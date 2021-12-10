@@ -16,7 +16,6 @@ from ppanggolin.formats import checkPangenomeInfo
 from itertools import combinations
 from tqdm import tqdm
 
-
 # local libraries
 
 
@@ -117,8 +116,6 @@ if __name__ == "__main__":
     logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
     logging.getLogger().info("PPanGGOLiN version: " + pkg_resources.get_distribution("ppanggolin").version)
     # launch(args)
-
-    # printInfo(pangenome=args.pangenome, content=True)
 
     p = Pangenome()
     p.addFile(args.pangenome)
