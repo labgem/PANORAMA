@@ -5,11 +5,9 @@
 import argparse
 import logging
 # import statistics
-import sys
 from time import time
 
 # installed libraries
-import pkg_resources
 from gmpy2 import popcount
 from ppanggolin.pangenome import Pangenome
 from ppanggolin.formats import checkPangenomeInfo
@@ -82,7 +80,7 @@ def launch(p_args: argparse.Namespace):
     pangenome.addFile(p_args.pangenome)
 
 
-def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
+def subparser(sub_parser) -> argparse.ArgumentParser:
     """
     Parser arguments specific to panfluidity command
     :param sub_parser : sub_parser for align command
@@ -98,11 +96,3 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
                           help="Output directory where the file(s) will be written")
 
     return parser
-
-if __name__ == "__main__":
-    # launch(args)
-
-    p = Pangenome()
-    p.addFile(args.pangenome)
-    g = genomes_fluidity(p_pangenome=p, disable_bar=args.disable_bar)
-    print(g)
