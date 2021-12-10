@@ -82,11 +82,14 @@ def launch(p_args: argparse.Namespace):
     pangenome.addFile(p_args.pangenome)
 
 
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Compute the pan-genome fluidity  from one pangenome",
-        formatter_class=argparse.RawTextHelpFormatter
-    )
+def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
+    """
+    Parser arguments specific to panfluidity command
+    :param sub_parser : sub_parser for align command
+
+    :return : parser arguments for align command
+    """
+    parser = sub_parser.add_parser("panfluidity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required")
@@ -94,27 +97,9 @@ if __name__ == "__main__":
     required.add_argument('-o', '--output', required=True, type=str,
                           help="Output directory where the file(s) will be written")
 
-    optional = parser.add_argument_group(title="Optional arguments",
-                                         description="The following arguments are optional")
-    optional.add_argument("--disable_bar", required=False, action="store_true",
-                          help="disables the progress bars")
-    optional.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                          help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
+    return parser
 
-    args = parser.parse_args()
-
-    level = logging.INFO  # info, warnings and errors, default verbose == 1
-    if hasattr(args, "verbose"):
-        if args.verbose == 2:
-            level = logging.DEBUG  # info, debug, warnings and errors
-        elif args.verbose == 0:
-            level = logging.WARNING  # only warnings and errors
-
-    logging.basicConfig(level=level,
-                        format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S')
-    logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
-    logging.getLogger().info("PPanGGOLiN version: " + pkg_resources.get_distribution("ppanggolin").version)
+if __name__ == "__main__":
     # launch(args)
 
     p = Pangenome()
