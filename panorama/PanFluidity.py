@@ -86,8 +86,8 @@ def write_fluidity(pangenome: Pangenome, g_fluidity: float):
 
 # TODO Function to compute mash distance between genome
 
-# TODO Function to export results (tsv, graphique avec coloration par genre ...)
-def export_tsv(pangenomes: list, output: str):
+# TODO Function to export results (graphique avec coloration par genre ...)
+def export_tsv(pangenomes: list, output: str, taxonomies: str = None):
     export_dict = {}
     for pangenome in pangenomes:
         with tables.open_file(pangenome, "r") as h5f:
@@ -101,7 +101,11 @@ def export_tsv(pangenomes: list, output: str):
     export_df = pd.DataFrame.from_dict(export_dict, orient='index', columns=['Genomes fluidity',
                                                                              "Nb of Organisms"])
     export_df.index.name = "Pangenome"
-    export_df.to_csv(f"{output}/genomes_fluidity.tsv", sep="\t", header=True, index=True, decimal=",", float_format='%.3f')
+    if taxonomies is not None:
+        tax_df = pd.read_csv(taxonomies, sep="\t", header=0, index_col=0)
+        export_df = export_df.merge(tax_df, left_index=True, right_index=True)
+    export_df.to_csv(f"{output}/genomes_fluidity.tsv", sep="\t", header=True, index=True, decimal=",",
+                     float_format='%.3f')
 
 
 def check_file_info(pangenome_file: str) -> bool:
@@ -172,7 +176,7 @@ def launch(args: argparse.Namespace):
                                        total=len(skim_list), disable=args.disable_prog_bar):
                 logging.getLogger().debug(f"{pangenome_file} Done")
         logging.getLogger().info("All the genomes fluidity were computed")
-    export_tsv(args.pangenomes, args.output)
+    export_tsv(args.pangenomes, args.output, args.taxonomies)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -194,5 +198,8 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
                                          description="All of the following arguments are optional and"
                                                      " with a default value")
     optional.add_argument("-c", "--cpu", required=False, default=1, type=int, help="Number of available cpus")
+    optional.add_argument("-t", "--taxonomies", required=False, default=None, type=str,
+                          help="Taxonomies information corresponding to pangenomes. "
+                               "Field must be separate by tab with header.")
 
     return parser
