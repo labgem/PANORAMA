@@ -17,6 +17,15 @@ import pkg_resources
 import panorama.PanFluidity
 
 
+def check_log(name):
+    if name == "stdout":
+        return sys.stdout
+    elif name == "stderr":
+        return sys.stderr
+    else:
+        return open(name, "w")
+
+
 def cmd_line():
     # need to manually write the description so that it's displayed into groups of subcommands ....
     desc = "\n"
@@ -32,7 +41,7 @@ def cmd_line():
         description="Comparative pangenomic  toolsbox",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s ' + pkg_resources.get_distribution("Panorma").version)
+                        version='%(prog)s ' + pkg_resources.get_distribution("panorama").version)
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
@@ -45,7 +54,7 @@ def cmd_line():
         #                     help="directory for storing temporary files")
         common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
                             help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-        # common.add_argument("--log", required=False, type=checkLog, default="stdout", help="log output file")
+        common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
         common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
                             help="disables the progress bars")
         # common.add_argument("-c", "--cpu", required=False, default=1, type=int, help="Number of available cpus")
@@ -61,7 +70,7 @@ def cmd_line():
         return args
 
 
-if __name__ == '__main__':
+def main():
     args = cmd_line()
 
     level = logging.INFO  # info, warnings and errors, default verbose == 1
@@ -82,3 +91,7 @@ if __name__ == '__main__':
 
     if args.subcommand == "panfluidity":
         panorama.PanFluidity.launch(args)
+
+
+if __name__ == '__main__':
+    main()
