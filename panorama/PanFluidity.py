@@ -15,6 +15,14 @@ from ppanggolin.formats import checkPangenomeInfo
 from itertools import combinations
 from tqdm import tqdm
 import tables
+import pandas as pd
+
+
+def mkOutdir(output, force):
+    if not os.path.exists(output):
+        os.makedirs(output)
+    elif not force:
+        raise FileExistsError(f"{output} already exists. Use -f if you want to overwrite the files in the directory")
 
 
 def genomes_fluidity(pangenome: Pangenome, disable_bar: bool = False) -> float:
@@ -62,15 +70,14 @@ def write_fluidity(pangenome: Pangenome, g_fluidity: float):
     :param g_fluidity: genomes_fluidity computed for the pangenome
     """
 
-    h5f = tables.open_file(pangenome.file, "a")
-    if "/info" not in h5f:
-        logging.getLogger().info("Your pangenome is without information. Information will be write to be relevant with "
-                                 "genomes fluidity")
-        ppanggolin.formats.writeInfo(pangenome, h5f)
+    with tables.open_file(pangenome.file, "a") as h5f:
+        if "/info" not in h5f:
+            logging.getLogger().info("Your pangenome is without information. Information will be write to be "
+                                     "relevant with genomes fluidity")
+            ppanggolin.formats.writeInfo(pangenome, h5f)
 
-    info_group = h5f.root.info
-    info_group._v_attrs.fluidity = g_fluidity
-    h5f.close()
+        info_group = h5f.root.info
+        info_group._v_attrs.fluidity = g_fluidity
     logging.getLogger().info("Done writing the genome fluidity in pangenome")
 
 
@@ -80,7 +87,22 @@ def write_fluidity(pangenome: Pangenome, g_fluidity: float):
 # TODO Function to compute mash distance between genome
 
 # TODO Function to export results (tsv, graphique avec coloration par genre ...)
-# def export_tsv(pangenomes : list):
+def export_tsv(pangenomes: list, output: str):
+    export_dict = {}
+    for pangenome in pangenomes:
+        with tables.open_file(pangenome, "r") as h5f:
+            infoGroup = h5f.root.info
+            if "numberOfOrganisms" in infoGroup._v_attrs._f_list():
+                export_dict[pangenome] = [infoGroup._v_attrs['fluidity'],
+                                          infoGroup._v_attrs['numberOfOrganisms']]
+            else:
+                raise Exception("The number of organism is not write in pangenome. Please provide a pangenome with the "
+                                "number of organisms write")
+    export_df = pd.DataFrame.from_dict(export_dict, orient='index', columns=['Genomes fluidity',
+                                                                             "Nb of Organisms"])
+    export_df.index.name = "Pangenome"
+    export_df.to_csv(f"{output}/genomes_fluidity.tsv", sep="\t", header=True, index=True, decimal=",", float_format='%.3f')
+
 
 def check_file_info(pangenome_file: str) -> bool:
     exists = os.path.isfile(pangenome_file)
@@ -130,6 +152,7 @@ def launch(args: argparse.Namespace):
 
     :param args: list of arguments
     """
+    mkOutdir(output=args.output, force=args.force)
     if len(args.pangenomes) == 0:
         raise Exception("Not one pangenome was found. Please check path to pangenome files.")
 
@@ -149,6 +172,7 @@ def launch(args: argparse.Namespace):
                                        total=len(skim_list), disable=args.disable_prog_bar):
                 logging.getLogger().debug(f"{pangenome_file} Done")
         logging.getLogger().info("All the genomes fluidity were computed")
+    export_tsv(args.pangenomes, args.output)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
