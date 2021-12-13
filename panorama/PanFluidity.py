@@ -5,7 +5,7 @@
 import argparse
 import logging
 from multiprocessing import get_context
-from time import time
+import os
 
 # installed libraries
 import ppanggolin.formats
@@ -30,18 +30,14 @@ def genomes_fluidity(pangenome: Pangenome, disable_bar: bool = False) -> float:
     checkPangenomeInfo(pangenome, needAnnotations=True, needFamilies=True, disable_bar=disable_bar)
     logging.getLogger().debug("Compute binaries sequences corresponding to presence / absence of families in organisms")
     pangenome.compute_org_bitarrays()  # Compute binaries corresponding to presence / absence of families in organisms
-    t0 = time()
     g_sum = 0
-    t4 = time()
     logging.getLogger().debug("Get number of families in each organisms")
     org2_nb_fam = nb_fam_per_org(pangenome, disable_bar)
-    print(time() - t4)
     logging.getLogger().info("Compute rate of unique family for each genome combination")
     for c_organisms in tqdm(list(combinations(pangenome.organisms, 2)), unit="combination", disable=disable_bar):
         tot_fam = org2_nb_fam.get(c_organisms[0].name) + org2_nb_fam.get(c_organisms[1].name)
         common_fam = popcount(c_organisms[0].bitarray & c_organisms[1].bitarray) - 1
         g_sum += (tot_fam - 2 * common_fam) / tot_fam
-    print("Temps de calcul : ", time() - t0)
     return (2 / (pangenome.number_of_organisms() * (pangenome.number_of_organisms() - 1))) * g_sum
 
 
@@ -83,7 +79,36 @@ def write_fluidity(pangenome: Pangenome, g_fluidity: float):
 
 # TODO Function to compute mash distance between genome
 
-# TODO Function to export results
+# TODO Function to export results (tsv, graphique avec coloration par genre ...)
+# def export_tsv(pangenomes : list):
+
+def check_file_info(pangenome_file: str) -> bool:
+    exists = os.path.isfile(pangenome_file)
+    if exists:
+        with tables.open_file(pangenome_file, "r") as h5f:
+            if 'fluidity' in h5f.root.info._v_attrs._f_list():
+                return True
+            else:
+                return False
+    else:
+        raise FileNotFoundError(f"The {pangenome_file} does not exist")
+
+
+def skim_pangenome(pangenomes: list) -> list:
+    """ Select the pangenome without genomes fluidity computed
+
+    :param pangenomes: list of all the pangenomes
+
+    :return: list of pangenomes without genomes fluidity computed
+    """
+    logging.getLogger().debug("Get pangenome without genomes fluidity")
+    pangenomes_list = []
+    for pangenome in pangenomes:
+        if not check_file_info(pangenome_file=pangenome):
+            pangenomes_list.append(pangenome)
+    logging.getLogger().debug("Selection done")
+    return pangenomes_list
+
 
 def mp_genome_fluidity(pangenome_file: str) -> str:
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
@@ -107,17 +132,21 @@ def launch(args: argparse.Namespace):
     """
     if len(args.pangenomes) == 0:
         raise Exception("Not one pangenome was found. Please check path to pangenome files.")
+
     if args.cpu == 1:
-        for pangenome_file in args.pangenomes:
+        for pangenome_file in skim_pangenome(args.pangenomes):
+            logging.getLogger().debug(f"Begin {pangenome_file}")
             pangenome = Pangenome()
             pangenome.addFile(pangenome_file)
             g = genomes_fluidity(pangenome=pangenome, disable_bar=args.disable_prog_bar)
             write_fluidity(pangenome, g)
+            logging.getLogger().debug(f"{pangenome_file} Done")
     else:
         logging.getLogger().info("Begin of the genomes fluidity computation")
+        skim_list = skim_pangenome(args.pangenomes)
         with get_context('fork').Pool(args.cpu) as p:
-            for pangenome_file in tqdm(p.imap_unordered(mp_genome_fluidity, args.pangenomes),
-                                       unit='pangenome', total=len(args.pangenomes), disable=args.disable_prog_bar):
+            for pangenome_file in tqdm(p.imap_unordered(mp_genome_fluidity, skim_list), unit='pangenome',
+                                       total=len(skim_list), disable=args.disable_prog_bar):
                 logging.getLogger().debug(f"{pangenome_file} Done")
         logging.getLogger().info("All the genomes fluidity were computed")
 
