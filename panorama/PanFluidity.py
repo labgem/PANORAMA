@@ -74,10 +74,19 @@ def nb_fam_per_org(p_pangenome: Pangenome, disable_bar: bool = False) -> dict:
 
 # TODO Function to export results
 
+# TODO write the fluidity in pangenome info
 
-def launch(p_args: argparse.Namespace):
+# TODO allow to give a list of pangenome
+
+def launch(args: argparse.Namespace):
+    """Allow to launch the panfluidity script from panorama command
+
+    :param args: list of arguments
+    """
     pangenome = Pangenome()
-    pangenome.addFile(p_args.pangenome)
+    pangenome.addFile(args.pangenome)
+    g = genomes_fluidity(p_pangenome=pangenome, disable_bar=args.disable_prog_bar)
+    print(g)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
