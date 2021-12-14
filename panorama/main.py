@@ -14,7 +14,7 @@ import pkg_resources
 # import tempfile
 # import os
 
-import panorama.PanFluidity
+import panorama.fluidity.PanFluidity
 
 
 def check_log(name):
@@ -45,7 +45,7 @@ def cmd_line():
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
-    subs = [panorama.PanFluidity.subparser(subparsers)]
+    subs = [panorama.fluidity.PanFluidity.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -90,7 +90,7 @@ def main():
         logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
     if args.subcommand == "panfluidity":
-        panorama.PanFluidity.launch(args)
+        panorama.fluidity.PanFluidity.launch(args)
 
 
 if __name__ == '__main__':

@@ -86,7 +86,6 @@ def write_fluidity(pangenome: Pangenome, g_fluidity: float):
 
 # TODO Function to compute mash distance between genome
 
-# TODO Function to export results (graphique avec coloration par genre ...)
 def export_tsv(pangenomes: list, output: str, taxonomies: str = None):
     export_dict = {}
     for pangenome in pangenomes:
