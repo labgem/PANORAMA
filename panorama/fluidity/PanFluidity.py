@@ -5,10 +5,8 @@
 import argparse
 import logging
 from multiprocessing import get_context
-import os
 
 # installed libraries
-import ppanggolin.formats
 from gmpy2 import popcount
 from ppanggolin.pangenome import Pangenome
 from ppanggolin.formats import checkPangenomeInfo
@@ -17,12 +15,8 @@ from tqdm import tqdm
 import tables
 import pandas as pd
 
-
-def mkOutdir(output, force):
-    if not os.path.exists(output):
-        os.makedirs(output)
-    elif not force:
-        raise FileExistsError(f"{output} already exists. Use -f if you want to overwrite the files in the directory")
+# local libraries
+from panorama.utils import mkdir, write_pangenome, check_file_info
 
 
 def genomes_fluidity(pangenome: Pangenome, disable_bar: bool = False) -> float:
@@ -63,24 +57,6 @@ def nb_fam_per_org(pangenome: Pangenome, disable_bar: bool = False) -> dict:
     return org2_nb_fam
 
 
-def write_fluidity(pangenome: Pangenome, g_fluidity: float):
-    """Write or update the genomes fluidity value in pangenome
-
-    :param pangenome: pangenome where it should be written the genomes fluidity
-    :param g_fluidity: genomes_fluidity computed for the pangenome
-    """
-
-    with tables.open_file(pangenome.file, "a") as h5f:
-        if "/info" not in h5f:
-            logging.getLogger().info("Your pangenome is without information. Information will be write to be "
-                                     "relevant with genomes fluidity")
-            ppanggolin.formats.writeInfo(pangenome, h5f)
-
-        info_group = h5f.root.info
-        info_group._v_attrs.fluidity = g_fluidity
-    logging.getLogger().info("Done writing the genome fluidity in pangenome")
-
-
 # TODO Function to normalize genome fluidity
 # def genomes_fluidity_norm(p_pangenome: Pangenome, disable_bar: bool = False) -> float:
 
@@ -90,10 +66,10 @@ def export_tsv(pangenomes: list, output: str, taxonomies: str = None):
     export_dict = {}
     for pangenome in pangenomes:
         with tables.open_file(pangenome, "r") as h5f:
-            infoGroup = h5f.root.info
-            if "numberOfOrganisms" in infoGroup._v_attrs._f_list():
-                export_dict[pangenome] = [infoGroup._v_attrs['fluidity'],
-                                          infoGroup._v_attrs['numberOfOrganisms']]
+            info_group = h5f.root.info
+            if "numberOfOrganisms" in info_group._v_attrs._f_list():
+                export_dict[pangenome] = [info_group._v_attrs['fluidity'],
+                                          info_group._v_attrs['numberOfOrganisms']]
             else:
                 raise Exception("The number of organism is not write in pangenome. Please provide a pangenome with the "
                                 "number of organisms write")
@@ -107,18 +83,6 @@ def export_tsv(pangenomes: list, output: str, taxonomies: str = None):
                      float_format='%.3f')
 
 
-def check_file_info(pangenome_file: str) -> bool:
-    exists = os.path.isfile(pangenome_file)
-    if exists:
-        with tables.open_file(pangenome_file, "r") as h5f:
-            if 'fluidity' in h5f.root.info._v_attrs._f_list():
-                return True
-            else:
-                return False
-    else:
-        raise FileNotFoundError(f"The {pangenome_file} does not exist")
-
-
 def skim_pangenome(pangenomes: list) -> list:
     """ Select the pangenome without genomes fluidity computed
 
@@ -129,7 +93,7 @@ def skim_pangenome(pangenomes: list) -> list:
     logging.getLogger().debug("Get pangenome without genomes fluidity")
     pangenomes_list = []
     for pangenome in pangenomes:
-        if not check_file_info(pangenome_file=pangenome):
+        if not check_file_info(pangenome_file=pangenome, need_fluidity=True):
             pangenomes_list.append(pangenome)
     logging.getLogger().debug("Selection done")
     return pangenomes_list
@@ -146,16 +110,16 @@ def mp_genome_fluidity(pangenome_file: str) -> str:
     pangenome = Pangenome()
     pangenome.addFile(pangenome_file)
     g = genomes_fluidity(pangenome=pangenome, disable_bar=True)
-    write_fluidity(pangenome, g)
+    write_pangenome(pangenome=pangenome, g_fluidity=g)
     return pangenome_file
 
 
 def launch(args: argparse.Namespace):
-    """Allow to launch the panfluidity script from panorama command
+    """Allow to launch the fluidity script from panorama command
 
     :param args: list of arguments
     """
-    mkOutdir(output=args.output, force=args.force)
+    mkdir(output=args.output, force=args.force)
     if len(args.pangenomes) == 0:
         raise Exception("Not one pangenome was found. Please check path to pangenome files.")
 
@@ -165,7 +129,7 @@ def launch(args: argparse.Namespace):
             pangenome = Pangenome()
             pangenome.addFile(pangenome_file)
             g = genomes_fluidity(pangenome=pangenome, disable_bar=args.disable_prog_bar)
-            write_fluidity(pangenome, g)
+            write_pangenome(pangenome=pangenome, g_fluidity=g)
             logging.getLogger().debug(f"{pangenome_file} Done")
     else:
         logging.getLogger().info("Begin of the genomes fluidity computation")
@@ -180,12 +144,12 @@ def launch(args: argparse.Namespace):
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
-    Parser arguments specific to panfluidity command
+    Parser arguments specific to fluidity command
     :param sub_parser : sub_parser for align command
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("panfluidity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("fluidity", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required")
