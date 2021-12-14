@@ -99,6 +99,22 @@ def skim_pangenome(pangenomes: list) -> list:
     return pangenomes_list
 
 
+def loop_genome_fluidity(pangenomes: list, disable_bar: bool = False):
+    """Compute on one thread the genome fluidity of multiple pangenome
+
+    :param pangenomes: list of pangenomes
+    :param disable_bar:  Disable the progress bar
+    """
+
+    for pangenome_file in pangenomes:
+        logging.getLogger().debug(f"Begin {pangenome_file}")
+        pangenome = Pangenome()
+        pangenome.addFile(pangenome_file)
+        g = genomes_fluidity(pangenome=pangenome, disable_bar=disable_bar)
+        write_pangenome(pangenome=pangenome, g_fluidity=g)
+        logging.getLogger().debug(f"{pangenome_file} Done")
+
+
 def mp_genome_fluidity(pangenome_file: str) -> str:
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
 
@@ -122,23 +138,25 @@ def launch(args: argparse.Namespace):
     mkdir(output=args.output, force=args.force)
     if len(args.pangenomes) == 0:
         raise Exception("Not one pangenome was found. Please check path to pangenome files.")
+    pangenomes = args.pangenomes
 
-    if args.cpu == 1:
-        for pangenome_file in skim_pangenome(args.pangenomes):
-            logging.getLogger().debug(f"Begin {pangenome_file}")
-            pangenome = Pangenome()
-            pangenome.addFile(pangenome_file)
-            g = genomes_fluidity(pangenome=pangenome, disable_bar=args.disable_prog_bar)
-            write_pangenome(pangenome=pangenome, g_fluidity=g)
-            logging.getLogger().debug(f"{pangenome_file} Done")
-    else:
+    if not args.all:
+        pangenomes = skim_pangenome(pangenomes)  # Remove pangenomes where fluidity is already known
+
+    if len(pangenomes) > 0:
         logging.getLogger().info("Begin of the genomes fluidity computation")
-        skim_list = skim_pangenome(args.pangenomes)
-        with get_context('fork').Pool(args.cpu) as p:
-            for pangenome_file in tqdm(p.imap_unordered(mp_genome_fluidity, skim_list), unit='pangenome',
-                                       total=len(skim_list), disable=args.disable_prog_bar):
-                logging.getLogger().debug(f"{pangenome_file} Done")
-        logging.getLogger().info("All the genomes fluidity were computed")
+        if args.cpu == 1:
+            loop_genome_fluidity(pangenomes=pangenomes, disable_bar=args.disable_prog_bar)
+        else:
+            with get_context('fork').Pool(args.cpu) as p:
+                for pangenome_file in tqdm(p.imap_unordered(mp_genome_fluidity, pangenomes), unit='pangenome',
+                                           total=len(pangenomes), disable=args.disable_prog_bar):
+                    logging.getLogger().debug(f"{pangenome_file} Done")
+            logging.getLogger().info("All the genomes fluidity were computed")
+    else:
+        logging.getLogger().warning("All the pangenomes already contain fluidity. "
+                                    "Please use --all option to compute again the fluidity, "
+                                    "if you think there is mistake")
     export_tsv(args.pangenomes, args.output, args.taxonomies)
 
 
@@ -164,5 +182,6 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     optional.add_argument("-t", "--taxonomies", required=False, default=None, type=str,
                           help="Taxonomies information corresponding to pangenomes. "
                                "Field must be separate by tab with header.")
-
+    optional.add_argument("--all", required=False, default=False, action='store_true',
+                          help="Recompute all the fluidity even though already computed")
     return parser
