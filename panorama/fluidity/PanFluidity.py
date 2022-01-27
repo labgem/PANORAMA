@@ -43,25 +43,6 @@ def genomes_fluidity(pangenome: Pangenome, disable_bar: bool = False) -> float:
     return (2 / (pangenome.number_of_organisms() * (pangenome.number_of_organisms() - 1))) * g_sum
 
 
-def nb_fam_per_org(pangenome: Pangenome, disable_bar: bool = False) -> dict:
-    """
-    Create a dictionary with for each organism the number of gene families
-
-    :param pangenome: Pangenome which contain the organisms and gene families
-    :param disable_bar: Disable the progress bar
-    :return: Dictionary with organisms as key and number of families as value
-    """
-    org2_nb_fam = dict()
-    for org in tqdm(pangenome.organisms, unit='organism', disable=disable_bar):
-        org2_nb_fam[org.name] = popcount(org.bitarray)
-    return org2_nb_fam
-
-
-# TODO Function to normalize genome fluidity
-# def genomes_fluidity_norm(p_pangenome: Pangenome, disable_bar: bool = False) -> float:
-
-# TODO Function to compute mash distance between genome
-
 def export_tsv(pangenomes: list, output: str, taxonomies: str = None):
     export_dict = {}
     for pangenome in pangenomes:
