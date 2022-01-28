@@ -34,6 +34,7 @@ def cmd_line():
     desc += "  panorama <subcommand> -h\n"
     desc += "\n"
     desc += "  Global:\n"
+    desc += "       info        provide and compare information through pangenomes\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -88,8 +89,7 @@ def main():
         logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
         logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
-    if args.subcommand == "":
-        pass
+    if args.subcommand == "info":
 
 
 if __name__ == '__main__':
