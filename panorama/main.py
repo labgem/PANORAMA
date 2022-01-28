@@ -34,7 +34,6 @@ def cmd_line():
     desc += "  panorama <subcommand> -h\n"
     desc += "\n"
     desc += "  Global:\n"
-    desc += "    fluidity           Compute genome fluidity of all pangenomes and compare them\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -45,7 +44,7 @@ def cmd_line():
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
-    subs = [panorama.fluidity.PanFluidity.subparser(subparsers)]
+    subs = []
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -89,8 +88,8 @@ def main():
         logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
         logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
-    if args.subcommand == "fluidity":
-        panorama.fluidity.PanFluidity.launch(args)
+    if args.subcommand == "":
+        pass
 
 
 if __name__ == '__main__':
