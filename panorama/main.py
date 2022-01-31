@@ -66,7 +66,6 @@ def cmd_line():
             exit(1)
 
         args = parser.parse_args()
-
         return args
 
 
