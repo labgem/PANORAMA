@@ -4,7 +4,7 @@
 # default libraries
 import sys
 
-if sys.version_info < (3, 8):  # minimum is python3.6
+if sys.version_info < (3, 8):  # minimum is python3.8
     raise AssertionError("Minimum python version to run Panorama is 3.8. Your current python version is " +
                          ".".join(map(str, sys.version_info)))
 

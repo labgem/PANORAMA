@@ -4,12 +4,16 @@
 # default libraries
 import argparse
 import logging
+
 from tqdm import tqdm
+
 # installed libraries
 from ppanggolin.pangenome import Pangenome
 from ppanggolin.formats.readBinaries import checkPangenomeInfo
 from multiprocessing import get_context
 
+#local libraries
+from panorama.info.module import get
 
 # def mp_info(pangenome_file: str):
 #     pass
@@ -20,6 +24,8 @@ def loop_info(pangenomes: list, need_info: dict, disable_bar: bool = False):
         pangenome = Pangenome()
         pangenome.addFile(pangenome_file)
         checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
+        if need_info['needModules']:
+            get(pangenome)
 
 
 def check_info(args) -> dict:
@@ -54,7 +60,7 @@ def launch(args: argparse.Namespace):
     else:
         loop_info(args.pangenomes, need_info, args.disable_prog_bar)
 
-    logging.getLogger().info("All the genomes fluidity were computed")
+    logging.getLogger().info("Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -64,7 +70,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-
+    logging.getLogger().info(f"{type(sub_parser)}")
     parser = sub_parser.add_parser("info", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
 
     required = parser.add_argument_group(title="Required arguments",
