@@ -12,20 +12,22 @@ from ppanggolin.pangenome import Pangenome
 from ppanggolin.formats.readBinaries import checkPangenomeInfo
 from multiprocessing import get_context
 
-#local libraries
-from panorama.info.module import get
+# local libraries
+from panorama.info.module import get_module_info
 
 # def mp_info(pangenome_file: str):
 #     pass
 
 
 def loop_info(pangenomes: list, need_info: dict, disable_bar: bool = False):
+    if need_info['needModules']:
+        modules_dic = {}
     for pangenome_file in pangenomes:
         pangenome = Pangenome()
         pangenome.addFile(pangenome_file)
         checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
         if need_info['needModules']:
-            get(pangenome)
+            modules_dic[pangenome.file] = get_module_info(pangenome)
 
 
 def check_info(args) -> dict:
