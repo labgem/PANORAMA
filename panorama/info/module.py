@@ -36,3 +36,9 @@ def get_module_info(pangenome: Pangenome) -> dict:
                             f"Please use ppanggolin module -p {pangenome.file} to compute module")
     else:
         raise Exception(f"No information find in {pangenome.file}")
+
+
+def export_modules(modules_dict: dict):
+    for pangenome, info in modules_dict.items():
+        print(info)
+        print(pd.DataFrame.from_dict(info))
