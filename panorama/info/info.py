@@ -65,12 +65,14 @@ def mp_info(pangenome_file: str) -> tuple:
         modules = get_module_info(pangenome)
     return pangenome.file, modules
 
+
 def export_info():
     global need_info
     global modules_dic
 
     if need_info['needModules']:
         export_modules(modules_dic)
+
 
 def launch(args: argparse.Namespace):
     global need_info
@@ -84,7 +86,7 @@ def launch(args: argparse.Namespace):
     if args.cpu > 1 and len(args.pangenomes) > 1:
         with get_context('fork').Pool(args.cpu) as p:
             for pangenome_file, modules_info in tqdm(p.imap_unordered(mp_info, args.pangenomes), unit='pangenome',
-                                       total=len(args.pangenomes), disable=args.disable_prog_bar):
+                                                     total=len(args.pangenomes), disable=args.disable_prog_bar):
                 modules_dic[pangenome_file] = modules_info
                 logging.getLogger().debug(f"{pangenome_file} Done")
     else:
