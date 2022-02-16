@@ -27,7 +27,7 @@ def loop_info(pangenomes: list, need_info: dict, disable_bar: bool = False):
         checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
         if need_info['needModules']:
             modules_dic[pangenome.file] = get_module_info(pangenome)
-            export_modules(modules_dic)
+    export_modules(modules_dic)
 
 
 def check_info(args) -> dict:
