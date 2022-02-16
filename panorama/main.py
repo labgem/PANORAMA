@@ -4,7 +4,7 @@
 # default libraries
 import sys
 
-if sys.version_info < (3, 8):  # minimum is python3.6
+if sys.version_info < (3, 8):  # minimum is python3.8
     raise AssertionError("Minimum python version to run Panorama is 3.8. Your current python version is " +
                          ".".join(map(str, sys.version_info)))
 
@@ -14,7 +14,7 @@ import pkg_resources
 # import tempfile
 # import os
 
-import panorama.fluidity.PanFluidity
+import panorama.info.info
 
 
 def check_log(name):
@@ -34,7 +34,7 @@ def cmd_line():
     desc += "  panorama <subcommand> -h\n"
     desc += "\n"
     desc += "  Global:\n"
-    desc += "    fluidity           Compute genome fluidity of all pangenomes and compare them\n"
+    desc += "       info        provide and compare information through pangenomes\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -45,7 +45,7 @@ def cmd_line():
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
-    subs = [panorama.fluidity.PanFluidity.subparser(subparsers)]
+    subs = [panorama.info.info.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -66,7 +66,6 @@ def cmd_line():
             exit(1)
 
         args = parser.parse_args()
-
         return args
 
 
@@ -89,8 +88,8 @@ def main():
         logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
         logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
-    if args.subcommand == "fluidity":
-        panorama.fluidity.PanFluidity.launch(args)
+    if args.subcommand == "info":
+        panorama.info.info.launch(args)
 
 
 if __name__ == '__main__':
