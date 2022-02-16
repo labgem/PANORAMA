@@ -18,16 +18,8 @@ from panorama.info.module import get_module_info, export_modules
 # def mp_info(pangenome_file: str):
 #     pass
 
-
-def loop_info(pangenomes: list, need_info: dict, disable_bar: bool = False):
-    modules_dic = {}
-    for pangenome_file in pangenomes:
-        pangenome = Pangenome()
-        pangenome.addFile(pangenome_file)
-        checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
-        if need_info['needModules']:
-            modules_dic[pangenome.file] = get_module_info(pangenome)
-    export_modules(modules_dic)
+modules_dic = {}
+need_info = {}
 
 
 def check_info(args) -> dict:
@@ -47,7 +39,42 @@ def check_info(args) -> dict:
     return check_dict
 
 
+def loop_info(pangenomes: list, disable_bar: bool = False):
+    global modules_dic
+    global need_info
+    for pangenome_file in pangenomes:
+        pangenome = Pangenome()
+        pangenome.addFile(pangenome_file)
+        checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
+        if need_info['needModules']:
+            modules_dic[pangenome.file] = get_module_info(pangenome)
+
+
+def mp_info(pangenome_file: str) -> tuple:
+    """ Compute in multiprocessing the genome fluidity of multiple pangenome
+    :param pangenome_file: one of the pangenome in the list of pangenome
+    :return: Name of the computed pangenome
+    """
+    # TODO Allow to show progress bar of each process
+    global need_info
+    modules = None
+    pangenome = Pangenome()
+    pangenome.addFile(pangenome_file)
+    checkPangenomeInfo(pangenome=pangenome, **need_info)
+    if need_info['needModules']:
+        modules = get_module_info(pangenome)
+    return pangenome.file, modules
+
+def export_info():
+    global need_info
+    global modules_dic
+
+    if need_info['needModules']:
+        export_modules(modules_dic)
+
 def launch(args: argparse.Namespace):
+    global need_info
+    global modules_dic
     logging.getLogger().debug("launch info command")
     if len(args.pangenomes) == 0:
         raise Exception("Not one pangenome was found. Please check path to pangenome files.")
@@ -56,11 +83,13 @@ def launch(args: argparse.Namespace):
     need_info = check_info(args)
     if args.cpu > 1 and len(args.pangenomes) > 1:
         with get_context('fork').Pool(args.cpu) as p:
-            for pangenome_file in tqdm(p.imap_unordered(mp_info, args.pangenomes), unit='pangenome',
-                                       total=len(pangenomes), disable=args.disable_prog_bar):
+            for pangenome_file, modules_info in tqdm(p.imap_unordered(mp_info, args.pangenomes), unit='pangenome',
+                                       total=len(args.pangenomes), disable=args.disable_prog_bar):
+                modules_dic[pangenome_file] = modules_info
                 logging.getLogger().debug(f"{pangenome_file} Done")
     else:
-        loop_info(args.pangenomes, need_info, args.disable_prog_bar)
+        loop_info(args.pangenomes, args.disable_prog_bar)
+    export_info()
 
     logging.getLogger().info("Done")
 
