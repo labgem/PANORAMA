@@ -39,17 +39,6 @@ def check_info(args) -> dict:
     return check_dict
 
 
-def loop_info(pangenomes: list, disable_bar: bool = False):
-    global modules_dic
-    global need_info
-    for pangenome_file in pangenomes:
-        pangenome = Pangenome()
-        pangenome.addFile(pangenome_file)
-        checkPangenomeInfo(pangenome=pangenome, **need_info, disable_bar=disable_bar)
-        if need_info['needModules']:
-            modules_dic[pangenome.file] = get_module_info(pangenome)
-
-
 def mp_info(pangenome_file: str) -> tuple:
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
     :param pangenome_file: one of the pangenome in the list of pangenome
@@ -67,9 +56,6 @@ def mp_info(pangenome_file: str) -> tuple:
 
 
 def export_info():
-    global need_info
-    global modules_dic
-
     if need_info['needModules']:
         export_modules(modules_dic)
 
@@ -83,14 +69,11 @@ def launch(args: argparse.Namespace):
     if not any(arg for arg in [args.modules]):
         raise Exception("You did not indicate which information you want.")
     need_info = check_info(args)
-    if args.cpu > 1 and len(args.pangenomes) > 1:
-        with get_context('fork').Pool(args.cpu) as p:
-            for pangenome_file, modules_info in tqdm(p.imap_unordered(mp_info, args.pangenomes), unit='pangenome',
-                                                     total=len(args.pangenomes), disable=args.disable_prog_bar):
-                modules_dic[pangenome_file] = modules_info
-                logging.getLogger().debug(f"{pangenome_file} Done")
-    else:
-        loop_info(args.pangenomes, args.disable_prog_bar)
+    with get_context('fork').Pool(args.cpu) as p:
+        for pangenome_file, modules_info in tqdm(p.imap_unordered(mp_info, args.pangenomes), unit='pangenome',
+                                                 total=len(args.pangenomes), disable=args.disable_prog_bar):
+            modules_dic[pangenome_file] = modules_info
+            logging.getLogger().debug(f"{pangenome_file} Done")
     export_info()
 
     logging.getLogger().info("Done")
@@ -103,18 +86,45 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    logging.getLogger().info(f"{type(sub_parser)}")
     parser = sub_parser.add_parser("info", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_info(parser)
+    return parser
 
+
+def parser_info(parser):
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=str, nargs='+',
                           help="A list of pangenome .h5 files")
     onereq = parser.add_argument_group(title="Input file", description="One of the following argument is required :")
-    onereq.add_argument('--modules', required=False, action="store_true",
-                        help="Compute the pangenome genomic fluidity")
+    onereq.add_argument("--content", required=False, action="store_true", default=False,
+                        help="Create a detailed information TSV file about pangenomes content")
+    onereq.add_argument('--modules', required=False, action="store_true", default=False,
+                        help="Create a detailed information TSV file about pangenomes modules")
     optional = parser.add_argument_group(title="Optional arguments",
                                          description="All of the following arguments are optional and"
                                                      " with a default value")
     optional.add_argument("-c", "--cpu", required=False, default=1, type=int, help="Number of available cpus")
-    return parser
+
+
+if __name__ == "__main__":
+    import sys
+    import argparse
+
+    from panorama.main import check_log
+
+    parser = argparse.ArgumentParser(
+        description="Comparative Pangenomic analyses toolsbox",
+        formatter_class=argparse.RawTextHelpFormatter)
+
+    parser_info(parser)
+    common = parser.add_argument_group(title="Common argument")
+    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
+                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
+    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
+    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
+                        help="disables the progress bars")
+    common.add_argument('-f', '--force', action="store_true",
+                        help="Force writing in output directory and in pangenome output file.")
+
+    launch(parser.parse_args())

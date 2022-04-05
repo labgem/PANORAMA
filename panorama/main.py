@@ -38,7 +38,7 @@ def cmd_line():
     desc += "\n"
 
     parser = argparse.ArgumentParser(
-        description="Comparative pangenomic  toolsbox",
+        description="Comparative Pangenomic analyses toolsbox",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--version', action='version',
                         version='%(prog)s ' + pkg_resources.get_distribution("panorama").version)
@@ -65,8 +65,8 @@ def cmd_line():
             sub.print_help()
             exit(1)
 
-        args = parser.parse_args()
-        return args
+    args = parser.parse_args()
+    return args
 
 
 def main():
