@@ -1,40 +1,47 @@
 #!/usr/bin/env python3
 # coding:utf-8
-import json
 
 
-# Define association functions of rules
 class Rule:
-    # def __init__(self):
-    def __init__(self, mandatory: set = None, accessory: set = None, forbidden: set = None, other: set = None):
-        self.mandatory = mandatory
-        self.accessory = accessory
-        self.forbidden = forbidden
-        self.other = other
+    """
+        A class used to represent a gene context
+    """
+    def __init__(self, name_rule=str):
+        self.mandatory = {}
+        self.accessory = {}
+        self.forbidden = {}
+        self.free = {}
+        self.name = name_rule
+        self.legal = {}
 
-    # Print rule attribute
-    def print_rule(self, attr: str = None):
+    def print_attr(self, attr: dict = None):
+        """
+        If attribute given, print the attribute rule. Else, print all rules attributes.
+
+        :param attr: attributes dictionary
+        """
         if attr is None:
-            print(f"mandatory : {str(self.mandatory)}\n"
-                  f"accessory : {str(self.accessory)}\n"
-                  f"forbidden : {str(self.forbidden)}\n"
-                  f"other : {str(self.other)}")
-        elif attr == "mandatory":
-            print(attr+" : "+str(self.mandatory))
-        elif attr == "accessory":
-            print(attr+" : "+str(self.accessory))
-        elif attr == "forbidden":
-            print(attr+" : "+str(self.forbidden))
-        elif attr == "other":
-            print(attr+" : "+str(self.other))
-        else:
-            raise Exception("This option doesn't exist")
+            attr = {'mandatory': True, 'accessory': True, 'forbidden': True, 'free': True}
+        for key, value in attr.items():
+            if value:
+                if key == 'mandatory':
+                    print(f"{key} : {self.mandatory}")
+                elif key == 'accessory':
+                    print(f"{key} : {self.accessory}")
+                elif key == 'forbidden':
+                    print(f"{key} : {self.forbidden}")
+                elif key == 'free':
+                    print(f"{key} : {self.free}")
 
-    # read json file given
-    def read_json(self, json_file):
-        with open(json_file) as my_file:
-            data = json.load(my_file)
-        # distribute values to attributes
+    def fill_attr(self, data: dict):
+        """
+        Transmits json file rule values in the arguments attributes, calculate if parameters have been respected and
+        print parameters not respected
+
+        :param data: dictionary of content json file rule
+        """
+
+        self.name = data.get('name')    # transmit values
         for key, value in data['families'].items():
             if key == 'mandatory':
                 self.mandatory = set(value)
@@ -43,28 +50,58 @@ class Rule:
             elif key == 'forbidden':
                 self.forbidden = set(value)
             else:
-                self.other = set(value)
-        for key, value in data['Parameters'].items():
+                self.free = set(value)
+        for key, value in data['parameters'].items():  # calculate parameters
             if key == 'min_mandatory':
-                if len(self.mandatory) <= value:
-                    print("min_mandatory is respected")
+                if len(self.mandatory) >= value:
+                    self.legal['min_mandatory'] = True
                 else:
-                    print("Error : min_mandatory isn't respected")
-            if key == 'min_total':
-                with value in data['families'].items():
-                    if len(value):
-                        print("min_total is respected")
-                    else:
-                        print("Error : min_total isn't respected")
-            if key == 'max_forbidden':
-                if len(self.forbidden) > value:
-                    print("max_forbidden is respected")
+                    self.legal['min_mandatory'] = False
+            elif key == 'min_total':
+                if sum(len(x) for x in [self.mandatory, self.accessory,
+                                        self.forbidden, self.free]) >= value:
+                    self.legal['min_total'] = True
                 else:
-                    print("Error : max_forbidden isn't respected")
-            if key == 'max_other':
-                if len(self.other) <= value:
-                    print("max_other is respected")
+                    self.legal['min_total'] = False
+            elif key == 'max_forbidden':
+                if len(self.forbidden) <= value:
+                    self.legal['max_forbidden'] = True
                 else:
-                    print("Error : max_other isn't respected")
+                    self.legal['max_forbidden'] = False
+            elif key == 'max_free':
+                if len(self.free) <= value:
+                    self.legal['max_free'] = True
+                else:
+                    self.legal['max_free'] = False
+            else:
+                Exception(f"The parameter {key} doesn't exist, use this parameters : min_mandatory, min_total,"
+                          f" max_forbidden, max_free")
+        if any(not x for x in self.legal.values()):     # print parameters not respected
+            print(f"\n{self.name}")
+            for parameter, boolean in self.legal.items():
+                if boolean is False:
+                    print(f"{parameter} isn't respected")
 
 
+class Rules:
+
+    def __init__(self):
+        self.rules = {}
+
+    def add_rule(self, rule: Rule):
+        """
+        Add one rule in rules dictionary
+
+        :param rule: the json file rule in object Rule
+        """
+        if all(x for x in rule.legal.values()):
+            self.rules[rule.name] = rule
+
+    def show_rules(self):
+        """
+        Print all the rules and the number of rules in dictionary
+        """
+        for r_name, rule in self.rules.items():
+            print(f"\n{r_name}")
+            rule.print_attr()
+        print(f"\nnumber of rules : {len(self.rules)}")
