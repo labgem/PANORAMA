@@ -15,6 +15,7 @@ import pkg_resources
 # import os
 
 import panorama.info.info
+import panorama.annotation.annot
 
 
 def check_log(name):
@@ -35,6 +36,7 @@ def cmd_line():
     desc += "\n"
     desc += "  Global:\n"
     desc += "       info        provide and compare information through pangenomes\n"
+    desc += "       annot       Annotate families and assign processus to modules in pangenome\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -45,7 +47,8 @@ def cmd_line():
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
-    subs = [panorama.info.info.subparser(subparsers)]
+    subs = [panorama.info.info.subparser(subparsers),
+            panorama.annotation.annot.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -90,6 +93,8 @@ def main():
 
     if args.subcommand == "info":
         panorama.info.info.launch(args)
+    elif args.subcommand == "annot":
+        panorama.annotation.annot.launch(args)
 
 
 if __name__ == '__main__':
