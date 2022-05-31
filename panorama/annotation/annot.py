@@ -9,39 +9,7 @@ from pathlib import Path
 # installed libraries
 
 # local libraries
-from panorama.annotation.rules import Rule, Rules
-
-
-def fill_attr(content_file: dict, rule: Rule = Rule()) -> Rule:
-    """
-    From a rule file, give values in attributes of object Rule, calculate and print parameters not respected
-
-    :param content_file: dictionary of file rule content
-    :param rule : json file rule in object Rule
-
-    :return: rule: json file rule
-    """
-    rule.fill_attr(content_file)
-    return rule
-
-
-def read_rules_directory(rules_dir, rules=Rules()):
-    """
-    Create directory path, read all rules in the directory, store rules respected in dictionary attribute of object
-    Rules and print all rules in the dictionary
-
-    :param rules_dir: directory path
-    :param rules: all rules respected in object Rules
-
-    :return: rules: all rules respected
-    """
-    rules_path = Path(rules_dir)
-    for rule_file in rules_path.glob("*.json"):  # Find all file in the directory path
-        json_dict = check_rule(rule_file)
-        rule = fill_attr(json_dict)
-        rules.add_rule(rule)
-    rules.show_rules()
-    return rules
+from panorama.annotation.rules import System, Systems
 
 
 def check_rule(json_file: Path):
@@ -54,29 +22,45 @@ def check_rule(json_file: Path):
     """
     with open(json_file) as my_file:
         data = json.load(my_file)
-    f_keys = ['families', 'parameters']
-    for key in f_keys:
-        try:
-            sub_dict = data[key]
-        except KeyError:
-            raise KeyError(f"Requires {key} in {json_file.stem}")
-        else:
-            if key == 'families':
-                fam_keys = ['mandatory', 'accessory', 'forbidden']
-                for f_key in fam_keys:
-                    try:
-                        _ = sub_dict[f_key]
-                    except KeyError:
-                        raise KeyError(f"Requires {f_key} of families in {json_file.stem}")
-            elif key == 'parameters':
-                param_keys = ['min_mandatory', 'min_total', 'max_forbidden', 'max_free']
-                for p_key in param_keys:
-                    try:
-                        _ = sub_dict[p_key]
-                    except KeyError:
-                        raise KeyError(f"Requires {p_key} of parameters in {json_file.stem}")
+    try:
+        sub_dict = data["func_unit"]
+    except KeyError:
+        raise KeyError(f"Requires func_unit in {json_file.stem}")
+    else:
+        f_keys = ['families', 'parameters']
+        for key in f_keys:
+            try:
+                s_dict = sub_dict[key]
+            except KeyError:
+                raise KeyError(f"Requires {key} in {json_file.stem}")
+            else:
+                if key == 'families':
+                    fam_keys = ['mandatory', 'accessory', 'forbidden']
+                    for f_key in fam_keys:
+                        try:
+                            _ = s_dict[f_key]
+                        except KeyError:
+                            raise KeyError(f"Requires {f_key} of families in {json_file.stem}")
+                elif key == 'parameters':
+                    param_keys = ['min_mandatory', 'min_total', 'max_separation', 'max_forbidden']
+                    for p_key in param_keys:
+                        try:
+                            _ = s_dict[p_key]
+                        except KeyError:
+                            raise KeyError(f"Requires {p_key} of parameters in {json_file.stem}")
     data['name'] = json_file.stem
     return data
+
+
+def read_files(systems_path, systems=Systems()):
+    for file in systems_path.glob("*.json"):
+        with open(file.resolve().as_posix()) as json_file:
+            system = System()
+            data = json.load(json_file)
+            system.read_system(data)
+            system.check_param_fu()
+            systems.add_sys(system)
+    systems.print_systems()
 
 
 def launch(args: argparse.Namespace):
@@ -85,11 +69,8 @@ def launch(args: argparse.Namespace):
 
     :param args: argument given
     """
-    rules = read_rules_directory(args.rules)
-    attr_dict = {'mandatory': args.mandatory, 'accessory': args.accessory,
-                 'forbidden': args.forbidden, 'free': args.free}
-    if not any(x for x in attr_dict.values()):
-        attr_dict = {key: True for key in attr_dict.keys()}
+    systems_path = Path(args.systems)
+    read_files(systems_path)
 
 
 def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
@@ -114,7 +95,7 @@ def parser_annot(parser: argparse.ArgumentParser):
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
 
-    required.add_argument("-r", "--rules", required=True, type=str, help="Path to rules directory")
+    required.add_argument("-s", "--systems", required=True, type=str, help="Path to rules directory")
     optional = parser.add_argument_group(title="Optional arguments",
                                          description="All of the following arguments are optional and"
                                                      " with a default value")
@@ -130,9 +111,9 @@ def parser_annot(parser: argparse.ArgumentParser):
                           required=False,
                           help="To read values forbidden",
                           action="store_true")
-    optional.add_argument('--free',
+    optional.add_argument('--neutral',
                           required=False,
-                          help="To read values free",
+                          help="To read values neutral",
                           action="store_true")
 
 
