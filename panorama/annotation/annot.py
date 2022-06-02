@@ -8,6 +8,12 @@ from rules import System, Systems
 
 
 def read_files(systems_path, systems=Systems()):
+    """
+    Read all json files in the directory
+
+    :param systems_path: path of systems directory
+    :param systems: class Systems with all systems
+    """
     for file in systems_path.glob("*.json"):
         with open(file.resolve().as_posix()) as json_file:
             data = json.load(json_file)
@@ -18,11 +24,21 @@ def read_files(systems_path, systems=Systems()):
 
 
 def launch(args):
+    """
+    Launch functions to read systems
+
+    :param args: Argument given
+    """
     systems_path = Path(args.systems)
     read_files(systems_path)
 
 
 def parser_annot(parser):
+    """
+    Parser for specific argument of annot command
+
+    :param parser: parser for annot argument
+    """
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
     required.add_argument('-s', '--systems',

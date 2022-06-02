@@ -11,27 +11,45 @@ class Systems:
         self.systems = systems
 
     def print_systems(self):
+        """
+        Print all systems predicted
+
+        """
         for system in self.systems.values():
             system.print_system()
 
     def get_sys(self, name: str):
-        for rule in self.systems:
-            if rule == name:
-                return rule
+        """
+        Get name system
+
+        :param name: name to find
+        """
+        for system in self.systems:
+            if system == name:
+                return system
 
     def add_sys(self, sys: System):
+        """
+        Add system
+
+        :param sys: system
+        """
         if sys.check_param() is True:
             self.systems[sys.name] = sys
 
 
 class Element:
     def __init__(self):
+        """Constructor Method
+        """
         self.name = ""
         self.parameters = dict()
 
 
 class System(Element):
     def __init__(self):
+        """Constructor Method
+        """
         super().__init__()
         self.func_units = dict()
         self.bool_param = False
@@ -42,6 +60,11 @@ class System(Element):
         self.neutral = set()
 
     def read_system(self, data):
+        """
+        Read system
+
+        :param data: json data dictionary
+        """
         for key, value in data.items():
             if key == 'name':
                 if isinstance(value, str):
@@ -66,9 +89,18 @@ class System(Element):
             self.neutral = None
 
     def add_func_unit(self, func_unit: FuncUnit):
+        """
+        Add function unit in function units dictionary of system
+
+        :param func_unit: function unit
+        """
         self.func_units[func_unit.name] = func_unit
 
     def add_type_fu(self):
+        """
+        Add a type for a function unit of system
+
+        """
         for name, fu in self.func_units.items():
             if fu.type == "mandatory":
                 self.mandatory.add(fu)
@@ -81,10 +113,20 @@ class System(Element):
         self.add_fam()
 
     def add_fam(self):
+        """
+        Add family in families dictionary of system
+
+        """
         for func_unit in self.func_units.values():
             self.families.update(func_unit.families)
 
     def check_system(self, dict_sys: dict):
+        """
+        Verify the json file of system
+
+        :param dict_sys: data json file
+
+        """
         keys_fu = ['name', 'func_units', 'parameters']
         for key in keys_fu:
             try:
@@ -135,6 +177,10 @@ class System(Element):
                                                     "func units's parameters")
 
     def check_param(self):
+        """
+        Verify with boolean the condition parameters
+
+        """
         bool_param_fu = False
         for f_unit in self.func_units.values():
             bool_param_fu = f_unit.check_param()
@@ -172,6 +218,10 @@ class System(Element):
             return False
 
     def print_system(self):
+        """
+        Print system
+
+        """
         self.pre_print()
         print(f"{self.name} :")
         print(f"\tparameters: {self.parameters}")
@@ -193,6 +243,10 @@ class System(Element):
                 f_unit.print_func_unit()
 
     def pre_print(self):
+        """
+        If type is empty, it's none
+
+        """
         if len(self.mandatory) == 0:
             self.mandatory = None
         if len(self.forbidden) == 0:
@@ -203,6 +257,8 @@ class System(Element):
 
 class FuncUnit(Element):
     def __init__(self):
+        """Constructor Method
+        """
         super().__init__()
         self.type = ""
         self.families = dict()
@@ -213,6 +269,12 @@ class FuncUnit(Element):
         self.forbidden = dict()
 
     def read_func_unit(self, data_fu: dict):
+        """
+        Read function unit
+
+        :param data_fu: data json file of all function units
+
+        """
         fam_fu = Family()
         fam_fu.name = self.name
         fam_fu.parameters = None
@@ -246,6 +308,10 @@ class FuncUnit(Element):
         self.families[fam_fu.name] = fam_fu
 
     def add_type_fam(self):
+        """
+         Add a type for a family of function unit
+
+        """
         for name, fam in self.families.items():
             if fam.parameters is not None:
                 if fam.type == "mandatory":
@@ -263,9 +329,19 @@ class FuncUnit(Element):
                     self.forbidden[name] = None
 
     def add_fam(self, fam: Family):
+        """
+        Add family in families dictionary of function unit
+
+        :param fam: a family
+        """
         self.families[fam.name] = fam
 
     def check_func_unit(self, dict_fu: dict):
+        """
+        Verify function units of system
+
+        :param dict_fu: data function unit of json file
+        """
         keys_fu = ['type', 'families', 'parameters']
         for key in keys_fu:
             try:
@@ -290,6 +366,10 @@ class FuncUnit(Element):
                                                  f"{self.name} of {self.system}")
 
     def check_param(self):
+        """
+         Verify with boolean the condition parameters
+
+        """
         bool_param_fam = False
         for fam in self.families.values():
             bool_param_fam = fam.check_param()
@@ -328,6 +408,10 @@ class FuncUnit(Element):
             return False
 
     def print_func_unit(self):
+        """
+        Print function units
+
+        """
         self.pre_print()
         print(f"\t\t{self.name} :")
         print(f"\t\t\tparameters : {self.parameters}")
@@ -336,6 +420,12 @@ class FuncUnit(Element):
         print(f"\t\t\tforbidden : {self.pre_print_str(self.forbidden)}")
 
     def pre_print_str(self, dict_type: dict):
+        """
+        If type is empty, it's none.
+        Print families
+
+        :param dict_type: type dictionary of families
+        """
         if dict_type is not None:
             string = ""
             for name, parameters in dict_type.items():
@@ -346,6 +436,10 @@ class FuncUnit(Element):
             return string
 
     def pre_print(self):
+        """
+        If type is empty, it's none
+
+        """
         if len(self.mandatory) == 0:
             self.mandatory = None
         if len(self.forbidden) == 0:
@@ -354,11 +448,20 @@ class FuncUnit(Element):
             self.accessory = None
 
     def get_sys(self, system_name: str, systems: Systems):
+        """
+        Get system of function unit
+
+        :param system_name: name system to find
+        :param systems: class Systems with all systems
+        :return name system
+        """
         return systems.systems[system_name]
 
 
 class Family(Element):
     def __init__(self):
+        """Constructor Method
+        """
         super().__init__()
         self.type = ""
         self.relation = ""
@@ -366,6 +469,11 @@ class Family(Element):
         self.system = ""
 
     def read_family(self, family: dict):
+        """
+        Read family
+
+        :param family: data json file with families
+        """
         self.check_family(family)
         for attrib, value in family.items():
             if attrib == 'type':
@@ -376,6 +484,11 @@ class Family(Element):
                 self.parameters = value
 
     def check_family(self, dict_fam: dict):
+        """
+        Check family in json file
+
+        :param dict_fam: data json file with families
+        """
         keys_fam = ['type', 'relation', 'parameters']
         for key in keys_fam:
             try:
@@ -407,10 +520,28 @@ class Family(Element):
                                     "relation and parameters exist")
 
     def check_param(self):
+        """
+         Verify with boolean the condition parameters
+
+        """
         return True
 
     def get_func_unit(self, func_unit: str, systems: Systems):
+        """
+        Get function unit name
+
+        :param func_unit: name of function unit
+        :param systems: class Systems with all systems
+        :return: name of function unit
+        """
         return self.get_sys(self.system, systems).func_units[func_unit]
 
     def get_sys(self, system_name: str, systems: Systems):
+        """
+        Get system name
+
+        :param system_name: name of system
+        :param systems: class Systems with all systems
+        :return: name of system
+        """
         return systems.systems[system_name]
