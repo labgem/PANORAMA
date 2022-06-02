@@ -58,7 +58,7 @@ def cmd_line():
         common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
                             help="disables the progress bars")
         # common.add_argument("-c", "--cpu", required=False, default=1, type=int, help="Number of available cpus")
-        common.add_argument('-f', '--force', action="store_true",
+        common.add_argument('--force', action="store_true",
                             help="Force writing in output directory and in pangenome output file.")
         sub._action_groups.append(common)
         if len(sys.argv) == 2 and sub.prog.split()[1] == sys.argv[1]:
