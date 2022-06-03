@@ -14,8 +14,9 @@ from bokeh.models import ColumnDataSource, DataTable, TableColumn
 def get_content_info(pangenome: Pangenome) -> dict:
     """ Get content information from pangenome file
 
-    :param pangenome:
-    :return:
+    :param pangenome: Pangenome to get content information
+
+    :return: Content information
     """
     h5f = tables.open_file(pangenome.file, "r")
     if "/info" in h5f:
@@ -67,10 +68,10 @@ def get_content_info(pangenome: Pangenome) -> dict:
 
 
 def export_content(content_dict: dict, output: Path):
-    """ Export Pangenome content
+    """ Export content information
 
-    :param content_dict:
-    :return:
+    :param content_dict: Content information
+    :param output: Path to output directory
     """
     df = pd.DataFrame.from_dict(content_dict, orient='index').reset_index().rename(columns={'index': "Pangenomes"})
     source = ColumnDataSource(df)

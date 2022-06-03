@@ -12,6 +12,8 @@ class Pangenome(Pan):
     This is a class representing pangenome based on PPanGGOLLiN class. It is used as a basic unit for all the analysis
     to access to the different elements of your pangenome, such as organisms, contigs, genes or gene families.
     This class provide some more methods needed to analyse pangenome.
+
+    :param name: Name of the pangenome
     """
 
     def __init__(self, name):
@@ -29,7 +31,7 @@ class Pangenomes:
     def __init__(self):
         """Constructor method
         """
-        self.pangenomes = {}
+        self.pangenomes_set = {}
 
     def add_pangenome(self, pangenome: Pangenome):
         """ Add a pangenome object
@@ -37,4 +39,4 @@ class Pangenomes:
         :param pangenome: Pangenome object
         :return:
         """
-        self.pangenomes[pangenome.name] = pangenome
+        self.pangenomes_set[pangenome.name] = pangenome

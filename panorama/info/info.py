@@ -14,7 +14,7 @@ from ppanggolin.formats.readBinaries import check_pangenome_info
 from multiprocessing import get_context, Manager
 
 # local libraries
-from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.pangenomes import Pangenome
 from panorama.utils import check_tsv_sanity, mkdir
 from panorama.info.module import get_module_info, export_modules
 from panorama.info.content import get_content_info, export_content
@@ -33,13 +33,13 @@ need_info = {"need_annotations": False,
 def check_former_info(args: argparse.Namespace) -> (Dict[str, Path], Dict[str, dict]):
     """ Check pangenomes path and needed information
 
-    :param args:
+    :param args: Argument from command line
 
     :return:
     """
     global need_info
     if not any(arg for arg in [args.modules, args.content]):
-        raise Exception("You did not indicate which information you want.")
+        raise argparse.ArgumentError(argument=None, message="You did not indicate which information you want.")
     manager = Manager()
     manager_dict = {}
     if args.modules is not None:
@@ -53,15 +53,16 @@ def check_former_info(args: argparse.Namespace) -> (Dict[str, Path], Dict[str, d
     return check_tsv_sanity(tsv_path=args.pangenomes), manager_dict
 
 
-def mp_info(pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool = False) -> tuple:
+def mp_info(pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool = False) -> Pangenome:
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
 
     :param pan_name: Pangenome name
     :param pan_file: Path to pangenome
+    :param manager_dict: Dictionary to save pangenome information in multiprocessing
+    :param disable_bar: Allow to disable progress bar
 
-    :return: Name of the computed pangenome
+    :return: The computed pangenome
     """
-    # TODO Allow to show progress bar of each process
     global need_info
     pangenome = Pangenome(pan_name)
     pangenome.add_file(pan_file.absolute().as_posix())
@@ -74,11 +75,23 @@ def mp_info(pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool
     return pangenome
 
 
-def run_info(args: list):
+def run_info(args: list) -> Pangenome:
+    """Allow to get information with multiprocessing
+
+    :param args: pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool = False
+
+    :return: The computed pangenome
+    """
     return mp_info(*args)
 
 
 def export_info(manager_dict: dict, output: Path, cpu: int = 1):
+    """ Export information to HTML file
+
+    :param manager_dict: Dictionary with information readable in multiprocessing
+    :param output: Path to output directory
+    :param cpu: Number of available CPU
+    """
     processes = []
     with get_context('fork').Pool(processes=cpu) as p:
         if need_info['need_modules']:
@@ -92,18 +105,17 @@ def export_info(manager_dict: dict, output: Path, cpu: int = 1):
 def launch(args: argparse.Namespace):
     """
     Command launcher
+
     :param args: All arguments provide by user
     """
     global need_info
     logging.getLogger().debug("launch info command")
     outdir = mkdir(args.output, args.force)
     path_2_pang, manager_dict = check_former_info(args)
-    pangenomes = Pangenomes()
     mp_args = [(name, pan, manager_dict, args.disable_prog_bar) for name, pan in path_2_pang.items()]
     with get_context('fork').Pool(args.cpu) as p:
         for pangenome in tqdm(p.imap_unordered(run_info, mp_args), unit='pangenome',
                               total=len(path_2_pang), disable=args.disable_prog_bar):
-            pangenomes.add_pangenome(pangenome)
             logging.getLogger().debug(f"{pangenome.name} Done")
     export_info(manager_dict, outdir, args.cpu)
 
@@ -148,7 +160,7 @@ def parser_info(parser):
 if __name__ == "__main__":
     import argparse
 
-    from panorama.main import check_log
+    from panorama.utils import check_log, set_verbosity_level
 
     main_parser = argparse.ArgumentParser(
         description="Comparative Pangenomic analyses toolsbox",
@@ -163,5 +175,5 @@ if __name__ == "__main__":
                         help="disables the progress bars")
     common.add_argument('--force', action="store_true",
                         help="Force writing in output directory and in pangenome output file.")
-
+    set_verbosity_level(main_parser.parse_args())
     launch(main_parser.parse_args())
