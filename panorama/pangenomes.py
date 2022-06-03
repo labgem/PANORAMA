@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 # coding: utf8
 
-#default libraries
+# default libraries
 
-#local libraries
+# local libraries
 from ppanggolin.pangenome import Pangenome as Pan
 
 
@@ -13,6 +13,7 @@ class Pangenome(Pan):
     to access to the different elements of your pangenome, such as organisms, contigs, genes or gene families.
     This class provide some more methods needed to analyse pangenome.
     """
+
     def __init__(self, name):
         """Constructor method.
         """
@@ -24,6 +25,7 @@ class Pangenomes:
     """
     This class represente a group of pangenome object.
     """
+
     def __init__(self):
         """Constructor method
         """
