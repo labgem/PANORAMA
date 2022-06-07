@@ -6,14 +6,26 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import os
 import re
 from pathlib import Path
 
 # installed libraries
+from ppanggolin.formats.readBinaries import check_pangenome_info
 
 # local libraries
+from panorama.utils import check_tsv_sanity
 from panorama.annotation.rules import System, Systems
+from panorama.pangenomes import Pangenome
+
+
+def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
+    """ Check and load pangenome information before adding annotation
+
+    :param pangenome:
+    :param disable_bar:
+    :return:
+    """
+    check_pangenome_info(pangenome, need_families=True, disable_bar=disable_bar)
 
 
 def read_files(systems_path, systems=Systems()):
@@ -51,35 +63,62 @@ def parser_pangenomes(pangenomes_path):
             pangenome_path = Path(line[1])
 
 
-def parser_hmmer(hmmer_path):
+def parser_hmmer(hmmer_path: Path) -> dict:
     """
     Recover information of hmmer results in a tsv file
 
     :param hmmer_path: Path to hmmer results of tsv file
+
+    :raise:
+
+    :return:
     """
+    hmm_res = {}
     try:
-        file = open(hmmer_path.absolute(), 'r')
-        hmmer = csv.reader(file, delimiter="\t")
+        hmm_file = open(hmmer_path.absolute(), 'r')
     except IOError:
         raise IOError
     except Exception:
         raise Exception("Unexpected error when opening the list of hmmer")
     else:
+        hmmer = csv.reader(hmm_file, delimiter="\t")
         for line in hmmer:
-            if not(re.compile("^#").search(line[0])):
+            if not (re.compile("^#").search(line[0])):
                 target_name = line[0]
-                if not(line[1] == "-"):
+                if line[1] != "-":
                     accession = line[1]
                 else:
                     accession = None
                 query_name = line[2]
                 evalue = line[4]
-                if not(line[18] == "-"):
+                if line[18] != "-":
                     system = line[18]
                 else:
                     system = target_name
-                print(f'name : {target_name}, accession : {accession}, query : {query_name}, e-value : {evalue}, '
-                      f'system : {system}')
+                hmm_res[query_name] = {"name": {target_name},
+                                       "accession": {accession},
+                                       "e-value": {evalue},
+                                       "description": {system}
+                                       }
+        return hmm_res
+
+
+def annot_pangenome(pangenome: Pangenome, hmm: Path, system: Path, source: str = None, force: bool = False,
+                    disable_bar: bool = False):
+    """ Main function to add annotation to pangenome
+
+    :param pangenome:
+    :param hmm:
+    :param system:
+    :param source:
+    :param force:
+    :param disable_bar:
+    """
+    check_pangenome_annotation(pangenome, disable_bar=disable_bar)
+
+    for gene_fam_name, hmm_res in parser_hmmer(hmm).items():
+        gene_fam = pangenome.get_gene_family(name=gene_fam_name)
+        gene_fam.add_annotation(source=hmm.stem if source is None else source, annotation=hmm_res, force=force)
 
 
 def launch(args):
@@ -88,12 +127,11 @@ def launch(args):
 
     :param args: Argument given
     """
-    # systems_path = Path(args.systems)
-    # read_files(systems_path)
-    list_pangenomes_path = Path(args.pangenomes)
-    parser_pangenomes(list_pangenomes_path)
-    sys_hmm_path = Path(args.hmmer)
-    parser_hmmer(sys_hmm_path)
+    pan_to_path = check_tsv_sanity(args.pangenomes)
+    for k, v in pan_to_path.items():
+        pangenome = Pangenome(name=k)
+        pangenome.add_file(v)
+        annot_pangenome(pangenome, args.hmm, args.systems, args.force, args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -119,21 +157,25 @@ def parser_annot(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-s', '--systems',
                           required=True,
-                          type=str,
+                          type=Path,
                           help="Path to systems directory")
     required.add_argument('-p', '--pangenomes',
                           required=True,
-                          type=str,
+                          type=Path,
+                          nargs='?',
                           help='A list of pangenome .h5 files')
-    required.add_argument('-hmm', '--hmmer',
+    required.add_argument('--hmm',
                           required=True,
-                          type=str,
+                          type=Path,
+                          nargs='?',
                           help='Findings systems of hmmer in tsv file')
+
+    optional = parser.add_argument_group(title="Optional arguments")
+    optional.add_argument("--source", required=False, type=str, nargs="?", default=None,
+                          help='Name of the annotation source. Default use name of hmm result file')
 
 
 if __name__ == "__main__":
-    import argparse
-
     from panorama.utils import check_log, set_verbosity_level
 
     main_parser = argparse.ArgumentParser(

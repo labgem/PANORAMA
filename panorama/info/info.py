@@ -158,8 +158,6 @@ def parser_info(parser):
 
 
 if __name__ == "__main__":
-    import argparse
-
     from panorama.utils import check_log, set_verbosity_level
 
     main_parser = argparse.ArgumentParser(

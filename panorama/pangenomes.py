@@ -2,9 +2,14 @@
 # coding: utf8
 
 # default libraries
+from typing import Union
+
+# install libraries
+import ppanggolin.geneFamily
+from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
-from ppanggolin.pangenome import Pangenome as Pan
+from panorama.geneFamily import GeneFamily
 
 
 class Pangenome(Pan):
@@ -21,6 +26,31 @@ class Pangenome(Pan):
         """
         super().__init__()
         self.name = name
+
+    def get_annnotation(self, annotation: str, source: str) -> Union[GeneFamily, list]:
+        """ Get the annotation in pangenome gene family by name or source of annotation
+
+        :param annotation: Name of the annotation
+        :param source: Name of the source
+
+        :return: Gene famillies with the annotation or source
+        """
+        pass
+
+    def _create_gene_family(self, name: str) -> GeneFamily:
+        """Creates a gene family object with the given `name`
+
+        :param name: the name to give to the gene family. Must not exist already.
+        :return: the created GeneFamily object
+        """
+
+        new_fam = GeneFamily(family_id=self.max_fam_id, name=name)
+        self.max_fam_id += 1
+        self._famGetter[new_fam.name] = new_fam
+        return new_fam
+
+    def get_gene_family(self, name: str) -> GeneFamily:
+        return super(Pangenome, self).get_gene_family(name)
 
 
 class Pangenomes:

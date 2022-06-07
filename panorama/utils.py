@@ -83,6 +83,8 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:
 
     :raise IOError: If tsv or a pangenome not exist raise IOError
     :raise Exception: Handle all others exception
+
+    :return: Dictionary with pangenome name as key and path to hdf5 file as value
     """
     pan_to_path = {}
     try:
@@ -100,8 +102,8 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:
                 raise Exception(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
                                 f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
                                 f"PPanGGOLiN this is not allowed. Please remove spaces from your genome names.")
-            if not Path(line[1]).exists():
-                raise IOError(f"The given path {line[1]} not exist")
-            pan_to_path[line[0]] = Path(line[1])
+            if not Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}").exists():
+                raise IOError(f"The given path {tsv_path.parent.absolute().as_posix()}/{line[1]} not exist")
+            pan_to_path[line[0]] = Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}")
         file.close()
         return pan_to_path
