@@ -14,7 +14,7 @@ import pkg_resources
 # local modules
 from panorama.utils import check_log, set_verbosity_level
 import panorama.info
-import panorama.annotation.annot
+import panorama.annotation
 
 
 def cmd_line():
@@ -25,7 +25,8 @@ def cmd_line():
     desc += "  panorama <subcommand> -h\n"
     desc += "\n"
     desc += "  Global:\n"
-    desc += "       annot       Annotate families and assign processus to modules in pangenome\n"
+    desc += "       info        provide and compare information through pangenomes\n"
+    desc += "       annotation       Annotate families and assign processus to modules in pangenome\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -67,7 +68,9 @@ def main():
     set_verbosity_level(args)
 
     if args.subcommand == "info":
-        panorama.info.info.launch(args)
+        panorama.info.launch(args)
+    elif args.subcommand == "annotation":
+        panorama.annotation.launch(args)
 
 
 if __name__ == '__main__':
