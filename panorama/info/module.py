@@ -2,14 +2,22 @@
 # coding:utf-8
 
 # installed libraries
+from pathlib import Path
+
 import tables
 from ppanggolin.pangenome import Pangenome
 import pandas as pd
-from bokeh.plotting import show
+from bokeh.plotting import save
 from bokeh.models import ColumnDataSource, DataTable, TableColumn
 
 
 def get_module_info(pangenome: Pangenome) -> dict:
+    """ Get module information from pangenome file
+
+    :param pangenome: Pangenome with module computed
+
+    :return: Dictionary with module information
+    """
     h5f = tables.open_file(pangenome.file, "r")
     if "/info" in h5f:
         info_group = h5f.root.info
@@ -35,10 +43,15 @@ def get_module_info(pangenome: Pangenome) -> dict:
         raise Exception(f"No information find in {pangenome.file}")
 
 
-def export_modules(modules_dict: dict):
+def export_modules(modules_dict: dict, output: Path):
+    """ Export modules information
+
+    :param modules_dict: Content information
+    :param output: Path to output directory
+    """
     df = pd.DataFrame.from_dict(modules_dict, orient='index').reset_index().rename(columns={'index': "Pangenomes"})
     source = ColumnDataSource(df)
     columns = [TableColumn(field=col, title=col) for col in df.columns]
     dt = DataTable(source=source, columns=columns, index_position=None,
                    autosize_mode='fit_columns', sizing_mode='stretch_both')
-    show(dt)
+    save(dt, filename=f"{output.absolute().as_posix()}/modules_info.html", title="Modules Information", resources="cdn")
