@@ -9,21 +9,12 @@ if sys.version_info < (3, 8):  # minimum is python3.8
                          ".".join(map(str, sys.version_info)))
 
 import argparse
-import logging
 import pkg_resources
-# import tempfile
-# import os
 
-import panorama.info.info
-
-
-def check_log(name):
-    if name == "stdout":
-        return sys.stdout
-    elif name == "stderr":
-        return sys.stderr
-    else:
-        return open(name, "w")
+# local modules
+from panorama.utils import check_log, set_verbosity_level
+import panorama.info
+import panorama.annotation
 
 
 def cmd_line():
@@ -35,6 +26,7 @@ def cmd_line():
     desc += "\n"
     desc += "  Global:\n"
     desc += "       info        provide and compare information through pangenomes\n"
+    desc += "       annotation       Annotate families and assign processus to modules in pangenome\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -45,7 +37,8 @@ def cmd_line():
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
-    subs = [panorama.info.info.subparser(subparsers)]
+    subs = [panorama.info.subparser(subparsers),
+            panorama.annotation.annot.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -72,24 +65,12 @@ def cmd_line():
 def main():
     args = cmd_line()
 
-    level = logging.INFO  # info, warnings and errors, default verbose == 1
-    if hasattr(args, "verbose"):
-        if args.verbose == 2:
-            level = logging.DEBUG  # info, debug, warnings and errors
-        elif args.verbose == 0:
-            level = logging.WARNING  # only warnings and errors
-
-        if args.log != sys.stdout and not args.disable_prog_bar:  # if output is not to stdout we remove progress bars.
-            args.disable_prog_bar = True
-
-        logging.basicConfig(stream=args.log, level=level,
-                            format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
+    set_verbosity_level(args)
 
     if args.subcommand == "info":
-        panorama.info.info.launch(args)
+        panorama.info.launch(args)
+    elif args.subcommand == "annotation":
+        panorama.annotation.launch(args)
 
 
 if __name__ == '__main__':

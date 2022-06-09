@@ -33,7 +33,7 @@ class Pangenome(Pan):
         :param annotation: Name of the annotation
         :param source: Name of the source
 
-        :return: Gene families with the annotation or source
+        :return: Gene famillies with the annotation or source
         """
         pass
 
