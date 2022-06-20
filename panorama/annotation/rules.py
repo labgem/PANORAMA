@@ -2,7 +2,7 @@
 # coding:utf-8
 from __future__ import annotations
 
-
+# TODO les fichiers padloc ont une famille qui n'existe pas : le nom du system qui est aussi une fu et donc un fam
 class Systems:
 
     def __init__(self, systems: dict = {}):
@@ -53,7 +53,7 @@ class System(Element):
         super().__init__()
         self.func_units = dict()
         self.bool_param = False
-        self.families = set()
+        self.families = dict()
         self.mandatory = set()
         self.accessory = set()
         self.forbidden = set()
@@ -277,6 +277,8 @@ class FuncUnit(Element):
         """
         fam_fu = Family()
         fam_fu.name = self.name
+        fam_fu.func_unit = self.name
+        fam_fu.system = self.system
         fam_fu.parameters = None
         if data_fu['families']:
             for family, dict_fam in data_fu['families'].items():
@@ -361,7 +363,7 @@ class FuncUnit(Element):
                             if not (parameter == 'min_mandatory' or parameter == 'min_total' or parameter ==
                                     'max_forbidden' or parameter == 'max_separation'):
                                 raise Exception(f"{parameter} doesn't exist in {self.name} of {self.system}")
-                            elif not(isinstance(value, int)) or value < 0:
+                            elif not (isinstance(value, int)) or value < 0:
                                 raise ValueError(f"The value {value} is not positive int type in "
                                                  f"{self.name} of {self.system}")
 
@@ -509,10 +511,10 @@ class Family(Element):
                 elif key == 'parameters':
                     if dict_fam['parameters'] is not None:
                         for parameter, value in dict_fam['parameters'].items():
-                            if not(parameter == 'max_separation'):
+                            if not (parameter == 'max_separation'):
                                 raise KeyError(f"The parameter {parameter} is incorrect. In family parameters, there is"
                                                f" only max_separation in {self.func_unit} {self.name} of {self.system}")
-                            elif not(isinstance(value, int)) or value < 0:
+                            elif not (isinstance(value, int)) or value < 0:
                                 raise ValueError(f"The value {value} is not positive int type in {self.func_unit} "
                                                  f"{self.name} of {self.system}")
                 else:
@@ -545,3 +547,4 @@ class Family(Element):
         :return: name of system
         """
         return systems.systems[system_name]
+

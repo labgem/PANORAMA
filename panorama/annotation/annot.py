@@ -10,6 +10,8 @@ import re
 from pathlib import Path
 
 # installed libraries
+import networkx as nx
+import matplotlib.pyplot as plt
 from ppanggolin.formats.readBinaries import check_pangenome_info
 
 # local libraries
@@ -21,68 +23,48 @@ from panorama.pangenomes import Pangenome
 def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
 
-    :param pangenome:
-    :param disable_bar:
-    :return:
+    :param pangenome: Pangenome object
+    :param disable_bar: Disable bar
     """
-    check_pangenome_info(pangenome, need_families=True, disable_bar=disable_bar)
+    check_pangenome_info(pangenome, need_families=True, need_graph=True, need_annotations=True, disable_bar=disable_bar)
 
 
-def read_files(systems_path, systems=Systems()):
-    """
-    Read all json files in the directory
+def read_systems(file: Path, systems=Systems()):
+    """ Read all json files in the directory
 
     :param systems_path: path of systems directory
     :param systems: class Systems with all systems
     """
-    for file in systems_path.glob("*.json"):
-        with open(file.resolve().as_posix()) as json_file:
-            data = json.load(json_file)
-            system = System()
-            system.read_system(data)
-            systems.add_sys(system)
-    systems.print_systems()
+    # for file in systems_path.glob("*.json"):
+    with open(file.resolve().as_posix()) as json_file:
+        data = json.load(json_file)
+        system = System()
+        system.read_system(data)
+        systems.add_sys(system)
+    return system
+    # systems.print_systems()
 
 
-def parser_pangenomes(pangenomes_path):
+def parser_hmm(hmm_path: Path) -> dict:
     """
-    Read all pangenome in a list tsv file
+    Recover information of hmm results in a tsv file
 
-    :param pangenomes_path: Path to the list tsv file
-    """
-    try:
-        file = open(pangenomes_path.absolute(), 'r')
-        pangenomes = csv.reader(file, delimiter="\t")
-    except IOError:
-        raise IOError
-    except Exception:
-        raise Exception("Unexpected error when opening the list of pangenomes")
-    else:
-        for line in pangenomes:
-            print(line[1])
-            pangenome_path = Path(line[1])
+    :param hmm_path: Path to hmm results of tsv file
 
+    :raise: Unexpected error when opening the list of hmm
 
-def parser_hmmer(hmmer_path: Path) -> dict:
-    """
-    Recover information of hmmer results in a tsv file
-
-    :param hmmer_path: Path to hmmer results of tsv file
-
-    :raise:
-
-    :return:
+    :return: hmm_res : dictionary of information hmm results
     """
     hmm_res = {}
     try:
-        hmm_file = open(hmmer_path.absolute(), 'r')
+        hmm_file = open(hmm_path.absolute(), 'r')
     except IOError:
         raise IOError
     except Exception:
-        raise Exception("Unexpected error when opening the list of hmmer")
+        raise Exception("Unexpected error when opening the list of hmm")
     else:
-        hmmer = csv.reader(hmm_file, delimiter="\t")
-        for line in hmmer:
+        hmm = csv.reader(hmm_file, delimiter="\t")
+        for line in hmm:
             if not (re.compile("^#").search(line[0])):
                 target_name = line[0]
                 if line[1] != "-":
@@ -95,10 +77,10 @@ def parser_hmmer(hmmer_path: Path) -> dict:
                     system = line[18]
                 else:
                     system = target_name
-                hmm_res[query_name] = {"name": {target_name},
-                                       "accession": {accession},
-                                       "e-value": {evalue},
-                                       "description": {system}
+                hmm_res[query_name] = {"name": target_name,
+                                       "accession": accession,
+                                       "e-value": evalue,
+                                       "description": system
                                        }
         return hmm_res
 
@@ -107,18 +89,124 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, system: Path, source: str =
                     disable_bar: bool = False):
     """ Main function to add annotation to pangenome
 
-    :param pangenome:
-    :param hmm:
-    :param system:
-    :param source:
-    :param force:
-    :param disable_bar:
+    :param pangenome: Pangenome object to ppanggolin
+    :param hmm: Path of hmm
+    :param system: Path of system
+    :param source: Source of hmm
+    :param force: Boolean of force argument
+    :param disable_bar: Disable bar
     """
     check_pangenome_annotation(pangenome, disable_bar=disable_bar)
+    annot2fam = dict()
+    for query_name, annot in parser_hmm(hmm).items():
+        gene_fam = pangenome.get_gene_family(name=query_name)
+        gene_fam.add_annotation(source=hmm.stem if source is None else source, annotation=annot, force=force)
+        if not annot["description"] in annot2fam:
+            annot2fam[annot["description"]] = set()
+        annot2fam[annot["description"]].add(gene_fam)
+    return annot2fam
 
-    for gene_fam_name, hmm_res in parser_hmmer(hmm).items():
-        gene_fam = pangenome.get_gene_family(name=gene_fam_name)
-        gene_fam.add_annotation(source=hmm.stem if source is None else source, annotation=hmm_res, force=force)
+
+def get_max_separation_sys(system: System):
+    """
+    Verify the maximum separation condition for genes family in the pangenome
+
+    :param system: one system object
+    """
+    max_sep_annot = dict()
+    for annot_name, fam_obj in system.families.items():
+        if fam_obj.parameters is not None and fam_obj.parameters["max_separation"]:
+            max_sep_annot[annot_name] = get_max_separation(fam_obj)
+        else:
+            for fu_name, fu_obj in system.func_units.items():
+                if fam_obj.func_unit == fu_name:
+                    if fu_obj.parameters is not None and fu_obj.parameters["max_separation"]:
+                        max_sep_annot[annot_name] = get_max_separation(fu_obj)
+                    elif system.parameters["max_separation"]:
+                        max_sep_annot[annot_name] = get_max_separation(system)
+    return max_sep_annot
+
+
+def check_presence_family(system: System, annot2fam: dict, one_family: bool):
+    if one_family is False or None:
+        if set(system.families.keys()).intersection(annot2fam.keys()) == system.families.keys():
+            return True
+        else:
+            return False
+    else:
+        for annot in system.families.keys():
+            return len(annot2fam.get(annot))
+
+
+# TODO pour vérifier si annot in sys, faire un break si y'a pas tl mandatory
+def present_system(system: System, annot2fam: dict):
+    """
+    Look if system is present in the pangenome
+    :param system:
+    :param annot2fam:
+    :return:
+    """
+    set_bool = set()
+    for annot in system.families:
+        if annot in annot2fam.keys():
+            set_bool.add(True)
+        else:
+            set_bool.add(False)
+    if all(boolean for boolean in set_bool):
+        draw_graph(system, annot2fam)
+
+
+def draw_graph(system: System, annot2fam: dict):
+    g = nx.Graph()
+    for annot in system.families:
+        for fam_obj in annot2fam[annot]:
+            g.add_node(fam_obj)
+    for annot in system.families:
+        for fam_obj in annot2fam[annot]:
+            if fam_obj in g.nodes():
+                add_node_edge(g, g.nodes(), get_max_separation_sys(system)[annot], i=0)
+    nx.draw(g)
+    plt.show()
+    return g
+
+
+def add_node_edge(g: nx.Graph, set_fam: set, max_sep: int, i: int):
+    pass
+#     if i != max_sep+1:
+#         i += 1
+#         for family in set_fam:
+#             for edge in family.edges:
+#                 if edge in g.node():
+#                     g.add_edge(fam_obj, edge.target)
+            # if family.target in g.nodes():
+    #
+    #         else:
+    #             edge.add(edge_fam)
+    #             g.add_node(edge.target)
+    #             g.add_edge(fam_obj, edge.target)
+    #             nx.draw(g)
+    #             plt.show()
+    #     i += 1
+    #     add_node_edge(g, edge.target.edges, edge.target, max_sep, i)
+    pass
+
+
+def get_annot_annot2fam(annot2fam: dict, max_sep_sys: dict):
+    annot_sys_pan = dict()
+    for annot in max_sep_sys.keys():
+        if annot in annot2fam.keys():
+            annot_sys_pan[annot] = annot2fam.get(annot)
+    return annot_sys_pan
+
+
+def get_max_separation(obj: object):
+    """
+    Get the parameter max_separation in a object
+
+    :param obj:
+    :return:
+    """
+    return obj.parameters["max_separation"]
 
 
 def launch(args):
@@ -127,11 +215,17 @@ def launch(args):
 
     :param args: Argument given
     """
+    systems_to_path = args.systems.absolute()
+    system = System()
+    for file in systems_to_path.glob("*.json"):
+        system = read_systems(file)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for k, v in pan_to_path.items():
         pangenome = Pangenome(name=k)
         pangenome.add_file(v)
-        annot_pangenome(pangenome, args.hmm, args.systems, args.force, args.disable_prog_bar)
+        annot2fam = annot_pangenome(pangenome, args.hmm, args.systems, args.force, args.disable_prog_bar)
+        present_system(system, annot2fam)
+        print("finish")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -163,12 +257,12 @@ def parser_annot(parser):
                           required=True,
                           type=Path,
                           nargs='?',
-                          help='A list of pangenome .h5 files')
+                          help='A list of pangenome .h5 files in .tsv file')
     required.add_argument('--hmm',
                           required=True,
                           type=Path,
                           nargs='?',
-                          help='Findings systems of hmmer in tsv file')
+                          help='Findings gene family of hmm in .tsv file')
 
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--source", required=False, type=str, nargs="?", default=None,
