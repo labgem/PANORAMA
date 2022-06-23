@@ -6,18 +6,23 @@ from __future__ import annotations
 import argparse
 import csv
 import json
-import re
+import logging
 from pathlib import Path
+import tempfile
 
 # installed libraries
 import networkx as nx
 import matplotlib.pyplot as plt
+import pandas as pd
 from ppanggolin.formats.readBinaries import check_pangenome_info
 
 # local libraries
 from panorama.utils import check_tsv_sanity
 from panorama.annotation.rules import System, Systems
 from panorama.pangenomes import Pangenome
+from panorama.annotation.hmm_search import launch_hmm_search
+
+col_names = ['Gene family', 'Annotation', 'Accesion Id', 'e-value', 'score', 'overlap', 'Annotation description']
 
 
 def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
@@ -43,68 +48,6 @@ def read_systems(file: Path, systems=Systems()):
         systems.add_sys(system)
     return system
     # systems.print_systems()
-
-
-def parser_hmm(hmm_path: Path) -> dict:
-    """
-    Recover information of hmm results in a tsv file
-
-    :param hmm_path: Path to hmm results of tsv file
-
-    :raise: Unexpected error when opening the list of hmm
-
-    :return: hmm_res : dictionary of information hmm results
-    """
-    hmm_res = {}
-    try:
-        hmm_file = open(hmm_path.absolute(), 'r')
-    except IOError:
-        raise IOError
-    except Exception:
-        raise Exception("Unexpected error when opening the list of hmm")
-    else:
-        hmm = csv.reader(hmm_file, delimiter="\t")
-        for line in hmm:
-            if not (re.compile("^#").search(line[0])):
-                target_name = line[0]
-                if line[1] != "-":
-                    accession = line[1]
-                else:
-                    accession = None
-                query_name = line[2]
-                evalue = line[4]
-                if line[18] != "-":
-                    system = line[18]
-                else:
-                    system = target_name
-                hmm_res[query_name] = {"name": target_name,
-                                       "accession": accession,
-                                       "e-value": evalue,
-                                       "description": system
-                                       }
-        return hmm_res
-
-
-def annot_pangenome(pangenome: Pangenome, hmm: Path, system: Path, source: str = None, force: bool = False,
-                    disable_bar: bool = False):
-    """ Main function to add annotation to pangenome
-
-    :param pangenome: Pangenome object to ppanggolin
-    :param hmm: Path of hmm
-    :param system: Path of system
-    :param source: Source of hmm
-    :param force: Boolean of force argument
-    :param disable_bar: Disable bar
-    """
-    check_pangenome_annotation(pangenome, disable_bar=disable_bar)
-    annot2fam = dict()
-    for query_name, annot in parser_hmm(hmm).items():
-        gene_fam = pangenome.get_gene_family(name=query_name)
-        gene_fam.add_annotation(source=hmm.stem if source is None else source, annotation=annot, force=force)
-        if not annot["description"] in annot2fam:
-            annot2fam[annot["description"]] = set()
-        annot2fam[annot["description"]].add(gene_fam)
-    return annot2fam
 
 
 def get_max_separation_sys(system: System):
@@ -172,13 +115,13 @@ def draw_graph(system: System, annot2fam: dict):
 
 def add_node_edge(g: nx.Graph, set_fam: set, max_sep: int, i: int):
     pass
-#     if i != max_sep+1:
-#         i += 1
-#         for family in set_fam:
-#             for edge in family.edges:
-#                 if edge in g.node():
-#                     g.add_edge(fam_obj, edge.target)
-            # if family.target in g.nodes():
+    #     if i != max_sep+1:
+    #         i += 1
+    #         for family in set_fam:
+    #             for edge in family.edges:
+    #                 if edge in g.node():
+    #                     g.add_edge(fam_obj, edge.target)
+    # if family.target in g.nodes():
     #
     #         else:
     #             edge.add(edge_fam)
@@ -209,6 +152,74 @@ def get_max_separation(obj: object):
     return obj.parameters["max_separation"]
 
 
+def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001):
+    """
+    Filter annotation from dataframe to keep the best annotation for each family.
+
+    :param annotated_df: Dataframe with annotation and families
+    :param eval_threshold: e-value threshold
+
+    :return: Filtered dataframe
+    """
+    df_filter = annotated_df[annotated_df[col_names[3]] <= eval_threshold]
+    df_eval = df_filter[df_filter[col_names[3]] == df_filter.groupby(col_names[0])[col_names[3]].transform(min)]
+    return df_eval[df_eval[col_names[4]] == df_eval.groupby(col_names[0])[col_names[4]].transform(max)]
+
+
+def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
+                           force: bool = False) -> dict:
+    """ Add to gene families an annotation and create a dictionary with for each annotation a set of gene family
+
+    :param annotation_df: Dataframe with for each family an annotation
+    :param pangenome: Pangenome with gene families
+    :param source: source of the annotation
+    :param force: force to write the annotation in gene families
+
+    :return: Dictionary with for each annotation a set of gene family
+    """
+    annot2fam = {}
+    for index, row in annotation_df.iterrows():
+        gene_fam = pangenome.get_gene_family(name=row['Gene family'])
+        gene_fam.add_annotation(source=source, annotation=row['Annotation'], force=force)
+        if row['Annotation'] not in annot2fam:
+            annot2fam[row['Annotation']] = {gene_fam}
+        else:
+            annot2fam[row['Annotation']].add(gene_fam)
+    return annot2fam
+
+
+def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float = 0.0001, source: str = None,
+                    tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, force: bool = False,
+                    disable_bar: bool = False) -> dict:
+    """ Main function to add annotation to pangenome from tsv file
+
+    :param pangenome: Pangenome object to ppanggolin
+    :param hmm: Path to hmm file or directory
+    :param tsv: Path to tsv with gene families annotation
+    :param e_value: e-value threshold to associate annoation to gene family
+    :param source: Source of annotation
+    :param tmpdir: Path to temporary directory
+    :param threads: Number of available threads
+    :param force: Boolean of force argument
+    :param disable_bar: Disable bar
+
+    :return: Dictionnary with for each annotation a set of corresponding gene families
+    """
+    check_pangenome_annotation(pangenome, disable_bar=disable_bar)
+    if tsv is not None:
+        annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
+                                    names=col_names)
+    elif hmm is not None:
+        annotation_df = launch_hmm_search(pangenome, hmm, tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
+    else:
+        raise Exception("You did not provide tsv or hmm for annotation")
+    annotation_fitlered = filter_df(annotation_df, e_value)
+    pd.set_option('display.max_columns', None)
+    print(annotation_fitlered[annotation_fitlered.duplicated(subset=col_names[0])])
+    pd.reset_option('max_columns')
+    return annotation_to_families(annotation_fitlered, pangenome, source, force)
+
+
 def launch(args):
     """
     Launch functions to read systems
@@ -223,9 +234,11 @@ def launch(args):
     for k, v in pan_to_path.items():
         pangenome = Pangenome(name=k)
         pangenome.add_file(v)
-        annot2fam = annot_pangenome(pangenome, args.hmm, args.systems, args.force, args.disable_prog_bar)
+        annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
+                                    e_value=args.e_value, tmpdir=args.tmpdir, threads=args.threads,
+                                    force=args.force, disable_bar=args.disable_prog_bar)
         present_system(system, annot2fam)
-        print("finish")
+        logging.getLogger().info("Annotation Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -249,24 +262,25 @@ def parser_annot(parser):
     """
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
-    required.add_argument('-s', '--systems',
-                          required=True,
-                          type=Path,
+    required.add_argument('-s', '--systems', required=True, type=Path,
                           help="Path to systems directory")
-    required.add_argument('-p', '--pangenomes',
-                          required=True,
-                          type=Path,
-                          nargs='?',
+    required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument('--hmm',
-                          required=True,
-                          type=Path,
-                          nargs='?',
-                          help='Findings gene family of hmm in .tsv file')
+    required.add_argument("--source", required=True, type=str, nargs="?",
+                          help='Name of the annotation source. Default use name of annnotation file or directory.')
+    exclusive = required.add_mutually_exclusive_group(required=True)
+    exclusive.add_argument('--tsv', type=Path, nargs='?',
+                           help='Gene families annotation in TSV file. See our github for more detail about format')
+    exclusive.add_argument('--hmm', type=Path, nargs='?',
+                           help="File with all HMM or a directory with one HMM by file")
 
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--source", required=False, type=str, nargs="?", default=None,
-                          help='Name of the annotation source. Default use name of hmm result file')
+    optional.add_argument("--e_value", required=False, type=float, nargs='?', default=0.0001,
+                          help='E-value threshold use to assign annotation to gene families')
+    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+                          help="directory for storing temporary files")
+    optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
+                          help="Number of av available threads")
 
 
 if __name__ == "__main__":

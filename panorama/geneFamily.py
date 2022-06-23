@@ -29,5 +29,6 @@ class GeneFamily(Fam):
         :param force:
         """
         if self.annotation.get(source) is not None and not force:
-            raise Exception("This source is already used. If you really want to rewrite annot use '--force' option.")
+            raise Exception(f"This source is already used in {self.name}. "
+                            f"If you really want to rewrite annot use '--force' option.")
         self.annotation[source] = annotation

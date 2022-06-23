@@ -4,7 +4,7 @@
 # default libraries
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Union
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import tempfile
@@ -16,6 +16,9 @@ import pandas as pd
 # local libraries
 from panorama.pangenomes import Pangenome
 from panorama.utils import path_is_dir, path_is_file
+
+
+col_names = ['Gene family', 'Annotation', 'Accesion Id', 'e-value', 'score', 'overlap', 'Annotation description']
 
 
 def digit_seq(pangenome: Pangenome) -> List[pyhmmer.easel.DigitalSequence]:
@@ -60,7 +63,7 @@ def split_hmm_file(hmm_path: Path, tmpdir: tempfile.TemporaryDirectory) -> List[
     return hmm_list
 
 
-def hmm_search(hmm_path, gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> List[str, str, float, str]:
+def hmm_search(hmm_path, gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> List[List[Union[str, str, int, str]]]:
     """ Compute a hmmsearch between gene families and one HMM
 
     :param hmm_path: Path to HMM file
@@ -74,33 +77,17 @@ def hmm_search(hmm_path, gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> L
         top_hits = pipeline.search_hmm(hmm, gf_sequences)
         hit_list = []
         for hit in top_hits:
-            hit_list.append([hit.name.decode('UTF-8'), hmm.name.decode('UTF-8'), hit.evalue,
-                             hmm.description.decode('UTF-8')])
+            hit_list.append([hit.name.decode('UTF-8'), hmm.name.decode('UTF-8'), hmm.accession.decode('UTF-8'),
+                             hit.evalue, hit.score, None, hmm.description.decode('UTF-8')])
         return hit_list
 
 
-def export_to_df(hmm_res: List[List[str, str, float, str]], eval_threshold: float = 0.0001):
-    """
-    Export result of all HMM comparison to gene family in one dataframe.
-    Filter result to keep for each gene family best evalue score greatter than threshold
-
-    :param hmm_res: list of HMM results
-    :param eval_threshold: e-value threshold
-
-    :return: Filtered dataframe
-    """
-    hmm_df = pd.DataFrame(hmm_res, columns=['Gene family name', 'Function name', 'e-value', 'Function description'])
-    hmm_filter = hmm_df[hmm_df['e-value'] <= eval_threshold]
-    return hmm_filter[hmm_filter['e-value'] == hmm_filter.groupby('Gene family name')['e-value'].transform(min)]
-
-
-def launch_hmm_search(pangenome: Pangenome, hmm_path: Path, eval_threshold: float = 0.0001,
-                      tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
+def launch_hmm_search(pangenome: Pangenome, hmm_path: Path, tmpdir: Path = Path(tempfile.gettempdir()),
+                      threads: int = 1, disable_bar: bool = False):
     """ Launch hmm search against pangenome gene families and HMM
 
     :param pangenome: Pangenome with gene families
     :param hmm_path: Path to one file with multiple HMM or a directory with one HMM by file
-    :param eval_threshold: e-value threshold to filter results
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param disable_bar: allow to disable progress bar
@@ -125,8 +112,7 @@ def launch_hmm_search(pangenome: Pangenome, hmm_path: Path, eval_threshold: floa
         logging.getLogger().debug("Run hmm search")
         for future in tqdm(as_completed(futures), unit="hmm", total=len(futures), disable=disable_bar):
             res += future.result()
-    logging.getLogger().debug("Export HMM search results")
-    return export_to_df(res, eval_threshold)
+    return pd.DataFrame(res, columns=col_names)
 
 
 if __name__ == "__main__":
@@ -142,8 +128,9 @@ if __name__ == "__main__":
         pangenome = Pangenome(name="pangenome")
         pangenome.add_file(pangenome_file=args.pangenome)
         check_pangenome_info(pangenome, need_families=True)
-        launch_hmm_search(pangenome=pangenome, hmm_path=args.hmm, eval_threshold=args.evalue, tmpdir=args.tmpdir,
-                          threads=args.threads, disable_bar=args.disable_prog_bar)
+        res = launch_hmm_search(pangenome=pangenome, hmm_path=args.hmm, tmpdir=args.tmpdir,
+                                threads=args.threads, disable_bar=args.disable_prog_bar)
+        print(res)
 
 
     main_parser = argparse.ArgumentParser(
@@ -156,7 +143,6 @@ if __name__ == "__main__":
     req.add_argument("--hmm", required=True, type=Path,
                      help="HMM file to test annotation with hmmer")
     opt = main_parser.add_argument_group(title="Optional argument")
-    opt.add_argument("--e_value", required=False, type=float, )
     opt.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
                      help="directory for storing temporary files")
     opt.add_argument("--threads", required=False, type=int, default=1)
