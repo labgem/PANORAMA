@@ -76,6 +76,34 @@ def mkdir(output: str, force: bool = False) -> Path:
         return Path(output)
 
 
+def path_exist(path: Path) -> Path:
+    try:
+        abs_path = path.resolve()
+    except FileNotFoundError:
+        raise FileNotFoundError(f"{path} not exist")
+    except Exception:
+        raise Exception(f"An unexpected error happened. Please report to our github.")
+    else:
+        return abs_path
+
+
+def path_is_dir(path: Path) -> bool:
+    abs_path = path_exist(path)
+    if abs_path.is_dir():
+        return True
+    else:
+        return False
+
+
+def path_is_file(path: Path) -> bool:
+    abs_path = path_exist(path)
+    if abs_path.is_file():
+        return True
+    else:
+        return False
+
+
+
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:
     """ Check if the given tsv is readable for the next PANORAMA step
 
