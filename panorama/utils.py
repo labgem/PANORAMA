@@ -79,8 +79,10 @@ def mkdir(output: str, force: bool = False) -> Path:
 def path_exist(path: Path) -> Path:
     try:
         abs_path = path.resolve()
+        if not abs_path.exists():
+            raise FileNotFoundError
     except FileNotFoundError:
-        raise FileNotFoundError(f"{path} not exist")
+        raise FileNotFoundError(f"{path.resolve()} not exist")
     except Exception:
         raise Exception(f"An unexpected error happened. Please report to our github.")
     else:
@@ -101,7 +103,6 @@ def path_is_file(path: Path) -> bool:
         return True
     else:
         return False
-
 
 
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:

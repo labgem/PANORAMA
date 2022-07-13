@@ -306,7 +306,7 @@ class FuncUnit(Element):
             elif key == "parameters":
                 self.parameters = value
             else:
-                Exception(f"{key} doesn't exist in {self.name} of {self.system}")
+                raise Exception(f"{key} doesn't exist in {self.name} of {self.system}")
         self.families[fam_fu.name] = fam_fu
 
     def add_type_fam(self):

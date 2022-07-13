@@ -2,9 +2,10 @@
 # coding:utf-8
 
 # default libraries
+import collections
 import logging
 from pathlib import Path
-from typing import List, Union
+from typing import List, Union, Generator
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import tempfile
@@ -17,8 +18,8 @@ import pandas as pd
 from panorama.pangenomes import Pangenome
 from panorama.utils import path_is_dir, path_is_file
 
-
-col_names = ['Gene family', 'Annotation', 'Accesion Id', 'e-value', 'score', 'overlap', 'Annotation description']
+res_col_names = ['Gene_family', 'Annotation', 'Accesion', 'e_value', 'score', 'overlap', 'Description']
+cutoffs_col_names = ["accession", "name", "eval", "hmm_cov", "target_cov", "description"]
 
 
 def digit_seq(pangenome: Pangenome) -> List[pyhmmer.easel.DigitalSequence]:
@@ -63,31 +64,106 @@ def split_hmm_file(hmm_path: Path, tmpdir: tempfile.TemporaryDirectory) -> List[
     return hmm_list
 
 
-def hmm_search(hmm_path, gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> List[List[Union[str, str, int, str]]]:
+def hmm_search_hmmer(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
+                     hmm_meta: pd.DataFrame = None, threads: int = 1, disable_bar: bool = False):
+    res = []
+    result = collections.namedtuple("Result", res_col_names)
+    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
+    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, bit_cutoffs='trusted'):
+        for hit in top_hits:
+            cog = hit.best_domain.alignment
+            if hmm_meta is None:
+                res.append(result(hit.name.decode('UTF-8'), cog.hmm_name.decode('UTF-8'),
+                                  cog.hmm_accession.decode('UTF-8'), hit.evalue, hit.score, None, None))
+            else:
+                hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
+                res.append(result(hit.name.decode('UTF-8'), hmm_info['name'], cog.hmm_accession.decode('UTF-8'),
+                                  hit.evalue, hit.score, None, hmm_info.description))
+        bar.update()
+    bar.close()
+    return res
+
+
+def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
+                         hmm_meta: pd.DataFrame = None, threads: int = 1, disable_bar: bool = False):
+    results = hmm_search_hmmer(hmm_list, gf_sequences, hmm_meta, threads, disable_bar)
+    best_results = {}
+    keep_query = set()
+    for result in results:
+        if result.Gene_family in best_results:
+            previous_bitscore = best_results[result.Gene_family].score
+            if result.score > previous_bitscore:
+                best_results[result.Gene_family] = result
+                keep_query.add(result.Gene_family)
+            elif result.score == previous_bitscore:
+                if best_results[result.Gene_family].Annotation != result.Annotation:
+                    keep_query.remove(result.Gene_family)
+        else:
+            best_results[result.Gene_family] = result
+            keep_query.add(result.Gene_family)
+    return [best_results[k] for k in sorted(best_results) if k in keep_query]
+
+
+def hmm_search_plan7(hmm: pyhmmer.plan7.HMM,
+                     gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> List[List[Union[str, str, int, str]]]:
     """ Compute a hmmsearch between gene families and one HMM
 
-    :param hmm_path: Path to HMM file
+    :param hmm: HMM with Plan7 data model
     :param gf_sequences: Digitalized sequences
 
     :return: result of hmmsearch against gene family sequences
     """
-    with pyhmmer.plan7.HMMFile(hmm_path.absolute()) as hmms:
-        hmm = next(hmms)
-        pipeline = pyhmmer.plan7.Pipeline(hmm.alphabet)
-        top_hits = pipeline.search_hmm(hmm, gf_sequences)
-        hit_list = []
-        for hit in top_hits:
-            hit_list.append([hit.name.decode('UTF-8'), hmm.name.decode('UTF-8'), hmm.accession.decode('UTF-8'),
-                             hit.evalue, hit.score, None, hmm.description.decode('UTF-8')])
-        return hit_list
+    pipeline = pyhmmer.plan7.Pipeline(hmm.alphabet, bit_cutoffs='trusted')
+    top_hits = pipeline.search_hmm(hmm, gf_sequences)
+    hit_list = []
+    for hit in top_hits:
+        hit_list.append([hit.name.decode('UTF-8'), hmm.name.decode('UTF-8'), hmm.accession.decode('UTF-8'),
+                         hit.evalue, hit.score, None, hmm.description.decode('UTF-8')])
+    return hit_list
 
 
-def launch_hmm_search(pangenome: Pangenome, hmm_path: Path, tmpdir: Path = Path(tempfile.gettempdir()),
-                      threads: int = 1, disable_bar: bool = False):
+def annot_with_plan7(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
+                     threads: int = 1, disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        logging.getLogger().debug("Intiate pool executor")
+        futures = [executor.submit(hmm_search_plan7, hmm=hmm, gf_sequences=gf_sequences) for hmm in hmm_list]
+        res = []
+        logging.getLogger().debug("Run hmm search")
+        for future in tqdm(as_completed(futures), unit="hmm", total=len(futures), disable=disable_bar):
+            res += future.result()
+        return res
+
+
+def get_hmm_iter_eval(hmm_dir: Generator, eval: float = 0.0001):
+    hmms = []
+    for hmm_file in hmm_dir:
+        hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
+        hmm.cutoffs.trusted = (eval, eval)
+        hmms.append(hmm)
+    return hmms
+
+
+def get_hmm_iter_cutoffs(hmm_dir: Generator, cutoffs: pd.DataFrame):
+    hmms = []
+    for hmm_file in hmm_dir:
+        hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
+        meta_info = cutoffs.loc[hmm.accession.decode('UTF-8')]
+        hmm.cutoffs.trusted = (meta_info.eval, meta_info.eval)
+        hmm.description = meta_info.description.encode('UTF-8')
+        hmms.append(hmm)
+    return hmms
+
+
+def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearch', eval: float = None,
+                   cutoffs_file: Path = None, tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1,
+                   disable_bar: bool = False):
     """ Launch hmm search against pangenome gene families and HMM
 
     :param pangenome: Pangenome with gene families
     :param hmm_path: Path to one file with multiple HMM or a directory with one HMM by file
+    :param method: Methods used to search HMM
+    :param eval:
+    :param cutoffs_file:
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param disable_bar: allow to disable progress bar
@@ -98,21 +174,37 @@ def launch_hmm_search(pangenome: Pangenome, hmm_path: Path, tmpdir: Path = Path(
     logging.getLogger().debug("Digitalized gene families sequences")
     gf_sequences = digit_seq(pangenome)
     tmp_dir = tempfile.TemporaryDirectory(prefix="hmm_panorama", dir=tmpdir)
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().debug("Intiate pool executor")
-        if path_is_file(hmm_path):
-            futures = [executor.submit(hmm_search, hmm_path=hmm,
-                                       gf_sequences=gf_sequences) for hmm in split_hmm_file(hmm_path, tmp_dir)]
-        elif path_is_dir(hmm_path):
-            futures = [executor.submit(hmm_search, hmm_path=hmm,
-                                       gf_sequences=gf_sequences) for hmm in hmm_path.iterdir()]
+    cutoffs_df = None
+    # Get list of HMM with Plan7 data model
+    if path_is_file(hmm_path):
+        split_hmm_file(hmm_path, tmp_dir)
+        if eval is not None:
+            hmms = get_hmm_iter_eval(hmm_dir=Path(tmp_dir.name).iterdir(), eval=eval)
+        elif cutoffs_file is not None:
+            cutoffs_df = pd.read_csv(cutoffs_file, delimiter="\t", names=cutoffs_col_names).set_index('accession')
+            cutoffs_df['description'] = cutoffs_df["description"].fillna('unknown')
+            hmms = get_hmm_iter_cutoffs(hmm_dir=Path(tmp_dir.name).iterdir(), cutoffs=cutoffs_df)
         else:
-            raise Exception("Unexpected error")
-        res = []
-        logging.getLogger().debug("Run hmm search")
-        for future in tqdm(as_completed(futures), unit="hmm", total=len(futures), disable=disable_bar):
-            res += future.result()
-    return pd.DataFrame(res, columns=col_names)
+            raise Exception("You didn't provide e-value or cutoffs file")
+    elif path_is_dir(hmm_path):
+        if eval is not None:
+            hmms = get_hmm_iter_eval(hmm_dir=hmm_path.iterdir(), eval=eval)
+        elif cutoffs_file is not None:
+            cutoffs_df = pd.read_csv(cutoffs_file, delimiter="\t", names=cutoffs_col_names).set_index('accession')
+            cutoffs_df['description'] = cutoffs_df["description"].fillna('unknown')
+            hmms = get_hmm_iter_cutoffs(hmm_dir=hmm_path.iterdir(), cutoffs=cutoffs_df)
+        else:
+            raise Exception("You didn't provide e-value or cutoffs file")
+    else:
+        raise Exception("Unexpected error")
+    # Choice of one method
+    if method == 'hmmsearch':
+        res = annot_with_hmmsearch(hmms, gf_sequences, cutoffs_df, threads, disable_bar)
+    elif method == 'plan7':
+        res = annot_with_plan7(hmms, gf_sequences, threads, disable_bar)
+    else:
+        raise Exception("Methods to search HMM is plan7 or hmmsearch. Please choose one of them.")
+    return pd.DataFrame(res, columns=res_col_names)
 
 
 if __name__ == "__main__":
@@ -128,9 +220,11 @@ if __name__ == "__main__":
         pangenome = Pangenome(name="pangenome")
         pangenome.add_file(pangenome_file=args.pangenome)
         check_pangenome_info(pangenome, need_families=True)
-        res = launch_hmm_search(pangenome=pangenome, hmm_path=args.hmm, tmpdir=args.tmpdir,
-                                threads=args.threads, disable_bar=args.disable_prog_bar)
-        print(res)
+        res_df = annot_with_hmm(pangenome=pangenome, hmm_path=args.hmm, method=args.method, tmpdir=args.tmpdir,
+                                eval=args.e_value, cutoffs_file=args.cutoffs, threads=args.threads,
+                                disable_bar=args.disable_prog_bar)
+        print(res_df)
+        res_df.to_csv(path_or_buf="hmm_res.tsv", sep="\t")
 
 
     main_parser = argparse.ArgumentParser(
@@ -143,6 +237,11 @@ if __name__ == "__main__":
     req.add_argument("--hmm", required=True, type=Path,
                      help="HMM file to test annotation with hmmer")
     opt = main_parser.add_argument_group(title="Optional argument")
+    opt.add_argument("--method", required=False, type=str, choices=['hmmsearch', 'plan7'], default='hmmsearch',
+                     help="Two methods are available and defined in pyhmmer. Plan7 or hmmsearch")
+    exclusive = opt.add_mutually_exclusive_group()
+    exclusive.add_argument('--e_value', required=False, type=float, default=None)
+    exclusive.add_argument('--cutoffs', required=False, type=Path, default=None)
     opt.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
                      help="directory for storing temporary files")
     opt.add_argument("--threads", required=False, type=int, default=1)

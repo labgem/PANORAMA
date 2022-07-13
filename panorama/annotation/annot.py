@@ -20,10 +20,18 @@ from ppanggolin.formats.readBinaries import check_pangenome_info
 from panorama.utils import check_tsv_sanity
 from panorama.annotation.rules import System, Systems
 from panorama.pangenomes import Pangenome
-from panorama.annotation.hmm_search import launch_hmm_search
+from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
 
 col_names = ['Gene family', 'Annotation', 'Accesion Id', 'e-value', 'score', 'overlap', 'Annotation description']
 
+
+def check_parameter(args):
+    if args.tsv is None and args.hmm is None:
+        raise Exception("You did not provide tsv or hmm for annotation")
+    if args.tsv is not None and args.e_value is None:
+        raise Exception("An e-value is needed to keep the best annotation for each family")
+    if args.hmm is not None and args.e_value is None and args.cutoffs is None:
+        raise Exception("You did not provide e_value or cutoffs file to assign function with HMM")
 
 def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
@@ -152,7 +160,7 @@ def get_max_separation(obj: object):
     return obj.parameters["max_separation"]
 
 
-def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001):
+def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.DataFrame:
     """
     Filter annotation from dataframe to keep the best annotation for each family.
 
@@ -179,7 +187,7 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     """
     annot2fam = {}
     for index, row in annotation_df.iterrows():
-        gene_fam = pangenome.get_gene_family(name=row['Gene family'])
+        gene_fam = pangenome.get_gene_family(name=row['Gene_family'])
         gene_fam.add_annotation(source=source, annotation=row['Annotation'], force=force)
         if row['Annotation'] not in annot2fam:
             annot2fam[row['Annotation']] = {gene_fam}
@@ -188,9 +196,9 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     return annot2fam
 
 
-def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float = 0.0001, source: str = None,
-                    tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, force: bool = False,
-                    disable_bar: bool = False) -> dict:
+def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float = 0.0001, cutoffs: Path = None,
+                    source: str = None, tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1,
+                    force: bool = False, disable_bar: bool = False) -> dict:
     """ Main function to add annotation to pangenome from tsv file
 
     :param pangenome: Pangenome object to ppanggolin
@@ -207,17 +215,14 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float =
     """
     check_pangenome_annotation(pangenome, disable_bar=disable_bar)
     if tsv is not None:
-        annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
-                                    names=col_names)
+        annotation_df = filter_df(pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
+                                              names=col_names), e_value)
     elif hmm is not None:
-        annotation_df = launch_hmm_search(pangenome, hmm, tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
+        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", eval=e_value, cutoffs_file=cutoffs,
+                                       tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
-    annotation_fitlered = filter_df(annotation_df, e_value)
-    pd.set_option('display.max_columns', None)
-    print(annotation_fitlered[annotation_fitlered.duplicated(subset=col_names[0])])
-    pd.reset_option('max_columns')
-    return annotation_to_families(annotation_fitlered, pangenome, source, force)
+    return annotation_to_families(annotation_df, pangenome, source, force)
 
 
 def launch(args):
@@ -226,6 +231,7 @@ def launch(args):
 
     :param args: Argument given
     """
+    check_parameter(args)
     systems_to_path = args.systems.absolute()
     system = System()
     for file in systems_to_path.glob("*.json"):
@@ -235,10 +241,10 @@ def launch(args):
         pangenome = Pangenome(name=k)
         pangenome.add_file(v)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                                    e_value=args.e_value, tmpdir=args.tmpdir, threads=args.threads,
-                                    force=args.force, disable_bar=args.disable_prog_bar)
-        present_system(system, annot2fam)
-        logging.getLogger().info("Annotation Done")
+                                    e_value=args.e_value, cutoffs=args.cutoffs, tmpdir=args.tmpdir,
+                                    threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
+        # present_system(system, annot2fam)
+        # logging.getLogger().info("Annotation Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -268,15 +274,17 @@ def parser_annot(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source. Default use name of annnotation file or directory.')
-    exclusive = required.add_mutually_exclusive_group(required=True)
-    exclusive.add_argument('--tsv', type=Path, nargs='?',
-                           help='Gene families annotation in TSV file. See our github for more detail about format')
-    exclusive.add_argument('--hmm', type=Path, nargs='?',
-                           help="File with all HMM or a directory with one HMM by file")
-
+    exclusive_mode = required.add_mutually_exclusive_group(required=True)
+    exclusive_mode.add_argument('--tsv', type=Path, nargs='?',
+                                help='Gene families annotation in TSV file. See our github for more detail about format')
+    exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
+                                help="File with all HMM or a directory with one HMM by file")
+    exclusive_threshold = required.add_mutually_exclusive_group()
+    exclusive_threshold.add_argument('--e_value', required=False, type=float, default=None,
+                                     help="Set the same e-value for all hmm to assign function")
+    exclusive_threshold.add_argument('--cutoffs', required=False, type=Path, default=None,
+                                     help="TSV file to set one evalue for each hmm")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--e_value", required=False, type=float, nargs='?', default=0.0001,
-                          help='E-value threshold use to assign annotation to gene families')
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
