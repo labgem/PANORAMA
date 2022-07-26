@@ -12,9 +12,7 @@ class GeneFamily(Fam):
     """
     This represents a single gene family. It will be a node in the pangenome graph, and be aware of its genes and edges.
     :param family_id: The internal identifier to give to the gene family
-    :type family_id: any
     :param name: The name of the gene family (to be printed in output files)
-    :type name: str
     """
 
     def __init__(self, family_id: int, name: str):
