@@ -3,26 +3,37 @@
 
 # default libraries
 from __future__ import annotations
+import logging
+from typing import Dict
 
-# installed libraries
-# local libraries
+suprules_params = ['min_mandatory', 'max_forbidden', 'min_total']
+keys_param = suprules_params.append('max_separation')
+rule_keys = ['type', 'parameters']
 
-# TODO les fichiers padloc ont une famille qui n'existe pas : le nom du system qui est aussi une fu et donc un fam
+
 class Systems:
-
-    def __init__(self, systems: dict = {}, dict_families: dict = {}):
+    """
+    :param systems: The internal identifier to give to the gene family
+    """
+    def __init__(self, systems: Dict[System] = None):
         """Constructor Method
         """
         self.systems = systems
-        self.dict_families = dict_families
 
-    def print_systems(self):
+    def __str__(self):
+
         """
         Print all systems predicted
 
         """
         for system in self.systems.values():
             system.print_system()
+
+    def in_sys(self, name: str):
+        if name in self.systems:
+            return True
+        else:
+            raise KeyError(f"The {name} system is not in the list of systems")
 
     def get_sys(self, name: str):
         """
@@ -57,56 +68,188 @@ class Systems:
                 self.dict_families[family] = sys.name
 
 
-class Element:
-    def __init__(self):
+class Rule:
+    """Super class for System and FuncUnit and Family
+
+    :param name: Neme of the element
+    :param parameters: Dictionary with the parameters name and value
+    :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
+    """
+
+    def __init__(self, name: str = "", parameters: dict = None, type: str = ""):
         """Constructor Method
         """
-        self.name = ""
-        self.parameters = dict()
+        self.name = name
+        self.parameters = parameters if parameters is not None else dict()
+        self.type = type
+
+    def check_param(self, message):
+        """
+        Verify with boolean the condition parameters
+
+        :param message: Message to print if problem with parameters
+        """
+        if self.parameters is not None:
+            dict_bool = dict()
+
+    def check_dict(self, rule_dict):
+        for key in rule_keys:
+            try:
+                _ = rule_dict[key]
+            except KeyError:
+                raise KeyError(f"Requires {key} in {self.name}")
+            else:
+                if key == 'type':
+                    if not rule_dict[key] in ['mandatory', 'accessory', 'forbidden']:
+                        raise KeyError(f"The type value {rule_dict[key]} is incorrect in {self.name}")
+                elif key == 'parameters' and rule_dict[key] is not None:
+                    for parameter, value in rule_dict['parameters'].items():
+                        if parameter != 'max_separation':
+                            raise KeyError(f"The parameter {parameter} is incorrect in {self.name}")
+                        elif not (isinstance(value, int)) or value < 0:
+                            raise ValueError(f"The value {value} is not positive int type in {self.name}")
+
+    def read_element(self, data: dict):
+        for key, value in data.items():
+            if isinstance(key, str):
+                self.name = key
+            else:
+                raise Exception(f"The name value must be str type")
+            if isinstance(value, dict):
+                return value
+            else:
+                raise Exception(f"The element are not readable")
 
 
-class System(Element):
-    def __init__(self):
+class SupRule(Rule):
+    """Super class for System and FuncUnit
+
+    :param mandatory: Set of mandatory sub element
+    :param accessory: Set of accessory sub element
+    :param forbidden: Set of forbidden sub element
+    :param neutral: Set of neutral sub element
+    """
+
+    def __init__(self, name: str = "", parameters: dict = None, type: str = "", mandatory: set = None,
+                 accessory: set = None, forbidden: set = None, neutral: set = None):
         """Constructor Method
         """
-        super().__init__()
-        self.func_units = dict()
+        super().__init__(name, parameters, type)
+        self.mandatory = mandatory if mandatory is not None else set()
+        self.accessory = accessory if accessory is not None else set()
+        self.forbidden = forbidden if forbidden is not None else set()
+        self.neutral = neutral if neutral is not None else set()
+
+    def check_param(self, message):
+        """
+        Verify with boolean the condition parameters
+
+        :param message: Message to print if problem with parameters
+        """
+        if self.parameters is not None:
+            dict_bool = dict()
+            for parameter, value in self.parameters.items():
+                if parameter == "min_mandatory":
+                    if len(self.mandatory) >= value:
+                        dict_bool[parameter] = True
+                    else:
+                        dict_bool[parameter] = False
+                elif parameter == "max_forbidden":
+                    if len(self.forbidden) >= value:
+                        dict_bool[parameter] = True
+                    else:
+                        dict_bool[parameter] = False
+                elif parameter == "min_total":
+                    if len(self.families) >= value:
+                        dict_bool[parameter] = True
+                    else:
+                        dict_bool[parameter] = False
+                elif parameter == "max_separation":
+                    dict_bool[parameter] = True
+            if all(x for x in dict_bool.values()):
+                return True
+            else:
+                for param, value in dict_bool.items():
+                    if value is False:
+                        logging.getLogger().warning(message + f"{param}")
+                return False
+        else:
+            return True
+
+    def check_dict(self, data_dict: dict):
+        super().check_dict(data_dict)
+        for parameter, value in data_dict['parameters'].items():
+            if parameter not in suprules_params:
+                raise KeyError(f"The parameter {parameter} is incorrect in {self.name}")
+            elif not (isinstance(value, int)) or value < 0:
+                raise ValueError(f"The value {value} is not positive int type in {self.name}")
+
+    def read_element(self, data: dict):
+        sub_dict = super(SupRule, self).read_element(data)
+        self.check_dict(sub_dict)
+        self.type = sub_dict['type'] if sub_dict is not None else 'neutral'
+        self.parameters = sub_dict['parameters']
+        return sub_dict
+class System(SupRule):
+    """Represent System rules which describe biological system
+
+     :param name: Neme of the element
+     :param parameters: Dictionary with the parameters name and value
+     :param mandatory: Set of mandatory sub element
+     :param accessory: Set of accessory sub element
+     :param forbidden: Set of forbidden sub element
+     :param neutral: Set of neutral sub element
+     """
+
+    def __init__(self, name: str = "", parameters: dict = None, mandatory: set = None, accessory: set = None,
+                 forbidden: set = None, neutral: set = None):
+        """Constructor Method
+        """
+        super().__init__(name, parameters, mandatory, accessory, forbidden, neutral)
         self.bool_param = False
-        self.families = dict()      # {name_fam : obj_fam}
-        self.mandatory = set()
-        self.accessory = set()
-        self.forbidden = set()
-        self.neutral = set()
-        self.dict_families = dict()
 
-    def read_system(self, data):
+    def __repr__(self):
+        return [self.name, self.mandatory, self.accessory, self.forbidden, self.neutral, self.parameters]
+
+    def __str__(self):
+        "\t".join([self.name, ",".join(self.mandatory), ",".join(self.accessory), ",".join(self.forbidden),
+                   ",".join(self.neutral), ",".join(self.parameters.values())])
+
+    def func_units(self):
+        return self.mandatory.union(self.accessory, self.forbidden, self.neutral)
+
+    def families(self):
+        families = dict()
+        for func_unit in self.func_units():
+            families.update(func_unit.families)
+        return families
+
+    def read_system(self, data: dict):
         """
         Read system to parse in self attributes
 
         :param data: json data dictionary
         """
-        for key, value in data.items():
-            if key == 'name':
-                if isinstance(value, str):
-                    self.name = value
-                else:
-                    raise Exception("The system name must to be str type.")
-            elif key == 'func_units':
-                for func_unit, dict_fu in data['func_units'].items():
+        sys_dict = super().read_element(data)
+        if not any([True for k in sys_dict.keys() if k in ['func_units', 'parameters']]):
+            raise KeyError(f"Requires func_units and parameters keys in {self.name}")
+        for key, value in sys_dict.items():
+            if key == 'func_units':
+                for dict_fu in value.values():
                     f_unit = FuncUnit()
-                    f_unit.name = func_unit
                     f_unit.system = self.name
                     f_unit.read_func_unit(dict_fu)
                     self.add_func_unit(f_unit)
-                self.add_type_fu()
             elif key == 'parameters':
+                if not all([True for k in value.keys() if k in keys_param]):
+                    raise Exception(f"Not all the following key are in {keys_param} in {self.name}")
                 self.parameters = value
             else:
-                Exception(f"The key {key} doesn't exist in the system {self.name}")
-        self.check_system(data)
+                raise Exception(f"{key} in {self.name} are not readable in systems")
+        self.check_system()
         if len(self.neutral) == 1 and len(self.func_units) == 1:
-            self.mandatory = self.neutral
-            self.neutral = None
+            logging.getLogger().warning(f"There is only one function unit in {self.name}. "
+                                        f"It should be a mandatory type.")
 
     def add_func_unit(self, func_unit: FuncUnit):
         """
@@ -114,87 +257,70 @@ class System(Element):
 
         :param func_unit: function unit
         """
-        self.func_units[func_unit.name] = func_unit
+        if func_unit.type == "mandatory":
+            self.mandatory.add(func_unit)
+        elif func_unit.type == "accessory":
+            self.accessory.add(func_unit)
+        elif func_unit.type == "forbidden":
+            self.forbidden.add(func_unit)
+        elif func_unit.type == "neutral":
+            self.neutral.add(func_unit)
 
-    def add_type_fu(self):
+    def check_system(self):
         """
-        Add a type for a function unit of system
-
-        """
-        for name, fu in self.func_units.items():
-            if fu.type == "mandatory":
-                self.mandatory.add(fu)
-            elif fu.type == "accessory":
-                self.accessory.add(fu)
-            elif fu.type == "forbidden":
-                self.forbidden.add(fu)
-            elif fu.type == "neutral":
-                self.neutral.add(fu)
-        self.add_fam()
-
-    def add_fam(self):
-        """
-        Add family in families dictionary of system
-
-        """
-        for func_unit in self.func_units.values():
-            self.families.update(func_unit.families)
-
-    def check_system(self, dict_sys: dict):
-        """
-        Verify the json file of system
+        Verify system coherence
 
         :param dict_sys: data json file
-
         """
-        keys_fu = ['name', 'func_units', 'parameters']
-        for key in keys_fu:
-            try:
-                sub_dict = dict_sys[key]
-            except KeyError:
-                raise KeyError(f"Requires {key} in {self.name}")
-            else:
-                if key == 'name':
-                    if sub_dict is None:
-                        raise Exception(f"The system must be to have a name")
-                elif key == 'parameters':
-                    if sub_dict is None:
-                        for func_unit in self.func_units.values():
-                            if func_unit.parameters is None:
-                                raise Exception("It must to have the four parameters (min_mandatory, max_forbidden, "
-                                                "min_total and max_separation) in system's parameters or in all "
-                                                "func units's parameters")
-                            else:
-                                k_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
-                                for parameter in k_param:
-                                    try:
-                                        _ = func_unit.parameters[parameter]
-                                    except KeyError:
-                                        raise KeyError("It must to have the four parameters (min_mandatory, "
-                                                       "max_forbidden, min_total and max_separation) in system's "
-                                                       "parameters or in all func units's parameters")
-                    else:
-                        keys_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
-                        for parameter in keys_param:
-                            try:
-                                _ = sub_dict[parameter]
-                            except:
-                                for func_unit in self.func_units.values():
-                                    if func_unit.parameters is None:
-                                        raise Exception(
-                                            "It must to have the four parameters (min_mandatory, max_forbidden, "
-                                            "min_total and max_separation) in system's parameters or in all "
-                                            "func units's parameters")
-                                    else:
-                                        k_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
-                                        for parameter in k_param:
-                                            try:
-                                                _ = func_unit.parameters[parameter]
-                                            except KeyError:
-                                                raise KeyError(
-                                                    "It must to have the four parameters (min_mandatory, max_forbidden,"
-                                                    " min_total and max_separation) in system's parameters or in all "
-                                                    "func units's parameters")
+        pass
+        # keys_fu = ['name', 'func_units', 'parameters']
+        # for key in keys_fu:
+        #     try:
+        #         sub_dict = dict_sys[key]
+        #     except KeyError:
+        #         raise KeyError(f"Requires {key} in {self.name}")
+        #     else:
+        #         if key == 'name':
+        #             if sub_dict is None:
+        #                 raise Exception(f"The system must be to have a name")
+        #         elif key == 'parameters':
+        #             if sub_dict is None:
+        #                 for func_unit in self.func_units.values():
+        #                     if func_unit.parameters is None:
+        #                         raise Exception("It must to have the four parameters (min_mandatory, max_forbidden, "
+        #                                         "min_total and max_separation) in system's parameters or in all "
+        #                                         "func units's parameters")
+        #                     else:
+        #                         k_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
+        #                         for parameter in k_param:
+        #                             try:
+        #                                 _ = func_unit.parameters[parameter]
+        #                             except KeyError:
+        #                                 raise KeyError("It must to have the four parameters (min_mandatory, "
+        #                                                "max_forbidden, min_total and max_separation) in system's "
+        #                                                "parameters or in all func units's parameters")
+        #             else:
+        #                 keys_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
+        #                 for parameter in keys_param:
+        #                     try:
+        #                         _ = sub_dict[parameter]
+        #                     except:
+        #                         for func_unit in self.func_units.values():
+        #                             if func_unit.parameters is None:
+        #                                 raise Exception(
+        #                                     "It must to have the four parameters (min_mandatory, max_forbidden, "
+        #                                     "min_total and max_separation) in system's parameters or in all "
+        #                                     "func units's parameters")
+        #                             else:
+        #                                 k_param = ['min_mandatory', 'max_forbidden', 'min_total', 'max_separation']
+        #                                 for parameter in k_param:
+        #                                     try:
+        #                                         _ = func_unit.parameters[parameter]
+        #                                     except KeyError:
+        #                                         raise KeyError(
+        #                                             "It must to have the four parameters (min_mandatory, max_forbidden,"
+        #                                             " min_total and max_separation) in system's parameters or in all "
+        #                                             "func units's parameters")
 
     def check_param(self):
         """
@@ -275,18 +401,46 @@ class System(Element):
             self.accessory = None
 
 
-class FuncUnit(Element):
-    def __init__(self):
+class FuncUnit(SupRule):
+    """Represent functional unit definition rule
+
+    :param name: Neme of the element
+    :param parameters: Dictionary with the parameters name and value
+    :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param mandatory: Set of mandatory sub element
+    :param accessory: Set of accessory sub element
+    :param forbidden: Set of forbidden sub element
+    :param neutral: Set of neutral sub element
+    """
+    def __init__(self, name: str = "", parameters: dict = None, type: str = "", mandatory: set = None,
+                 accessory: set = None, forbidden: set = None, neutral: set = None, system: System = None):
         """Constructor Method
         """
-        super().__init__()
-        self.type = ""
-        self.families = dict()
-        self.system = ""
+        super().__init__(name, parameters, type, mandatory, accessory, forbidden, neutral)
+        self.system = system
         self.bool_param = False
-        self.mandatory = dict()
-        self.accessory = dict()
-        self.forbidden = dict()
+
+    def __repr__(self):
+        return f"Functional unit name : {self.name}, type : {self.type}"
+
+    @property
+    def families(self):
+        for fam in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
+            yield fam
+
+    def check_dict(self, fu_dict):
+        try:
+            super(FuncUnit, self).check_dict(fu_dict)
+        except Exception:
+            raise Exception(f"Functional unit dictionnary unreadable in "
+                            f"{self.name} from {self.system.name if self.system is not None else 'Unknow system'}")
+        else:
+            try:
+                _ = fu_dict['families']
+            except KeyError:
+                raise KeyError(f"Functional unit {self.name} from "
+                               f"{self.system.name if self.system is not None else 'Unknow system'}"
+                               f"can't be without families.")
 
     def read_func_unit(self, data_fu: dict):
         """
@@ -295,54 +449,12 @@ class FuncUnit(Element):
         :param data_fu: data json file of all function units
 
         """
-        if data_fu['families']:
-            for family, dict_fam in data_fu['families'].items():
-                fam = Family()
-                fam.name = family
-                fam.func_unit = self.name
-                fam.system = self.system
-                fam.read_family(dict_fam)
-                self.add_fam(fam)
-            self.add_type_fam()
-        self.check_func_unit(data_fu)
-        for key, value in data_fu.items():
-            if key == "type":
-                if value is None:
-                    self.type = "neutral"
-                else:
-                    if value == 'mandatory' or value == 'accessory' or value == 'forbidden':
-                        self.type = value
-                    else:
-                        raise Exception(f"{value} doesn't exist, in {self.name} of {self.system}")
-                    self.type = value
-            elif key == "families":
-                pass
-            elif key == "parameters":
-                self.parameters = value
-            else:
-                raise Exception(f"{key} doesn't exist in {self.name} of {self.system}")
-
-
-    def add_type_fam(self):
-        """
-         Add a type for a family of function unit
-
-        """
-        for name, fam in self.families.items():
-            if fam.parameters is not None:
-                if fam.type == "mandatory":
-                    self.mandatory[name] = int(fam.parameters.get('max_separation'))
-                elif fam.type == "accessory":
-                    self.accessory[name] = int(fam.parameters.get('max_separation'))
-                elif fam.type == "forbidden":
-                    self.forbidden[name] = int(fam.parameters.get('max_separation'))
-            else:
-                if fam.type == "mandatory":
-                    self.mandatory[name] = None
-                elif fam.type == "accessory":
-                    self.accessory[name] = None
-                elif fam.type == "forbidden":
-                    self.forbidden[name] = None
+        fu_dict = super().read_element(data_fu)
+        for family_dict in fu_dict['families'].values():
+            curent_family = Family()
+            curent_family.func_unit = self.name
+            curent_family.read_family(family_dict)
+            self.add_fam(curent_family)
 
     def add_fam(self, fam: Family):
         """
@@ -350,7 +462,14 @@ class FuncUnit(Element):
 
         :param fam: a family
         """
-        self.families[fam.name] = fam
+        if fam.type == 'mandatory':
+            self.mandatory.add(fam)
+        elif fam.type == "accessory":
+            self.accessory.add(fam)
+        elif fam.type == "forbidden":
+            self.forbidden.add(fam)
+        else:
+            self.neutral.add(fam)
 
     def check_func_unit(self, dict_fu: dict):
         """
@@ -474,102 +593,73 @@ class FuncUnit(Element):
         return systems.systems[system_name]
 
 
-    def get_fam(self, fam_name: str):
-        """
-        Get system of function unit
-
-        :param system_name: name system to find
-        :param systems: class Systems with all systems
-        :return name system
-        """
-        return self.families[fam_name]
-
-
-class Family(Element):
-    def __init__(self):
+class Family(Rule):
+    def __init__(self, name: str = "", parameters: dict = None, type: str = "", relation: str = "",
+                 func_unit: FuncUnit = None):
         """Constructor Method
         """
-        super().__init__()
-        self.type = ""
-        self.relation = ""
-        self.func_unit = ""
-        self.system = ""
+        super().__init__(name, parameters, type)
+        self.relation = relation
+        self.func_unit = func_unit
 
-    def read_family(self, family: dict):
+    def __repr__(self):
+        return f"Family name : {self.name}, type : {self.type}, " \
+               f"Functional Unit : {self.func_unit.name if self.func_unit is not None else 'Unknow'}, " \
+               f"System : {self.system.name if self.system is not None else 'Unknow'}"
+
+    def __str__(self):
+        out_dic = {"name": self.name, "type": self.type, "relation": self.relation,
+                   "functional unit": self.func_unit.name if self.func_unit is not None else None,
+                   "system": self.system.name if self.system is not None else None}
+        out_dic.update(
+            {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
+        return ", ".join([f"{k}: {v}" for k, v in out_dic.items()])
+
+    def check_dict(self, family_dict: dict):
+        try:
+            super(Family, self).check_dict(family_dict)
+        except Exception:
+            raise Exception(f"Family dictionnary unreadable in "
+                            f"{self.func_unit.name if self.func_unit is not None else 'Unknow functional unit'} from "
+                            f"{self.system.name if self.system is not None else 'Unknow system'}")
+        else:
+            try:
+                _ = family_dict['relation']
+            except KeyError:
+                raise KeyError(f"The relation attribute does not exist in {self.name} from "
+                               f"{self.func_unit.name if self.func_unit is not None else 'Unknow functional unit'} "
+                               f"and {self.system.name if self.system is not None else 'Unknow system'}")
+            else:
+                if family_dict['relation'] not in [None, 'homologs', 'analogs']:
+                    raise ValueError(f"The relation value is incorrect in {self.name} from "
+                                     f"{self.func_unit.name if self.func_unit is not None else 'Unknow func unit'} "
+                                     f"and {self.system.name if self.system is not None else 'Unknow system'}. "
+                                     f"It must be None, homologs or analogs")
+
+    def read_family(self, data_dict: dict):
         """
         Read family
 
-        :param family: data json file with families
+        :param family_dict: data json file with families
         """
-        self.check_family(family)
-        for attrib, value in family.items():
+        family_dict = self.read_element(data_dict)
+        self.check_dict(family_dict)
+        for attrib, value in family_dict.items():
             if attrib == 'type':
-                self.type = value
+                self.type = value if value is not None else 'neutral'
             elif attrib == 'relation':
                 self.relation = value
             elif attrib == 'parameters':
                 self.parameters = value
 
-    def check_family(self, dict_fam: dict):
-        """
-        Check family in json file
+    @property
+    def system(self):
+        return self.func_unit.system
 
-        :param dict_fam: data json file with families
-        """
-        keys_fam = ['type', 'relation', 'parameters']
-        for key in keys_fam:
-            try:
-                _ = dict_fam[key]
-            except KeyError:
-                raise KeyError(f"Requires {key} in {self.func_unit} {self.name} of {self.system}")
-            else:
-                if key == 'type':
-                    if not (dict_fam['type'] == 'mandatory' or dict_fam['type'] == 'accessory'
-                            or dict_fam['type'] == 'forbidden'):
-                        raise KeyError(f"The type value {dict_fam['type']} is incorrect in {self.func_unit} {self.name}"
-                                       f" of {self.system}, it must be mandatory, accessory or forbidden")
-                elif key == 'relation':
-                    if not (dict_fam['relation'] is None or dict_fam['relation'] == 'homologs'
-                            or dict_fam['relation'] == 'analogs'):
-                        raise KeyError(f"The relation value {dict_fam['relation']} is incorrect in {self.func_unit} "
-                                       f"{self.name} of {self.system}, it must be None, homologs or analogs")
-                elif key == 'parameters':
-                    if dict_fam['parameters'] is not None:
-                        for parameter, value in dict_fam['parameters'].items():
-                            if not (parameter == 'max_separation'):
-                                raise KeyError(f"The parameter {parameter} is incorrect. In family parameters, there is"
-                                               f" only max_separation in {self.func_unit} {self.name} of {self.system}")
-                            elif not (isinstance(value, int)) or value < 0:
-                                raise ValueError(f"The value {value} is not positive int type in {self.func_unit} "
-                                                 f"{self.name} of {self.system}")
-                else:
-                    raise Exception(f"{key} doesn't exit in {self.func_unit} {self.name} of {self.system}, only type, "
-                                    "relation and parameters exist")
 
-    def check_param(self):
-        """
-         Verify with boolean the condition parameters
-
-        """
-        return True
-
-    def get_func_unit(self, func_unit: str, systems: Systems):
-        """
-        Get function unit name
-
-        :param func_unit: name of function unit
-        :param systems: class Systems with all systems
-        :return: name of function unit
-        """
-        return self.get_sys(self.system, systems).func_units[func_unit]
-
-    def get_sys(self, system_name: str, systems: Systems):
-        """
-        Get system name
-
-        :param system_name: name of system
-        :param systems: class Systems with all systems
-        :return: name of system
-        """
-        return systems.systems[system_name]
-
+if __name__ == "__main__":
+    """Test Family class"""
+    fam_dict = {"type": "mandatory", "relation": 'a', "parameters": {"max_separation": 4}}
+    family = Family(name="test_fam")
+    family.read_family(fam_dict)
+    print(family)
