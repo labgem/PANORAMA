@@ -1,14 +1,20 @@
 #!/usr/bin/env python3
 # coding:utf-8
+
+# default libraries
 from __future__ import annotations
+
+# installed libraries
+# local libraries
 
 # TODO les fichiers padloc ont une famille qui n'existe pas : le nom du system qui est aussi une fu et donc un fam
 class Systems:
 
-    def __init__(self, systems: dict = {}):
+    def __init__(self, systems: dict = {}, dict_families: dict = {}):
         """Constructor Method
         """
         self.systems = systems
+        self.dict_families = dict_families
 
     def print_systems(self):
         """
@@ -28,6 +34,17 @@ class Systems:
             if system == name:
                 return system
 
+    def get_sys2fam(self, name_fam: str):
+        """
+        Get name system of family
+
+        :param name_fam: name of family to find its system
+        :return: system
+        """
+        for obj_fam, system in self.dict_families.items():
+            if obj_fam.name == name_fam:
+                return system
+
     def add_sys(self, sys: System):
         """
         Add system
@@ -36,6 +53,8 @@ class Systems:
         """
         if sys.check_param() is True:
             self.systems[sys.name] = sys
+            for family in sys.families.values():
+                self.dict_families[family] = sys.name
 
 
 class Element:
@@ -53,15 +72,16 @@ class System(Element):
         super().__init__()
         self.func_units = dict()
         self.bool_param = False
-        self.families = dict()
+        self.families = dict()      # {name_fam : obj_fam}
         self.mandatory = set()
         self.accessory = set()
         self.forbidden = set()
         self.neutral = set()
+        self.dict_families = dict()
 
     def read_system(self, data):
         """
-        Read system
+        Read system to parse in self attributes
 
         :param data: json data dictionary
         """
@@ -82,7 +102,7 @@ class System(Element):
             elif key == 'parameters':
                 self.parameters = value
             else:
-                Exception(f"{key} doesn't exist in {self.name}")
+                Exception(f"The key {key} doesn't exist in the system {self.name}")
         self.check_system(data)
         if len(self.neutral) == 1 and len(self.func_units) == 1:
             self.mandatory = self.neutral
@@ -194,7 +214,7 @@ class System(Element):
                         else:
                             dict_bool[parameter] = False
                     elif parameter == "max_forbidden":
-                        if len(self.forbidden) <= value:
+                        if len(self.forbidden) >= value:
                             dict_bool[parameter] = True
                         else:
                             dict_bool[parameter] = False
@@ -275,11 +295,6 @@ class FuncUnit(Element):
         :param data_fu: data json file of all function units
 
         """
-        fam_fu = Family()
-        fam_fu.name = self.name
-        fam_fu.func_unit = self.name
-        fam_fu.system = self.system
-        fam_fu.parameters = None
         if data_fu['families']:
             for family, dict_fam in data_fu['families'].items():
                 fam = Family()
@@ -300,14 +315,13 @@ class FuncUnit(Element):
                     else:
                         raise Exception(f"{value} doesn't exist, in {self.name} of {self.system}")
                     self.type = value
-                fam_fu.type = self.type
             elif key == "families":
                 pass
             elif key == "parameters":
                 self.parameters = value
             else:
                 raise Exception(f"{key} doesn't exist in {self.name} of {self.system}")
-        self.families[fam_fu.name] = fam_fu
+
 
     def add_type_fam(self):
         """
@@ -385,7 +399,7 @@ class FuncUnit(Element):
                         else:
                             dict_bool[parameter] = False
                     elif parameter == "max_forbidden":
-                        if len(self.forbidden) <= value:
+                        if len(self.forbidden) >= value:
                             dict_bool[parameter] = True
                         else:
                             dict_bool[parameter] = False
@@ -458,6 +472,17 @@ class FuncUnit(Element):
         :return name system
         """
         return systems.systems[system_name]
+
+
+    def get_fam(self, fam_name: str):
+        """
+        Get system of function unit
+
+        :param system_name: name system to find
+        :param systems: class Systems with all systems
+        :return name system
+        """
+        return self.families[fam_name]
 
 
 class Family(Element):

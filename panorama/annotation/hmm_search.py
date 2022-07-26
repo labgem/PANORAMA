@@ -18,7 +18,7 @@ import pandas as pd
 from panorama.pangenomes import Pangenome
 from panorama.utils import path_is_dir, path_is_file
 
-res_col_names = ['Gene_family', 'Annotation', 'Accesion', 'e_value', 'score', 'overlap', 'Description']
+res_col_names = ['Gene_family', 'Annotation', 'Accession', 'e_value', 'score', 'overlap', 'Description']
 cutoffs_col_names = ["accession", "name", "eval", "hmm_cov", "target_cov", "description"]
 
 

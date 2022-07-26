@@ -9,10 +9,8 @@ import json
 import logging
 from pathlib import Path
 import tempfile
-
+import re
 # installed libraries
-import networkx as nx
-import matplotlib.pyplot as plt
 import pandas as pd
 from ppanggolin.formats.readBinaries import check_pangenome_info
 
@@ -21,8 +19,7 @@ from panorama.utils import check_tsv_sanity
 from panorama.annotation.rules import System, Systems
 from panorama.pangenomes import Pangenome
 from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
-
-col_names = ['Gene family', 'Annotation', 'Accesion Id', 'e-value', 'score', 'overlap', 'Annotation description']
+from panorama.annotation.system_search import launch_system_search
 
 
 def check_parameter(args):
@@ -42,20 +39,19 @@ def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     check_pangenome_info(pangenome, need_families=True, need_graph=True, need_annotations=True, disable_bar=disable_bar)
 
 
-def read_systems(file: Path, systems=Systems()):
-    """ Read all json files in the directory
+def read_systems(systems_path: Path, systems=Systems()):
+    """ Read all json files systems in the directory
 
     :param systems_path: path of systems directory
     :param systems: class Systems with all systems
     """
-    # for file in systems_path.glob("*.json"):
-    with open(file.resolve().as_posix()) as json_file:
-        data = json.load(json_file)
-        system = System()
-        system.read_system(data)
-        systems.add_sys(system)
-    return system
-    # systems.print_systems()
+    for file in systems_path.glob("*.json"):
+        with open(file.resolve().as_posix()) as json_file:
+            data = json.load(json_file)
+            system = System()
+            system.read_system(data)
+            systems.add_sys(system)
+    return systems
 
 
 def get_max_separation_sys(system: System):
@@ -89,57 +85,27 @@ def check_presence_family(system: System, annot2fam: dict, one_family: bool):
             return len(annot2fam.get(annot))
 
 
-# TODO pour vérifier si annot in sys, faire un break si y'a pas tl mandatory
-def present_system(system: System, annot2fam: dict):
+def search_system(systems: Systems, annot2fam: dict):
     """
-    Look if system is present in the pangenome
-    :param system:
+    Search present system in the pangenome
+    :param systems:
     :param annot2fam:
     :return:
     """
-    set_bool = set()
-    for annot in system.families:
-        if annot in annot2fam.keys():
-            set_bool.add(True)
+    for system in systems.systems.values():
+        if check_all_present_families(system, annot2fam) is True:
+            launch_system_search(system, annot2fam)
+
+
+def check_all_present_families(system: System, annot2fam: dict):
+    bool_dict = dict()
+    for fam in system.families.keys():
+        match = [re.match(f"^{fam}", annotfam) for annotfam in annot2fam]
+        if len(match) > 0:
+            bool_dict[fam] = True
         else:
-            set_bool.add(False)
-    if all(boolean for boolean in set_bool):
-        draw_graph(system, annot2fam)
-
-
-def draw_graph(system: System, annot2fam: dict):
-    g = nx.Graph()
-    for annot in system.families:
-        for fam_obj in annot2fam[annot]:
-            g.add_node(fam_obj)
-    for annot in system.families:
-        for fam_obj in annot2fam[annot]:
-            if fam_obj in g.nodes():
-                add_node_edge(g, g.nodes(), get_max_separation_sys(system)[annot], i=0)
-    nx.draw(g)
-    plt.show()
-    return g
-
-
-def add_node_edge(g: nx.Graph, set_fam: set, max_sep: int, i: int):
-    pass
-    #     if i != max_sep+1:
-    #         i += 1
-    #         for family in set_fam:
-    #             for edge in family.edges:
-    #                 if edge in g.node():
-    #                     g.add_edge(fam_obj, edge.target)
-    # if family.target in g.nodes():
-    #
-    #         else:
-    #             edge.add(edge_fam)
-    #             g.add_node(edge.target)
-    #             g.add_edge(fam_obj, edge.target)
-    #             nx.draw(g)
-    #             plt.show()
-    #     i += 1
-    #     add_node_edge(g, edge.target.edges, edge.target, max_sep, i)
-    pass
+            bool_dict[fam] = False
+    return all(bool_dict.values())
 
 
 def get_annot_annot2fam(annot2fam: dict, max_sep_sys: dict):
@@ -169,9 +135,9 @@ def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.
 
     :return: Filtered dataframe
     """
-    df_filter = annotated_df[annotated_df[col_names[3]] <= eval_threshold]
-    df_eval = df_filter[df_filter[col_names[3]] == df_filter.groupby(col_names[0])[col_names[3]].transform(min)]
-    return df_eval[df_eval[col_names[4]] == df_eval.groupby(col_names[0])[col_names[4]].transform(max)]
+    df_filter = annotated_df[annotated_df[res_col_names[3]] <= eval_threshold]
+    df_eval = df_filter[df_filter[res_col_names[3]] == df_filter.groupby(res_col_names[0])[res_col_names[3]].transform(min)]
+    return df_eval[df_eval[res_col_names[4]] == df_eval.groupby(res_col_names[0])[res_col_names[4]].transform(max)]
 
 
 def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
@@ -187,12 +153,12 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     """
     annot2fam = {}
     for index, row in annotation_df.iterrows():
-        gene_fam = pangenome.get_gene_family(name=row['Gene_family'])
-        gene_fam.add_annotation(source=source, annotation=row['Annotation'], force=force)
-        if row['Annotation'] not in annot2fam:
-            annot2fam[row['Annotation']] = {gene_fam}
+        gene_fam = pangenome.get_gene_family(name=row[res_col_names[0]])
+        gene_fam.add_annotation(source=source, annotation=row[res_col_names[1]], force=force)
+        if row[res_col_names[1]] not in annot2fam:
+            annot2fam[row[res_col_names[1]]] = {gene_fam}
         else:
-            annot2fam[row['Annotation']].add(gene_fam)
+            annot2fam[row[res_col_names[1]]].add(gene_fam)
     return annot2fam
 
 
@@ -215,8 +181,10 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float =
     """
     check_pangenome_annotation(pangenome, disable_bar=disable_bar)
     if tsv is not None:
-        annotation_df = filter_df(pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
-                                              names=col_names), e_value)
+        annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE, names=res_col_names)
+        if e_value != 0:
+            logging.getLogger().debug("Filter TSV annotation file")
+            annotation_df = filter_df(annotation_df, e_value)
     elif hmm is not None:
         annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", eval=e_value, cutoffs_file=cutoffs,
                                        tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
@@ -233,9 +201,7 @@ def launch(args):
     """
     check_parameter(args)
     systems_to_path = args.systems.absolute()
-    system = System()
-    for file in systems_to_path.glob("*.json"):
-        system = read_systems(file)
+    systems = read_systems(systems_to_path)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for k, v in pan_to_path.items():
         pangenome = Pangenome(name=k)
@@ -243,8 +209,8 @@ def launch(args):
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
                                     e_value=args.e_value, cutoffs=args.cutoffs, tmpdir=args.tmpdir,
                                     threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
-        # present_system(system, annot2fam)
-        # logging.getLogger().info("Annotation Done")
+        search_system(systems, annot2fam)
+        logging.getLogger().info("Annotation Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -294,10 +260,8 @@ def parser_annot(parser):
 if __name__ == "__main__":
     from panorama.utils import check_log, set_verbosity_level
 
-    main_parser = argparse.ArgumentParser(
-        description="Comparative Pangenomic analyses toolsbox",
-        formatter_class=argparse.RawTextHelpFormatter)
-
+    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
+                                          formatter_class=argparse.RawTextHelpFormatter)
     parser_annot(main_parser)
     common = main_parser.add_argument_group(title="Common argument")
     common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
