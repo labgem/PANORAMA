@@ -49,8 +49,12 @@ def read_systems(systems_path: Path, systems=Systems()):
         with open(file.resolve().as_posix()) as json_file:
             data = json.load(json_file)
             system = System()
-            system.read_system(data)
-            systems.add_sys(system)
+            try:
+                system.read_system(data)
+            except Exception:
+                raise Exception(f"Problem to read json {file}")
+            else:
+                systems.add_sys(system)
     return systems
 
 
