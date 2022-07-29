@@ -42,7 +42,7 @@ def min_total_func_unit(system: System, func_unit: FuncUnit):
 
 def list_mandatory_family(func_unit: FuncUnit):
     list_mandatory = []
-    for fam in func_unit.mandatory.keys():
+    for fam in func_unit.mandatory:
         list_mandatory.append(fam)
     return list_mandatory
 
@@ -56,10 +56,10 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     """
     families = dict()
     fam2annot = dict()
-    for fam_sys in func_unit.families.keys():
+    for fam_sys in func_unit.families:
         # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_sys}", annot)})
         for annot, pan_fam in annot2fam.items():
-            if re.match(f"^{fam_sys}", annot):
+            if re.match(f"^{fam_sys.name}", annot):
                 for family in pan_fam:
                     families[family.name] = family
                     fam2annot[family.name] = fam_sys
@@ -69,17 +69,15 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
 def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
                    count_forbidden: int):
     bool_list = [False, False, False, False]
-    if len(list_mandatory) <= len(func_unit.families.keys())-min_mandatory_func_unit(system, func_unit):
+    if len(list_mandatory) <= len(func_unit.families.keys()) - min_mandatory_func_unit(system, func_unit):
         bool_list[0] = True
     if group not in pred_dict.values():
         bool_list[1] = True
     if count_forbidden <= max_forbidden_func_unit(system, func_unit):
         bool_list[2] = True
-    if len(group)-count_forbidden >= min_mandatory_func_unit(system, func_unit):
+    if len(group) - count_forbidden >= min_mandatory_func_unit(system, func_unit):
         bool_list[3] = True
     return bool_list
-
-
 
 
 def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: FuncUnit):
@@ -89,35 +87,72 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     """
     pred_dict = dict()  # dictionnaire pour les systèmes prédits
     nb_pred = 0  # compteur de prédiction du system
+    seen = set()
 
+    def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
+        nextlevel = {node}
+        cc = set()
+        while len(nextlevel) > 0:
+            thislevel = nextlevel
+            nextlevel = set()
+            for v in thislevel:
+                if v not in seen:
+                    cc.add(v)
+                    seen.add(v)
+                    nextlevel |= set(graph.neighbors(v))
+        return cc
+
+
+    def check_cc(cc: set, fam2annot: dict, system: System, func_unit: FuncUnit):
+        count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
+        forbidden_list, mandatory_list, accessory_list = (func_unit.forbidden_name(), func_unit.mandatory_name(),
+                                                          func_unit.accessory_name())
+        for node in cc:
+            annot = fam2annot.get(node.name)
+            if annot is not None:
+                if annot.type == 'forbidden':  # if node is forbidden
+                    if annot.name in forbidden_list:
+                        count_forbidden += 1
+                        forbidden_list.remove(annot.name)
+                        if count_forbidden > func_unit.parameters["max_forbidden"]:
+                            return False
+                elif annot.type == 'mandatory':  # if node is mandatory
+                    if annot.name in mandatory_list:
+                        count_mandatory += 1
+                        mandatory_list.remove(annot.name)
+                if annot.type == 'accessory':  # if node is accessory
+                    if annot.name in accessory_list:
+                        count_accesory += 1
+                        accessory_list.remove(annot.name)
+        if count_mandatory > func_unit.parameters['min_mandatory'] and \
+                count_accesory + count_mandatory > func_unit.parameters['min_total']:
+            return True
+        else:
+            return False
+
+
+    remove_node = set()
     for node in g.nodes():  # pour chaque noeud du graphe
-        group = {node.name}  # groupe d'un ensemble de noeud du graphe
-        count_forbidden = 0
-        list_mandatory = list_mandatory_family(func_unit)
-        if fam2annot.get(node.name) in func_unit.forbidden.keys():  # if node is forbidden
-            count_forbidden += 1
-        elif fam2annot.get(node.name) in list_mandatory:
-            list_mandatory.remove(fam2annot.get(node.name))
-        if len(node.edges) >= min_mandatory_func_unit(system, func_unit) - 1 and \
-                count_forbidden <= max_forbidden_func_unit(system, func_unit):  # si nb arête plus petit que min_m et compteur f plus petit que max_f
-            for edge in node.edges:     # pr chaque arête
-                neighbor = edge.source if edge.source != node else edge.target
-                if fam2annot.get(neighbor.name) in func_unit.forbidden.keys(): 
-                    count_forbidden += 1
-                elif fam2annot.get(neighbor.name) in list_mandatory:
-                    list_mandatory.remove(fam2annot.get(neighbor.name))
-                if fam2annot.get(neighbor.name) in func_unit.families.keys():
-                    group.add(neighbor.name)
-        if all(bool_condition(system, func_unit, list_mandatory, group, pred_dict, count_forbidden)):
-            nb_pred += 1
-            pred_dict[nb_pred] = group
+        if node not in seen:
+            cc = extract_cc(node, g, seen)  # extract coonnect component
+            if check_cc(cc, fam2annot, system, func_unit):
+                pred_dict[nb_pred] = cc
+                nb_pred += 1
+            else:
+                remove_node |= cc
+    # if len(pred_dict) > 0:
+    #     nx.draw(g)
+    #     plt.show()
+    g.remove_nodes_from(remove_node)
+    return pred_dict
 
-
-
-def launch_system_search(system: System, annot2fam: dict):
-    for func_unit in system.func_units.values():
+def launch_system_search(system: System, annot2fam: dict, disable_bar: bool = False):
+    for func_unit in system.func_units:
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"])
-        verify_param(g, fam2annot, system, func_unit)
-        nx.draw(g)
-        plt.show()
+        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"], disable_bar=disable_bar)
+        pred_dict = verify_param(g, fam2annot, system, func_unit)
+        if len(pred_dict)>0:
+            print(system.name, len(pred_dict))
+            print(pred_dict)
+            # nx.draw(g)
+            # plt.show()

@@ -89,22 +89,22 @@ def check_presence_family(system: System, annot2fam: dict, one_family: bool):
             return len(annot2fam.get(annot))
 
 
-def search_system(systems: Systems, annot2fam: dict):
+def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
     """
     Search present system in the pangenome
     :param systems:
     :param annot2fam:
     :return:
     """
-    for system in systems.systems.values():
+    for system in systems:
         if check_all_present_families(system, annot2fam) is True:
-            launch_system_search(system, annot2fam)
+            launch_system_search(system, annot2fam, disable_bar=disable_bar)
 
 
 def check_all_present_families(system: System, annot2fam: dict):
     bool_dict = dict()
-    for fam in system.families.keys():
-        match = [re.match(f"^{fam}", annotfam) for annotfam in annot2fam]
+    for fam in system.families:
+        match = [re.match(f"^{fam.name}", annotfam) for annotfam in annot2fam]
         if len(match) > 0:
             bool_dict[fam] = True
         else:
@@ -207,13 +207,13 @@ def launch(args):
     systems_to_path = args.systems.absolute()
     systems = read_systems(systems_to_path)
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    for k, v in pan_to_path.items():
-        pangenome = Pangenome(name=k)
-        pangenome.add_file(v)
+    for pangenome_name, pangenome_file in pan_to_path.items():
+        pangenome = Pangenome(name=pangenome_name)
+        pangenome.add_file(pangenome_file)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
                                     e_value=args.e_value, cutoffs=args.cutoffs, tmpdir=args.tmpdir,
                                     threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
-        search_system(systems, annot2fam)
+        search_system(systems, annot2fam, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
 
 

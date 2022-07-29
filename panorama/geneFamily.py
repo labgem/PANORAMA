@@ -19,6 +19,8 @@ class GeneFamily(Fam):
         super().__init__(family_id, name)
         self.annotation = {}
 
+    def __repr__(self):
+        return f"GF {self.ID}: {self.name}"
     def add_annotation(self, source: str, annotation: dict, force: bool = False):
         """ Add annotation to gene family
 

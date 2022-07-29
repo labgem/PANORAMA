@@ -64,6 +64,7 @@ class Systems:
                     families_dict[family.name] = [sys.name]
                 else:
                     families_dict[family.name].append(sys.name)
+        return families_dict
 
     def get_sys(self, name: str):
         """
@@ -171,6 +172,18 @@ class SupRule(Rule):
     def size(self):
         return len(self.mandatory.union(self.accessory, self.forbidden, self.neutral))
 
+    def mandatory_name(self):
+        return [elem.name for elem in self.mandatory]
+
+    def accessory_name(self):
+        return [elem.name for elem in self.accessory]
+
+    def forbidden_name(self):
+        return [elem.name for elem in self.forbidden]
+
+    def neutral_name(self):
+        return [elem.name for elem in self.neutral]
+
     def check_param(self, param_dict: dict):
         """
         Verify with boolean the condition parameters
@@ -230,6 +243,12 @@ class System(SupRule):
     def families(self):
         for func_unit in self.func_units:
             yield from func_unit.families
+
+    def func_unit_name(self):
+        return [fu.name for fu in self.func_units]
+
+    def families_name(self):
+        return [fam.name for fam in self.families]
 
     def check_system_dict(self, system_dict):
         try:
@@ -329,6 +348,9 @@ class FuncUnit(SupRule):
     def families(self):
         for fam in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield fam
+
+    def families_name(self):
+        return [fam.name for fam in self.families]
 
     def check_fu_dict(self, fu_dict):
         try:
