@@ -156,13 +156,16 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     :return: Dictionary with for each annotation a set of gene family
     """
     annot2fam = {}
-    for index, row in annotation_df.iterrows():
-        gene_fam = pangenome.get_gene_family(name=row[res_col_names[0]])
-        gene_fam.add_annotation(source=source, annotation=row[res_col_names[1]], force=force)
-        if row[res_col_names[1]] not in annot2fam:
-            annot2fam[row[res_col_names[1]]] = {gene_fam}
-        else:
-            annot2fam[row[res_col_names[1]]].add(gene_fam)
+    gfs = annotation_df[res_col_names[0]].unique()
+    for gf in annotation_df[res_col_names[0]].unique():
+        select_df = annotation_df.loc[annotation_df[res_col_names[0]] == gf]
+        gene_fam = pangenome.get_gene_family(name=gf)
+        gene_fam.add_annotation(source=source, annotation=list(select_df[res_col_names[1]]), force=force)
+        for index, row in select_df.iterrows():
+            if row[res_col_names[1]] not in annot2fam:
+                annot2fam[row[res_col_names[1]]] = {gene_fam}
+            else:
+                annot2fam[row[res_col_names[1]]].add(gene_fam)
     return annot2fam
 
 

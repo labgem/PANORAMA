@@ -89,19 +89,36 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     results = hmm_search_hmmer(hmm_list, gf_sequences, hmm_meta, threads, disable_bar)
     best_results = {}
     keep_query = set()
+    keep_size = 5
     for result in results:
         if result.Gene_family in best_results:
-            previous_bitscore = best_results[result.Gene_family].score
-            if result.score > previous_bitscore:
-                best_results[result.Gene_family] = result
-                keep_query.add(result.Gene_family)
-            elif result.score == previous_bitscore:
-                if best_results[result.Gene_family].Annotation != result.Annotation:
-                    keep_query.remove(result.Gene_family)
+            # Search if Annotation already exist for families
+            annot_in = False
+            for index, res in enumerate(best_results[result.Gene_family]):
+                if result.Annotation == res.Annotation:
+                    if result.score > res.score:
+                        best_results[result.Gene_family][index] = result
+                        annot_in = True
+                        break
+            if not annot_in:
+                if len(best_results[result.Gene_family]) < keep_size:
+                    best_results[result.Gene_family].append(result)
+                else:
+                    previous_bitscore = best_results[result.Gene_family][-1].score
+                    if result.score > previous_bitscore:
+                        best_results[result.Gene_family][-1] = result
+                    elif result.score == previous_bitscore:
+                        if result.Annotation not in [res.Annotation for res in best_results[result.Gene_family]]:
+                            fam_rm = best_results[result.Gene_family].pop(-1)
+                            if len(best_results[result.Gene_family]) == 0:
+                                keep_query.remove(fam_rm)
+                best_results[result.Gene_family] = sorted(best_results[result.Gene_family],
+                                                          key=lambda x: x.score, reverse=True)
         else:
-            best_results[result.Gene_family] = result
+            best_results[result.Gene_family] = [result]
             keep_query.add(result.Gene_family)
-    return [best_results[k] for k in sorted(best_results) if k in keep_query]
+    return sorted([res for gf, res_list in best_results.items() for res in res_list if gf in keep_query],
+                  key=lambda x: x.Gene_family)
 
 
 def hmm_search_plan7(hmm: pyhmmer.plan7.HMM,
