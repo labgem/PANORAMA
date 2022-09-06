@@ -9,7 +9,7 @@ from typing import List, Union, Generator
 from tqdm import tqdm
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import tempfile
-
+import re
 # installed libraries
 import pyhmmer
 import pandas as pd
@@ -22,7 +22,7 @@ res_col_names = ['Gene_family', 'Annotation', 'Accession', 'e_value', 'score', '
 cutoffs_col_names = ["accession", "name", "eval", "hmm_cov", "target_cov", "description"]
 
 
-def digit_seq(pangenome: Pangenome) -> List[pyhmmer.easel.DigitalSequence]:
+def digit_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmmer.easel.DigitalSequence]:
     """Digitalised pangenome gene families sequences for hmmsearch
 
     :param pangenome: Pangenome object with gene families
@@ -30,7 +30,8 @@ def digit_seq(pangenome: Pangenome) -> List[pyhmmer.easel.DigitalSequence]:
     :return: list of digitalised gene family sequences
     """
     digit_gf_seq = []
-    for family in pangenome.gene_families:
+    for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar,
+                       desc='Digitalised sequences'):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name, sequence=family.sequence)
         digit_gf_seq.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
@@ -68,7 +69,7 @@ def hmm_search_hmmer(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmm
                      hmm_meta: pd.DataFrame = None, threads: int = 1, disable_bar: bool = False):
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
+    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar, desc="Align gene fam to HMM")
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, bit_cutoffs='trusted'):
         for hit in top_hits:
             cog = hit.best_domain.alignment
@@ -84,39 +85,44 @@ def hmm_search_hmmer(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmm
     return res
 
 
-def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
-                         hmm_meta: pd.DataFrame = None, threads: int = 1, disable_bar: bool = False):
-    results = hmm_search_hmmer(hmm_list, gf_sequences, hmm_meta, threads, disable_bar)
+def filter_results(results: list, prediction_size: int = 1):
     best_results = {}
     keep_query = set()
-    keep_size = 5
     for result in results:
         if result.Gene_family in best_results:
             # Search if Annotation already exist for families
             annot_in = False
-            for index, res in enumerate(best_results[result.Gene_family]):
+            index = 0
+            while index < len(best_results[result.Gene_family]) and not annot_in:
+                res = best_results[result.Gene_family][index]
                 if result.Annotation == res.Annotation:
-                    if result.score > res.score:
-                        best_results[result.Gene_family][index] = result
-                        annot_in = True
-                        break
+                    best_results[result.Gene_family][index] = result
+                    annot_in = True
+                index += 1
             if not annot_in:
-                if len(best_results[result.Gene_family]) < keep_size:
+                if len(best_results[result.Gene_family]) < prediction_size:
                     best_results[result.Gene_family].append(result)
                 else:
                     previous_bitscore = best_results[result.Gene_family][-1].score
                     if result.score > previous_bitscore:
                         best_results[result.Gene_family][-1] = result
                     elif result.score == previous_bitscore:
-                        if result.Annotation not in [res.Annotation for res in best_results[result.Gene_family]]:
-                            fam_rm = best_results[result.Gene_family].pop(-1)
-                            if len(best_results[result.Gene_family]) == 0:
-                                keep_query.remove(fam_rm)
-                best_results[result.Gene_family] = sorted(best_results[result.Gene_family],
-                                                          key=lambda x: x.score, reverse=True)
+                        fam_rm = best_results[result.Gene_family].pop(-1)
+                        if len(best_results[result.Gene_family]) == 0:
+                            keep_query.remove(fam_rm.Gene_family)
+            best_results[result.Gene_family] = sorted(best_results[result.Gene_family],
+                                                      key=lambda x: x.score, reverse=True)
         else:
             best_results[result.Gene_family] = [result]
             keep_query.add(result.Gene_family)
+    return best_results, keep_query
+
+
+def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
+                         hmm_meta: pd.DataFrame = None, prediction_size: int = 1, threads: int = 1,
+                         disable_bar: bool = False):
+    results = hmm_search_hmmer(hmm_list, gf_sequences, hmm_meta, threads, disable_bar)
+    best_results, keep_query = filter_results(results, prediction_size)
     return sorted([res for gf, res_list in best_results.items() for res in res_list if gf in keep_query],
                   key=lambda x: x.Gene_family)
 
@@ -172,8 +178,8 @@ def get_hmm_iter_cutoffs(hmm_dir: Generator, cutoffs: pd.DataFrame):
 
 
 def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearch', eval: float = None,
-                   cutoffs_file: Path = None, tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1,
-                   disable_bar: bool = False):
+                   cutoffs_file: Path = None, prediction_size: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
+                   threads: int = 1, disable_bar: bool = False):
     """ Launch hmm search against pangenome gene families and HMM
 
     :param pangenome: Pangenome with gene families
@@ -216,7 +222,7 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearc
         raise Exception("Unexpected error")
     # Choice of one method
     if method == 'hmmsearch':
-        res = annot_with_hmmsearch(hmms, gf_sequences, cutoffs_df, threads, disable_bar)
+        res = annot_with_hmmsearch(hmms, gf_sequences, cutoffs_df, prediction_size, threads, disable_bar)
     elif method == 'plan7':
         res = annot_with_plan7(hmms, gf_sequences, threads, disable_bar)
     else:
@@ -227,10 +233,65 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearc
 if __name__ == "__main__":
     # default libraries
     import argparse
+    from time import time
     # installed libraries
     from ppanggolin.formats.readBinaries import check_pangenome_info
     # local libraries
     from panorama.utils import check_log, set_verbosity_level
+
+
+    def plot_res(pred_size_max, nb_pred, run_time):
+        import matplotlib.pyplot as plt
+
+        fig, ax = plt.subplots()
+        fig.subplots_adjust(right=0.75)
+
+        twin1 = ax.twinx()
+
+        p1, = ax.plot(range(1, pred_size_max + 1), nb_pred, 'r.', label="Nombre de prédiction total")
+        p2, = twin1.plot(range(1, pred_size_max + 1), run_time, 'bx', label="Temps de calcul")
+
+        ax.set_xlabel("Nombre maximum de prédiction par familles")
+        ax.set_ylabel("Nombre de prédiction total")
+        twin1.set_ylabel("Temps de calcul (s)")
+
+        tkw = dict(size=4, width=1.5)
+        ax.tick_params(axis='y', colors=p1.get_color(), **tkw)
+        twin1.tick_params(axis='y', colors=p2.get_color(), **tkw)
+        ax.tick_params(axis='x', **tkw)
+
+        # Shrink current axis by 20%
+        box = ax.get_position()
+        ax.set_position([box.x0, box.y0 + box.height * 0.1,
+                         box.width, box.height * 0.9])
+
+        # Put a legend to the right of the current axis
+        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), handles=[p1, p2],
+                  fancybox=True, shadow=True, ncol=2)
+
+        plt.show()
+
+
+    def plot_stat(pred_size_max, res_stat):
+        import matplotlib.pyplot as plt
+        fig, ax = plt.subplots()
+        p1 = ax.plot(range(1, pred_size_max + 1), [res.mean for res in res_stat],
+                     'ro', label="Moyenne")
+        p2 = ax.plot(range(1, pred_size_max + 1), [res.min for res in res_stat],
+                     'bo', label="Minimum")
+        p3 = ax.plot(range(1, pred_size_max + 1), [res.max for res in res_stat],
+                     'go', label="Maximum")
+
+        ax.errorbar(range(1, pred_size_max + 1), [res.mean for res in res_stat],
+                    yerr=[res.std for res in res_stat], fmt="+", capsize=6)
+
+        ax.set_xlabel("Nombre maximum de prédiction par familles")
+        ax.set_ylabel("Nombre de prédiction par famille")
+
+        # Put a legend to the right of the current axis
+        ax.legend(loc='upper center', fancybox=True, shadow=True, ncol=2)
+
+        plt.show()
 
 
     def test_hmm_search(args: argparse.Namespace):
@@ -238,10 +299,10 @@ if __name__ == "__main__":
         pangenome.add_file(pangenome_file=args.pangenome)
         check_pangenome_info(pangenome, need_families=True)
         res_df = annot_with_hmm(pangenome=pangenome, hmm_path=args.hmm, method=args.method, tmpdir=args.tmpdir,
-                                eval=args.e_value, cutoffs_file=args.cutoffs, threads=args.threads,
-                                disable_bar=args.disable_prog_bar)
-        print(res_df)
+                                eval=args.e_value, cutoffs_file=args.cutoffs, prediction_size=args.prediction_size,
+                                threads=args.threads, disable_bar=args.disable_prog_bar)
         res_df.to_csv(path_or_buf="hmm_res.tsv", sep="\t")
+        return res_df
 
 
     main_parser = argparse.ArgumentParser(
@@ -259,6 +320,8 @@ if __name__ == "__main__":
     exclusive = opt.add_mutually_exclusive_group()
     exclusive.add_argument('--e_value', required=False, type=float, default=None)
     exclusive.add_argument('--cutoffs', required=False, type=Path, default=None)
+    opt.add_argument("--prediction_size", required=False, type=int, default=1,
+                     help="Number of prediction associate with gene families")
     opt.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
                      help="directory for storing temporary files")
     opt.add_argument("--threads", required=False, type=int, default=1)
@@ -272,4 +335,20 @@ if __name__ == "__main__":
                         help="Force writing in output directory and in pangenome output file.")
     main_args = main_parser.parse_args()
     set_verbosity_level(main_args)
-    test_hmm_search(main_args)
+    run_time = []
+    nb_pred = []
+    stat = collections.namedtuple("Stat", ['min', 'max', 'mean', "std"])
+    res_stat = []
+    max_pred = main_args.prediction_size
+    for i in range(1, max_pred + 1):
+        print(i)
+        b_time = time()
+        main_args.prediction_size = i
+        res_df = test_hmm_search(main_args)
+        res_vc = res_df['Gene_family'].value_counts()
+        res_stat.append(stat(res_vc.min(), res_vc.max(), res_vc.mean(), res_vc.std()))
+        nb_pred.append(res_vc.sum())
+        run_time.append(time() - b_time)
+    print(nb_pred, run_time)
+    plot_res(max_pred, nb_pred, run_time)
+    plot_stat(max_pred, res_stat)

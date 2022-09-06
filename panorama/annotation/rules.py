@@ -28,13 +28,13 @@ class Systems:
         """
         self._system_getter = systems if systems is not None else {}
 
-    def __str__(self):
-        """
-        Print all systems predicted
-
-        """
-        for system in self.__iter__():
-            print(system)
+    # def __str__(self):
+    #     """
+    #     Print all systems predicted
+    #
+    #     """
+    #     for system in self.__iter__():
+    #         return system
 
     def __iter__(self):
         for sys in self._system_getter.values():
@@ -43,6 +43,10 @@ class Systems:
     @property
     def systems(self):
         return list(self)
+
+    @property
+    def size(self):
+        return len(self.systems)
 
     @property
     def func_units(self):
@@ -89,6 +93,8 @@ class Systems:
             self.get_sys(sys.name)
         except KeyError:
             self._system_getter[sys.name] = sys
+        else:
+            raise Exception(f"System {sys.name} already in set of systems")
 
 
 class Rule:

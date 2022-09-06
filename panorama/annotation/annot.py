@@ -10,6 +10,7 @@ import logging
 from pathlib import Path
 import tempfile
 import re
+from tqdm import tqdm
 # installed libraries
 import pandas as pd
 from ppanggolin.formats.readBinaries import check_pangenome_info
@@ -29,6 +30,7 @@ def check_parameter(args):
         raise Exception("An e-value is needed to keep the best annotation for each family")
     if args.hmm is not None and args.e_value is None and args.cutoffs is None:
         raise Exception("You did not provide e_value or cutoffs file to assign function with HMM")
+
 
 def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
@@ -58,26 +60,6 @@ def read_systems(systems_path: Path, systems=Systems()):
     return systems
 
 
-def get_max_separation_sys(system: System):
-    """
-    Verify the maximum separation condition for genes family in the pangenome
-
-    :param system: one system object
-    """
-    max_sep_annot = dict()
-    for annot_name, fam_obj in system.families.items():
-        if fam_obj.parameters is not None and fam_obj.parameters["max_separation"]:
-            max_sep_annot[annot_name] = get_max_separation(fam_obj)
-        else:
-            for fu_name, fu_obj in system.func_units.items():
-                if fam_obj.func_unit == fu_name:
-                    if fu_obj.parameters is not None and fu_obj.parameters["max_separation"]:
-                        max_sep_annot[annot_name] = get_max_separation(fu_obj)
-                    elif system.parameters["max_separation"]:
-                        max_sep_annot[annot_name] = get_max_separation(system)
-    return max_sep_annot
-
-
 def check_presence_family(system: System, annot2fam: dict, one_family: bool):
     if one_family is False or None:
         if set(system.families.keys()).intersection(annot2fam.keys()) == system.families.keys():
@@ -96,38 +78,38 @@ def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
     :param annot2fam:
     :return:
     """
-    for system in systems:
-        if check_all_present_families(system, annot2fam) is True:
-            launch_system_search(system, annot2fam, disable_bar=disable_bar)
+    pred = []
+    org_pred = {}
+    spot_pred = {}
+
+    def org2pred(org_pred_dict: dict, pred_res: dict, system_name: str):
+        for keys, value in pred_res.items():
+            org_inter = set()
+            for fam in value:
+                if len(org_inter) == 0:
+                    org_inter = fam.organisms
+                else:
+                    org_inter.intersection(fam.organisms)
+            if len(org_inter) == 0:
+                print(system_name)
+            for org in org_inter:
+                if org.name in org_pred_dict:
+                    org_pred_dict[org.name].add(system_name)
+                else:
+                    org_pred_dict[org.name] = {system_name}
 
 
-def check_all_present_families(system: System, annot2fam: dict):
-    bool_dict = dict()
-    for fam in system.families:
-        match = [re.match(f"^{fam.name}", annotfam) for annotfam in annot2fam]
-        if len(match) > 0:
-            bool_dict[fam] = True
-        else:
-            bool_dict[fam] = False
-    return all(bool_dict.values())
-
-
-def get_annot_annot2fam(annot2fam: dict, max_sep_sys: dict):
-    annot_sys_pan = dict()
-    for annot in max_sep_sys.keys():
-        if annot in annot2fam.keys():
-            annot_sys_pan[annot] = annot2fam.get(annot)
-    return annot_sys_pan
-
-
-def get_max_separation(obj: object):
-    """
-    Get the parameter max_separation in a object
-
-    :param obj:
-    :return:
-    """
-    return obj.parameters["max_separation"]
+    for system in tqdm(systems, total=systems.size, unit='system', disable=disable_bar):
+        # if check_all_present_families(system, annot2fam) is True:
+        pred_res = launch_system_search(system, annot2fam)
+        if pred_res is not None:
+            pred.append([system.name, max(pred_res.keys())+1])
+            org2pred(org_pred, pred_res, system.name)
+    proj = pd.DataFrame.from_dict(org_pred, orient='index')
+    sys_df = pd.DataFrame(pred, columns=['System', 'Nb Detection']).sort_values('System').reset_index(drop=True)
+    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+                header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
+    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
 def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.DataFrame:
@@ -140,7 +122,8 @@ def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.
     :return: Filtered dataframe
     """
     df_filter = annotated_df[annotated_df[res_col_names[3]] <= eval_threshold]
-    df_eval = df_filter[df_filter[res_col_names[3]] == df_filter.groupby(res_col_names[0])[res_col_names[3]].transform(min)]
+    df_eval = df_filter[
+        df_filter[res_col_names[3]] == df_filter.groupby(res_col_names[0])[res_col_names[3]].transform(min)]
     return df_eval[df_eval[res_col_names[4]] == df_eval.groupby(res_col_names[0])[res_col_names[4]].transform(max)]
 
 
@@ -156,7 +139,6 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     :return: Dictionary with for each annotation a set of gene family
     """
     annot2fam = {}
-    gfs = annotation_df[res_col_names[0]].unique()
     for gf in annotation_df[res_col_names[0]].unique():
         select_df = annotation_df.loc[annotation_df[res_col_names[0]] == gf]
         gene_fam = pangenome.get_gene_family(name=gf)
@@ -170,8 +152,8 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
 
 
 def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float = 0.0001, cutoffs: Path = None,
-                    source: str = None, tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1,
-                    force: bool = False, disable_bar: bool = False) -> dict:
+                    source: str = None, prediction_size:int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
+                    threads: int = 1, force: bool = False, disable_bar: bool = False) -> dict:
     """ Main function to add annotation to pangenome from tsv file
 
     :param pangenome: Pangenome object to ppanggolin
@@ -194,7 +176,8 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float =
             annotation_df = filter_df(annotation_df, e_value)
     elif hmm is not None:
         annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", eval=e_value, cutoffs_file=cutoffs,
-                                       tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
+                                       prediction_size=prediction_size, tmpdir=tmpdir, threads=threads,
+                                       disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
     return annotation_to_families(annotation_df, pangenome, source, force)
@@ -214,8 +197,9 @@ def launch(args):
         pangenome = Pangenome(name=pangenome_name)
         pangenome.add_file(pangenome_file)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                                    e_value=args.e_value, cutoffs=args.cutoffs, tmpdir=args.tmpdir,
-                                    threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
+                                    e_value=args.e_value, cutoffs=args.cutoffs, prediction_size=args.prediction_size,
+                                    tmpdir=args.tmpdir, threads=args.threads, force=args.force,
+                                    disable_bar=args.disable_prog_bar)
         search_system(systems, annot2fam, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
 
@@ -258,6 +242,8 @@ def parser_annot(parser):
     exclusive_threshold.add_argument('--cutoffs', required=False, type=Path, default=None,
                                      help="TSV file to set one evalue for each hmm")
     optional = parser.add_argument_group(title="Optional arguments")
+    optional.add_argument("--prediction_size", required=False, type=int, default=1,
+                          help="Number of prediction associate with gene families")
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,

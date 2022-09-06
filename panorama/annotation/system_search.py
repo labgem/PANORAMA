@@ -59,7 +59,7 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     for fam_sys in func_unit.families:
         # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_sys}", annot)})
         for annot, pan_fam in annot2fam.items():
-            if re.match(f"^{fam_sys.name}", annot):
+            if re.match(f"^{fam_sys.name}_", annot):
                 for family in pan_fam:
                     families[family.name] = family
                     fam2annot[family.name] = fam_sys
@@ -81,11 +81,13 @@ def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, gr
 
 
 def search_fu_with_one_fam(func_unit: FuncUnit, fam2annot: dict, pred_dict: dict, nb_pred: int):
-    fam_fu = list(func_unit.families)[0]
     for fam_sys in fam2annot.keys():
-        if re.match(f"^{fam_sys}", fam_fu.name):
-            for pan_fam in fam2annot[fam_sys]:
-                pred_dict[nb_pred] = {pan_fam}
+        for mandatory_fam in func_unit.mandatory:
+            if re.match(f"^{fam_sys}", mandatory_fam.name):
+                for pan_fam in fam2annot[fam_sys]:
+                    pred_dict[nb_pred] = {pan_fam}
+                    nb_pred += 1
+    return nb_pred
 
 
 def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
@@ -152,17 +154,17 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     g.remove_nodes_from(remove_node)
     return pred_dict
 
-def launch_system_search(system: System, annot2fam: dict, disable_bar: bool = False):
+
+def launch_system_search(system: System, annot2fam: dict):
     for func_unit in system.func_units:
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
-            search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
+            nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"], disable_bar=disable_bar)
+        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
-        if len(pred_dict)>0:
-            print(system.name, len(pred_dict))
-            print(pred_dict)
+        if len(pred_dict) > 0:
+            return pred_dict
         #     # nx.draw(g)
         #     # plt.show()
