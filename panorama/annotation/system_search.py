@@ -7,14 +7,10 @@ from __future__ import annotations
 
 # installed libraries
 import networkx as nx
-import matplotlib.pyplot as plt
 import re
-from tqdm import tqdm
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
-from ppanggolin.genome import Gene
 
 # local libraries
-from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 from panorama.annotation.rules import Systems, System, FuncUnit
 
@@ -58,11 +54,10 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     fam2annot = dict()
     for fam_sys in func_unit.families:
         # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_sys}", annot)})
-        for annot, pan_fam in annot2fam.items():
-            if re.match(f"^{fam_sys.name}_", annot):
-                for family in pan_fam:
-                    families[family.name] = family
-                    fam2annot[family.name] = fam_sys
+        if fam_sys.name in annot2fam:
+            for pan_fam in annot2fam[fam_sys.name]:
+                families[pan_fam.name] = pan_fam
+                fam2annot[pan_fam.name] = fam_sys
     return families, fam2annot
 
 
@@ -80,13 +75,12 @@ def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, gr
     return bool_list
 
 
-def search_fu_with_one_fam(func_unit: FuncUnit, fam2annot: dict, pred_dict: dict, nb_pred: int):
-    for fam_sys in fam2annot.keys():
-        for mandatory_fam in func_unit.mandatory:
-            if re.match(f"^{fam_sys}", mandatory_fam.name):
-                for pan_fam in fam2annot[fam_sys]:
-                    pred_dict[nb_pred] = {pan_fam}
-                    nb_pred += 1
+def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict, nb_pred: int):
+    for mandatory_fam in func_unit.mandatory:
+        if mandatory_fam.name in annot2fam:
+            for pan_fam in annot2fam[mandatory_fam.name]:
+                pred_dict[nb_pred] = {pan_fam}
+                nb_pred += 1
     return nb_pred
 
 
@@ -157,6 +151,12 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
 
 def launch_system_search(system: System, annot2fam: dict):
     for func_unit in system.func_units:
+        # if re.match(f"pycsar_unknown", func_unit.name, re.IGNORECASE):
+        #     print("pika")
+        #     pass
+        # if re.match(f"disarm_other", func_unit.name, re.IGNORECASE):
+        #     print("pika")
+        #     pass
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
