@@ -130,7 +130,7 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:
             if " " in line[0]:
                 raise Exception(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
                                 f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
-                                f"PPanGGOLiN this is not allowed. Please remove spaces from your genome names.")
+                                f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
             if not Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}").exists():
                 raise IOError(f"The given path {tsv_path.parent.absolute().as_posix()}/{line[1]} not exist")
             pan_to_path[line[0]] = Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}")

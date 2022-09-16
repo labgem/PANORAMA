@@ -22,13 +22,15 @@ def write_gene_to_families(family: GeneFamily, out_dict: dict):
         out_dict["graph"]["nodes"].append({"id": gene.ID,
                                            "attr": {"genomic_type": "CDS",
                                                     "is_fragment": int(gene.is_fragment)}})
-        out_dict["graph"]["edges"].append({"from": gene.ID, "to": family.ID, "type": "IN_FAMILY", "attr": {}})
-        out_dict["graph"]["node_types"][str(gene.ID)] = ["gene"]
+        out_dict["graph"]["edges"].append({"from": gene.ID, "to": f"F_{family.ID}",
+                                           "type": ["IN_FAMILY"], "attr": {}})
+        out_dict["graph"]["node_types"][str(gene.ID)] = ["GENE"]
 
 
 def write_gene_to_contig(contig: Contig, out_dict: dict):
     for gene in contig.genes:
-        out_dict["graph"]["edges"].append({"from": gene.ID, "to": contig.name, "type": "IN_CONTIG", "attr": {}})
+        out_dict["graph"]["edges"].append({"from": gene.ID, "to": contig.name,
+                                           "type": ["IN_CONTIG"], "attr": {}})
 
 
 def write_contig_to_organism(organism: Organism, out_dict: dict):
@@ -36,8 +38,8 @@ def write_contig_to_organism(organism: Organism, out_dict: dict):
         out_dict["graph"]["nodes"].append({"id": f"C_{contig.name}",
                                            "attr": {"is_circular": int(contig.is_circular)}})
         out_dict["graph"]["edges"].append({"from": f"C_{contig.name}", "to": organism.name,
-                                           "type": "IN_GENOME", "attr": {}})
-        out_dict["graph"]["node_types"][f"C_{contig.name}"] = ["gene"]
+                                           "type": ["IN_GENOME"], "attr": {}})
+        out_dict["graph"]["node_types"][f"C_{contig.name}"] = ["CONTIG"]
         write_gene_to_contig(contig, out_dict)
 
 
@@ -47,8 +49,7 @@ def write_gene_families(pangenome: Pangenome, out_dict: dict):
                                                                             "partition": family.named_partition,
                                                                             "subpartition": family.partition}})
         out_dict["graph"]["node_types"][f"F_{family.ID}"] = ["FAMILY", family.named_partition]
-        out_dict["graph"]["edges"].append({"from": f"F_{family.ID}",
-                                           "to": pangenome.name,
+        out_dict["graph"]["edges"].append({"from": f"F_{family.ID}", "to": pangenome.name,
                                            "type": ["IN_PANGENOME"],
                                            "attr": {"partition": family.named_partition}})
         write_gene_to_families(family, out_dict)
@@ -68,6 +69,8 @@ def write_organisms(pangenome: Pangenome, out_dict: dict):
     for org in pangenome.organisms:
         out_dict["graph"]["nodes"].append({"id": str(org.name), "attr": {}})
         out_dict["graph"]["node_types"][str(org.name)] = ["GENOME"]
+
+        write_contig_to_organism(organism=org, out_dict=out_dict)
 
 
 def create_dict(pangenome: Pangenome):
