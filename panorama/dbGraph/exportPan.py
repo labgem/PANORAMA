@@ -49,6 +49,7 @@ def add_pangenome_node(node: dict) -> str:
                             query += f"SET n.{param} = {value}\n"
     return query
 
+
 def add_family_node(node: dict, label: list) -> str:
     query = f"CREATE (n:{':'.join(label)}) SET n.id='{node['id']}'\n"
     attr_fam = {"name": str, "partition": ["persistent", "shell", "cloud"], "subpartition": str}
@@ -121,6 +122,7 @@ def add_in_family_edge(edge: dict, pangenome_data: dict):
         query += "SET r.{} = \"{}\"\n".format(attr_key, attr_val)
     return query
 
+
 def add_in_contig_edge(edge: dict):
     query = f"MATCH (s:GENE {{id: '{edge['from']}'}}), " \
             f"(t:CONTIG {{id: '{edge['to']}'}}) \n" \
@@ -134,6 +136,7 @@ def add_in_contig_edge(edge: dict):
                 raise Exception(f"Wrong format value for property {attr_key} in neighbor edges")
         query += "SET r.{} = \"{}\"\n".format(attr_key, attr_val)
     return query
+
 
 def add_contig_node(node: dict) -> str:
     query = f"CREATE (n:CONTIG) SET n.id='{node['id']}'\n"
@@ -174,6 +177,94 @@ def add_in_genome_edge(edge: dict):
     return query
 
 
+def add_rgp_node(node: dict) -> str:
+    query = f"CREATE (n:RGP) SET n.id='{node['id']}'\n"
+    attr_rgp = {"start": int, "stop": int, "score": float,
+                "is_whole_contig": bool,
+                "is_contig_border": bool}
+    for attr_key, attr_val in node["attr"].items():
+        if attr_key not in attr_rgp:
+            raise Exception(f"Unknown family property : {str(attr_key)} for family {node['id']}")
+        else:
+            if not isinstance(attr_val, attr_rgp[attr_key]):
+                raise Exception(f"Wrong format va*lue for property {attr_key} in family {node['id']}")
+        query += f"SET n.{attr_key} = '{attr_val}'\n"
+    return query
+
+
+def add_in_rgp_edge(edge: dict) -> str:
+    query = f"MATCH (s:GENE {{id: '{edge['from']}'}}), " \
+            f"(t:RGP {{id: '{edge['to']}'}}) \n" \
+            "MERGE (s)-[r:IN_RGP]->(t)\n"
+    attr_in_rgp = {"start": bool,
+                   "stop": bool}
+    for attr_key, attr_val in edge["attr"].items():
+        if attr_key not in attr_in_rgp:
+            raise Exception("Unknown attribute : " + str(attr_key))
+        else:
+            if not isinstance(attr_val, attr_in_rgp[attr_key]):
+                raise Exception(f"Wrong format value for property {attr_key} in neighbor edges")
+        query += "SET r.{} = \"{}\"\n".format(attr_key, attr_val)
+    return query
+
+
+def add_spot_node(node: dict) -> str:
+    query = f"CREATE (n:SPOT) SET n.id='{node['id']}'\n"
+    attr_rgp = {}
+    for attr_key, attr_val in node["attr"].items():
+        if attr_key not in attr_rgp:
+            raise Exception(f"Unknown family property : {str(attr_key)} for family {node['id']}")
+        else:
+            if not isinstance(attr_val, attr_rgp[attr_key]):
+                raise Exception(f"Wrong format va*lue for property {attr_key} in family {node['id']}")
+        query += f"SET n.{attr_key} = '{attr_val}'\n"
+    return query
+
+
+def add_in_spot_edge(edge: dict) -> str:
+    query = f"MATCH (s:RGP {{id: '{edge['from']}'}}), " \
+            f"(t:SPOT {{id: '{edge['to']}'}}) \n" \
+            "MERGE (s)-[r:IN_SPOT]->(t)\n"
+    attr_in_spot = {}
+    for attr_key, attr_val in edge["attr"].items():
+        if attr_key not in attr_in_spot:
+            raise Exception("Unknown attribute : " + str(attr_key))
+        else:
+            if not isinstance(attr_val, attr_in_spot[attr_key]):
+                raise Exception(f"Wrong format value for property {attr_key} in neighbor edges")
+        query += "SET r.{} = \"{}\"\n".format(attr_key, attr_val)
+    return query
+
+
+def add_module_node(node: dict) -> str:
+    query = f"CREATE (n:MODULE) SET n.id='{node['id']}'\n"
+    attr_module = {}
+    for attr_key, attr_val in node["attr"].items():
+        if attr_key not in attr_module:
+            raise Exception(f"Unknown family property : {str(attr_key)} for family {node['id']}")
+        else:
+            if not isinstance(attr_val, attr_module[attr_key]):
+                raise Exception(f"Wrong format value for property {attr_key} in family {node['id']}")
+        query += f"SET n.{attr_key} = '{attr_val}'\n"
+    return query
+
+
+def add_in_module_edge(edge: dict, pangenome_data: dict) -> str:
+    family_label = pangenome_data["graph"]["node_types"][edge["from"]]
+    query = f"MATCH (s:{':'.join(family_label)} {{id: '{edge['from']}'}}), " \
+            f"(t:MODULE {{id: '{edge['to']}'}}) \n" \
+            "MERGE (s)-[r:IN_MODULE]->(t)\n"
+    attr_in_module = {}
+    for attr_key, attr_val in edge["attr"].items():
+        if attr_key not in attr_in_module:
+            raise Exception("Unknown attribute : " + str(attr_key))
+        else:
+            if not isinstance(attr_val, attr_in_module[attr_key]):
+                raise Exception(f"Wrong format value for property {attr_key} in neighbor edges")
+        query += "SET r.{} = \"{}\"\n".format(attr_key, attr_val)
+    return query
+
+
 def get_queries(pangenome_data: dict):
     """Load the dataset from json."""
 
@@ -203,7 +294,12 @@ def get_queries(pangenome_data: dict):
             query_list.append(add_contig_node(node))
         if primary_type == "GENOME":
             query_list.append(add_genome_node(node))
-
+        if primary_type == "RGP":
+            query_list.append(add_rgp_node(node))
+        if primary_type == "SPOT":
+            query_list.append(add_spot_node(node))
+        if primary_type == "MODULE":
+            query_list.append(add_module_node(node))
     for edge in tqdm(pangenome_data["graph"]["edges"], unit="edges", desc="Read edges and create query"):
         primary_type = edge["type"][0]
         if primary_type == "IN_PANGENOME":
@@ -216,6 +312,12 @@ def get_queries(pangenome_data: dict):
             query_list.append(add_in_contig_edge(edge))
         if primary_type == "IN_GENOME":
             query_list.append(add_in_genome_edge(edge))
+        if primary_type == "IN_RGP":
+            query_list.append(add_in_rgp_edge(edge))
+        if primary_type == "IN_SPOT":
+            query_list.append(add_in_spot_edge(edge))
+        if primary_type == "IN_MODULE":
+            query_list.append(add_in_module_edge(edge, pangenome_data))
     return query_list
 
 
