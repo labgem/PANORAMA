@@ -38,7 +38,7 @@ def cmd_line():
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
     subs = [panorama.info.subparser(subparsers),
-            panorama.annotation.annot.subparser(subparsers)]
+            panorama.annotation.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.

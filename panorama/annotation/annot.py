@@ -10,6 +10,8 @@ import logging
 from pathlib import Path
 import tempfile
 import re
+
+from ppanggolin.genome import Organism
 from tqdm import tqdm
 # installed libraries
 import pandas as pd
@@ -93,10 +95,17 @@ def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
             if len(org_inter) == 0:
                 print(system_name)
             for org in org_inter:
-                if org.name in org_pred_dict:
-                    org_pred_dict[org.name].add(system_name)
-                else:
-                    org_pred_dict[org.name] = {system_name}
+                all_fam = {family: False for family in value}
+                index = 0
+                for contig in org.contigs:
+                    for gene in contig.genes:
+                        if gene.family in all_fam:
+                            all_fam[gene.family] = True
+                if all(x for x in all_fam.values()):
+                    if org.name in org_pred_dict:
+                        org_pred_dict[org.name].add(system_name)
+                    else:
+                        org_pred_dict[org.name] = {system_name}
 
     for system in tqdm(systems, total=systems.size, unit='system', disable=disable_bar):
         # if check_all_present_families(system, annot2fam) is True:
@@ -106,9 +115,9 @@ def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
             org2pred(org_pred, pred_res, system.name)
     proj = pd.DataFrame.from_dict(org_pred, orient='index')
     sys_df = pd.DataFrame(pred, columns=['System', 'Nb Detection']).sort_values('System').reset_index(drop=True)
-    proj.to_csv("projection1.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
                 header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system1.tsv", sep="\t", header=['System', "Nb_detected"])
+    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
 def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.DataFrame:
