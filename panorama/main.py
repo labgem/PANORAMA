@@ -15,6 +15,7 @@ import pkg_resources
 from panorama.utils import check_log, set_verbosity_level
 import panorama.info
 import panorama.annotation
+import panorama.dbGraph
 
 
 def cmd_line():
@@ -25,8 +26,9 @@ def cmd_line():
     desc += "  panorama <subcommand> -h\n"
     desc += "\n"
     desc += "  Global:\n"
-    desc += "       info        provide and compare information through pangenomes\n"
-    desc += "       annotation       Annotate families and assign processus to modules in pangenome\n"
+    desc += "       info            Provide and compare information through pangenomes\n"
+    desc += "       annotation      Annotate families and assign processus to modules in pangenome\n"
+    desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -38,7 +40,8 @@ def cmd_line():
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
     subs = [panorama.info.subparser(subparsers),
-            panorama.annotation.annot.subparser(subparsers)]
+            panorama.annotation.annot.subparser(subparsers),
+            panorama.dbGraph.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -71,6 +74,8 @@ def main():
         panorama.info.launch(args)
     elif args.subcommand == "annotation":
         panorama.annotation.launch(args)
+    elif args.subcommand == "graph-db":
+        panorama.dbGraph.launch(args)
 
 
 if __name__ == '__main__':

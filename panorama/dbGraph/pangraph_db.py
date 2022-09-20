@@ -50,7 +50,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("dbGraph", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("graph-db", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_pangraph_db(parser)
     return parser
 
@@ -65,7 +65,7 @@ def parser_pangraph_db(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    neo4j_arg = required.add_argument_group(title="Required arguments for Neo4J DB")
+    neo4j_arg = parser.add_argument_group(title="Required arguments for Neo4J DB")
     neo4j_arg.add_argument('--uri', required=True, type=str, nargs='?',
                            help='URI to connect to the database')
     neo4j_arg.add_argument('--user', required=True, type=str, nargs='?',
