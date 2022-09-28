@@ -46,7 +46,7 @@ def set_verbosity_level(args: argparse.Namespace):
                             format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
         logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("ppanggolin").version)
+        logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
 
 # File managing system

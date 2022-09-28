@@ -1,79 +1,93 @@
 #!/usr/bin/env python3
 # coding:utf-8
-import concurrent.futures
-import logging
 # default libraries
-from threading import Lock
-from typing import Union, List
-from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+
+import logging
+from multiprocessing import Lock
 
 # installed librairies
-from neo4j import GraphDatabase, Session
-
-try:
-    from neo4j._async.driver import AsyncGraphDatabase
-except ModuleNotFoundError:
-    print('Error! You should be running neo4j python driver version 5 to use async features')
+from py2neo import Graph
+from dict2graph import Dict2graph
 
 # local librairies
 from panorama.pangenomes import Pangenome
 
 
-class Neo4jDB:
+def custom_pre_func(node):
+    return node
 
-    def __init__(self, uri, user, pwd):
-        self.__uri = uri
-        self.__user = user
-        self.__pwd = pwd
-        self.__driver = None
+
+def custom_post_func(node):
+    if node is not None and node.__primarylabel__ == "Family":
+        node.add_label(node["partition"])
+    return node
+
+class PangenomeLoader:
+
+    def __init__(self, pangenome_name: str, pangenome_data: dict, lock: Lock):
+        self.name = pangenome_name
+        self.lock = lock
+        self.data = pangenome_data
+        self._build_loader()
+
+    def load(self, graph: Graph):
+        assert self.lock is not None, "Lock not Initialized"
         try:
-            self.__driver = GraphDatabase.driver(self.__uri, auth=(self.__user, self.__pwd))
-            self.__async_driver = AsyncGraphDatabase.driver(self.__uri, auth=(self.__user, self.__pwd))
-        except Exception as e:
-            raise Exception("Failed to create the driver:", e)
-        self._lock = Lock()
+            with self.lock:
+                self.loader.parse(self.data)
+                self.loader.create_indexes(graph)
+                self.loader.merge(graph)
+        except Exception as error:
+            raise Exception(f"Load to Neo4j failed because : {error}")
 
-    def close(self):
-        assert self.__driver is not None, "Driver not initialized!"
-        try:
-            self.__driver.close()
-        except Exception:
-            raise Exception("Close driver failed")
+    def _build_loader(self):
+        d2g = Dict2graph()
+        # c.config_dict_label_override = config.JSON2GRAPH_LABELOVERRIDE
+        # c.config_func_custom_relation_name_generator = DataTransformer.nameRelation
+        d2g.config_dict_primarykey_generated_hashed_attrs_by_label = {
+            "Pangenome": None,  # Random id
+            "Family": ["name", "partition", "subpartition"],
+            "Gene": 'OuterContent',
+            "Module": "AllContent"
+        }
+        # d2g.config_dict_concat_list_attr = {"Author": {"middle": " "}}
+        # c.config_str_collection_hub_label = "{LIST_MEMBER_LABEL}Collection"
+        # d2g.config_list_collection_hub_extra_labels = []
 
-    async def close_async(self):
-        assert self.__async_driver is not None, "Async driver not initialized!"
-        try:
-            await self.__async_driver.close()
-        except Exception:
-            raise Exception("Close async driver failed")
+        # d2g.config_graphio_batch_size = config.COMMIT_INTERVAL
+        # c.config_dict_primarykey_attr_by_label = config.JSON2GRAPH_ID_ATTR
+        d2g.config_str_primarykey_generated_attr_name = "id"
+        d2g.config_list_blocklist_collection_hubs = [
+            "FamilyCollection",
+            "GeneCollection",
+            "NeighborCollection",
+            "ModuleCollection"
+        ]
+        d2g.config_dict_node_prop_to_rel_prop = {"Family": {"weight": ["NEIGHBOR"], "partition": ["IN_MODULE"]}}
+        d2g.config_dict_primarykey_attr_by_label = {"Family": ["name", "partition", "subpartition"],
+                                                    "Module": ["module_id"]}
+        d2g.config_dict_reltype_override = {"PANGENOME_HAS_FAMILY": "IN_PANGENOME",
+                                            "FAMILY_HAS_GENE": "IN_FAMILY",
+                                            "FAMILY_HAS_FAMILY": "NEIGHBOR",
+                                            "MODULE_HAS_FAMILY": "IN_MODULE"}
+        d2g.config_list_blocklist_reltypes = ["PANGENOME_HAS_MODULE"]
+        d2g.config_bool_capitalize_labels = False
+        # d2g.config_dict_label_override = {
+        #     "location": "Location",
+        #     "cite_spans": "Citation",
+        #     "affiliation": "Affiliation",
+        # }
+        d2g.config_func_node_post_modifier = custom_post_func
+        # d2g.config_func_node_pre_modifier = custom_pre_func
 
-    def run(self, query: str, parameters: dict = None, db: str = None):
-        assert self.__driver is not None, "Driver not initialized!"
-        session = None
-        response = None
-        if len(query) > 0:
-            try:
-                session = self.__driver.session(database=db) if db is not None else self.__driver.session()
-            except Exception as e:
-                raise Exception("Init session failed:", e)
-            finally:
-                try:
-                    response = session.run(query, parameters)
-                except Exception as e:
-                    raise Exception("Request failed", e)
-                finally:
-                    if session is not None:
-                        session.close()
-        else:
-            raise ValueError("Query is empty")
-        return response
-
-    def clean(self, max_rows: int = 1000):
-        self.run(query=f"MATCH (n) CALL {{WITH n DETACH DELETE n}} IN TRANSACTIONS OF {max_rows} ROWS;")
+        # c.config_dict_property_name_override = config.JSON2GRAPH_PROPOVERRIDE
+        self.loader = d2g
 
 
 if __name__ == "__main__":
-    neo4j_db = Neo4jDB(uri="bolt://localhost:7687",
-                       user="neo4j",
-                       pwd="PANORAMA2022")
+    from py2neo import GraphService
+
+    neo4j_graph = Graph(uri="bolt://localhost:7687", user="neo4j",
+                        password="PANORAMA2022", name="test")
+
+    print(neo4j_graph.name)

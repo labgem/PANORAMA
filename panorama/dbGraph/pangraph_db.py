@@ -6,15 +6,85 @@ import argparse
 import logging
 from tqdm import tqdm
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, CancelledError, Executor, Future
+from multiprocessing import Manager
+import functools
 
 # installed librairies
 from ppanggolin.formats.readBinaries import check_pangenome_info
+from py2neo import Graph
 # local librairies
 from panorama.pangenomes import Pangenome
 from panorama.utils import check_tsv_sanity
 from panorama.dbGraph.translatePan import create_dict
-from panorama.panDB import Neo4jDB
-from panorama.dbGraph.exportPan import load_data
+from panorama.panDB import PangenomeLoader
+
+
+logger = logging.getLogger(__name__)
+
+
+def init_db_lock(lock):
+    global db_loading_lock
+    db_loading_lock = lock
+
+
+def load_pangenome_done(pangenome_name, executor: Executor, bar, future: Future):
+    try:
+        future.result()
+    except CancelledError:
+        # canceled by god or anyone
+        logging.getLogger().info(f"Load {pangenome_name} cancelled")
+        return
+    except Exception as error:
+        # if config.CANCEL_WHOLE_IMPORT_IF_A_WORKER_FAILS:
+        logging.getLogger().warning(f"Load {pangenome_name} failed. Cancel all tasks and stop workers...")
+        executor.shutdown(cancel_futures=True)
+
+        logging.getLogger().info(f"{pangenome_name} failed")
+        logging.getLogger().exception(f"Load {pangenome_name} raised {error}")
+        raise error
+    bar.update()
+    logging.getLogger().info(f"Load {pangenome_name} finished")
+
+
+def load_pangenome(pangenome_name, pangenome_path):
+    pangenome = Pangenome(name=pangenome_name)
+    pangenome.add_file(pangenome_path)
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True,
+                         need_modules=True, disable_bar=True)
+    data = create_dict(pangenome)
+    loader = PangenomeLoader(pangenome_name, data, db_loading_lock)
+    loader.load(graph)
+
+
+def load_pangenome_mp(pangenomes: dict, cpu: int = 1):
+    manager = Manager()
+    lock = manager.Lock()
+    futures = []
+    bar = tqdm(total=len(pangenomes), unit='pangenome')
+    with ProcessPoolExecutor(max_workers=cpu, initializer=init_db_lock, initargs=(lock,)) as executor:
+        for pangenome_name, pangenome_path in pangenomes.items():
+            logging.getLogger().info(f"Add {pangenome_name} to schedule")
+            future = executor.submit(load_pangenome, pangenome_name, pangenome_path)
+
+            future.add_done_callback(
+                functools.partial(
+                    load_pangenome_done,
+                    pangenome_name,
+                    executor,
+                    bar
+                )
+            )
+            futures.append(future)
+    bar.close()
+
+
+# pandas.read_csv(config.METADATA_FILE)
+
+# Simple singleprocessed loading
+# def load_data():
+#     dataloader = Dataloader(config.METADATA_FILE)
+#     dataloader.parse()
 
 
 def launch(args):
@@ -23,23 +93,14 @@ def launch(args):
 
     :param args: Argument given
     """
+    global graph
+
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    neo4j_db = Neo4jDB(uri=args.uri,
-                       user=args.user,
-                       pwd=args.pwd)
+    graph = Graph(uri=args.uri, user=args.user, password=args.pwd)
     if args.clean:
-        neo4j_db.clean()
-    for pangenome_name, pangenome_path in tqdm(pan_to_path.items(), unit='pangenome'):
-        pangenome = Pangenome(name=pangenome_name)
-        pangenome.add_file(pangenome_path)
-        check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True)
-        logging.getLogger().info(f"Begin {pangenome_name} translation for Neo4J")
-        translate_pangenome = create_dict(pangenome)
-        logging.getLogger().info(f"Begin {pangenome_name} load into Neo4J DB")
-        load_data(db=neo4j_db, pangenome_data=translate_pangenome, threads=args.threads)
-        neo4j_db.close()
-        logging.getLogger().info("Load finished and connection to Neo4J DB closed")
-    neo4j_db.close()
+        graph.delete_all()
+    load_pangenome_mp(pan_to_path, args.cpu)
+
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -76,8 +137,8 @@ def parser_pangraph_db(parser):
     optional.add_argument("--clean", required=False, action='store_true', default=False,
                           help="Clean the database before to add pangenomes. "
                                "WARNING, all the pangenomes will be removed.")
-    optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
-                          help="Number of av available threads")
+    optional.add_argument("--cpu", required=False, nargs='?', type=int, default=1,
+                          help="Number of available cpu")
 
 
 if __name__ == "__main__":

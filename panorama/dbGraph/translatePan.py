@@ -8,6 +8,7 @@ import json
 import tempfile
 from pathlib import Path
 
+from ppanggolin.edge import Edge
 # installed librairies
 from ppanggolin.utils import write_compressed_or_not
 from ppanggolin.formats.readBinaries import check_pangenome_info
@@ -17,15 +18,22 @@ from ppanggolin.region import Module, Region, Spot
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
+index = 1
+fam_visit = set()
 
-def write_gene_to_families(family: GeneFamily, out_dict: dict):
+
+def get_genes(family: GeneFamily):
+    genes_list = []
     for gene in family.genes:
-        out_dict["graph"]["nodes"].append({"id": gene.ID,
-                                           "attr": {"genomic_type": "CDS",
-                                                    "is_fragment": int(gene.is_fragment)}})
-        out_dict["graph"]["edges"].append({"from": gene.ID, "to": f"F_{family.ID}",
-                                           "type": ["IN_FAMILY"], "attr": {}})
-        out_dict["graph"]["node_types"][str(gene.ID)] = ["GENE"]
+        genes_list.append({"name": gene.name,
+                           "genomic_type": gene.type,
+                           "is_fragment": bool(gene.is_fragment),
+                           # Prevent TypeError: Object of type bool_ is not JSON serializable
+                           "start": gene.start,
+                           "stop": gene.stop,
+                           "strand": gene.strand,
+                           "product": gene.product})
+    return genes_list
 
 
 def write_gene_to_contig(contig: Contig, out_dict: dict):
@@ -44,26 +52,40 @@ def write_contig_to_organism(organism: Organism, out_dict: dict):
         write_gene_to_contig(contig, out_dict)
 
 
-def write_gene_families(pangenome: Pangenome, out_dict: dict):
+def write_families(pangenome: Pangenome, out_dict: dict):
     for family in pangenome.gene_families:
-        out_dict["graph"]["nodes"].append({"id": f"F_{family.ID}", "attr": {"name": family.name,
-                                                                            "partition": family.named_partition,
-                                                                            "subpartition": family.partition}})
-        out_dict["graph"]["node_types"][f"F_{family.ID}"] = ["FAMILY", family.named_partition]
-        out_dict["graph"]["edges"].append({"from": f"F_{family.ID}", "to": pangenome.name,
-                                           "type": ["IN_PANGENOME"],
-                                           "attr": {"partition": family.named_partition}})
-        write_gene_to_families(family, out_dict)
+        out_dict["Pangenome"]["Family"].append({"name": family.name,
+                                                "partition": family.named_partition,
+                                                "subpartition": family.partition,
+                                                "Gene": get_genes(family),
+                                                "Family": get_neighbor(family)  # Return neighbor with edges weight
+                                                })
 
 
-def write_neighbor_edges(pangenome: Pangenome, out_dict: dict):
-    for edge in pangenome.edges:
-        part_source, part_target = (pangenome.get_gene_family(edge.source.name).named_partition,
-                                    pangenome.get_gene_family(edge.target.name).named_partition)
-        out_dict["graph"]["edges"].append(
-            {"from": f"F_{edge.source.ID}", "to": f"F_{edge.target.ID}",
-             "type": ["NEIGHBOR_OF", f"{part_source}_{part_target}"],
-             "attr": {"weight": len(edge.organisms)}})
+def get_neighbor(family: GeneFamily):
+    global fam_visit
+    edge: Edge
+    neighbor_list = []
+    for edge in family.edges:
+        if edge.source.name == family.name:
+            if edge.target.name not in fam_visit:
+                neighbor_list.append({"weight": len(edge.organisms),
+                                      "name": edge.target.name,
+                                      "partition": edge.target.named_partition,
+                                      "subpartition": edge.target.partition
+                                      })
+        elif edge.target.name == family.name:
+            if edge.source.name not in fam_visit:
+                neighbor_list.append({"weight": len(edge.organisms),
+                                      "name": edge.source.name,
+                                      "partition": edge.source.named_partition,
+                                      "subpartition": edge.source.partition
+                                      })
+        else:
+            raise Exception("Source and target name are different from edge's family. "
+                            "Please check you import graph data and if the problem persist, post an issue.")
+    fam_visit.add(family.name)
+    return neighbor_list
 
 
 def write_organisms(pangenome: Pangenome, out_dict: dict):
@@ -108,30 +130,24 @@ def write_spot(pangenome: Pangenome, out_dict: dict):
         write_in_spot(spot=spot, out_dict=out_dict)
 
 
-def write_family_in_module(module: Module, out_dict):
-    for family in module.families:
-        out_dict["graph"]["edges"].append({"from": f"F_{family.ID}", "to": f"M_{str(module.ID)}",
-                                           "type": ["IN_MODULE"],
-                                           "attr": {}})
-
-
 def write_modules(pangenome: Pangenome, out_dict: dict):
+    module: Module
     for module in pangenome.modules:
-        out_dict["graph"]["nodes"].append({"id": f"M_{str(module.ID)}", "attr": {}})
-        out_dict["graph"]["node_types"][f"M_{str(module.ID)}"] = ["MODULE"]
-
-        write_family_in_module(module=module, out_dict=out_dict)
+        out_dict["Pangenome"]["Module"].append({"module_id": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
+                                                "Family": [{"name": family.name,
+                                                            "partition": family.named_partition,
+                                                            "subpartition": family.partition}
+                                                           for family in module.families]
+                                                })
 
 
 def create_dict(pangenome: Pangenome):
-    out_dict = {"graph": {"edges": [], "nodes": [], "node_types": {}}}
-    out_dict["graph"]["nodes"].append({"id": pangenome.name, "attr": {"parameters": pangenome.parameters}})
-    out_dict["graph"]["node_types"][pangenome.name] = ["PANGENOME"]
-    write_gene_families(pangenome, out_dict)
-    write_neighbor_edges(pangenome, out_dict)
-    write_organisms(pangenome, out_dict)
-    write_rgp(pangenome, out_dict)
-    write_spot(pangenome, out_dict)
+    out_dict = {"Pangenome": {"name": pangenome.name, "Family": [], "Edges": [], "Module": []}}
+    write_families(pangenome, out_dict)
+    # write_neighbor(pangenome, out_dict)
+    # write_organisms(pangenome, out_dict)
+    # write_rgp(pangenome, out_dict)
+    # write_spot(pangenome, out_dict)
     write_modules(pangenome, out_dict)
 
     return out_dict
@@ -139,7 +155,7 @@ def create_dict(pangenome: Pangenome):
 
 def write_json(pangenome: Pangenome, output: Path, compress):
     logging.getLogger().info(f"Writing the json file for the {pangenome.name} pangenome graph")
-    outname = f"{output.absolute()}/{pangenome.name}.json"
+    outname = f"{output.absolute()}/{pangenome.name}_short2.json"
     out_dict = create_dict(pangenome)
 
     # for mod in pangenome.modules:
@@ -152,7 +168,7 @@ def write_json(pangenome: Pangenome, output: Path, compress):
     #         out_dict["graph"]["edges"].append(
     #             {"from": pan_name + '_' + str(mod.ID), "to": pan_name, "type": ["IN_TAXA"], "attr": {}})
     with write_compressed_or_not(outname, compress) as json_file:
-        json.dump(out_dict, json_file)
+        json.dump(out_dict, json_file, indent=4)
 
 
 def launch(args):
