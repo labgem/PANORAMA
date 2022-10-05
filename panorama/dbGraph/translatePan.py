@@ -5,26 +5,27 @@
 import argparse
 import logging
 import json
-import tempfile
 from pathlib import Path
+from typing import Union
 
-from ppanggolin.edge import Edge
 # installed librairies
 from ppanggolin.utils import write_compressed_or_not
 from ppanggolin.formats.readBinaries import check_pangenome_info
 from ppanggolin.genome import Organism, Contig
+from ppanggolin.edge import Edge
 from ppanggolin.region import Module, Region, Spot
+
 # local librairies
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
-index = 1
+
 fam_visit = set()
 
 
-def get_genes(family: GeneFamily):
+def get_genes(parent: Union[GeneFamily, Region, Contig]):
     genes_list = []
-    for gene in family.genes:
+    for gene in parent.genes:
         genes_list.append({"name": gene.name,
                            "genomic_type": gene.type,
                            "is_fragment": bool(gene.is_fragment),
@@ -32,24 +33,18 @@ def get_genes(family: GeneFamily):
                            "start": gene.start,
                            "stop": gene.stop,
                            "strand": gene.strand,
-                           "product": gene.product})
+                           "product": gene.product,
+                           "local_id": gene.local_identifier})
     return genes_list
 
 
-def write_gene_to_contig(contig: Contig, out_dict: dict):
-    for gene in contig.genes:
-        out_dict["graph"]["edges"].append({"from": gene.ID, "to": contig.name,
-                                           "type": ["IN_CONTIG"], "attr": {}})
-
-
-def write_contig_to_organism(organism: Organism, out_dict: dict):
+def write_contig(organism: Organism):
+    contig_list = []
     for contig in organism.contigs:
-        out_dict["graph"]["nodes"].append({"id": f"C_{contig.name}",
-                                           "attr": {"is_circular": int(contig.is_circular)}})
-        out_dict["graph"]["edges"].append({"from": f"C_{contig.name}", "to": organism.name,
-                                           "type": ["IN_GENOME"], "attr": {}})
-        out_dict["graph"]["node_types"][f"C_{contig.name}"] = ["CONTIG"]
-        write_gene_to_contig(contig, out_dict)
+        contig_list.append({"name": contig.name,
+                            "is_circular": bool(contig.is_circular),
+                            "Gene": get_genes(contig)})
+    return contig_list
 
 
 def write_families(pangenome: Pangenome, out_dict: dict):
@@ -90,50 +85,33 @@ def get_neighbor(family: GeneFamily):
 
 def write_organisms(pangenome: Pangenome, out_dict: dict):
     for org in pangenome.organisms:
-        out_dict["graph"]["nodes"].append({"id": str(org.name), "attr": {}})
-        out_dict["graph"]["node_types"][str(org.name)] = ["GENOME"]
-
-        write_contig_to_organism(organism=org, out_dict=out_dict)
+        out_dict["Pangenome"]["Genome"].append({"name": str(org.name),
+                                                "Contig": write_contig(org)})
 
 
-def write_in_rgp(region: Region, out_dict: dict):
-    for gene in region.genes:
-        out_dict["graph"]["edges"].append({"from": gene.ID, "to": str(region.name),
-                                           "type": ["IN_RGP"],
-                                           "attr": {"start": True if gene == region.start_gene else False,
-                                                    "stop": True if gene == region.stop_gene else False}})
-
-
-def write_rgp(pangenome: Pangenome, out_dict: dict):
-    for rgp in pangenome.regions:
-        out_dict["graph"]["nodes"].append({"id": str(rgp.name),
-                                           "attr": {"start": rgp.start, "stop": rgp.stop, "score": float(rgp.score),
-                                                    "is_whole_contig": rgp.is_whole_contig,
-                                                    "is_contig_border": rgp.is_contig_border}})
-        out_dict["graph"]["node_types"][str(rgp.name)] = ["RGP"]
-
-        write_in_rgp(region=rgp, out_dict=out_dict)
-
-
-def write_in_spot(spot: Spot, out_dict: dict):
-    for region in spot.regions:
-        out_dict["graph"]["edges"].append({"from": f"{str(region.name)}", "to": f"S_{str(spot.ID)}",
-                                           "type": ["IN_SPOT"],
-                                           "attr": {}})
+def write_rgp(parent: Union[Pangenome, Spot]):
+    rgp_list = []
+    for rgp in parent.regions:
+        rgp_list.append({"name": str(rgp.name),
+                         "start": rgp.start,
+                         "stop": rgp.stop,
+                         "score": float(rgp.score),
+                         "is_whole_contig": rgp.is_whole_contig,
+                         "is_contig_border": rgp.is_contig_border,
+                         "Gene": get_genes(rgp)})
+    return rgp_list
 
 
 def write_spot(pangenome: Pangenome, out_dict: dict):
     for spot in pangenome.spots:
-        out_dict["graph"]["nodes"].append({"id": f"S_{str(spot.ID)}", "attr": {}})
-        out_dict["graph"]["node_types"][f"S_{str(spot.ID)}"] = ["SPOT"]
-
-        write_in_spot(spot=spot, out_dict=out_dict)
+        out_dict["Pangenome"]["Spot"].append({"name": f"{str(spot.ID)}",
+                                              "RGP": write_rgp(parent=spot)})
 
 
 def write_modules(pangenome: Pangenome, out_dict: dict):
     module: Module
     for module in pangenome.modules:
-        out_dict["Pangenome"]["Module"].append({"module_id": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
+        out_dict["Pangenome"]["Module"].append({"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
                                                 "Family": [{"name": family.name,
                                                             "partition": family.named_partition,
                                                             "subpartition": family.partition}
@@ -142,14 +120,12 @@ def write_modules(pangenome: Pangenome, out_dict: dict):
 
 
 def create_dict(pangenome: Pangenome):
-    out_dict = {"Pangenome": {"name": pangenome.name, "Family": [], "Edges": [], "Module": []}}
+    out_dict = {"Pangenome": {"name": pangenome.name, "taxid": pangenome.taxid, "Family": [], "Edges": [],
+                              "Module": [], "RGP": write_rgp(parent=pangenome), "Spot": [], "Genome": []}}
     write_families(pangenome, out_dict)
-    # write_neighbor(pangenome, out_dict)
-    # write_organisms(pangenome, out_dict)
-    # write_rgp(pangenome, out_dict)
-    # write_spot(pangenome, out_dict)
+    write_organisms(pangenome, out_dict)
+    write_spot(pangenome, out_dict)
     write_modules(pangenome, out_dict)
-
     return out_dict
 
 
@@ -158,15 +134,6 @@ def write_json(pangenome: Pangenome, output: Path, compress):
     outname = f"{output.absolute()}/{pangenome.name}_short2.json"
     out_dict = create_dict(pangenome)
 
-    # for mod in pangenome.modules:
-    #     out_dict["graph"]["nodes"].append(
-    #         {"id": pan_name + '_' + str(mod.ID), "attr": {"nb_fams": str(len(mod.families))}})
-    #     out_dict["graph"]["node_types"][pan_name + '_' + str(mod.ID)] = ["Module"]
-    #     for family in mod.families:
-    #         out_dict["graph"]["edges"].append(
-    #             {"from": "F_" + family.name, "to": pan_name + '_' + str(mod.ID), "type": ["IN_MODULE"], "attr": {}})
-    #         out_dict["graph"]["edges"].append(
-    #             {"from": pan_name + '_' + str(mod.ID), "to": pan_name, "type": ["IN_TAXA"], "attr": {}})
     with write_compressed_or_not(outname, compress) as json_file:
         json.dump(out_dict, json_file, indent=4)
 

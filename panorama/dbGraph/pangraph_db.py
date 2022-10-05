@@ -7,25 +7,61 @@ import logging
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, CancelledError, Executor, Future
-from multiprocessing import Manager
+from multiprocessing import Manager, Lock
 import functools
 
 # installed librairies
 from ppanggolin.formats.readBinaries import check_pangenome_info
 from py2neo import Graph
+from graphio import RelationshipSet
+import pandas as pd
+
 # local librairies
 from panorama.pangenomes import Pangenome
 from panorama.utils import check_tsv_sanity
 from panorama.dbGraph.translatePan import create_dict
-from panorama.panDB import PangenomeLoader
-
+from panorama.panDB import PangenomeLoader, SimilarityLoader
 
 logger = logging.getLogger(__name__)
+
+db_loading_lock: Lock = None
+
+def load_similarities(df: pd.DataFrame, batch_size):
+    global fam_index, fam_known, fam_list
+
+    is_similar_to = RelationshipSet('IS_SIMILAR_TO', ['Family'], ['Family'], ['name'], ['name'])
+    for row in df.iterrows():
+        is_similar_to.add_relationship(start_node_properties={"name": row[1]['Family_1']},
+                                       end_node_properties={"name": row[1]['Family_2']},
+                                       properties={"identity": row[1]['identity'],
+                                                   "covery": row[1]['covery']})
+    is_similar_to.merge(graph=graph, batch_size=batch_size)
+
+
+def load_similarities_mp(tsv: Path, cpu: int = 1, batch_size: int = 1000):
+    df = pd.read_csv(filepath_or_buffer=tsv, sep="\t", header=None,
+                     names=["Family_1", "Family_2", "identity", "covery"])
+
+    manager = Manager()
+    lock = manager.Lock()
+    init_db_lock(lock)
+    subset_df = []
+    chunk = batch_size * 10
+
+    for i in range((df.shape[0] // chunk + 1)):
+        df_temp = df.iloc[i * chunk:(i + 1) * chunk]
+        df_temp = df_temp.reset_index(drop=True)
+        subset_df.append(df_temp)
+
+    with ProcessPoolExecutor(max_workers=cpu, initializer=init_db_lock, initargs=(lock,)) as executor:
+        list(tqdm(executor.map(load_similarities, subset_df, [batch_size]*len(subset_df)),
+             unit="similarities_batch", total=len(subset_df)))
 
 
 def init_db_lock(lock):
     global db_loading_lock
-    db_loading_lock = lock
+    if db_loading_lock is None:
+        db_loading_lock = lock
 
 
 def load_pangenome_done(pangenome_name, executor: Executor, bar, future: Future):
@@ -47,11 +83,11 @@ def load_pangenome_done(pangenome_name, executor: Executor, bar, future: Future)
     logging.getLogger().info(f"Load {pangenome_name} finished")
 
 
-def load_pangenome(pangenome_name, pangenome_path):
-    pangenome = Pangenome(name=pangenome_name)
-    pangenome.add_file(pangenome_path)
+def load_pangenome(pangenome_name, pangenome_info):
+    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+    pangenome.add_file(pangenome_info["path"])
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True,
-                         need_modules=True, disable_bar=True)
+                         need_rgp=True, need_spots=True, need_modules=True, disable_bar=True)
     data = create_dict(pangenome)
     loader = PangenomeLoader(pangenome_name, data, db_loading_lock)
     loader.load(graph)
@@ -63,9 +99,9 @@ def load_pangenome_mp(pangenomes: dict, cpu: int = 1):
     futures = []
     bar = tqdm(total=len(pangenomes), unit='pangenome')
     with ProcessPoolExecutor(max_workers=cpu, initializer=init_db_lock, initargs=(lock,)) as executor:
-        for pangenome_name, pangenome_path in pangenomes.items():
+        for pangenome_name, pangenome_info in pangenomes.items():
             logging.getLogger().info(f"Add {pangenome_name} to schedule")
-            future = executor.submit(load_pangenome, pangenome_name, pangenome_path)
+            future = executor.submit(load_pangenome, pangenome_name, pangenome_info)
 
             future.add_done_callback(
                 functools.partial(
@@ -79,14 +115,6 @@ def load_pangenome_mp(pangenomes: dict, cpu: int = 1):
     bar.close()
 
 
-# pandas.read_csv(config.METADATA_FILE)
-
-# Simple singleprocessed loading
-# def load_data():
-#     dataloader = Dataloader(config.METADATA_FILE)
-#     dataloader.parse()
-
-
 def launch(args):
     """
     Launch functions to read systems
@@ -95,12 +123,18 @@ def launch(args):
     """
     global graph
 
-    pan_to_path = check_tsv_sanity(args.pangenomes)
+    pangenomes = check_tsv_sanity(args.pangenomes)
     graph = Graph(uri=args.uri, user=args.user, password=args.pwd)
+    # graph.run("create constraint on f:Family assert f.hash_id is unique;")
     if args.clean:
         graph.delete_all()
-    load_pangenome_mp(pan_to_path, args.cpu)
-
+        # tx = graph.begin()
+        # tx.run("create constraint on f:Family assert f.hash_id is unique;")
+        # graph.commit(tx)
+    load_pangenome_mp(pangenomes, args.cpu)
+    logging.getLogger().info("All pangenomes loaded...")
+    logging.getLogger().info("Bengin load of similarities...")
+    load_similarities_mp(args.similarities)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -139,6 +173,10 @@ def parser_pangraph_db(parser):
                                "WARNING, all the pangenomes will be removed.")
     optional.add_argument("--cpu", required=False, nargs='?', type=int, default=1,
                           help="Number of available cpu")
+    optional.add_argument("--similarities", required=False, nargs='?', type=Path, default=None,
+                          help="PANORAMA can perform an alignment of all gene families. In this case,"
+                               "3 identiy levels will be used to have complete information."
+                               "If you want you can give your own alignment file.")
 
 
 if __name__ == "__main__":

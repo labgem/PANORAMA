@@ -21,12 +21,12 @@ class Pangenome(Pan):
     :param name: Name of the pangenome
     """
 
-    def __init__(self, name, species_id: int = None):
+    def __init__(self, name, taxid: int = None):
         """Constructor method.
         """
         super().__init__()
         self.name = name
-        self.species_id = species_id
+        self.taxid = taxid
 
     def get_annnotation(self, annotation: str, source: str) -> Union[GeneFamily, list]:
         """ Get the annotation in pangenome gene family by name or source of annotation
