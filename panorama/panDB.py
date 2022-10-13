@@ -80,7 +80,10 @@ class PangenomeLoader:
         # c.config_func_custom_relation_name_generator = DataTransformer.nameRelation
         d2g.config_dict_primarykey_generated_hashed_attrs_by_label = {
             "Pangenome": 'AllAttributes',  # Random id
-            "Family": ["name", "partition", "subpartition"],
+            "Family": 'AllContent',
+            "Persistent": ["name", "subpartition"],
+            "Shell": ["name", "subpartition"],
+            "Cloud": ["name", "subpartition"],
             "Gene": 'AllAttributes',
             "Module": "AllContent",
             "Spot": "AllContent",
@@ -96,7 +99,9 @@ class PangenomeLoader:
         # c.config_dict_primarykey_attr_by_label = config.JSON2GRAPH_ID_ATTR
         d2g.config_str_primarykey_generated_attr_name = "hash_id"
         d2g.config_list_blocklist_collection_hubs = [
-            "FamilyCollection",
+            "PersistentCollection",
+            "ShellCollection",
+            "CloudCollection",
             "GeneCollection",
             "NeighborCollection",
             "ModuleCollection",
@@ -105,12 +110,28 @@ class PangenomeLoader:
             "GenomeCollection",
             "ContigCollection",
         ]
-        d2g.config_dict_node_prop_to_rel_prop = {"Family": {"weight": ["NEIGHBOR"], "partition": ["IN_MODULE"]}}
-        d2g.config_dict_primarykey_attr_by_label = {"Family": ["name", "partition", "subpartition"]}
+        d2g.config_dict_node_prop_to_rel_prop = {"Persistent": {"weight": ["NEIGHBOR"]},
+                                                 "Shell": {"weight": ["NEIGHBOR"]},
+                                                 "Cloud": {"weight": ["NEIGHBOR"]}}  # ,  "partition": ["IN_MODULE"]}}
+        d2g.config_dict_primarykey_attr_by_label = {"Persistent": ["name", "subpartition"],
+                                                    "Shell": ["name", "subpartition"],
+                                                    "Cloud": ["name", "subpartition"]}
         d2g.config_dict_reltype_override = {"PANGENOME_HAS_FAMILY": "IS_IN_PANGENOME",
-                                            "FAMILY_HAS_GENE": "IS_IN_FAMILY",
-                                            "FAMILY_HAS_FAMILY": "NEIGHBOR",
-                                            "MODULE_HAS_FAMILY": "IS_IN_MODULE",
+                                            "PERSISTENT_HAS_GENE": "IS_IN_FAMILY",
+                                            "SHELL_HAS_GENE": "IS_IN_FAMILY",
+                                            "CLOUD_HAS_GENE": "IS_IN_FAMILY",
+                                            "PERSISTENT_HAS_PERSISTENT": "NEIGHBOR",
+                                            "PERSISTENT_HAS_SHELL": "NEIGHBOR",
+                                            "PERSISTENT_HAS_CLOUD": "NEIGHBOR",
+                                            "SHELL_HAS_PERSISTENT": "NEIGHBOR",
+                                            "SHELL_HAS_SHELL": "NEIGHBOR",
+                                            "SHELL_HAS_CLOUD": "NEIGHBOR",
+                                            "CLOUD_HAS_CLOUD": "NEIGHBOR",
+                                            "CLOUD_HAS_PERSISTENT": "NEIGHBOR",
+                                            "CLOUD_HAS_SHELL": "NEIGHBOR",
+                                            "MODULE_HAS_PERSISTENT": "IS_IN_MODULE",
+                                            "MODULE_HAS_SHELL": "IS_IN_MODULE",
+                                            "MODULE_HAS_CLOUD": "IS_IN_MODULE",
                                             "SPOT_HAS_RGP": "IS_IN_SPOT",
                                             "RGP_HAS_GENE": "IS_IN_RGP",
                                             "GENOME_HAS_CONTIG": "IS_IN_GENOME",
@@ -125,7 +146,7 @@ class PangenomeLoader:
         #     "cite_spans": "Citation",
         #     "affiliation": "Affiliation",
         # }
-        d2g.config_func_node_post_modifier = custom_post_func
+        # d2g.config_func_node_post_modifier = custom_post_func
         # d2g.config_func_node_pre_modifier = custom_pre_func
 
         # c.config_dict_property_name_override = config.JSON2GRAPH_PROPOVERRIDE

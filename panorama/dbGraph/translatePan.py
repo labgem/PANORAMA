@@ -49,38 +49,57 @@ def write_contig(organism: Organism):
 
 def write_families(pangenome: Pangenome, out_dict: dict):
     for family in pangenome.gene_families:
-        out_dict["Pangenome"]["Family"].append({"name": family.name,
-                                                "partition": family.named_partition,
-                                                "subpartition": family.partition,
-                                                "Gene": get_genes(family),
-                                                "Family": get_neighbor(family)  # Return neighbor with edges weight
-                                                })
+        fam_dic_property = {"name": family.name,
+                            # "partition": family.named_partition,
+                            "subpartition": family.partition,
+                            "Gene": get_genes(family)
+                            # "Family": get_neighbor(family)  # Return neighbor with edges weight
+                            }
+        fam_dic_property.update(get_neighbor(family))
+        if family.named_partition == "persistent":
+            out_dict["Pangenome"]["Family"]["Persistent"].append(fam_dic_property)
+        elif family.named_partition == "shell":
+            out_dict["Pangenome"]["Family"]["Shell"].append(fam_dic_property)
+        elif family.named_partition == "cloud":
+            out_dict["Pangenome"]["Family"]["Cloud"].append(fam_dic_property)
+        else:
+            raise Exception("Unrecognized partition name")
 
 
 def get_neighbor(family: GeneFamily):
     global fam_visit
     edge: Edge
-    neighbor_list = []
+    neighbor_dict = {"Persistent": [], "Shell": [], "Cloud": []}
     for edge in family.edges:
+        neighbor, neighbor_part = None, None
         if edge.source.name == family.name:
             if edge.target.name not in fam_visit:
-                neighbor_list.append({"weight": len(edge.organisms),
-                                      "name": edge.target.name,
-                                      "partition": edge.target.named_partition,
-                                      "subpartition": edge.target.partition
-                                      })
+                neighbor = {"weight": len(edge.organisms),
+                            "name": edge.target.name,
+                            "subpartition": edge.target.partition}
+                neighbor_part = edge.target.named_partition
         elif edge.target.name == family.name:
             if edge.source.name not in fam_visit:
-                neighbor_list.append({"weight": len(edge.organisms),
-                                      "name": edge.source.name,
-                                      "partition": edge.source.named_partition,
-                                      "subpartition": edge.source.partition
-                                      })
+                neighbor = {"weight": len(edge.organisms),
+                            "name": edge.source.name,
+                            # "partition": edge.source.named_partition,
+                            "subpartition": edge.source.partition}
+                neighbor_part = edge.source.named_partition
         else:
             raise Exception("Source and target name are different from edge's family. "
                             "Please check you import graph data and if the problem persist, post an issue.")
+        if neighbor is not None and neighbor_part is not None:
+            if neighbor_part == "persistent":
+                neighbor_dict["Persistent"].append(neighbor)
+            elif neighbor_part == "shell":
+                neighbor_dict["Shell"].append(neighbor)
+            elif neighbor_part == "cloud":
+                neighbor_dict["Cloud"].append(neighbor)
+            else:
+                raise Exception("Edge partition not recognized")
     fam_visit.add(family.name)
-    return neighbor_list
+
+    return neighbor_dict
 
 
 def write_organisms(pangenome: Pangenome, out_dict: dict):
@@ -112,17 +131,35 @@ def write_modules(pangenome: Pangenome, out_dict: dict):
     module: Module
     for module in pangenome.modules:
         out_dict["Pangenome"]["Module"].append({"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
-                                                "Family": [{"name": family.name,
-                                                            "partition": family.named_partition,
-                                                            "subpartition": family.partition}
-                                                           for family in module.families]
+                                                "Persistent": [], "Shell": [], "Cloud": []
                                                 })
+        module_dict = {"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
+                       "Persistent": [], "Shell": [], "Cloud": []}
+        for family in module.families:
+            fam_dic_property = {"name": family.name,
+                                "subpartition": family.partition}
+            if family.named_partition == "persistent":
+                module_dict["Persistent"].append(fam_dic_property)
+            elif family.named_partition == "shell":
+                module_dict["Shell"].append(fam_dic_property)
+            elif family.named_partition == "cloud":
+                module_dict["Cloud"].append(fam_dic_property)
+            else:
+                raise Exception("Unrecognized partition name")
 
+        out_dict["Pangenome"]["Module"].append(module_dict)
 
 def create_dict(pangenome: Pangenome):
-    out_dict = {"Pangenome": {"name": pangenome.name, "taxid": pangenome.taxid, "Family": [], "Edges": [],
-                              "Module": [], "RGP": write_rgp(parent=pangenome), "Spot": [], "Genome": []}}
+    out_dict = {"Pangenome": {"name": pangenome.name, "taxid": pangenome.taxid,
+                              "Family": {"nb_families": pangenome.number_of_gene_families(),
+                                         "Persistent": [], "Shell": [], "Cloud": []},
+                              "Module": [],
+                              "RGP": write_rgp(parent=pangenome),
+                              "Spot": [], "Genome": []}}
     write_families(pangenome, out_dict)
+    out_dict["Pangenome"]["Family"]["nb_persitent"] = len(out_dict["Pangenome"]["Family"]["Persistent"])
+    out_dict["Pangenome"]["Family"]["nb_shell"] = len(out_dict["Pangenome"]["Family"]["Shell"])
+    out_dict["Pangenome"]["Family"]["nb_cloud"] = len(out_dict["Pangenome"]["Family"]["Cloud"])
     write_organisms(pangenome, out_dict)
     write_spot(pangenome, out_dict)
     write_modules(pangenome, out_dict)
@@ -134,8 +171,8 @@ def write_json(pangenome: Pangenome, output: Path, compress):
     outname = f"{output.absolute()}/{pangenome.name}_short2.json"
     out_dict = create_dict(pangenome)
 
-    with write_compressed_or_not(outname, compress) as json_file:
-        json.dump(out_dict, json_file, indent=4)
+    # with write_compressed_or_not(outname, compress) as json_file:
+    #     json.dump(out_dict, json_file, indent=4)
 
 
 def launch(args):

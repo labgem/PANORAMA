@@ -26,36 +26,31 @@ logger = logging.getLogger(__name__)
 
 db_loading_lock: Lock = None
 
-def load_similarities(df: pd.DataFrame, batch_size):
-    global fam_index, fam_known, fam_list
-
-    is_similar_to = RelationshipSet('IS_SIMILAR_TO', ['Family'], ['Family'], ['name'], ['name'])
-    for row in df.iterrows():
-        is_similar_to.add_relationship(start_node_properties={"name": row[1]['Family_1']},
-                                       end_node_properties={"name": row[1]['Family_2']},
-                                       properties={"identity": row[1]['identity'],
-                                                   "covery": row[1]['covery']})
+def load_similarities(is_similar_to, batch_size):
     is_similar_to.merge(graph=graph, batch_size=batch_size)
 
 
 def load_similarities_mp(tsv: Path, cpu: int = 1, batch_size: int = 1000):
+    global fam_index, fam_known, fam_list
     df = pd.read_csv(filepath_or_buffer=tsv, sep="\t", header=None,
                      names=["Family_1", "Family_2", "identity", "covery"])
 
-    manager = Manager()
-    lock = manager.Lock()
-    init_db_lock(lock)
-    subset_df = []
-    chunk = batch_size * 10
-
-    for i in range((df.shape[0] // chunk + 1)):
-        df_temp = df.iloc[i * chunk:(i + 1) * chunk]
-        df_temp = df_temp.reset_index(drop=True)
-        subset_df.append(df_temp)
-
-    with ProcessPoolExecutor(max_workers=cpu, initializer=init_db_lock, initargs=(lock,)) as executor:
-        list(tqdm(executor.map(load_similarities, subset_df, [batch_size]*len(subset_df)),
-             unit="similarities_batch", total=len(subset_df)))
+    # manager = Manager()
+    # lock = manager.Lock()
+    # init_db_lock(lock)
+    is_similar_list = []
+    for start_label in ['Persistent', 'Shell', 'Cloud']:
+        for end_label in ['Persistent', 'Shell', 'Cloud']:
+            is_similar_to = RelationshipSet('IS_SIMILAR_TO', [start_label], [end_label], ['name'], ['name'])
+            for row in df.iterrows():
+                is_similar_to.add_relationship(start_node_properties={"name": row[1]['Family_1']},
+                                               end_node_properties={"name": row[1]['Family_2']},
+                                               properties={"identity": row[1]['identity'],
+                                                           "covery": row[1]['covery']})
+            is_similar_list.append(is_similar_to)
+    with ProcessPoolExecutor(max_workers=cpu) as executor:
+        list(tqdm(executor.map(load_similarities, is_similar_list, [batch_size]*len(is_similar_list)),
+             unit="similarities_batch", total=len(is_similar_list)))
 
 
 def init_db_lock(lock):
@@ -125,7 +120,6 @@ def launch(args):
 
     pangenomes = check_tsv_sanity(args.pangenomes)
     graph = Graph(uri=args.uri, user=args.user, password=args.pwd)
-    # graph.run("create constraint on f:Family assert f.hash_id is unique;")
     if args.clean:
         graph.delete_all()
         # tx = graph.begin()
