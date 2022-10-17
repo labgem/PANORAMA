@@ -10,6 +10,9 @@ import logging
 from pathlib import Path
 import tempfile
 import re
+
+import tables
+from ppanggolin.genome import Organism
 from tqdm import tqdm
 # installed libraries
 import pandas as pd
@@ -21,7 +24,7 @@ from panorama.annotation.rules import System, Systems
 from panorama.pangenomes import Pangenome
 from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
 from panorama.annotation.system_search import launch_system_search
-
+from panorama.format.write_binaries import write_gene_fam_annot
 
 def check_parameter(args):
     if args.tsv is None and args.hmm is None:
@@ -93,17 +96,23 @@ def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
             if len(org_inter) == 0:
                 print(system_name)
             for org in org_inter:
-                if org.name in org_pred_dict:
-                    org_pred_dict[org.name].add(system_name)
-                else:
-                    org_pred_dict[org.name] = {system_name}
-
+                all_fam = {family: False for family in value}
+                index = 0
+                for contig in org.contigs:
+                    for gene in contig.genes:
+                        if gene.family in all_fam:
+                            all_fam[gene.family] = True
+                if all(x for x in all_fam.values()):
+                    if org.name in org_pred_dict:
+                        org_pred_dict[org.name].add(system_name)
+                    else:
+                        org_pred_dict[org.name] = {system_name}
 
     for system in tqdm(systems, total=systems.size, unit='system', disable=disable_bar):
         # if check_all_present_families(system, annot2fam) is True:
         pred_res = launch_system_search(system, annot2fam)
         if pred_res is not None:
-            pred.append([system.name, max(pred_res.keys())+1])
+            pred.append([system.name, max(pred_res.keys()) + 1])
             org2pred(org_pred, pred_res, system.name)
     proj = pd.DataFrame.from_dict(org_pred, orient='index')
     sys_df = pd.DataFrame(pred, columns=['System', 'Nb Detection']).sort_values('System').reset_index(drop=True)
@@ -142,25 +151,33 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     for gf in annotation_df[res_col_names[0]].unique():
         select_df = annotation_df.loc[annotation_df[res_col_names[0]] == gf]
         gene_fam = pangenome.get_gene_family(name=gf)
-        gene_fam.add_annotation(source=source, annotation=list(select_df[res_col_names[1]]), force=force)
+        gene_fam.add_annotation(source=source, annotation=list(select_df['protein_name']), force=force)
         for index, row in select_df.iterrows():
-            if row[res_col_names[1]] not in annot2fam:
-                annot2fam[row[res_col_names[1]]] = {gene_fam}
+            if row['protein_name'] not in annot2fam:
+                annot2fam[row['protein_name']] = {gene_fam}
             else:
-                annot2fam[row[res_col_names[1]]].add(gene_fam)
+                annot2fam[row['protein_name']].add(gene_fam)
+            if not pd.isna(row['secondary_name']):  # Test if there is a second name
+                for other_name in re.split('\|', row['secondary_name']):
+                    if other_name not in annot2fam:
+                        annot2fam[other_name] = {gene_fam}
+                    else:
+                        annot2fam[other_name].add(gene_fam)
     return annot2fam
 
 
-def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float = 0.0001, cutoffs: Path = None,
-                    source: str = None, prediction_size:int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
+def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None, e_value: float = 0.0001,
+                    source: str = None, prediction_size: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
                     threads: int = 1, force: bool = False, disable_bar: bool = False) -> dict:
     """ Main function to add annotation to pangenome from tsv file
 
     :param pangenome: Pangenome object to ppanggolin
     :param hmm: Path to hmm file or directory
     :param tsv: Path to tsv with gene families annotation
-    :param e_value: e-value threshold to associate annoation to gene family
+    :param meta:
+    :param e_value:
     :param source: Source of annotation
+    :param prediction_size:
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param force: Boolean of force argument
@@ -175,9 +192,8 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, e_value: float =
             logging.getLogger().debug("Filter TSV annotation file")
             annotation_df = filter_df(annotation_df, e_value)
     elif hmm is not None:
-        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", eval=e_value, cutoffs_file=cutoffs,
-                                       prediction_size=prediction_size, tmpdir=tmpdir, threads=threads,
-                                       disable_bar=disable_bar)
+        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, prediction_size=prediction_size,
+                                       tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
     return annotation_to_families(annotation_df, pangenome, source, force)
@@ -197,11 +213,15 @@ def launch(args):
         pangenome = Pangenome(name=pangenome_name)
         pangenome.add_file(pangenome_file)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                                    e_value=args.e_value, cutoffs=args.cutoffs, prediction_size=args.prediction_size,
+                                    meta=args.meta, e_value=args.e_value, prediction_size=args.prediction_size,
                                     tmpdir=args.tmpdir, threads=args.threads, force=args.force,
                                     disable_bar=args.disable_prog_bar)
         search_system(systems, annot2fam, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
+        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        h5f = tables.open_file(pangenome_file, "a")
+        write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
+        h5f.close()
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -231,19 +251,18 @@ def parser_annot(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source. Default use name of annnotation file or directory.')
+    required.add_argument("--meta", required=True, type=Path,
+                          help="Metadata link to HMM with protein name, description and cutoff")
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
     exclusive_mode.add_argument('--tsv', type=Path, nargs='?',
                                 help='Gene families annotation in TSV file. See our github for more detail about format')
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
                                 help="File with all HMM or a directory with one HMM by file")
-    exclusive_threshold = required.add_mutually_exclusive_group()
-    exclusive_threshold.add_argument('--e_value', required=False, type=float, default=None,
-                                     help="Set the same e-value for all hmm to assign function")
-    exclusive_threshold.add_argument('--cutoffs', required=False, type=Path, default=None,
-                                     help="TSV file to set one evalue for each hmm")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--prediction_size", required=False, type=int, default=1,
                           help="Number of prediction associate with gene families")
+    optional.add_argument('--e_value', required=False, type=float, default=0,
+                          help="Set the same e-value for all hmm to filter TSV")
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
