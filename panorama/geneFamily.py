@@ -21,14 +21,25 @@ class GeneFamily(Fam):
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
-    def add_annotation(self, source: str, annotation: dict, force: bool = False):
+
+    def get_annot(self, source: str):
+        if self.annotation.get(source) is not None:
+            return self.annotation[source]
+        else:
+            return None
+
+    def add_annotation(self, source: str, annotation: list, force: bool = False):
         """ Add annotation to gene family
 
         :param source: Name of database source
         :param annotation: Identifier of the annotation
         :param force:
         """
-        if self.annotation.get(source) is not None and not force:
-            raise Exception(f"This source is already used in {self.name}. "
-                            f"If you really want to rewrite annot use '--force' option.")
-        self.annotation[source] = annotation
+        if self.get_annot(source) is not None:
+            if not force:
+                raise Exception(f"This source is already used in {self.name}. "
+                                f"If you really want to rewrite annot use '--force' option.")
+            else:
+                self.annotation[source] += annotation
+        else:
+            self.annotation[source] = annotation

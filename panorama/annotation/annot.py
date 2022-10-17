@@ -11,6 +11,7 @@ from pathlib import Path
 import tempfile
 import re
 
+import tables
 from ppanggolin.genome import Organism
 from tqdm import tqdm
 # installed libraries
@@ -23,7 +24,7 @@ from panorama.annotation.rules import System, Systems
 from panorama.pangenomes import Pangenome
 from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
 from panorama.annotation.system_search import launch_system_search
-
+from panorama.format.write_binaries import write_gene_fam_annot
 
 def check_parameter(args):
     if args.tsv is None and args.hmm is None:
@@ -217,6 +218,10 @@ def launch(args):
                                     disable_bar=args.disable_prog_bar)
         search_system(systems, annot2fam, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
+        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        h5f = tables.open_file(pangenome_file, "a")
+        write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
+        h5f.close()
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

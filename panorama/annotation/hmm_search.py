@@ -214,9 +214,10 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearc
         res = annot_with_plan7(hmms, gf_sequences, threads, disable_bar)
     else:
         raise Exception("Methods to search HMM is plan7 or hmmsearch. Please choose one of them.")
-    return pd.concat([pd.DataFrame(res, columns=res_col_names).set_index(res_col_names[1]),
-                      pd.DataFrame.from_dict(hmm_to_metaname, orient='index')],
-                     axis=1, join='inner').set_index(res_col_names[2])
+
+    return pd.DataFrame(res, columns=res_col_names).set_index(res_col_names[1]).join(
+        pd.DataFrame.from_dict(hmm_to_metaname, orient='index'),
+        how='inner').set_index(res_col_names[2])
 
 
 if __name__ == "__main__":
