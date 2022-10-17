@@ -28,7 +28,7 @@ class GeneFamily(Fam):
         else:
             return None
 
-    def add_annotation(self, source: str, annotation: list, force: bool = False):
+    def add_annotation(self, source: str, annotation: list):
         """ Add annotation to gene family
 
         :param source: Name of database source
@@ -36,10 +36,6 @@ class GeneFamily(Fam):
         :param force:
         """
         if self.get_annot(source) is not None:
-            if not force:
-                raise Exception(f"This source is already used in {self.name}. "
-                                f"If you really want to rewrite annot use '--force' option.")
-            else:
-                self.annotation[source] += annotation
+            self.annotation[source].add(annotation)
         else:
-            self.annotation[source] = annotation
+            self.annotation[source] = {annotation}

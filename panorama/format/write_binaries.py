@@ -4,12 +4,8 @@
 # default libraries
 import logging
 
-from panorama.geneFamily import GeneFamily
-from tqdm import tqdm
-
 # installed libraries
 import tables
-
 
 # local libraries
 from panorama.pangenomes import Pangenome
