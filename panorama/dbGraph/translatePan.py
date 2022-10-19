@@ -10,7 +10,7 @@ from typing import Union
 
 # installed librairies
 from ppanggolin.utils import write_compressed_or_not
-from ppanggolin.formats.readBinaries import check_pangenome_info
+
 from ppanggolin.genome import Organism, Contig
 from ppanggolin.edge import Edge
 from ppanggolin.region import Module, Region, Spot
@@ -18,7 +18,7 @@ from ppanggolin.region import Module, Region, Spot
 # local librairies
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
-
+from panorama.format.read_binaries import check_pangenome_info
 
 fam_visit = set()
 
@@ -48,10 +48,13 @@ def write_contig(organism: Organism):
 
 
 def write_families(pangenome: Pangenome, out_dict: dict):
+    family: GeneFamily
     for family in pangenome.gene_families:
+        annot = family.get_annot("CARD")
         fam_dic_property = {"name": family.name,
                             # "partition": family.named_partition,
                             "subpartition": family.partition,
+                            "annotation": annot[0] if annot is not None else "",
                             "Gene": get_genes(family)
                             # "Family": get_neighbor(family)  # Return neighbor with edges weight
                             }
@@ -74,16 +77,20 @@ def get_neighbor(family: GeneFamily):
         neighbor, neighbor_part = None, None
         if edge.source.name == family.name:
             if edge.target.name not in fam_visit:
+                annot = edge.target.get_annot("CARD")
                 neighbor = {"weight": len(edge.organisms),
                             "name": edge.target.name,
-                            "subpartition": edge.target.partition}
+                            "subpartition": edge.target.partition,
+                            "annotation": annot[0] if annot is not None else ""}
                 neighbor_part = edge.target.named_partition
         elif edge.target.name == family.name:
             if edge.source.name not in fam_visit:
+                annot = edge.source.get_annot("CARD")
                 neighbor = {"weight": len(edge.organisms),
                             "name": edge.source.name,
                             # "partition": edge.source.named_partition,
-                            "subpartition": edge.source.partition}
+                            "subpartition": edge.source.partition,
+                            "annotation": annot[0] if annot is not None else ""}
                 neighbor_part = edge.source.named_partition
         else:
             raise Exception("Source and target name are different from edge's family. "
@@ -136,8 +143,10 @@ def write_modules(pangenome: Pangenome, out_dict: dict):
         module_dict = {"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
                        "Persistent": [], "Shell": [], "Cloud": []}
         for family in module.families:
+            annot = family.get_annot("CARD")
             fam_dic_property = {"name": family.name,
-                                "subpartition": family.partition}
+                                "subpartition": family.partition,
+                                "annotation": annot[0] if annot is not None else ""}
             if family.named_partition == "persistent":
                 module_dict["Persistent"].append(fam_dic_property)
             elif family.named_partition == "shell":
@@ -184,7 +193,7 @@ def launch(args):
     pangenome = Pangenome(name=args.pangenome.stem)
     pangenome.add_file(args.pangenome)
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, need_partitions=True,
-                         need_rgp=True, need_spots=True, need_modules=True)
+                         need_rgp=True, need_spots=True, need_modules=True, need_anntation_fam=True)
     write_json(pangenome, args.out_directory, compress=False)
     logging.getLogger().info("Translate pangenome in json Done")
 

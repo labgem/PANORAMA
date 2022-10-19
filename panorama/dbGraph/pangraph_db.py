@@ -4,6 +4,8 @@
 # default libraries
 import argparse
 import logging
+
+import py2neo
 from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, CancelledError, Executor, Future
@@ -11,7 +13,6 @@ from multiprocessing import Manager, Lock
 import functools
 
 # installed librairies
-from ppanggolin.formats.readBinaries import check_pangenome_info
 from py2neo import Graph
 from graphio import RelationshipSet
 import pandas as pd
@@ -21,10 +22,29 @@ from panorama.pangenomes import Pangenome
 from panorama.utils import check_tsv_sanity
 from panorama.dbGraph.translatePan import create_dict
 from panorama.panDB import PangenomeLoader, SimilarityLoader
+from panorama.format.read_binaries import check_pangenome_info
 
 logger = logging.getLogger(__name__)
 
 db_loading_lock: Lock = None
+
+
+def invert_edges_query(edge_label: str):
+    return f"""
+    MATCH (f)-[r:{edge_label}]->(s)
+    CALL apoc.refactor.invert(r)
+    yield input, output
+    RETURN input, output"""
+
+def invert_edges(edge_label: str):
+    query = invert_edges_query(edge_label)
+    try:
+        tx = graph.begin()
+        tx.run(query)
+        tx.commit()
+    except Exception:
+        raise Exception("Pb to invert edges")
+
 
 def load_similarities(is_similar_to, batch_size):
     is_similar_to.merge(graph=graph, batch_size=batch_size)
@@ -82,7 +102,8 @@ def load_pangenome(pangenome_name, pangenome_info):
     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
     pangenome.add_file(pangenome_info["path"])
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True,
-                         need_rgp=True, need_spots=True, need_modules=True, disable_bar=True)
+                         need_rgp=True, need_spots=True, need_modules=True, need_anntation_fam=True,
+                         disable_bar=False)
     data = create_dict(pangenome)
     loader = PangenomeLoader(pangenome_name, data, db_loading_lock)
     loader.load(graph)
@@ -129,6 +150,12 @@ def launch(args):
     logging.getLogger().info("All pangenomes loaded...")
     logging.getLogger().info("Bengin load of similarities...")
     load_similarities_mp(args.similarities)
+    logging.getLogger().info("Invert edges...")
+    labels2invert = ["IS_IN_PANGENOME", "IS_IN_MODULE", "IS_IN_PERSISTENT", "IS_IN_SHELL",
+                     "IS_IN_CLOUD", "IS_IN_CONTIG", "IS_IN_GENOME", "IS_IN_SPOT", "IS_IN_RGP"]
+    for edge_label in labels2invert:
+        logging.getLogger().debug(f"Invert: {edge_label}")
+        invert_edges(edge_label)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

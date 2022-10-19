@@ -66,8 +66,13 @@ class Pangenome(Pan):
         self._famGetter[new_fam.name] = new_fam
         return new_fam
 
-    def get_gene_family(self, name: str) -> GeneFamily:
-        return super(Pangenome, self).get_gene_family(name)
+    def get_gene_family(self, name: str) -> Union[GeneFamily, None]:
+        try:
+            fam = super(Pangenome, self).get_gene_family(name)
+        except KeyError:
+            return None
+        else:
+            return fam
 
 
 class Pangenomes:

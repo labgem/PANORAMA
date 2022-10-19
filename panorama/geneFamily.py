@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf8
+from typing import Union
 
 # default libraries
 
@@ -28,14 +29,22 @@ class GeneFamily(Fam):
         else:
             return None
 
-    def add_annotation(self, source: str, annotation: list):
+    def add_annotation(self, source: str, annotation: Union[list, str]):
         """ Add annotation to gene family
 
         :param source: Name of database source
         :param annotation: Identifier of the annotation
         :param force:
         """
+        # TODO Change list for set
         if self.get_annot(source) is not None:
-            self.annotation[source].add(annotation)
+            if isinstance(annotation, str):
+                self.annotation[source].append(annotation)
+            else:
+                self.annotation[source] += annotation
         else:
-            self.annotation[source] = {annotation}
+            if isinstance(annotation, str):
+                self.annotation[source] = [annotation]
+            else:
+                self.annotation[source] = annotation
+

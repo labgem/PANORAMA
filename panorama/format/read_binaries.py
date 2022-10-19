@@ -26,7 +26,7 @@ def read_gene_families_info(pangenome: Pangenome, disable_bar: bool = False):
     else:
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
     h5f = tables.open_file(filename, "r")
-
+    logging.getLogger().info("Reading families annotation...")
     annotation_group = h5f.root.geneFamiliesAnnot
 
     if pangenome.status["genesClustered"] != "Loaded":
@@ -38,6 +38,7 @@ def read_gene_families_info(pangenome: Pangenome, disable_bar: bool = False):
                         unit="gene family", disable=disable_bar):
             fam = pangenome.get_gene_family(row["geneFam"].decode())
             fam.add_annotation(source=source_table.name, annotation=row["annotation"].decode())
+    h5f.close()
 
 
 def check_pangenome_info(pangenome, need_annotations: bool = False, need_families: bool = False,

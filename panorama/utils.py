@@ -105,7 +105,7 @@ def path_is_file(path: Path) -> bool:
         return False
 
 
-def check_tsv_sanity(tsv_path: Path) -> Dict[str, Path]:
+def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[int, Path]]:
     """ Check if the given tsv is readable for the next PANORAMA step
 
     :param tsv_path: Path to tsv file with list of pangenome
