@@ -4,13 +4,12 @@
 # default libraries
 import argparse
 import logging
-import json
+from tqdm import tqdm
 from pathlib import Path
 from typing import Union
+import uuid
 
 # installed librairies
-from ppanggolin.utils import write_compressed_or_not
-
 from ppanggolin.genome import Organism, Contig
 from ppanggolin.edge import Edge
 from ppanggolin.region import Module, Region, Spot
@@ -21,6 +20,11 @@ from panorama.geneFamily import GeneFamily
 from panorama.format.read_binaries import check_pangenome_info
 
 fam_visit = set()
+
+
+def give_gene_tmp_id(pangenome: Pangenome, disable_bar: bool = True):
+    for gene in tqdm(pangenome.genes, total=pangenome.number_of_gene(), unit='gene', disable_bar=disable_bar):
+        gene.tmp_id = str(uuid.uuid4())
 
 
 def get_genes(parent: Union[GeneFamily, Region, Contig]):
@@ -34,7 +38,8 @@ def get_genes(parent: Union[GeneFamily, Region, Contig]):
                            "stop": gene.stop,
                            "strand": gene.strand,
                            "product": gene.product,
-                           "local_id": gene.local_identifier})
+                           "local_id": gene.local_identifier,
+                           "tmp_id": gene.tmp_id})
     return genes_list
 
 
@@ -52,61 +57,51 @@ def write_families(pangenome: Pangenome, out_dict: dict):
     for family in pangenome.gene_families:
         annot = family.get_annot("CARD")
         fam_dic_property = {"name": family.name,
-                            # "partition": family.named_partition,
-                            "subpartition": family.partition,
-                            "annotation": annot[0] if annot is not None else "",
-                            "Gene": get_genes(family)
-                            # "Family": get_neighbor(family)  # Return neighbor with edges weight
+                            "Partition": {"partition": family.named_partition,
+                                          "subpartition": family.partition},
+                            "annotation": annot[0] if annot is not None else None,
+                            "Gene": get_genes(family),
+                            "Family": get_neighbor(family)  # Return neighbor with edges weight
                             }
-        fam_dic_property.update(get_neighbor(family))
-        if family.named_partition == "persistent":
-            out_dict["Pangenome"]["Family"]["Persistent"].append(fam_dic_property)
-        elif family.named_partition == "shell":
-            out_dict["Pangenome"]["Family"]["Shell"].append(fam_dic_property)
-        elif family.named_partition == "cloud":
-            out_dict["Pangenome"]["Family"]["Cloud"].append(fam_dic_property)
-        else:
-            raise Exception("Unrecognized partition name")
+        # fam_dic_property.update(get_neighbor(family))
+        # if family.named_partition == "persistent":
+        #     out_dict["Pangenome"]["Family"]["Persistent"].append(fam_dic_property)
+        # elif family.named_partition == "shell":
+        #     out_dict["Pangenome"]["Family"]["Shell"].append(fam_dic_property)
+        # elif family.named_partition == "cloud":
+        #     out_dict["Pangenome"]["Family"]["Cloud"].append(fam_dic_property)
+        # else:
+        #     raise Exception("Unrecognized partition name")
+        out_dict["Pangenome"]["Family"].append(fam_dic_property)
 
 
 def get_neighbor(family: GeneFamily):
     global fam_visit
     edge: Edge
-    neighbor_dict = {"Persistent": [], "Shell": [], "Cloud": []}
+    neighbors = []
     for edge in family.edges:
-        neighbor, neighbor_part = None, None
         if edge.source.name == family.name:
             if edge.target.name not in fam_visit:
                 annot = edge.target.get_annot("CARD")
-                neighbor = {"weight": len(edge.organisms),
-                            "name": edge.target.name,
-                            "subpartition": edge.target.partition,
-                            "annotation": annot[0] if annot is not None else ""}
-                neighbor_part = edge.target.named_partition
+                neighbors.append({"weight": len(edge.organisms),
+                                  "name": edge.target.name,
+                                  "Partition": {"partition": edge.target.named_partition,
+                                                "subpartition": edge.target.partition},
+                                  "annotation": annot[0] if annot is not None else None})
         elif edge.target.name == family.name:
             if edge.source.name not in fam_visit:
                 annot = edge.source.get_annot("CARD")
-                neighbor = {"weight": len(edge.organisms),
-                            "name": edge.source.name,
-                            # "partition": edge.source.named_partition,
-                            "subpartition": edge.source.partition,
-                            "annotation": annot[0] if annot is not None else ""}
-                neighbor_part = edge.source.named_partition
+                neighbors.append({"weight": len(edge.organisms),
+                                  "name": edge.source.name,
+                                  "Partition": {"partition": edge.source.named_partition,
+                                                "subpartition": edge.source.partition},
+                                  "annotation": annot[0] if annot is not None else None})
         else:
             raise Exception("Source and target name are different from edge's family. "
                             "Please check you import graph data and if the problem persist, post an issue.")
-        if neighbor is not None and neighbor_part is not None:
-            if neighbor_part == "persistent":
-                neighbor_dict["Persistent"].append(neighbor)
-            elif neighbor_part == "shell":
-                neighbor_dict["Shell"].append(neighbor)
-            elif neighbor_part == "cloud":
-                neighbor_dict["Cloud"].append(neighbor)
-            else:
-                raise Exception("Edge partition not recognized")
     fam_visit.add(family.name)
 
-    return neighbor_dict
+    return neighbors
 
 
 def write_organisms(pangenome: Pangenome, out_dict: dict):
@@ -137,38 +132,25 @@ def write_spot(pangenome: Pangenome, out_dict: dict):
 def write_modules(pangenome: Pangenome, out_dict: dict):
     module: Module
     for module in pangenome.modules:
-        out_dict["Pangenome"]["Module"].append({"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
-                                                "Persistent": [], "Shell": [], "Cloud": []
-                                                })
         module_dict = {"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
-                       "Persistent": [], "Shell": [], "Cloud": []}
+                       "Family": []}
         for family in module.families:
             annot = family.get_annot("CARD")
-            fam_dic_property = {"name": family.name,
-                                "subpartition": family.partition,
-                                "annotation": annot[0] if annot is not None else ""}
-            if family.named_partition == "persistent":
-                module_dict["Persistent"].append(fam_dic_property)
-            elif family.named_partition == "shell":
-                module_dict["Shell"].append(fam_dic_property)
-            elif family.named_partition == "cloud":
-                module_dict["Cloud"].append(fam_dic_property)
-            else:
-                raise Exception("Unrecognized partition name")
-
+            module_dict["Family"].append({"name": family.name,
+                                          "Partition": {"partition": family.named_partition,
+                                                        "subpartition": family.partition},
+                                          "annotation": annot[0] if annot is not None else None})
         out_dict["Pangenome"]["Module"].append(module_dict)
+
 
 def create_dict(pangenome: Pangenome):
     out_dict = {"Pangenome": {"name": pangenome.name, "taxid": pangenome.taxid,
-                              "Family": {"nb_families": pangenome.number_of_gene_families(),
-                                         "Persistent": [], "Shell": [], "Cloud": []},
+                              "Family": [],
+                              "Partition": [],
                               "Module": [],
                               "RGP": write_rgp(parent=pangenome),
                               "Spot": [], "Genome": []}}
     write_families(pangenome, out_dict)
-    out_dict["Pangenome"]["Family"]["nb_persitent"] = len(out_dict["Pangenome"]["Family"]["Persistent"])
-    out_dict["Pangenome"]["Family"]["nb_shell"] = len(out_dict["Pangenome"]["Family"]["Shell"])
-    out_dict["Pangenome"]["Family"]["nb_cloud"] = len(out_dict["Pangenome"]["Family"]["Cloud"])
     write_organisms(pangenome, out_dict)
     write_spot(pangenome, out_dict)
     write_modules(pangenome, out_dict)
@@ -194,6 +176,7 @@ def launch(args):
     pangenome.add_file(args.pangenome)
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, need_partitions=True,
                          need_rgp=True, need_spots=True, need_modules=True, need_anntation_fam=True)
+    give_gene_tmp_id(pangenome)
     write_json(pangenome, args.out_directory, compress=False)
     logging.getLogger().info("Translate pangenome in json Done")
 

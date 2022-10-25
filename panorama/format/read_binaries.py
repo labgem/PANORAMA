@@ -69,4 +69,4 @@ def check_pangenome_info(pangenome, need_annotations: bool = False, need_familie
              need_spots, need_gene_sequences, need_modules, disable_bar=disable_bar)
 
     if need_anntation_fam:
-        read_gene_families_info(pangenome)
+        read_gene_families_info(pangenome, disable_bar=disable_bar)
