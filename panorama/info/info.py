@@ -42,7 +42,7 @@ def check_former_info(args: argparse.Namespace) -> (Dict[str, Path], Dict[str, d
         raise argparse.ArgumentError(argument=None, message="You did not indicate which information you want.")
     manager = Manager()
     manager_dict = {}
-    if args.modules is not None:
+    if args.modules:
         need_info['need_families'] = True
         need_info['need_modules'] = True
         manager_dict["modules"] = manager.dict()
@@ -53,7 +53,7 @@ def check_former_info(args: argparse.Namespace) -> (Dict[str, Path], Dict[str, d
     return check_tsv_sanity(tsv_path=args.pangenomes), manager_dict
 
 
-def mp_info(pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool = False) -> Pangenome:
+def mp_info(pan_name: str, pan_info: dict, manager_dict: dict, disable_bar: bool = False) -> Pangenome:
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
 
     :param pan_name: Pangenome name
@@ -64,8 +64,8 @@ def mp_info(pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool
     :return: The computed pangenome
     """
     global need_info
-    pangenome = Pangenome(pan_name)
-    pangenome.add_file(pan_file.absolute().as_posix())
+    pangenome = Pangenome(pan_name, taxid=pan_info["taxid"])
+    pangenome.add_file(pan_info["path"].absolute().as_posix())
     check_pangenome_info(pangenome=pangenome, **{k: v for k, v in need_info.items() if k != "need_content"},
                          disable_bar=disable_bar)
     if need_info['need_content']:
@@ -112,7 +112,7 @@ def launch(args: argparse.Namespace):
     logging.getLogger().debug("launch info command")
     outdir = mkdir(args.output, args.force)
     path_2_pang, manager_dict = check_former_info(args)
-    mp_args = [(name, pan, manager_dict, args.disable_prog_bar) for name, pan in path_2_pang.items()]
+    mp_args = [(name, pan_info, manager_dict, args.disable_prog_bar) for name, pan_info in path_2_pang.items()]
     with get_context('fork').Pool(args.cpu) as p:
         for pangenome in tqdm(p.imap_unordered(run_info, mp_args), unit='pangenome',
                               total=len(path_2_pang), disable=args.disable_prog_bar):
@@ -147,9 +147,9 @@ def parser_info(parser):
                           help="A list of pangenome .h5 files")
     required.add_argument('-o', '--output', required=True, type=str, nargs='?')
     onereq = parser.add_argument_group(title="Input file", description="One of the following argument is required :")
-    onereq.add_argument("--content", required=False, action="store_true", default=False,
+    onereq.add_argument("--content", required=False, action="store_true",
                         help="Create a detailed information TSV file about pangenomes content")
-    onereq.add_argument('--modules', required=False, action="store_true", default=False,
+    onereq.add_argument('--modules', required=False, action="store_true",
                         help="Create a detailed information TSV file about pangenomes modules")
     optional = parser.add_argument_group(title="Optional arguments",
                                          description="All of the following arguments are optional and"

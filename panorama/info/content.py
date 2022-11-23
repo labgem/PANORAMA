@@ -23,7 +23,7 @@ def get_content_info(pangenome: Pangenome) -> dict:
         info_group = h5f.root.info
         req_info_list = ['numberOfGenes', 'numberOfOrganisms', 'numberOfClusters', 'numberOfEdges', 'numberOfCloud',
                          'numberOfPersistent', 'persistentStats', 'numberOfShell', 'shellStats', 'cloudStats',
-                         'numberOfPartitions', 'numberOfSubpartitions', 'StatOfFamiliesInModules']
+                         'numberOfPartitions', 'numberOfSubpartitions']
         if all(info in info_group._v_attrs._f_list() for info in req_info_list):
             content_dic = {'Number of Genes': info_group._v_attrs['numberOfGenes'],
                            'Number of Genomes': info_group._v_attrs['numberOfOrganisms'],
@@ -46,7 +46,11 @@ def get_content_info(pangenome: Pangenome) -> dict:
                            'Sd of Cloud': info_group._v_attrs['cloudStats']['sd']
                            }
         else:
-            raise Exception(f"No information about modules find in {pangenome.file}"
+            miss_list = []
+            for info in req_info_list:
+                if info not in info_group._v_attrs._f_list():
+                    miss_list.append(info)
+            raise Exception(f"No information about {','.join(miss_list)} find in {pangenome.file}"
                             f"Please use ppanggolin module -p {pangenome.file} to compute module and "
                             f"ppanggolin metrics --info_modules {pangenome.file} to compute information about module")
         if 'genome_fluidity' in info_group._v_attrs._f_list():
@@ -74,6 +78,7 @@ def export_content(content_dict: dict, output: Path):
     :param output: Path to output directory
     """
     df = pd.DataFrame.from_dict(content_dict, orient='index').reset_index().rename(columns={'index': "Pangenomes"})
+    df.T.to_csv(path_or_buf=f"{output.absolute().as_posix()}/content_info.tsv")
     source = ColumnDataSource(df)
     columns = [TableColumn(field=col, title=col) for col in df.columns]
     dt = DataTable(source=source, columns=columns, index_position=None,

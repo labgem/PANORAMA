@@ -4,16 +4,11 @@
 
 import logging
 from multiprocessing import Lock
-from typing import List
 
 import py2neo
 # installed librairies
 from py2neo import Graph
-from graphio import NodeSet, RelationshipSet
 from dict2graph import Dict2graph
-
-# local librairies
-from panorama.pangenomes import Pangenome
 
 
 def custom_pre_func(node):
@@ -39,8 +34,11 @@ class PangenomeLoader:
         assert self.lock is not None, "Lock not Initialized"
         try:
             with self.lock:
+                logging.getLogger().debug("parse")
                 self.loader.parse(self.data)
+                logging.getLogger().debug("index")
                 self.loader.create_indexes(graph)
+                logging.getLogger().debug("merge")
                 self.loader.merge(graph)
         except Exception as error:
             raise Exception(f"Load to Neo4j failed because : {error}")

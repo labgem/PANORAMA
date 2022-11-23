@@ -9,7 +9,6 @@ from tqdm import tqdm
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, CancelledError, Executor, Future
 from multiprocessing import Manager, Lock
-import functools
 
 # installed librairies
 from py2neo import Graph
@@ -30,10 +29,10 @@ db_loading_lock: Lock = None
 
 def invert_edges_query(edge_label: str):
     return f"""
-    MATCH (f)-[r:{edge_label}]->(s)
-    CALL apoc.refactor.invert(r)
-    yield input, output
-    RETURN input, output"""
+        MATCH (f)-[r:{edge_label}]->(s)
+        CALL apoc.refactor.invert(r)
+        yield input, output
+        RETURN input, output"""
 
 def invert_edges(edge_label: str):
     query = invert_edges_query(edge_label)
@@ -66,7 +65,7 @@ def load_similarities_mp(tsv: Path, cpu: int = 1, batch_size: int = 1000):
         is_similar_to.add_relationship(start_node_properties={"name": row[1]['Family_1']},
                                        end_node_properties={"name": row[1]['Family_2']},
                                        properties={"identity": row[1]['identity'],
-                                                   "covery": row[1]['covery']})
+                                                   "coverage": row[1]['covery']})
     is_similar_list.append(is_similar_to)
     for sim in tqdm(is_similar_list, unit="similarities_batch", total=len(is_similar_list)):
         load_similarities(sim, batch_size)
@@ -107,7 +106,7 @@ def load_pangenome(pangenome_name, pangenome_info, batch_size: int = 1000):
     pangenome.add_file(pangenome_info["path"])
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True,
                          need_rgp=True, need_spots=True, need_modules=True, need_anntation_fam=True,
-                         disable_bar=True)
+                         disable_bar=False)
     give_gene_tmp_id(pangenome)
     data = create_dict(pangenome)
     loader = PangenomeLoader(pangenome_name, data, db_loading_lock, batch_size=batch_size)
@@ -121,6 +120,10 @@ def load_pangenome_mp(pangenomes: dict, cpu: int = 1, batch_size: int = 1000):
         list(tqdm(executor.map(load_pangenome, pangenomes.keys(), pangenomes.values(),
                                [batch_size] * len(pangenomes)),
                   total=len(pangenomes), unit='pangenome'))
+    # init_db_lock(lock)
+    # for name, info in tqdm(pangenomes.items(), total=len(pangenomes), unit='pangenome'):
+    #     print(info)
+    #     load_pangenome(name, info, batch_size)
 
 
 def launch(args):

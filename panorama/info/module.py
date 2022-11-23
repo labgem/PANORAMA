@@ -36,7 +36,7 @@ def get_module_info(pangenome: Pangenome) -> dict:
                           }
             return module_dic
         else:
-            raise Exception(f"No information about modules find in {pangenome.file}"
+            raise Exception(f"No information about modules find in {pangenome.file} "
                             f"Please use ppanggolin module -p {pangenome.file} to compute module and "
                             f"ppanggolin metrics --info_modules {pangenome.file} to compute information about module")
     else:

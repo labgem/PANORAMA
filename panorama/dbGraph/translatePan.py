@@ -23,7 +23,7 @@ fam_visit = set()
 
 
 def give_gene_tmp_id(pangenome: Pangenome, disable_bar: bool = True):
-    for gene in tqdm(pangenome.genes, total=pangenome.number_of_gene(), unit='gene', disable_bar=disable_bar):
+    for gene in tqdm(pangenome.genes, total=pangenome.number_of_gene(), unit='gene', disable=disable_bar):
         gene.tmp_id = str(uuid.uuid4())
 
 

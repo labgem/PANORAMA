@@ -27,17 +27,20 @@ def read_gene_families_info(pangenome: Pangenome, disable_bar: bool = False):
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
     h5f = tables.open_file(filename, "r")
     logging.getLogger().info("Reading families annotation...")
-    annotation_group = h5f.root.geneFamiliesAnnot
+    try:
+        annotation_group = h5f.root.geneFamiliesAnnot
+    except:
+        logging.getLogger().warning(f"There is no annotation in {pangenome.name}")
+    else:
+        if pangenome.status["genesClustered"] != "Loaded":
+            raise Exception("Gene families aren't loaded in pangenome.")
 
-    if pangenome.status["genesClustered"] != "Loaded":
-        raise Exception("Gene families aren't loaded in pangenome.")
-
-    for source_table in annotation_group:
-        logging.getLogger().info(f"Reading annotation {source_table.name}")
-        for row in tqdm(read_chunks(source_table, chunk=20000), total=source_table.nrows,
-                        unit="gene family", disable=disable_bar):
-            fam = pangenome.get_gene_family(row["geneFam"].decode())
-            fam.add_annotation(source=source_table.name, annotation=row["annotation"].decode())
+        for source_table in annotation_group:
+            logging.getLogger().info(f"Reading annotation {source_table.name}")
+            for row in tqdm(read_chunks(source_table, chunk=20000), total=source_table.nrows,
+                            unit="gene family", disable=disable_bar):
+                fam = pangenome.get_gene_family(row["geneFam"].decode())
+                fam.add_annotation(source=source_table.name, annotation=row["annotation"].decode())
     h5f.close()
 
 

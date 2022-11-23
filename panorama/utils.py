@@ -119,10 +119,11 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[int, Path]]:
     try:
         file = open(tsv_path.absolute(), 'r')
         tsv = csv.reader(file, delimiter="\t")
-    except IOError:
-        raise IOError
-    except Exception:
-        raise Exception("Unexpected error when opening the list of pangenomes")
+    except IOError as ios_error:
+        raise IOError(ios_error)
+    except Exception as exception_error:
+        raise Exception(f"The following unexpected error happened when opening the list of pangenomes : "
+                        f"{exception_error}")
     else:
         for line in tsv:
             if len(line) < 2:
