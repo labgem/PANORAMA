@@ -9,22 +9,21 @@ import json
 import logging
 from pathlib import Path
 import tempfile
-import re
-
-import tables
-from ppanggolin.genome import Organism
 from tqdm import tqdm
+
 # installed libraries
 import pandas as pd
+import tables
 
 # local libraries
 from panorama.utils import check_tsv_sanity
-from panorama.annotation.rules import System, Systems
-from panorama.pangenomes import Pangenome
+from panorama.detection.systems import System, Systems
 from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
-from panorama.annotation.system_search import launch_system_search
+from panorama.detection.detection import launch_system_search
 from panorama.format.write_binaries import write_gene_fam_annot
 from panorama.format.read_binaries import check_pangenome_info
+from panorama.annotation.annotation import Annotation
+from panorama.pangenomes import Pangenome
 
 
 def check_parameter(args):
@@ -40,7 +39,8 @@ def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     :param pangenome: Pangenome object
     :param disable_bar: Disable bar
     """
-    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, disable_bar=disable_bar)
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True,
+                         need_graph=True, disable_bar=disable_bar)
 
 
 def read_systems(systems_path: Path, systems=Systems()):
@@ -120,23 +120,8 @@ def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
     sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
-def filter_df(annotated_df: pd.DataFrame, eval_threshold: float = 0.0001) -> pd.DataFrame:
-    """
-    Filter annotation from dataframe to keep the best annotation for each family.
-
-    :param annotated_df: Dataframe with annotation and families
-    :param eval_threshold: e-value threshold
-
-    :return: Filtered dataframe
-    """
-    df_filter = annotated_df[annotated_df[res_col_names[3]] <= eval_threshold]
-    df_eval = df_filter[
-        df_filter[res_col_names[3]] == df_filter.groupby(res_col_names[0])[res_col_names[3]].transform(min)]
-    return df_eval[df_eval[res_col_names[4]] == df_eval.groupby(res_col_names[0])[res_col_names[4]].transform(max)]
-
-
 def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
-                           search_sys: bool = False) -> dict:
+                           max_prediction: int = None) -> dict:
     """ Add to gene families an annotation and create a dictionary with for each annotation a set of gene family
 
     :param annotation_df: Dataframe with for each family an annotation
@@ -146,29 +131,35 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
 
     :return: Dictionary with for each annotation a set of gene family
     """
-    annot2fam = {}
-    for gf in annotation_df[res_col_names[0]].unique():
-        select_df = annotation_df.loc[annotation_df[res_col_names[0]] == gf]
-        gene_fam = pangenome.get_gene_family(name=gf)
+    # annot2fam = {}
+    for row in annotation_df.itertuples(index=False):
+        gene_fam = pangenome.get_gene_family(name=row.Gene_family)
         if gene_fam is not None:
-            gene_fam.add_annotation(source=source, annotation=list(select_df['protein_name']))
-            if search_sys:
-                for index, row in select_df.iterrows():
-                    if row['protein_name'] not in annot2fam:
-                        annot2fam[row['protein_name']] = {gene_fam}
-                    else:
-                        annot2fam[row['protein_name']].add(gene_fam)
-                    if not pd.isna(row['secondary_name']):  # Test if there is a second name
-                        for other_name in re.split('\|', row['secondary_name']):
-                            if other_name not in annot2fam:
-                                annot2fam[other_name] = {gene_fam}
-                            else:
-                                annot2fam[other_name].add(gene_fam)
-    return annot2fam
+            annotation = Annotation(source=source, accession=row.Accession, name=row.protein_name,
+                                    secondary_names=row.secondary_name, description=row.Description,
+                                    score=row.score, e_val=row.e_value, bias=row.bias)
+            gene_fam.add_annotation(source=source, annotation=annotation, max_prediction=max_prediction)
+        else:
+            logging.getLogger().warning(f"Family {row['Gene_family']} does not exist in pangenome. If you give a tsv check name."
+                                        f"If you're using hmm annotation, please post an issue on our github.")
+            # if search_sys:
+            #     for index, row in select_df.iterrows():
+            #         if row['protein_name'] not in annot2fam:
+            #             annot2fam[row['protein_name']] = {gene_fam}
+            #         else:
+            #             annot2fam[row['protein_name']].add(gene_fam)
+            #         if not pd.isna(row['secondary_name']):  # Test if there is a second name
+            #             for other_name in re.split('\|', row['secondary_name']):
+            #                 if row['secondary_name'] != '-':
+            #                     if other_name not in annot2fam:
+            #                         annot2fam[other_name] = {gene_fam}
+            #                     else:
+            #                         annot2fam[other_name].add(gene_fam)
+    # return annot2fam
 
 
-def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None, search_sys: bool = False,
-                    source: str = None, prediction_size: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
+def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None,
+                    source: str = None, max_prediction: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
                     threads: int = 1, disable_bar: bool = False) -> dict:
     """ Main function to add annotation to pangenome from tsv file
 
@@ -188,14 +179,14 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     check_pangenome_annotation(pangenome, disable_bar=disable_bar)
     if tsv is not None:
         annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
-                                    names=['Gene_family', 'Accession', 'protein_name', 'score', 'secondary_name',
-                                           'Description'])
+                                    names=['Gene_family', 'Accession', 'protein_name', 'e_value',
+                                           'score', 'bias', 'secondary_name', 'Description'])
     elif hmm is not None:
         annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, prediction_size=prediction_size,
                                        tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
-    return annotation_to_families(annotation_df, pangenome, source, search_sys)
+    return annotation_to_families(annotation_df, pangenome, source, max_prediction)
 
 
 def launch(args):
@@ -204,27 +195,19 @@ def launch(args):
 
     :param args: Argument given
     """
-    search_sys = True if args.systems is not None else False
-
     check_parameter(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                                    meta=args.meta, search_sys=search_sys, prediction_size=args.prediction_size,
+                                    meta=args.meta, max_prediction=args.max_prediction,
                                     tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
-        if search_sys:
-            logging.getLogger().info("Looking for systems")
-            systems_to_path = args.systems.absolute()
-            systems = read_systems(systems_to_path)
-            search_system(systems, annot2fam, args.disable_prog_bar)
-            logging.getLogger().info("Systems searching done")
-        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-        h5f = tables.open_file(pangenome_info["path"], "a")
-        write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
-        h5f.close()
+        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        # h5f = tables.open_file(pangenome_info["path"], "a")
+        # write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
+        # h5f.close()
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -258,10 +241,8 @@ def parser_annot(parser):
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
                                 help="File with all HMM or a directory with one HMM by file")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--prediction_size", required=False, type=int, default=1,
-                          help="Number of prediction associate with gene families")
-    optional.add_argument('-s', '--systems', required=False, type=Path, default=None,
-                          help="Path to systems directory")
+    optional.add_argument("--max_prediction", required=False, type=int, default=1,
+                          help="Maximum number of prediction associate to each gene family")
     optional.add_argument("--meta", required=False, type=Path, default=None,
                           help="Metadata link to HMM with protein name, description and cutoff")
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),

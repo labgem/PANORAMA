@@ -5,7 +5,6 @@
 from typing import Union, Generator
 
 # install libraries
-import ppanggolin.geneFamily
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
@@ -31,7 +30,6 @@ class Pangenome(Pan):
     @property
     def annotation_source(self) -> set:
         source_set = set()
-        gf: GeneFamily
         for gf in self.gene_families:
             for source_annotation in gf.annotation.keys():
                 source_set.add(source_annotation)
@@ -47,8 +45,6 @@ class Pangenome(Pan):
         """
         if annotation is None and source is None:
             raise Exception("Neither annotation or source was provided to get gen families")
-
-        fam: GeneFamily
 
         for fam in self.gene_families:
             if fam.get_annot(source) is not None:

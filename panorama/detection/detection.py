@@ -12,7 +12,7 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.annotation.rules import Systems, System, FuncUnit
+from panorama.annotation.systems import Systems, System, FuncUnit
 
 
 def min_mandatory_func_unit(system: System, func_unit: FuncUnit):
@@ -160,3 +160,64 @@ def launch_system_search(system: System, annot2fam: dict):
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
         if len(pred_dict) > 0:
             return pred_dict
+
+
+def subparser(sub_parser) -> argparse.ArgumentParser:
+    """
+    Subparser to launch PANORAMA in Command line
+
+    :param sub_parser : sub_parser for align command
+
+    :return : parser arguments for align command
+    """
+    parser = sub_parser.add_parser("annotation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_annot(parser)
+    return parser
+
+
+def parser_annot(parser):
+    """
+    Parser for specific argument of annot command
+
+    :param parser: parser for annot argument
+    """
+    required = parser.add_argument_group(title="Required arguments",
+                                         description="All of the following arguments are required :")
+    required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
+                          help='A list of pangenome .h5 files in .tsv file')
+    required.add_argument("--source", required=True, type=str, nargs="?",
+                          help='Name of the annotation source. Default use name of annnotation file or directory.')
+    exclusive_mode = required.add_mutually_exclusive_group(required=True)
+    exclusive_mode.add_argument('--tsv', type=Path, nargs='?',
+                                help='Gene families annotation in TSV file. See our github for more detail about format')
+    exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
+                                help="File with all HMM or a directory with one HMM by file")
+    optional = parser.add_argument_group(title="Optional arguments")
+    optional.add_argument("--prediction_size", required=False, type=int, default=1,
+                          help="Number of prediction associate with gene families")
+    optional.add_argument('-s', '--systems', required=False, type=Path, default=None,
+                          help="Path to systems directory")
+    optional.add_argument("--meta", required=False, type=Path, default=None,
+                          help="Metadata link to HMM with protein name, description and cutoff")
+    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+                          help="directory for storing temporary files")
+    optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
+                          help="Number of available threads")
+
+
+if __name__ == "__main__":
+    from panorama.utils import check_log, set_verbosity_level
+
+    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
+                                          formatter_class=argparse.RawTextHelpFormatter)
+    parser_annot(main_parser)
+    common = main_parser.add_argument_group(title="Common argument")
+    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
+                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
+    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
+    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
+                        help="disables the progress bars")
+    common.add_argument('--force', action="store_true",
+                        help="Force writing in output directory and in pangenome output file.")
+    set_verbosity_level(main_parser.parse_args())
+    launch(main_parser.parse_args())

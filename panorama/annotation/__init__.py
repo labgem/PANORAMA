@@ -1,1 +1,1 @@
-from .annot import subparser, launch
+from .annotate import subparser, launch
