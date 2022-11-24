@@ -47,7 +47,7 @@ def read_gene_families_info(pangenome: Pangenome, disable_bar: bool = False):
 def check_pangenome_info(pangenome, need_annotations: bool = False, need_families: bool = False,
                          need_graph: bool = False, need_partitions: bool = False, need_rgp: bool = False,
                          need_spots: bool = False, need_gene_sequences: bool = False, need_modules: bool = False,
-                         need_anntation_fam: bool = False, disable_bar: bool = False):
+                         need_annotation_fam: bool = False, disable_bar: bool = False):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`
@@ -62,7 +62,7 @@ def check_pangenome_info(pangenome, need_annotations: bool = False, need_familie
     :param need_modules: get modules
     :param disable_bar: Allow to disable the progress bar
     """
-    if need_anntation_fam:
+    if need_annotation_fam:
         if pangenome.status["genesClustered"] == "inFile":
             need_families = True
         elif pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
@@ -71,5 +71,5 @@ def check_pangenome_info(pangenome, need_annotations: bool = False, need_familie
     check_pp(pangenome, need_annotations, need_families, need_graph, need_partitions, need_rgp,
              need_spots, need_gene_sequences, need_modules, disable_bar=disable_bar)
 
-    if need_anntation_fam:
+    if need_annotation_fam:
         read_gene_families_info(pangenome, disable_bar=disable_bar)

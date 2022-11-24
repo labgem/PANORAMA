@@ -151,12 +151,6 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
 
 def launch_system_search(system: System, annot2fam: dict):
     for func_unit in system.func_units:
-        # if re.match(f"pycsar_unknown", func_unit.name, re.IGNORECASE):
-        #     print("pika")
-        #     pass
-        # if re.match(f"disarm_other", func_unit.name, re.IGNORECASE):
-        #     print("pika")
-        #     pass
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
@@ -166,5 +160,3 @@ def launch_system_search(system: System, annot2fam: dict):
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
         if len(pred_dict) > 0:
             return pred_dict
-        #     # nx.draw(g)
-        #     # plt.show()

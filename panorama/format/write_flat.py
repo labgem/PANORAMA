@@ -55,8 +55,8 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, disable_
 
     check_pangenome_info(pangenome, need_annotations=needAnnotations, need_families=needFamilies, need_graph=needGraph,
                          need_partitions=needPartitions, need_rgp=needRegions, need_spots=needSpots,
-                         need_modules=needModules, need_gene_sequences=needGeneSequences,
-                         need_anntation_fam=needAnnotationsFam, disable_bar=disable_bar)
+                         need_gene_sequences=needGeneSequences, need_modules=needModules,
+                         need_annotation_fam=needAnnotationsFam, disable_bar=disable_bar)
 
     if annotation:
         write_annotation_to_families(pangenome, output)

@@ -104,9 +104,8 @@ def load_pangenome(pangenome_name, pangenome_info, batch_size: int = 1000):
     logging.getLogger(f"Add {pangenome_name} to load list")
     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
     pangenome.add_file(pangenome_info["path"])
-    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True,
-                         need_rgp=True, need_spots=True, need_modules=True, need_anntation_fam=True,
-                         disable_bar=False)
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, need_rgp=True,
+                         need_spots=True, need_modules=True, need_annotation_fam=True, disable_bar=False)
     give_gene_tmp_id(pangenome)
     data = create_dict(pangenome)
     loader = PangenomeLoader(pangenome_name, data, db_loading_lock, batch_size=batch_size)

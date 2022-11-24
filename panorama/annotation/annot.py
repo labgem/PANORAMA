@@ -40,7 +40,7 @@ def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
     :param pangenome: Pangenome object
     :param disable_bar: Disable bar
     """
-    check_pangenome_info(pangenome, need_families=True, need_graph=True, need_annotations=True, disable_bar=disable_bar)
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, disable_bar=disable_bar)
 
 
 def read_systems(systems_path: Path, systems=Systems()):
