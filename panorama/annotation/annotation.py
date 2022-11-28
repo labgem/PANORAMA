@@ -28,7 +28,7 @@ class Annotation:
         self.source = source
         self.accession = accession
         self.name = name
-        self.secondary_names = secondary_names
+        self.secondary_names = ','.join(secondary_names) if isinstance(secondary_names, list) else secondary_names
         self.description = description
         self.score = score
         self.e_val = e_val

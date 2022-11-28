@@ -20,9 +20,10 @@ from panorama.utils import check_tsv_sanity
 from panorama.detection.systems import System, Systems
 from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
 from panorama.detection.detection import launch_system_search
-from panorama.format.write_binaries import write_gene_fam_annot
+from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.annotation.annotation import Annotation
+from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
@@ -32,15 +33,30 @@ def check_parameter(args):
     if args.hmm is not None and args.meta is None:
         raise Exception("You did not provide metadata file to assign function with HMM")
 
-
-def check_pangenome_annotation(pangenome: Pangenome, disable_bar: bool = False):
+def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
     :param disable_bar: Disable bar
     """
-    check_pangenome_info(pangenome, need_annotations=True, need_families=True,
-                         need_graph=True, disable_bar=disable_bar)
+    try:
+        _ = pangenome.status["annotation_source"]
+    except KeyError:
+        check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
+    else:
+        if source in pangenome.status["annotation_source"]:
+            if not force:
+                raise Exception(f"An annotation corresponding to the source : '{source}' already exist in pangenome."
+                                f"Change the source name or add the option --force to erase")
+            else:
+                erase_pangenome(pangenome, annotation=True, source=source)
+        if pangenome.status['annotation'] == 'inFile':  # Source annotation was removed but other sources could be loaded
+            check_pangenome_info(pangenome, need_annotations=True, need_families=True,
+                                 need_annotation_fam=True, disable_bar=disable_bar)
+        else:
+            check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
+
+
 
 
 def read_systems(systems_path: Path, systems=Systems()):
@@ -155,6 +171,7 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
             #                         annot2fam[other_name] = {gene_fam}
             #                     else:
             #                         annot2fam[other_name].add(gene_fam)
+    pangenome.status["annotation"] = "Computed"
     # return annot2fam
 
 
@@ -176,13 +193,12 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
 
     :return: Dictionnary with for each annotation a set of corresponding gene families
     """
-    check_pangenome_annotation(pangenome, disable_bar=disable_bar)
     if tsv is not None:
         annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
                                     names=['Gene_family', 'Accession', 'protein_name', 'e_value',
                                            'score', 'bias', 'secondary_name', 'Description'])
     elif hmm is not None:
-        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, prediction_size=prediction_size,
+        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, prediction_size=max_prediction,
                                        tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
@@ -200,14 +216,13 @@ def launch(args):
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
+        check_pangenome_annotation(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
                                     meta=args.meta, max_prediction=args.max_prediction,
                                     tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
-        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-        # h5f = tables.open_file(pangenome_info["path"], "a")
-        # write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
-        # h5f.close()
+        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

@@ -2,6 +2,7 @@
 # coding: utf8
 
 # default libraries
+from typing import Dict, Generator, List, Union
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
@@ -19,45 +20,67 @@ class GeneFamily(Fam):
 
     def __init__(self, family_id: int, name: str):
         super().__init__(family_id, name)
-        self.annotation = {}  # Key = source, Value = ordered list of best annotation for one source
+        self._annotationGetter = {}  # Key = source, Value = ordered list of best annotation for one source
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
 
-    def get_annot(self, source: str):
-        if self.annotation.get(source) is not None:
-            return self.annotation[source]
+    @property
+    def annotations(self) -> Generator[Annotation, None, None]:
+        for annot_list in self._annotationGetter.values():
+            for annotation in annot_list:
+                yield annotation
+
+    @property
+    def sources(self) -> List[str]:
+        return list(self._annotationGetter.keys())
+
+    def get_source(self, name: str) -> List[Annotation]:
+        return self._annotationGetter[name] if name in self.sources else None
+
+    def get_annotations(self, name: str, accession: str) -> Generator[Annotation, None, None]:
+        assert name is not None and accession is not None
+
+        for annotation in self.annotations:
+            if annotation.name == name or annotation.accession == accession:
+                yield annotation
 
     def add_annotation(self, source: str, annotation: Annotation, max_prediction: int = None):
         """ Add annotation to gene family
 
         :param source: Name of database source
         :param annotation: Identifier of the annotation
+        :param max_prediction:
         """
-        source_annot = self.get_annot(source)
+        for annot in self.get_annotations(name=annotation.name, accession=annotation.accession):
+            if annot.source == source:
+                self.get_source(source).remove(annot)
+
+        source_annot = self.get_source(source)
         if source_annot is not None:
             index_annot = 0
-            insert = False
+            insert_bool = False
             while index_annot < len(source_annot):
                 current_annot = source_annot[index_annot]
                 if current_annot.score is not None and annotation.score is not None:
                     if current_annot.score < annotation.score:
                         source_annot.insert(index_annot, annotation)
-                        insert = True
+                        insert_bool = True
                     elif current_annot.score == annotation.score:
                         if current_annot.e_val is not None and annotation.e_val is not None:
                             if current_annot.e_val < annotation.e_val:
                                 source_annot.insert(index_annot, annotation)
-                                insert = True
+                                insert_bool = True
                 elif current_annot.e_val is not None and annotation.e_val is not None:
                     if current_annot.e_val < annotation.e_val:
                         source_annot.insert(index_annot, annotation)
-                        insert = True
-                if not insert:
+                        insert_bool = True
+                if not insert_bool:
                     index_annot += 1
                 else:
                     break
-            if not insert and len(source_annot) < max_prediction:
-                source_annot.append(annotation)
+            if not insert_bool:
+                if max_prediction is None or len(source_annot) < max_prediction:
+                    source_annot.append(annotation)
         else:
-            self.annotation[source] = [annotation]
+            self._annotationGetter[source] = [annotation]
