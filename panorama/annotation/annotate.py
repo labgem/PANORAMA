@@ -13,7 +13,6 @@ from tqdm import tqdm
 
 # installed libraries
 import pandas as pd
-import tables
 
 # local libraries
 from panorama.utils import check_tsv_sanity
@@ -32,6 +31,7 @@ def check_parameter(args):
         raise Exception("You did not provide tsv or hmm for annotation")
     if args.hmm is not None and args.meta is None:
         raise Exception("You did not provide metadata file to assign function with HMM")
+
 
 def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
@@ -55,8 +55,6 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
                                  need_annotation_fam=True, disable_bar=disable_bar)
         else:
             check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
-
-
 
 
 def read_systems(systems_path: Path, systems=Systems()):
@@ -156,8 +154,9 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
                                     score=row.score, e_val=row.e_value, bias=row.bias)
             gene_fam.add_annotation(source=source, annotation=annotation, max_prediction=max_prediction)
         else:
-            logging.getLogger().warning(f"Family {row['Gene_family']} does not exist in pangenome. If you give a tsv check name."
-                                        f"If you're using hmm annotation, please post an issue on our github.")
+            logging.getLogger().warning(
+                f"Family {row['Gene_family']} does not exist in pangenome. If you give a tsv check name."
+                f"If you're using hmm annotation, please post an issue on our github.")
             # if search_sys:
             #     for index, row in select_df.iterrows():
             #         if row['protein_name'] not in annot2fam:
@@ -194,11 +193,9 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     :return: Dictionnary with for each annotation a set of corresponding gene families
     """
     if tsv is not None:
-        annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE,
-                                    names=['Gene_family', 'Accession', 'protein_name', 'e_value',
-                                           'score', 'bias', 'secondary_name', 'Description'])
+        annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE, names=res_col_names)
     elif hmm is not None:
-        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, prediction_size=max_prediction,
+        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, max_prediction=max_prediction,
                                        tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
@@ -221,8 +218,8 @@ def launch(args):
                                     meta=args.meta, max_prediction=args.max_prediction,
                                     tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
-        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
+        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -255,11 +252,14 @@ def parser_annot(parser):
                                 help='Gene families annotation in TSV file. See our github for more detail about format')
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
                                 help="File with all HMM or a directory with one HMM by file")
+    hmm_param = parser.add_argument_group(title="HMM arguments",
+                                          description="All of the following arguments are required,"
+                                                      " if you're using HMM mode :")
+    hmm_param.add_argument("--meta", required=False, type=Path, default=None,
+                           help="Metadata link to HMM with protein name, description and cutoff")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--max_prediction", required=False, type=int, default=1,
                           help="Maximum number of prediction associate to each gene family")
-    optional.add_argument("--meta", required=False, type=Path, default=None,
-                          help="Metadata link to HMM with protein name, description and cutoff")
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
