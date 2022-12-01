@@ -17,12 +17,11 @@ import pandas as pd
 # local libraries
 from panorama.utils import check_tsv_sanity
 from panorama.detection.systems import System, Systems
-from panorama.annotation.hmm_search import annot_with_hmm, res_col_names
+from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
 from panorama.detection.detection import launch_system_search
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.annotation.annotation import Annotation
-from panorama.geneFamily import GeneFamily
+from panorama.annotation import Annotation
 from panorama.pangenomes import Pangenome
 
 
@@ -174,7 +173,7 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
     # return annot2fam
 
 
-def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None,
+def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None, mode: str = 'fast', msa: Path = None,
                     source: str = None, max_prediction: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
                     threads: int = 1, disable_bar: bool = False) -> dict:
     """ Main function to add annotation to pangenome from tsv file
@@ -183,6 +182,8 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     :param hmm: Path to hmm file or directory
     :param tsv: Path to tsv with gene families annotation
     :param meta:
+    :param mode:
+    :param msa:
     :param source: Source of annotation
     :param prediction_size:
     :param tmpdir: Path to temporary directory
@@ -195,8 +196,8 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     if tsv is not None:
         annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE, names=res_col_names)
     elif hmm is not None:
-        annotation_df = annot_with_hmm(pangenome, hmm, method="hmmsearch", meta=meta, max_prediction=max_prediction,
-                                       tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
+        annotation_df = annot_with_hmm(pangenome, hmm, meta=meta, tmpdir=tmpdir, threads=threads, mode=mode, msa=msa,
+                                       disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
     return annotation_to_families(annotation_df, pangenome, source, max_prediction)
@@ -215,11 +216,11 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_annotation(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                                    meta=args.meta, max_prediction=args.max_prediction,
+                                    meta=args.meta, max_prediction=args.max_prediction, mode=args.mode, msa=args.msa,
                                     tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
-        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-        # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
+        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -257,6 +258,17 @@ def parser_annot(parser):
                                                       " if you're using HMM mode :")
     hmm_param.add_argument("--meta", required=False, type=Path, default=None,
                            help="Metadata link to HMM with protein name, description and cutoff")
+    hmm_param.add_argument("--mode", required=False, type=str, default='fast',  choices=['fast', 'profile'],
+                           help=argparse.SUPPRESS)
+                           # help="Choose the mode use to align HMM database and gene families. "
+                           #      "Fast will align the reference sequence of gene family against HMM."
+                           #      "Profile will create an HMM profile for each gene family and "
+                           #      "this profile will be aligned")
+    hmm_param.add_argument("--msa", required=False, type=Path, default=None,
+                           help=argparse.SUPPRESS)
+                           # help="To create a HMM profile for families, you can give a msa of each gene in families."
+                           #      "This msa could be get from ppanggolin (See ppanggolin msa). "
+                           #      "If no msa provide Panorama will launch one.")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--max_prediction", required=False, type=int, default=1,
                           help="Maximum number of prediction associate to each gene family")

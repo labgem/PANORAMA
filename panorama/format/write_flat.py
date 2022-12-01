@@ -4,59 +4,91 @@
 # default libraries
 from __future__ import annotations
 import argparse
-import csv
-import json
-import logging
 from pathlib import Path
-import tempfile
-import re
-
-import tables
-from ppanggolin.genome import Organism
-from tqdm import tqdm
 # installed libraries
+import numpy as np
 import pandas as pd
 
 # local libraries
-from panorama.pangenomes import Pangenome
-from panorama.geneFamily import GeneFamily
-from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
+from panorama.utils import check_tsv_sanity
+from panorama.geneFamily import GeneFamily
+from panorama.pangenomes import Pangenome
+
+
+# def filter_df(df: pd.DataFrame):
+#     current_gf = ''
+#     index_access = range(4, df.shape[1] + 1, 2)
+#     for row in df.itertuples():
+#         if current_gf != row[2]:
+#             current_gf = row[2]
+#             access_dict = {i: set() for i in index_access}
+#             for index in index_access:
+#
+
+
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path):
-    rows = []
-    family: GeneFamily
-    for family in pangenome.gene_families:
-        row_base = [pangenome.name, family.name]
-        for source, annotations in family.annotation.items():
-            row_source = row_base + [source]
-            for annotation in annotations:
-                rows.append(row_source + [annotation])
-
-    out_df = pd.DataFrame(rows, columns=["Pangenome", "Family", "Source", "Annotation"])
+    gf: GeneFamily
+    # out_df = pd.DataFrame({"Pangenome": [], "Family": []})
+    nb_source = len(pangenome.annotation_source)
+    source_list = list(pangenome.annotation_source)
+    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation_{source},Accession_{source}' for source in source_list])}".split(','))
+    array_list = []
+    for gf in pangenome.gene_families:
+        annot_array = np.empty((gf.max_annotation_by_source()[1], 2+nb_source*2), dtype=object)
+        if annot_array.shape[0] > 0:
+            annot_array[:, 0] = pangenome.name
+            annot_array[:, 1] = gf.name
+            index_source = 2
+            for source in source_list:
+                index_annot = 0
+                if source in gf.sources:
+                    for annotation in gf.get_source(source):
+                        annot_array[index_annot, index_source] = annotation.name
+                        annot_array[index_annot, index_source + 1] = annotation.accession
+                        index_annot += 1
+                index_source += 2
+            array_list.append(annot_array)
+    out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
+    out_df = out_df.sort_values(by=['Pangenome', 'Gene Family'] + list(column_name[range(3, len(column_name), 2)]))
     out_df.to_csv(f"{output}/families_annotations.tsv", sep="\t", header=True)
 
 
+    # for source in pangenome.annotation_source:
+    #     rows = []
+    #     for gf in pangenome.gene_families:
+    #         row_base = [pangenome.name, gf.name]
+    #         if gf.get_source(source) is not None:
+    #             for annotation in gf.get_source(source):
+    #                 rows.append(row_base + [annotation.name, annotation.accession])
+    #     out_df = out_df.merge(pd.DataFrame(rows, columns=["Pangenome", "Family", f"Annotation_{source}",
+    #                                                       f"Accession_{source}"]), how='outer',
+    #                           on=["Pangenome", "Family"])
+    # filter_df(out_df)
+    # out_df.sort_values(by=['Pangenome', 'Family']).to_csv(f"{output}/families_annotations.tsv", sep="\t", header=True)
+
+
 def write_flat_files(pangenome, output: Path, annotation: bool = False, disable_bar: bool = False):
-    needAnnotations = False
-    needFamilies = False
-    needGraph = False
-    needPartitions = False
-    needSpots = False
-    needRegions = False
-    needModules = False
-    needGeneSequences=False
-    needAnnotationsFam = False
+    need_annotations = False
+    need_families = False
+    need_graph = False
+    need_partitions = False
+    need_spots = False
+    need_regions = False
+    need_modules = False
+    need_gene_sequences = False
+    need_annotations_fam = False
 
     if annotation:
-        needFamilies = True
-        needAnnotationsFam = True
+        need_families = True
+        need_annotations_fam = True
 
-    check_pangenome_info(pangenome, need_annotations=needAnnotations, need_families=needFamilies, need_graph=needGraph,
-                         need_partitions=needPartitions, need_rgp=needRegions, need_spots=needSpots,
-                         need_gene_sequences=needGeneSequences, need_modules=needModules,
-                         need_annotation_fam=needAnnotationsFam, disable_bar=disable_bar)
+    check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
+                         need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
+                         need_annotation_fam=need_annotations_fam, disable_bar=disable_bar)
 
     if annotation:
         write_annotation_to_families(pangenome, output)
@@ -72,21 +104,10 @@ def launch(args):
     # systems_to_path = args.systems.absolute()
     # systems = read_systems(systems_to_path)
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    for pangenome_name, pangenome_file in pan_to_path.items():
-        pangenome = Pangenome(name=pangenome_name)
-        pangenome.add_file(pangenome_file)
+    for pangenome_name, pangenome_info in pan_to_path.items():
+        pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+        pangenome.add_file(pangenome_info["path"])
         write_flat_files(pangenome, output=args.output, annotation=args.annotation, disable_bar=args.disable_prog_bar)
-    #     annot2fam = annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-    #                                 meta=args.meta, e_value=args.e_value, prediction_size=args.prediction_size,
-    #                                 tmpdir=args.tmpdir, threads=args.threads, force=args.force,
-    #                                 disable_bar=args.disable_prog_bar)
-    #     search_system(systems, annot2fam, args.disable_prog_bar)
-    #     logging.getLogger().info("Annotation Done")
-    #     logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-    #     h5f = tables.open_file(pangenome_file, "a")
-    #     write_gene_fam_annot(pangenome, h5f, force=args.force, disable_bar=args.disable_prog_bar)
-    #     h5f.close()
-
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

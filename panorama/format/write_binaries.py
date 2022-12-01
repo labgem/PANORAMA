@@ -79,9 +79,6 @@ def write_gene_fam_annot(pangenome: Pangenome, h5f: tables.File, source: str, di
         annot_group = h5f.create_group("/", "geneFamiliesAnnot", "Gene families functional annotation")
     else:
         annot_group = h5f.root.geneFamiliesAnnot
-    if f'/geneFamiliesAnnot/{source}' in h5f:
-        logging.getLogger().info(f"Erasing gene family annotations from {source}...")
-        h5f.remove_node('/geneFamiliesAnnot', f'{source}')  # erasing the table, and rewriting a new one.
     select_gf = list(pangenome.get_gf_by_sources(source=source))
     annot_len = get_annot_len(select_gf, source)
     source_table = h5f.create_table(annot_group, source, annot_desc(*annot_len[:-1]),

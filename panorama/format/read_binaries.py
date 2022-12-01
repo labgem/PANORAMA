@@ -11,7 +11,7 @@ from ppanggolin.formats import read_chunks
 from ppanggolin.formats import check_pangenome_info as check_pp
 
 # local libraries
-from panorama.annotation.annotation import Annotation
+from panorama.annotation import Annotation
 from panorama.pangenomes import Pangenome
 
 

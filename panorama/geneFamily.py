@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Union
 from ppanggolin.geneFamily import GeneFamily as Fam
 
 # local libraries
-from panorama.annotation.annotation import Annotation
+from panorama.annotation import Annotation
 
 
 class GeneFamily(Fam):
@@ -34,6 +34,15 @@ class GeneFamily(Fam):
     @property
     def sources(self) -> List[str]:
         return list(self._annotationGetter.keys())
+
+    def max_annotation_by_source(self):
+        max_annot = 0
+        max_source = None
+        for source, annotations in self._annotationGetter.items():
+            if len(annotations) > max_annot:
+                max_annot = len(annotations)
+                max_source = source
+        return max_source, max_annot
 
     def get_source(self, name: str) -> List[Annotation]:
         return self._annotationGetter[name] if name in self.sources else None
@@ -68,11 +77,11 @@ class GeneFamily(Fam):
                         insert_bool = True
                     elif current_annot.score == annotation.score:
                         if current_annot.e_val is not None and annotation.e_val is not None:
-                            if current_annot.e_val < annotation.e_val:
+                            if current_annot.e_val > annotation.e_val:
                                 source_annot.insert(index_annot, annotation)
                                 insert_bool = True
                 elif current_annot.e_val is not None and annotation.e_val is not None:
-                    if current_annot.e_val < annotation.e_val:
+                    if current_annot.e_val > annotation.e_val:
                         source_annot.insert(index_annot, annotation)
                         insert_bool = True
                 if not insert_bool:
@@ -82,5 +91,8 @@ class GeneFamily(Fam):
             if not insert_bool:
                 if max_prediction is None or len(source_annot) < max_prediction:
                     source_annot.append(annotation)
+            else:
+                if max_prediction is not None and len(source_annot) > max_prediction:
+                    del source_annot[max_prediction:]
         else:
             self._annotationGetter[source] = [annotation]

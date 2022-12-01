@@ -2,12 +2,12 @@
 # coding:utf-8
 
 # default libraries
+import os
 import collections
 import logging
 from pathlib import Path
 from typing import List, Generator, Tuple, Union
 from tqdm import tqdm
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import tempfile
 
 # installed libraries
@@ -27,20 +27,53 @@ meta_dtype = {"accession": "string", "hmm_name": "string", "protein_name": "stri
               "target_cov_threshold": "float", "description": "string"}
 
 
-def digit_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmmer.easel.DigitalSequence]:
+def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmmer.easel.DigitalSequence]:
     """Digitalised pangenome gene families sequences for hmmsearch
 
     :param pangenome: Pangenome object with gene families
 
     :return: list of digitalised gene family sequences
     """
-    digit_gf_seq = []
+    digit_gf_sequence = []
     for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar,
                        desc='Digitalised sequences'):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name, sequence=family.sequence)
-        digit_gf_seq.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
-    return digit_gf_seq
+        digit_gf_sequence.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
+    return digit_gf_sequence
+
+
+# def get_msa():
+#     pass
+
+
+# def profile_gf(pangenome: Pangenome, msa: Path = None, disable_bar: bool = False):
+#     """Create an HMM profile for each gene families"""
+#     alphabet = pyhmmer.easel.Alphabet.amino()
+#     builder = pyhmmer.plan7.Builder(alphabet)
+#     background = pyhmmer.plan7.Background(alphabet)
+#     gf_to_msa = {}
+#     if msa is None:
+#         get_msa()
+#     else:
+#         msa_file_list = list(msa.iterdir())
+#         for msa_file in tqdm(msa_file_list, total=len(msa_file_list), unit='file',
+#                              desc='read msa', disable=disable_bar):
+#             if os.stat(msa_file).st_size == 0:
+#                 logging.getLogger().warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
+#                                             f"Pass to next file")
+#             else:
+#                 print(msa_file)
+#                 try:
+#                     with pyhmmer.easel.MSAFile(msa_file.as_posix(), digital=True, alphabet=alphabet) as easel_msa:
+#                         gf_to_msa[msa_file.stem] = next(easel_msa)
+#                 except Exception as error:
+#                     raise Exception(f"The following error happened with file {msa_file} : {error}")
+#     for gf_name, easel_msa in gf_to_msa.items():
+#         hmm, profile, optimized_profile = builder.build_msa(easel_msa, background, )
+#         if gf_name == 'HXT67_RS08840':
+#             print("pika")
+#         gf = pangenome.get_gene_family(gf_name)
 
 
 def read_metadata(metadata: Path):
@@ -84,73 +117,16 @@ def split_hmm_file(hmm_path: Path, tmpdir: tempfile.TemporaryDirectory) -> List[
         for line in hmm_file.readlines():
             if line.startswith('HMMER'):
                 hmm_list.append(Path(f"{tmpdir.name}/HMM_{counter}.hmm"))
-                file = open(hmm_list[-1].as_posix(), 'w')
-                file.write("\n".join(lines))
+                new_hmm_file = open(hmm_list[-1].as_posix(), 'w')
+                new_hmm_file.write("\n".join(lines))
                 counter += 1
                 lines = [line]
             else:
                 lines.append(line)
         hmm_list.append(Path(f"{tmpdir.name}/HMM_{counter}.hmm"))
-        file = open(hmm_list[-1].as_posix(), 'w')
-        file.write("\n".join(lines))
+        new_hmm_file = open(hmm_list[-1].as_posix(), 'w')
+        new_hmm_file.write("\n".join(lines))
     return hmm_list
-
-
-# def hmm_search_hmmer(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
-#                      hmm_meta: pd.DataFrame = None, threads: int = 1, disable_bar: bool = False):
-#     res = []
-#     result = collections.namedtuple("Result", res_col_names)
-#     bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar, desc="Align gene fam to HMM")
-#     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
-#         for hit in top_hits:
-#             cog = hit.best_domain.alignment
-#             hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
-#             add_res = False
-#             if pd.isna(hmm_info['score_threshold']):
-#                 if hit.evalue > hmm_info['eval_threshold']:
-#                     add_res = True
-#             else:
-#                 if hit.score > hmm_info['score_threshold']:
-#                     add_res = True
-#             if add_res:
-#                 res.append(result(hit.name.decode('UTF-8'), hmm_info['hmm_name'], cog.hmm_accession.decode('UTF-8'),
-#                                   hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
-#         bar.update()
-#     bar.close()
-#     return res
-
-
-# def filter_results(results: list, max_prediction: int = 1):
-#     best_results = {}
-#     keep_query = set()
-#     for result in results:
-#         if result.Gene_family in best_results:
-#             # Search if Annotation already exist for families
-#             annot_in = False
-#             index = 0
-#             while index < len(best_results[result.Gene_family]) and not annot_in:
-#                 res = best_results[result.Gene_family][index]
-#                 if result.protein_name == res.protein_name:
-#                     best_results[result.Gene_family][index] = result
-#                     annot_in = True
-#                 index += 1
-#             if not annot_in:
-#                 if len(best_results[result.Gene_family]) < max_prediction:
-#                     best_results[result.Gene_family].append(result)
-#                 else:
-#                     previous_bitscore = best_results[result.Gene_family][-1].score
-#                     if result.score > previous_bitscore:
-#                         best_results[result.Gene_family][-1] = result
-#                     elif result.score == previous_bitscore:
-#                         fam_rm = best_results[result.Gene_family].pop(-1)
-#                         if len(best_results[result.Gene_family]) == 0:
-#                             keep_query.remove(fam_rm.Gene_family)
-#             best_results[result.Gene_family] = sorted(best_results[result.Gene_family],
-#                                                       key=lambda x: x.score, reverse=True)
-#         else:
-#             best_results[result.Gene_family] = [result]
-#             keep_query.add(result.Gene_family)
-#     return best_results, keep_query
 
 
 def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
@@ -165,7 +141,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
             hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
             add_res = False
             if pd.isna(hmm_info['score_threshold']):
-                if hit.evalue > hmm_info['eval_threshold']:
+                if hit.evalue < hmm_info['eval_threshold']:
                     add_res = True
             else:
                 if hit.score > hmm_info['score_threshold']:
@@ -176,52 +152,17 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
         bar.update()
     bar.close()
     return res
-    # results = hmm_search_hmmer(hmm_list, gf_sequences, hmm_meta, threads, disable_bar)
-    # best_results, keep_query = filter_results(results, max_prediction)
-    # return sorted([res for gf, res_list in best_results.items() for res in res_list if gf in keep_query],
-    #               key=lambda x: x.Gene_family)
 
 
-def hmm_search_plan7(hmm: pyhmmer.plan7.HMM,
-                     gf_sequences: List[pyhmmer.easel.DigitalSequence]) -> List[List[Union[str, str, int, str]]]:
-    """ Compute a hmmsearch between gene families and one HMM
-
-    :param hmm: HMM with Plan7 data model
-    :param gf_sequences: Digitalized sequences
-
-    :return: result of hmmsearch against gene family sequences
-    """
-    pipeline = pyhmmer.plan7.Pipeline(hmm.alphabet)
-    top_hits = pipeline.search_hmm(hmm, gf_sequences)
-    hit_list = []
-    for hit in top_hits:
-        hit_list.append([hit.name.decode('UTF-8'), hmm.name.decode('UTF-8'), hmm.accession.decode('UTF-8'),
-                         hit.evalue, hit.score, None, hmm.description.decode('UTF-8')])
-    return hit_list
-
-
-def annot_with_plan7(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
-                     threads: int = 1, disable_bar: bool = False):
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().debug("Intiate pool executor")
-        futures = [executor.submit(hmm_search_plan7, hmm=hmm, gf_sequences=gf_sequences) for hmm in hmm_list]
-        res = []
-        logging.getLogger().debug("Run hmm search")
-        for future in tqdm(as_completed(futures), unit="hmm", total=len(futures), disable=disable_bar):
-            res += future.result()
-        return res
-
-
-def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearch', meta: Path = None,
-                   max_prediction: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
-                   threads: int = 1, disable_bar: bool = False):
+def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None, mode: str = 'fast', msa: Path = None,
+                   tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
     """ Launch hmm search against pangenome gene families and HMM
 
     :param pangenome: Pangenome with gene families
     :param hmm_path: Path to one file with multiple HMM or a directory with one HMM by file
-    :param method: Methods used to search HMM
     :param meta:
-    :param max_prediction:
+    :param mode:
+    :param msa:
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param disable_bar: allow to disable progress bar
@@ -230,7 +171,12 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearc
     """
     logging.getLogger().info("Begin HMM searching")
     logging.getLogger().debug("Digitalized gene families sequences")
-    gf_sequences = digit_seq(pangenome)
+    if mode == 'fast':
+        gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
+    # elif mode == 'profile':
+    #     gf_sequences = profile_gf(pangenome, msa, disable_bar=disable_bar)
+    else:
+        raise ValueError(f"{mode} unrecognized mode")
     tmp_dir = tempfile.TemporaryDirectory(prefix="hmm_panorama", dir=tmpdir)
     metadata, hmm_to_metaname = read_metadata(meta)
     # Get list of HMM with Plan7 data model
@@ -242,14 +188,7 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, method: str = 'hmmsearc
         hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
     else:
         raise Exception("Unexpected error")
-    # Choice of one method
-    if method == 'hmmsearch':
-        res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
-    elif method == 'plan7':
-        res = annot_with_plan7(hmms, gf_sequences, threads, disable_bar)
-    else:
-        raise Exception("Methods to search HMM is plan7 or hmmsearch. Please choose one of them.")
-
+    res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
     return pd.DataFrame(res)
 
 
@@ -340,10 +279,6 @@ if __name__ == "__main__":
     req.add_argument("--meta", required=True, type=Path,
                      help="Metadata link to HMM with protein name, description and cutoff")
     opt = main_parser.add_argument_group(title="Optional argument")
-    opt.add_argument("--method", required=False, type=str, choices=['hmmsearch', 'plan7'], default='hmmsearch',
-                     help="Two methods are available and defined in pyhmmer. Plan7 or hmmsearch")
-    opt.add_argument("--max_prediction", required=False, type=int, default=1,
-                     help="Number of prediction associate with gene families")
     opt.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
                      help="directory for storing temporary files")
     opt.add_argument("--threads", required=False, type=int, default=1)
