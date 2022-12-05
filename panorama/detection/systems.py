@@ -105,12 +105,13 @@ class Rule:
     :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, type: str = ""):
+    def __init__(self, name: str = "", parameters: dict = None, type: str = "", duplicate: int = 1):
         """Constructor Method
         """
         self.name = name
         self.parameters = parameters if parameters is not None else dict()
         self.type = type
+        self.duplicate = duplicate
 
     def check_param(self, param_dict):
         try:
@@ -208,12 +209,6 @@ class SupRule(Rule):
                 if not isinstance(param_val, int) or param_val < 0:
                     raise ValueError(f"The {param} value is not positive int type")
 
-    def check_suprules(self):
-        if len(self.mandatory) < self.parameters["min_mandatory"]:
-            raise Exception(f"There is less mandatory than the minimum mandatory in {self.name}")
-        if len(self.forbidden) < self.parameters["max_forbidden"]:
-            raise Exception(f"There is less forbidden than the maximum forbidden accepted in {self.name}")
-
 
 class System(SupRule):
     """Represent System rules which describe biological system
@@ -272,7 +267,10 @@ class System(SupRule):
                     self.check_rule_key(system_dict, key)
 
     def check_system(self):
-        super(System, self).check_suprules()
+        if len(self.mandatory) < self.parameters["min_mandatory"]:
+            raise Exception(f"There is less mandatory than the minimum mandatory in {self.name}")
+        if len(self.forbidden) < self.parameters["max_forbidden"]:
+            raise Exception(f"There is less forbidden than the maximum forbidden accepted in {self.name}")
         if self.size < self.parameters["min_total"]:
             raise Exception(f"There is less functional units than the minimum total"
                             f" of functional unit needed in {self.name}")
@@ -358,6 +356,19 @@ class FuncUnit(SupRule):
     def families_name(self):
         return [fam.name for fam in self.families]
 
+    def duplicate_fam(self, filter: str = None):
+        assert filter in [None, 'mandatory', 'forbidden']
+
+        if filter is None:
+            select_fam = self.families
+        elif filter == "mandatory":
+            select_fam = self.mandatory
+        elif filter == "forbidden":
+            select_fam = self.forbidden
+        for fam in select_fam:
+            if fam.duplicate > 1:
+                yield fam
+
     def check_fu_dict(self, fu_dict):
         try:
             check_key(fu_dict, rule_keys + ['families'])
@@ -374,8 +385,15 @@ class FuncUnit(SupRule):
                     self.check_rule_key(fu_dict, key)
 
     def check_func_unit(self):
-        super(FuncUnit, self).check_suprules()
-        if self.size < self.parameters["min_total"]:
+        f_m = len(list(self.duplicate_fam(filter="mandatory")))
+        f_f = len(list(self.duplicate_fam(filter="forbidden")))
+        f_a = len(list(self.duplicate_fam()))
+
+        if self.parameters["min_mandatory"] > len(self.mandatory) + len(list(self.duplicate_fam(filter="mandatory"))):
+            raise Exception(f"There is less mandatory than the minimum mandatory in {self.name}")
+        if self.parameters["max_forbidden"] > len(self.forbidden):
+            raise Exception(f"There is less forbidden than the maximum forbidden accepted in {self.name}")
+        if self.parameters["min_total"] > self.size + len(list(self.duplicate_fam())):
             raise Exception(f"There is less families than the minimum total"
                             f" of functional unit needed in {self.name}")
         if len(self.neutral) == 1 and self.size == 1:
@@ -454,6 +472,9 @@ class Family(Rule):
                             raise TypeError("relation value from family in json must be an str or null")
                         if fam_dict[key] not in ['homologs', 'analogs']:
                             raise ValueError("Family relation must be null homologs or analogs")
+                elif key == 'duplicate':
+                    if not isinstance(fam_dict[key], int):
+                        raise TypeError("duplicate value from family in json must be an int or null")
                 else:
                     self.check_rule_key(fam_dict, key)
 
@@ -467,6 +488,8 @@ class Family(Rule):
         for key, value in data_fam.items():
             if key == 'relation':
                 self.relation = value
+            elif key == 'duplicate':
+                self.duplicate = value
             else:
                 self.read_rule(key, value)
 

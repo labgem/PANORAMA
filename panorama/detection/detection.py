@@ -4,15 +4,58 @@
 
 # default libraries
 from __future__ import annotations
+import argparse
+from pathlib import Path
+import logging
+import json
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from tqdm import tqdm
 
 # installed libraries
 import networkx as nx
-import re
+import pandas as pd
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
+import matplotlib.pyplot as plt
 
 # local libraries
+from panorama.detection.systems import Systems, System, FuncUnit
+from panorama.utils import check_tsv_sanity
+from panorama.format.read_binaries import check_pangenome_info
 from panorama.geneFamily import GeneFamily
-from panorama.annotation.systems import Systems, System, FuncUnit
+from panorama.pangenomes import Pangenome
+
+
+def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
+    """ Check and load pangenome information before adding annotation
+
+    :param pangenome: Pangenome object
+    :param disable_bar: Disable bar
+    """
+    if source in pangenome.status["annotation_source"]:
+        check_pangenome_info(pangenome, need_annotations=True, need_families=True,
+                             need_annotation_fam=True, disable_bar=disable_bar)
+    else:
+        raise Exception("Annotation source not in pangenome")
+
+
+def read_systems(systems_path: Path, disable_bar: bool = False) -> Systems:
+    """ Read all json files systems in the directory
+
+    :param systems_path: path of systems directory
+    """
+    systems = Systems()
+    for file in tqdm(list(systems_path.glob("*.json")), unit='system', desc="Read system", disable=disable_bar):
+        with open(file.resolve().as_posix()) as json_file:
+            data = json.load(json_file)
+            system = System()
+            try:
+                system.read_system(data)
+            except Exception:
+                raise Exception(f"Problem to read json {file}")
+            else:
+                systems.add_sys(system)
+    return systems
 
 
 def min_mandatory_func_unit(system: System, func_unit: FuncUnit):
@@ -43,6 +86,19 @@ def list_mandatory_family(func_unit: FuncUnit):
     return list_mandatory
 
 
+def get_annotation_to_families(pangenome: Pangenome, source: str):
+    annot2fam = {}
+    for gf in pangenome.gene_families:
+        annotations = gf.get_source(source)
+        if annotations is not None:
+            for annotation in annotations:
+                if annotation.name in annot2fam:
+                    annot2fam[annotation.name].add(gf)
+                else:
+                    annot2fam[annotation.name] = {gf}
+    return annot2fam
+
+
 def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     """
     Recover all families in the function unit
@@ -61,18 +117,18 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
-                   count_forbidden: int):
-    bool_list = [False, False, False, False]
-    if len(list_mandatory) <= len(func_unit.families.keys()) - min_mandatory_func_unit(system, func_unit):
-        bool_list[0] = True
-    if group not in pred_dict.values():
-        bool_list[1] = True
-    if count_forbidden <= max_forbidden_func_unit(system, func_unit):
-        bool_list[2] = True
-    if len(group) - count_forbidden >= min_mandatory_func_unit(system, func_unit):
-        bool_list[3] = True
-    return bool_list
+# def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
+#                    count_forbidden: int):
+#     bool_list = [False, False, False, False]
+#     if len(list_mandatory) <= len(func_unit.families.keys()) - min_mandatory_func_unit(system, func_unit):
+#         bool_list[0] = True
+#     if group not in pred_dict.values():
+#         bool_list[1] = True
+#     if count_forbidden <= max_forbidden_func_unit(system, func_unit):
+#         bool_list[2] = True
+#     if len(group) - count_forbidden >= min_mandatory_func_unit(system, func_unit):
+#         bool_list[3] = True
+#     return bool_list
 
 
 def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict, nb_pred: int):
@@ -149,17 +205,101 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     return pred_dict
 
 
-def launch_system_search(system: System, annot2fam: dict):
+def _draw_graph(g: Graph):
+    nx.draw(g, with_labels=True)
+    plt.show()
+
+
+def search_system(system: System, annot2fam: dict, disable_bar: bool = False):
     for func_unit in system.func_units:
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
             nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
+        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=disable_bar)
+        _draw_graph(g)
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
         if len(pred_dict) > 0:
-            return pred_dict
+            return pred_dict, system.name
+
+
+def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
+    """
+    Search present system in the pangenome
+    :param systems:
+    :param pangenome:
+    :param source:
+    :param threads:
+    :param disable_bar:
+
+    :return:
+    """
+    org_pred = {}
+    spot_pred = {}
+    annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
+
+    def org2pred(org_pred_dict: dict, pred_res: dict, system_name: str):
+        for keys, value in pred_res.items():
+            org_inter = set()
+            for fam in value:
+                if len(org_inter) == 0:
+                    org_inter = fam.organisms
+                else:
+                    org_inter.intersection(fam.organisms)
+            if len(org_inter) == 0:
+                print(system_name)
+            for org in org_inter:
+                all_fam = {family: False for family in value}
+                index = 0
+                for contig in org.contigs:
+                    for gene in contig.genes:
+                        if gene.family in all_fam:
+                            all_fam[gene.family] = True
+                if all(x for x in all_fam.values()):
+                    if org.name in org_pred_dict:
+                        org_pred_dict[org.name].add(system_name)
+                    else:
+                        org_pred_dict[org.name] = {system_name}
+
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=systems.size, unit='system', disable=disable_bar) as progress:
+            futures = []
+            for system in systems:
+                future = executor.submit(search_system, system, annot2fam)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+            prediction_results = []
+            for future in futures:
+                result = future.result()
+                if result is not None:
+                    pred_res, sys_name = (result[0], result[1])
+                    prediction_results.append([sys_name, max(pred_res.keys()) + 1])
+                    org2pred(org_pred, pred_res, sys_name)
+    proj = pd.DataFrame.from_dict(org_pred, orient='index')
+    sys_df = pd.DataFrame(prediction_results, columns=['System',
+                                                       'Nb Detection']).sort_values('System').reset_index(drop=True)
+    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+                header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
+    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
+
+
+def launch(args):
+    """
+    Launch functions to detect systems in pangenomes
+
+    :param args: Argument given
+    """
+    pan_to_path = check_tsv_sanity(args.pangenomes)
+    systems = read_systems(args.systems)
+    for pangenome_name, pangenome_info in pan_to_path.items():
+        pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+        pangenome.add_file(pangenome_info["path"])
+        check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+        res = search_systems(systems, pangenome, args.source, args.threads, args.disable_prog_bar)
+        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -171,11 +311,11 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     :return : parser arguments for align command
     """
     parser = sub_parser.add_parser("annotation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser_annot(parser)
+    parser_detection(parser)
     return parser
 
 
-def parser_annot(parser):
+def parser_detection(parser):
     """
     Parser for specific argument of annot command
 
@@ -185,22 +325,11 @@ def parser_annot(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument("--source", required=True, type=str, nargs="?",
-                          help='Name of the annotation source. Default use name of annnotation file or directory.')
-    exclusive_mode = required.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--tsv', type=Path, nargs='?',
-                                help='Gene families annotation in TSV file. See our github for more detail about format')
-    exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
-                                help="File with all HMM or a directory with one HMM by file")
-    optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--prediction_size", required=False, type=int, default=1,
-                          help="Number of prediction associate with gene families")
-    optional.add_argument('-s', '--systems', required=False, type=Path, default=None,
+    required.add_argument('-s', '--systems', required=False, type=Path, default=None,
                           help="Path to systems directory")
-    optional.add_argument("--meta", required=False, type=Path, default=None,
-                          help="Metadata link to HMM with protein name, description and cutoff")
-    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
-                          help="directory for storing temporary files")
+    required.add_argument("-S", "--source", required=True, type=str, nargs="?",
+                          help='Name of the annotation source where panorama as to select in pangenomes')
+    optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
 
@@ -210,7 +339,7 @@ if __name__ == "__main__":
 
     main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
                                           formatter_class=argparse.RawTextHelpFormatter)
-    parser_annot(main_parser)
+    parser_detection(main_parser)
     common = main_parser.add_argument_group(title="Common argument")
     common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
                         help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
