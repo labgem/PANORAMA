@@ -147,7 +147,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
                 if hit.score > hmm_info['score_threshold']:
                     add_res = True
             if add_res:
-                res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info['hmm_name'],
+                res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
                                   hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
         bar.update()
     bar.close()

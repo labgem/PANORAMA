@@ -2,13 +2,15 @@
 # coding: utf8
 
 # default libraries
-from typing import Union, Generator, List
+from typing import Dict, Generator, List, Union
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
+from panorama.annotation import Annotation
 from panorama.geneFamily import GeneFamily
+
 
 
 class Pangenome(Pan):
@@ -24,6 +26,8 @@ class Pangenome(Pan):
         """Constructor method.
         """
         super().__init__()
+        self._source_index = None
+        self._annotation_index = None
         self.name = name
         self.taxid = taxid
 
@@ -53,6 +57,11 @@ class Pangenome(Pan):
             for source_annotation in gf.sources:
                 source_set.add(source_annotation)
         return source_set
+
+    @property
+    def annotations(self) -> Generator[Annotation, None, None]:
+        for gf in self.gene_families:
+            yield gf.annotations
 
     def get_gf_by_annnotation(self, annotation: str = None, accession: str = None) -> Generator[GeneFamily, None, None]:
         """ Get gene famlies with a specific annotation or source in pangenome

@@ -55,6 +55,8 @@ def get_annot_len(select_gf: List[GeneFamily], source: str) -> (int, int):
         if len(gf.name) > max_gf_name_len:
             max_gf_name_len = len(gf.name)
         for annotation in gf.get_source(name=source):
+            if isinstance(annotation.name, float):
+                print('pika')
             if len(annotation.name) > max_name_len:
                 max_name_len = len(annotation.name)
             if len(annotation.accession) > max_accession_len:

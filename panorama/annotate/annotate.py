@@ -18,7 +18,6 @@ import pandas as pd
 from panorama.utils import check_tsv_sanity
 from panorama.detection.systems import System, Systems
 from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
-from panorama.detection.detection import launch_system_search
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.annotation import Annotation
@@ -56,25 +55,6 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
             check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
 
 
-def read_systems(systems_path: Path, systems=Systems()):
-    """ Read all json files systems in the directory
-
-    :param systems_path: path of systems directory
-    :param systems: class Systems with all systems
-    """
-    for file in systems_path.glob("*.json"):
-        with open(file.resolve().as_posix()) as json_file:
-            data = json.load(json_file)
-            system = System()
-            try:
-                system.read_system(data)
-            except Exception:
-                raise Exception(f"Problem to read json {file}")
-            else:
-                systems.add_sys(system)
-    return systems
-
-
 def check_presence_family(system: System, annot2fam: dict, one_family: bool):
     if one_family is False or None:
         if set(system.families.keys()).intersection(annot2fam.keys()) == system.families.keys():
@@ -84,53 +64,6 @@ def check_presence_family(system: System, annot2fam: dict, one_family: bool):
     else:
         for annot in system.families.keys():
             return len(annot2fam.get(annot))
-
-
-def search_system(systems: Systems, annot2fam: dict, disable_bar: bool = False):
-    """
-    Search present system in the pangenome
-    :param systems:
-    :param annot2fam:
-    :return:
-    """
-    pred = []
-    org_pred = {}
-    spot_pred = {}
-
-    def org2pred(org_pred_dict: dict, pred_res: dict, system_name: str):
-        for keys, value in pred_res.items():
-            org_inter = set()
-            for fam in value:
-                if len(org_inter) == 0:
-                    org_inter = fam.organisms
-                else:
-                    org_inter.intersection(fam.organisms)
-            if len(org_inter) == 0:
-                print(system_name)
-            for org in org_inter:
-                all_fam = {family: False for family in value}
-                index = 0
-                for contig in org.contigs:
-                    for gene in contig.genes:
-                        if gene.family in all_fam:
-                            all_fam[gene.family] = True
-                if all(x for x in all_fam.values()):
-                    if org.name in org_pred_dict:
-                        org_pred_dict[org.name].add(system_name)
-                    else:
-                        org_pred_dict[org.name] = {system_name}
-
-    for system in tqdm(systems, total=systems.size, unit='system', disable=disable_bar):
-        # if check_all_present_families(system, annot2fam) is True:
-        pred_res = launch_system_search(system, annot2fam)
-        if pred_res is not None:
-            pred.append([system.name, max(pred_res.keys()) + 1])
-            org2pred(org_pred, pred_res, system.name)
-    proj = pd.DataFrame.from_dict(org_pred, orient='index')
-    sys_df = pd.DataFrame(pred, columns=['System', 'Nb Detection']).sort_values('System').reset_index(drop=True)
-    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
-                header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
 def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
@@ -205,7 +138,7 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
 
 def launch(args):
     """
-    Launch functions to read systems
+    Launch functions to annotate pangenomes
 
     :param args: Argument given
     """
