@@ -11,6 +11,7 @@ import json
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+from itertools import combinations
 
 # installed libraries
 import networkx as nx
@@ -34,7 +35,7 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
     """
     if source in pangenome.status["annotation_source"]:
         check_pangenome_info(pangenome, need_annotations=True, need_families=True,
-                             need_annotation_fam=True, disable_bar=disable_bar)
+                             need_annotation_fam=True, need_modules=True, disable_bar=disable_bar)
     else:
         raise Exception("Annotation source not in pangenome")
 
@@ -111,9 +112,9 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     for fam_sys in func_unit.families:
         # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_sys}", annot)})
         if fam_sys.name in annot2fam:
-            for pan_fam in annot2fam[fam_sys.name]:
-                families[pan_fam.name] = pan_fam
-                fam2annot[pan_fam.name] = fam_sys
+            for gf in annot2fam[fam_sys.name]:
+                families[gf.name] = gf
+                fam2annot[gf.name] = fam_sys
     return families, fam2annot
 
 
@@ -160,7 +161,6 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
                     nextlevel |= set(graph.neighbors(v))
         return cc
 
-
     def check_cc(cc: set, fam2annot: dict, system: System, func_unit: FuncUnit):
         count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
         forbidden_list, mandatory_list, accessory_list = (func_unit.forbidden_name(), func_unit.mandatory_name(),
@@ -188,7 +188,6 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
         else:
             return False
 
-
     remove_node = set()
     for node in g.nodes():  # pour chaque noeud du graphe
         if node not in seen:
@@ -198,16 +197,8 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
                 nb_pred += 1
             else:
                 remove_node |= cc
-    # if len(pred_dict) > 0:
-    #     nx.draw(g)
-    #     plt.show()
     g.remove_nodes_from(remove_node)
     return pred_dict
-
-
-def _draw_graph(g: Graph):
-    nx.draw(g, with_labels=True)
-    plt.show()
 
 
 def search_system(system: System, annot2fam: dict, disable_bar: bool = False):
@@ -218,10 +209,80 @@ def search_system(system: System, annot2fam: dict, disable_bar: bool = False):
             nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
         g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=disable_bar)
-        _draw_graph(g)
+        # nx.draw(g)
+        # plt.show()
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
         if len(pred_dict) > 0:
             return pred_dict, system.name
+
+
+def system_to_module(pangenome: Pangenome, system: System, predictions: set):
+    """Associate a system to modules"""
+    for module in pangenome.modules:
+        for prediction in predictions:
+            if prediction.issubset(module.families):
+                print("pika")
+    pass
+
+
+def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system: System, source: str):
+    mandatory_family = [fam.name for fam in system.families if fam.type == 'mandatory']
+    accessory_family = [fam.name for fam in system.families if fam.type == 'accessory']
+    for fu in system.func_units:
+        for organism in pangenome.organisms:
+            # if organism.name in ['GCF_006539645.1_ASM653964v1_genomic', 'GCF_001038185.1_ASM103818v1_genomic',
+            #                      'GCF_000807315.1_ASM80731v1_genomic', 'GCF_014194605.1_ASM1419460v1_genomic',
+            #                      'GCF_009864815.1_ASM986481v1_genomic', 'GCF_013752735.1_ASM1375273v1_genomic',
+            #                      'GCF_000472985.1_ASM47298v1_genomic', 'GCF_000773865.1_ASM77386v1_genomic',
+            #                      'GCF_000284375.1_ASM28437v1_genomic']:
+            #     print("pika")
+            for prediction in pred_res.values():
+                if prediction.issubset(organism.families):
+                    mandatory_dict = {mandatory: False for mandatory in mandatory_family}
+                    accessory_dict = {accessory: False for accessory in accessory_family}
+                    for gf in prediction:
+                        if gf.get_source(source) is not None:
+                            for annotation in [annot.name for annot in gf.get_source(source)]:
+                                if annotation in mandatory_family:
+                                    mandatory_dict[annotation] = True
+                                elif annotation in accessory_family:
+                                    accessory_dict[annotation] = True
+                    if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
+                        if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
+                            if organism.name in proj_dict:
+                                proj_dict[organism.name].add(system.name)
+                            else:
+                                proj_dict[organism.name] = {system.name}
+    # for keys, value in pred_res.items():
+    #     for gf_combi in combinations(value, 2):
+    #         org_inter = set()
+    #         for fam in gf_combi:
+    #             if len(org_inter) == 0:
+    #                 org_inter = fam.organisms
+    #             else:
+    #                 org_inter = org_inter.intersection(fam.organisms)
+    #         for org in org_inter:
+    #             if org.name in ['GCF_006539645.1_ASM653964v1_genomic', 'GCF_001038185.1_ASM103818v1_genomic',
+    #                             'GCF_000807315.1_ASM80731v1_genomic', 'GCF_014194605.1_ASM1419460v1_genomic',
+    #                             'GCF_009864815.1_ASM986481v1_genomic', 'GCF_013752735.1_ASM1375273v1_genomic',
+    #                             'GCF_000472985.1_ASM47298v1_genomic', 'GCF_000773865.1_ASM77386v1_genomic',
+    #                             'GCF_000284375.1_ASM28437v1_genomic']:
+    #                 print("pika")
+    #             gf_present = set()
+    #             for contig in org.contigs:
+    #                 for gene in contig.genes:
+    #                     if gene.family in gf_combi:
+    #                         gf_present.add(gene.family)
+    #             mandatory_dict = {mandatory: False for mandatory in mandatory_family}
+    #             for gf in gf_present:
+    #                 for annotation in [annot.name for annot in gf.get_source(source)]:
+    #                     if annotation in mandatory_family:
+    #                         mandatory_dict[annotation] = True
+    #             if all(x for x in mandatory_dict.values()):
+    #                 if org.name in proj_dict:
+    #                     proj_dict[org.name].add(system.name)
+    #                 else:
+    #                     proj_dict[org.name] = {system.name}
 
 
 def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
@@ -235,32 +296,8 @@ def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads:
 
     :return:
     """
-    org_pred = {}
-    spot_pred = {}
+    proj_dict = {}
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
-
-    def org2pred(org_pred_dict: dict, pred_res: dict, system_name: str):
-        for keys, value in pred_res.items():
-            org_inter = set()
-            for fam in value:
-                if len(org_inter) == 0:
-                    org_inter = fam.organisms
-                else:
-                    org_inter.intersection(fam.organisms)
-            if len(org_inter) == 0:
-                print(system_name)
-            for org in org_inter:
-                all_fam = {family: False for family in value}
-                index = 0
-                for contig in org.contigs:
-                    for gene in contig.genes:
-                        if gene.family in all_fam:
-                            all_fam[gene.family] = True
-                if all(x for x in all_fam.values()):
-                    if org.name in org_pred_dict:
-                        org_pred_dict[org.name].add(system_name)
-                    else:
-                        org_pred_dict[org.name] = {system_name}
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=systems.size, unit='system', disable=disable_bar) as progress:
@@ -270,19 +307,19 @@ def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads:
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
-            prediction_results = []
+            prediction_results = {}
             for future in futures:
                 result = future.result()
                 if result is not None:
-                    pred_res, sys_name = (result[0], result[1])
-                    prediction_results.append([sys_name, max(pred_res.keys()) + 1])
-                    org2pred(org_pred, pred_res, sys_name)
-    proj = pd.DataFrame.from_dict(org_pred, orient='index')
+                    prediction_results[result[1]] = result[0]
+                    # system_to_module(pangenome, systems.get_sys(result[1]), result[0].values())
+                    project_system(pangenome, proj_dict, result[0], systems.get_sys(result[1]), source)
+    proj = pd.DataFrame.from_dict(proj_dict, orient='index')
     sys_df = pd.DataFrame(prediction_results, columns=['System',
                                                        'Nb Detection']).sort_values('System').reset_index(drop=True)
-    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+    proj.to_csv("projection.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
                 header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
+    sys_df.to_csv("system.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
 def launch(args):

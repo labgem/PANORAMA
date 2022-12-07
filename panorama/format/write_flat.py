@@ -34,10 +34,10 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path):
     # out_df = pd.DataFrame({"Pangenome": [], "Family": []})
     nb_source = len(pangenome.annotation_source)
     source_list = list(pangenome.annotation_source)
-    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation_{source},Accession_{source}' for source in source_list])}".split(','))
+    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
     array_list = []
     for gf in pangenome.gene_families:
-        annot_array = np.empty((gf.max_annotation_by_source()[1], 2+nb_source*2), dtype=object)
+        annot_array = np.empty((gf.max_annotation_by_source()[1], 2+nb_source*3), dtype=object)
         if annot_array.shape[0] > 0:
             annot_array[:, 0] = pangenome.name
             annot_array[:, 1] = gf.name
@@ -48,8 +48,9 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path):
                     for annotation in gf.get_source(source):
                         annot_array[index_annot, index_source] = annotation.name
                         annot_array[index_annot, index_source + 1] = annotation.accession
+                        annot_array[index_annot, index_source + 2] = annotation.secondary_names if annotation.secondary_names is not pd.NA else '-'
                         index_annot += 1
-                index_source += 2
+                index_source += 3
             array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
     out_df = out_df.sort_values(by=['Pangenome', 'Gene Family'] + list(column_name[range(3, len(column_name), 2)]))
