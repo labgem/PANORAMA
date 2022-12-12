@@ -20,7 +20,10 @@ class GeneFamily(Fam):
 
     def __init__(self, family_id: int, name: str):
         super().__init__(family_id, name)
-        self._annotationGetter = {}     # Key = source, Value = ordered list of best annotation for one source
+        self._annotationGetter = {}  # Key = source, Value = ordered list of best annotation for one source
+        self.hmm = None
+        self.profile = None
+        self.optimized_profile = None
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"

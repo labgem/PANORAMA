@@ -4,40 +4,34 @@
 # default libraries
 from __future__ import annotations
 import argparse
+import logging
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor
+import os
+from tqdm import tqdm
+import collections
+
 # installed libraries
 import numpy as np
 import pandas as pd
+import pyhmmer
 
 # local libraries
+from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.utils import check_tsv_sanity
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
-# def filter_df(df: pd.DataFrame):
-#     current_gf = ''
-#     index_access = range(4, df.shape[1] + 1, 2)
-#     for row in df.itertuples():
-#         if current_gf != row[2]:
-#             current_gf = row[2]
-#             access_dict = {i: set() for i in index_access}
-#             for index in index_access:
-#
-
-
-
-
-def write_annotation_to_families(pangenome: Pangenome, output: Path):
-    gf: GeneFamily
+def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
     # out_df = pd.DataFrame({"Pangenome": [], "Family": []})
     nb_source = len(pangenome.annotation_source)
     source_list = list(pangenome.annotation_source)
     column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
     array_list = []
-    for gf in pangenome.gene_families:
-        annot_array = np.empty((gf.max_annotation_by_source()[1], 2+nb_source*3), dtype=object)
+    for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
+        annot_array = np.empty((gf.max_annotation_by_source()[1], 2 + nb_source * 3), dtype=object)
         if annot_array.shape[0] > 0:
             annot_array[:, 0] = pangenome.name
             annot_array[:, 1] = gf.name
@@ -48,7 +42,8 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path):
                     for annotation in gf.get_source(source):
                         annot_array[index_annot, index_source] = annotation.name
                         annot_array[index_annot, index_source + 1] = annotation.accession
-                        annot_array[index_annot, index_source + 2] = annotation.secondary_names if annotation.secondary_names is not pd.NA else '-'
+                        annot_array[
+                            index_annot, index_source + 2] = annotation.secondary_names if annotation.secondary_names is not pd.NA else '-'
                         index_annot += 1
                 index_source += 3
             array_list.append(annot_array)
@@ -57,21 +52,29 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path):
     out_df.to_csv(f"{output}/families_annotations.tsv", sep="\t", header=True)
 
 
-    # for source in pangenome.annotation_source:
-    #     rows = []
-    #     for gf in pangenome.gene_families:
-    #         row_base = [pangenome.name, gf.name]
-    #         if gf.get_source(source) is not None:
-    #             for annotation in gf.get_source(source):
-    #                 rows.append(row_base + [annotation.name, annotation.accession])
-    #     out_df = out_df.merge(pd.DataFrame(rows, columns=["Pangenome", "Family", f"Annotation_{source}",
-    #                                                       f"Accession_{source}"]), how='outer',
-    #                           on=["Pangenome", "Family"])
-    # filter_df(out_df)
-    # out_df.sort_values(by=['Pangenome', 'Family']).to_csv(f"{output}/families_annotations.tsv", sep="\t", header=True)
+def write_hmm(gf: GeneFamily, output: Path):
+    with open(f"{output.absolute().as_posix()}/{gf.name}.hmm", 'wb') as hmm_file:
+        gf.hmm.write(hmm_file)
 
 
-def write_flat_files(pangenome, output: Path, annotation: bool = False, disable_bar: bool = False):
+def write_hmm_profile(pangenome: Pangenome, output: Path, hmm: bool = False, threads: int = 1,
+                      disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=pangenome.number_of_gene_families(), unit='file',
+                  desc='write gene families hmm/profile', disable=disable_bar) as progress:
+            futures = []
+            for gf in pangenome.gene_families:
+                if hmm:
+                    future = executor.submit(write_hmm, gf, output)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+                for future in futures:
+                    future.result()
+
+
+def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,
+                     disable_bar: bool = False, **kwargs):
     need_annotations = False
     need_families = False
     need_graph = False
@@ -86,6 +89,11 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, disable_
         need_families = True
         need_annotations_fam = True
 
+    if hmm:
+        need_families = True
+        need_annotations = True
+        # need_gene_sequences = True
+
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
@@ -93,6 +101,13 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, disable_
 
     if annotation:
         write_annotation_to_families(pangenome, output)
+
+    if hmm:
+        msa_path = kwargs.get('msa_path', None)
+        msa_format = kwargs.get('msa_format', 'afa')
+        threads = kwargs.get('threads', 1)
+        profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
+        write_hmm_profile(pangenome, output, hmm, threads, disable_bar)
 
 
 def launch(args):
@@ -108,7 +123,8 @@ def launch(args):
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
-        write_flat_files(pangenome, output=args.output, annotation=args.annotation, disable_bar=args.disable_prog_bar)
+        write_flat_files(pangenome, output=args.output, annotation=args.annotation, hmm=args.hmm,
+                         msa_path=args.msa, threads=args.threads, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -139,6 +155,17 @@ def parser_write(parser):
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--annotation", required=False, action="store_true",
                           help="Write all the annotations from families")
+    optional.add_argument("--hmm", required=False, action="store_true",
+                          help="Write an hmm for each gene families in pangenomes")
+    optional.add_argument("--msa", required=False, type=Path, default=None,
+                          help="To create a HMM profile for families, you can give a msa of each gene in families."
+                               "This msa could be get from ppanggolin (See ppanggolin msa). "
+                               "If no msa provide Panorama will launch one.")
+    optional.add_argument("--msa-format", required=False, type=str, default="afa",
+                          choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                                   "clustal", "clustallike", "phylip", "phylips"],
+                          help="Format of the input MSA.")
+    optional.add_argument("--threads", required=False, type=int, default=1)
 
 
 if __name__ == "__main__":

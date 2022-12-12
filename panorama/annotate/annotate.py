@@ -192,16 +192,18 @@ def parser_annot(parser):
     hmm_param.add_argument("--meta", required=False, type=Path, default=None,
                            help="Metadata link to HMM with protein name, description and cutoff")
     hmm_param.add_argument("--mode", required=False, type=str, default='fast',  choices=['fast', 'profile'],
-                           help=argparse.SUPPRESS)
-                           # help="Choose the mode use to align HMM database and gene families. "
-                           #      "Fast will align the reference sequence of gene family against HMM."
-                           #      "Profile will create an HMM profile for each gene family and "
-                           #      "this profile will be aligned")
+                           help="Choose the mode use to align HMM database and gene families. "
+                                "Fast will align the reference sequence of gene family against HMM."
+                                "Profile will create an HMM profile for each gene family and "
+                                "this profile will be aligned")
     hmm_param.add_argument("--msa", required=False, type=Path, default=None,
-                           help=argparse.SUPPRESS)
-                           # help="To create a HMM profile for families, you can give a msa of each gene in families."
-                           #      "This msa could be get from ppanggolin (See ppanggolin msa). "
-                           #      "If no msa provide Panorama will launch one.")
+                           help="To create a HMM profile for families, you can give a msa of each gene in families."
+                                "This msa could be get from ppanggolin (See ppanggolin msa). "
+                                "If no msa provide Panorama will launch one.")
+    hmm_param.add_argument("--msa-format", required=False, type=str, default="afa",
+                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                                    "clustal", "clustallike", "phylip", "phylips"],
+                           help="Format of the input MSA.")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--max_prediction", required=False, type=int, default=1,
                           help="Maximum number of prediction associate to each gene family")

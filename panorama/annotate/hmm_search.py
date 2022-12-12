@@ -9,12 +9,14 @@ from pathlib import Path
 from typing import List, Generator, Tuple, Union
 from tqdm import tqdm
 import tempfile
+from concurrent.futures import ThreadPoolExecutor
 
 # installed libraries
 import pyhmmer
 import pandas as pd
 
 # local libraries
+from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 from panorama.utils import path_is_dir, path_is_file
 
@@ -35,45 +37,56 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     :return: list of digitalised gene family sequences
     """
     digit_gf_sequence = []
-    for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar,
-                       desc='Digitalised sequences'):
+    logging.getLogger().info("Digitalized gene families sequences")
+    for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
-        seq = pyhmmer.easel.TextSequence(name=bit_name, sequence=family.sequence)
+        seq = pyhmmer.easel.TextSequence(name=bit_name,
+                                         sequence=family.sequence if family.hmm is None
+                                         else family.hmm.consensus.upper() + '*')
         digit_gf_sequence.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
     return digit_gf_sequence
 
 
-# def get_msa():
-#     pass
+def get_msa():
+    pass
+
+def profile_gf(gf: GeneFamily, msa_file: Path,  msa_format: str = "afa", ):
+    alphabet = pyhmmer.easel.Alphabet.amino()
+    builder = pyhmmer.plan7.Builder(alphabet)
+    background = pyhmmer.plan7.Background(alphabet)
+    if os.stat(msa_file).st_size == 0:
+        logging.getLogger().warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
+                                    f"Pass to next file")
+    else:
+        try:
+            with pyhmmer.easel.MSAFile(msa_file.absolute().as_posix(), format=msa_format,
+                                       digital=True, alphabet=alphabet) as easel_msa:
+                msa = next(easel_msa)
+                msa.name = gf.name.encode('UTF-8')
+                msa.accession = f"PAN{gf.ID}".encode('UTF-8')
+                gf.hmm, gf.profile, gf.optimized_profile = builder.build_msa(msa, background)
+        except Exception as error:
+            raise Exception(f"The following error happened with file {msa_file} : {error}")
 
 
-# def profile_gf(pangenome: Pangenome, msa: Path = None, disable_bar: bool = False):
-#     """Create an HMM profile for each gene families"""
-#     alphabet = pyhmmer.easel.Alphabet.amino()
-#     builder = pyhmmer.plan7.Builder(alphabet)
-#     background = pyhmmer.plan7.Background(alphabet)
-#     gf_to_msa = {}
-#     if msa is None:
-#         get_msa()
-#     else:
-#         msa_file_list = list(msa.iterdir())
-#         for msa_file in tqdm(msa_file_list, total=len(msa_file_list), unit='file',
-#                              desc='read msa', disable=disable_bar):
-#             if os.stat(msa_file).st_size == 0:
-#                 logging.getLogger().warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
-#                                             f"Pass to next file")
-#             else:
-#                 print(msa_file)
-#                 try:
-#                     with pyhmmer.easel.MSAFile(msa_file.as_posix(), digital=True, alphabet=alphabet) as easel_msa:
-#                         gf_to_msa[msa_file.stem] = next(easel_msa)
-#                 except Exception as error:
-#                     raise Exception(f"The following error happened with file {msa_file} : {error}")
-#     for gf_name, easel_msa in gf_to_msa.items():
-#         hmm, profile, optimized_profile = builder.build_msa(easel_msa, background, )
-#         if gf_name == 'HXT67_RS08840':
-#             print("pika")
-#         gf = pangenome.get_gene_family(gf_name)
+def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa", threads: int = 1, disable_bar: bool = False):
+    """Create an HMM profile for each gene families"""
+    if msa_path is None:
+        get_msa()
+    else:
+        msa_file_list = list(msa_path.iterdir())
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            logging.getLogger().info("Compute gene families HMM and profile")
+            with tqdm(total=len(msa_file_list), unit='file', disable=disable_bar) as progress:
+                futures = []
+                for msa_file in msa_file_list:
+                    gf = pangenome.get_gene_family(msa_file.stem)
+                    future = executor.submit(profile_gf, gf, msa_file, msa_format)
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+
+                for future in futures:
+                    future.result()
 
 
 def read_metadata(metadata: Path):
@@ -90,7 +103,8 @@ def read_metadata(metadata: Path):
 def read_hmm(hmm_dir: Generator, disable_bar: bool = False):
     hmms = []
     hmm_list_path = list(hmm_dir)
-    for hmm_file in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', desc='Read HMM', disable=disable_bar):
+    logging.getLogger().info("Read HMM")
+    for hmm_file in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         try:
             hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
         except ValueError as val_error:
@@ -134,7 +148,8 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
                          disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar, desc="Align gene fam to HMM")
+    logging.getLogger().info("Align gene families to HMM")
+    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
         for hit in top_hits:
             cog = hit.best_domain.alignment
@@ -170,13 +185,13 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None, mode
     :return: dataframe with best result for each pangenome families
     """
     logging.getLogger().info("Begin HMM searching")
-    logging.getLogger().debug("Digitalized gene families sequences")
-    if mode == 'fast':
-        gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
-    # elif mode == 'profile':
-    #     gf_sequences = profile_gf(pangenome, msa, disable_bar=disable_bar)
+    if mode == 'profile':
+        profile_gfs(pangenome, msa, threads=threads, disable_bar=disable_bar)
+        logging.getLogger().debug("Gene families HMM and profile computation... Done")
     else:
-        raise ValueError(f"{mode} unrecognized mode")
+        if mode != 'fast':
+            raise ValueError(f"{mode} unrecognized mode")
+    gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
     tmp_dir = tempfile.TemporaryDirectory(prefix="hmm_panorama", dir=tmpdir)
     metadata, hmm_to_metaname = read_metadata(meta)
     # Get list of HMM with Plan7 data model
