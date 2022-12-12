@@ -114,7 +114,10 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
         if fam_sys.name in annot2fam:
             for gf in annot2fam[fam_sys.name]:
                 families[gf.name] = gf
-                fam2annot[gf.name] = fam_sys
+                if gf.name in fam2annot:
+                    fam2annot[gf.name].add(fam_sys)
+                else:
+                    fam2annot[gf.name] = {fam_sys}
     return families, fam2annot
 
 
@@ -161,27 +164,28 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
                     nextlevel |= set(graph.neighbors(v))
         return cc
 
-    def check_cc(cc: set, fam2annot: dict, system: System, func_unit: FuncUnit):
+    def check_cc(cc: set, fam2annot: dict, func_unit: FuncUnit):
         count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
         forbidden_list, mandatory_list, accessory_list = (func_unit.forbidden_name(), func_unit.mandatory_name(),
                                                           func_unit.accessory_name())
         for node in cc:
-            annot = fam2annot.get(node.name)
-            if annot is not None:
-                if annot.type == 'forbidden':  # if node is forbidden
-                    if annot.name in forbidden_list:
-                        count_forbidden += 1
-                        forbidden_list.remove(annot.name)
-                        if count_forbidden > func_unit.parameters["max_forbidden"]:
-                            return False
-                elif annot.type == 'mandatory':  # if node is mandatory
-                    if annot.name in mandatory_list:
-                        count_mandatory += 1
-                        mandatory_list.remove(annot.name)
-                if annot.type == 'accessory':  # if node is accessory
-                    if annot.name in accessory_list:
-                        count_accesory += 1
-                        accessory_list.remove(annot.name)
+            annotations = fam2annot.get(node.name)
+            if annotations is not None:
+                for annot in annotations:
+                    if annot.type == 'forbidden':  # if node is forbidden
+                        if annot.name in forbidden_list:
+                            count_forbidden += 1
+                            forbidden_list.remove(annot.name)
+                            if count_forbidden > func_unit.parameters["max_forbidden"]:
+                                return False
+                    elif annot.type == 'mandatory':  # if node is mandatory
+                        if annot.name in mandatory_list:
+                            count_mandatory += 1
+                            mandatory_list.remove(annot.name)
+                    if annot.type == 'accessory':  # if node is accessory
+                        if annot.name in accessory_list:
+                            count_accesory += 1
+                            accessory_list.remove(annot.name)
         if count_mandatory >= func_unit.parameters['min_mandatory'] and \
                 count_accesory + count_mandatory >= func_unit.parameters['min_total']:
             return True
@@ -192,7 +196,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     for node in g.nodes():  # pour chaque noeud du graphe
         if node not in seen:
             cc = extract_cc(node, g, seen)  # extract coonnect component
-            if check_cc(cc, fam2annot, system, func_unit):
+            if check_cc(cc, fam2annot, func_unit):
                 pred_dict[nb_pred] = cc
                 nb_pred += 1
             else:
@@ -201,14 +205,16 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     return pred_dict
 
 
-def search_system(system: System, annot2fam: dict, disable_bar: bool = False):
+def search_system(system: System, annot2fam: dict):
+    if system.name in ['disarm_type_I']:
+        print("pika")
     for func_unit in system.func_units:
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
             nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=disable_bar)
+        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
         # nx.draw(g)
         # plt.show()
         pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
@@ -230,29 +236,27 @@ def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system
     accessory_family = [fam.name for fam in system.families if fam.type == 'accessory']
     for fu in system.func_units:
         for organism in pangenome.organisms:
-            # if organism.name in ['GCF_006539645.1_ASM653964v1_genomic', 'GCF_001038185.1_ASM103818v1_genomic',
-            #                      'GCF_000807315.1_ASM80731v1_genomic', 'GCF_014194605.1_ASM1419460v1_genomic',
-            #                      'GCF_009864815.1_ASM986481v1_genomic', 'GCF_013752735.1_ASM1375273v1_genomic',
-            #                      'GCF_000472985.1_ASM47298v1_genomic', 'GCF_000773865.1_ASM77386v1_genomic',
-            #                      'GCF_000284375.1_ASM28437v1_genomic']:
+            # if organism.name in ['GCF_000472745.1_ASM47274v1_genomic'] and system.name == 'DRT_Other':
             #     print("pika")
             for prediction in pred_res.values():
-                if prediction.issubset(organism.families):
-                    mandatory_dict = {mandatory: False for mandatory in mandatory_family}
-                    accessory_dict = {accessory: False for accessory in accessory_family}
-                    for gf in prediction:
-                        if gf.get_source(source) is not None:
-                            for annotation in [annot.name for annot in gf.get_source(source)]:
-                                if annotation in mandatory_family:
-                                    mandatory_dict[annotation] = True
-                                elif annotation in accessory_family:
-                                    accessory_dict[annotation] = True
-                    if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
-                        if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
-                            if organism.name in proj_dict:
-                                proj_dict[organism.name].add(system.name)
-                            else:
-                                proj_dict[organism.name] = {system.name}
+                for combi_pred in combinations(prediction, fu.parameters["min_total"]):
+                    if set(combi_pred).issubset(organism.families):
+                        mandatory_dict = {mandatory: False for mandatory in mandatory_family}
+                        accessory_dict = {accessory: False for accessory in accessory_family}
+                        for gf in prediction:
+                            if gf.get_source(source) is not None:
+                                for annotation in [annot.name for annot in gf.get_source(source)]:
+                                    if annotation in mandatory_family:
+                                        mandatory_dict[annotation] = True
+                                    elif annotation in accessory_family:
+                                        accessory_dict[annotation] = True
+                        if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
+                            if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
+                                if organism.name in proj_dict:
+                                    proj_dict[organism.name].add(system.name)
+                                else:
+                                    proj_dict[organism.name] = {system.name}
+            # print("pikapi")
     # for keys, value in pred_res.items():
     #     for gf_combi in combinations(value, 2):
     #         org_inter = set()
@@ -304,12 +308,12 @@ def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads:
             futures = []
             for system in systems:
                 future = executor.submit(search_system, system, annot2fam)
-                future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
             prediction_results = {}
             for future in futures:
                 result = future.result()
+                future.add_done_callback(lambda p: progress.update())
                 if result is not None:
                     prediction_results[result[1]] = result[0]
                     # system_to_module(pangenome, systems.get_sys(result[1]), result[0].values())
@@ -317,9 +321,9 @@ def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads:
     proj = pd.DataFrame.from_dict(proj_dict, orient='index')
     sys_df = pd.DataFrame(prediction_results, columns=['System',
                                                        'Nb Detection']).sort_values('System').reset_index(drop=True)
-    proj.to_csv("projection.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
                 header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system.tsv", sep="\t", header=['System', "Nb_detected"])
+    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
 
 
 def launch(args):
