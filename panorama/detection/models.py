@@ -4,7 +4,7 @@
 # default libraries
 from __future__ import annotations
 import logging
-from typing import Set
+from typing import Dict, List, Generator, Set, Union
 
 
 suprules_params = ['min_mandatory', 'max_forbidden', 'min_total']
@@ -13,107 +13,133 @@ rule_keys = ['name', 'parameters', 'type']
 accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
 
 
-def check_key(dict, need_key):
-    if not all([key in dict for key in need_key]):
+def check_key(parameter_data: Dict, need_key: List):
+    """
+    Global function to check if all the keys are present in the dict.
+    This function is applied to check model, functional unit and family consistency
+
+    :param parameter_data: Dictonnary which define model, functional unit or family
+    :param need_key: List of all the key needed
+    """
+    if not all([key in parameter_data for key in need_key]):
         raise KeyError(f"All the following key are necessary : {need_key}")
 
 
-class Systems:
+class Models:
     """
-    :param systems: The internal identifier to give to the gene family
+    :param models: A set of model defining system
     """
 
-    def __init__(self, systems: Set[System] = None):
+    def __init__(self, models: Set[Model] = None):
         """Constructor Method
         """
-        self._system_getter = systems if systems is not None else {}
+        self._model_getter = models if models is not None else {}
 
-    # def __str__(self):
-    #     """
-    #     Print all systems predicted
-    #
-    #     """
-    #     for system in self.__iter__():
-    #         return system
-
-    def __iter__(self):
-        for sys in self._system_getter.values():
-            yield sys
+    def __iter__(self) -> Generator[Model, None, None]:
+        for _model in self._model_getter.values():
+            yield _model
 
     @property
-    def systems(self):
+    def value(self) -> List[Model]:
+        """Return all models added. Useful if you need a list ang not a generator"""
         return list(self)
 
     @property
-    def size(self):
-        return len(self.systems)
+    def size(self) -> int:
+        """Get the number of model added
+
+        :return: number of model inside
+        """
+        return len(self.value)
 
     @property
-    def func_units(self):
+    def func_units(self) -> Dict[str, Model]:
+        """Get all functional units in models link to referent model
+
+        :return: Dictionnary of function unit link to referent model
+        """
         func_unit_dict = {}
-        for sys in self.__iter__():
-            for fu in sys.func_units:
+        for model in self:
+            for fu in model.func_units:
                 if fu.name not in func_unit_dict:
-                    func_unit_dict[fu.name] = [sys.name]
+                    func_unit_dict[fu.name] = {model}
                 else:
-                    func_unit_dict[fu.name].append(sys.name)
+                    func_unit_dict[fu.name].add(model)
         return func_unit_dict
 
     @property
-    def families(self):
+    def families(self) -> Dict[str, Model]:
+        """Get all families in models link to referent model
+
+        :return: Dictionnary of families link to referent model
+        """
         families_dict = {}
-        for sys in self.__iter__():
-            for family in sys.families:
+        for model in self.__iter__():
+            for family in model.families:
                 if family.name not in families_dict:
-                    families_dict[family.name] = [sys.name]
+                    families_dict[family.name] = [model]
                 else:
-                    families_dict[family.name].append(sys.name)
+                    families_dict[family.name].append(model)
         return families_dict
 
-    def get_sys(self, name: str):
+    def get_model(self, name: str) -> Model:
         """
-        Get name system
+        Get a model by his name
 
         :param name: name to find
+
+        :raise KeyError: Model not present
         """
         try:
-            sys = self._system_getter[name]
+            model = self._model_getter[name]
         except KeyError:
-            raise KeyError("System not present in set of systems")
+            raise KeyError("Model not present in set of value")
         else:
-            return sys
+            return model
 
-    def add_sys(self, sys: System):
+    def add_model(self, model: Model):
         """
-        Add system
+        Add model
 
-        :param sys: system
+        :param model: Complete model object
+
+        :raise Exception: A model with the same name is already present in system
         """
         try:
-            self.get_sys(sys.name)
+            self.get_model(model.name)
         except KeyError:
-            self._system_getter[sys.name] = sys
+            self._model_getter[model.name] = model
         else:
-            raise Exception(f"System {sys.name} already in set of systems")
+            raise Exception(f"Model {model.name} already in set of value")
 
 
 class Rule:
-    """Super class for System and FuncUnit and Family
+    """Super class for Model and FuncUnit and Family
 
-    :param name: Neme of the element
+    :param name: Name of the element
     :param parameters: Dictionary with the parameters name and value
-    :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param duplicate: If item is duplicate, number of duplication
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, type: str = "", duplicate: int = 1):
+    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", duplicate: int = 0):
         """Constructor Method
         """
         self.name = name
         self.parameters = parameters if parameters is not None else dict()
-        self.type = type
-        self.duplicate = duplicate
+        self.type = mtype
+        self.duplicate = duplicate if duplicate is not None else 0
 
-    def check_param(self, param_dict):
+    def check_parameters(self, param_dict):
+        """Check if all parameters are inside and with the good type
+
+        :param param_dict: Dictionnary with all the parameters for the rule
+
+        :raise KeyError: One or more mandatory parameters are missing
+        :raise TypeError: One or more parameters are with a non-acceptable type
+        :raise ValueError: One or more parameters are with a non-acceptable value
+        :raise Exception: Manage an unexpected error
+        """
         try:
             max_sep = param_dict['max_separation']
         except KeyError:
@@ -121,23 +147,39 @@ class Rule:
         except Exception:
             raise Exception("Unexpected Error")
         else:
-            if not isinstance(max_sep, int) or max_sep < 0:
+            if not isinstance(max_sep, int):
+                raise TypeError("The max_separation value is not an integer")
+            if max_sep < 0:
                 raise ValueError("The max_separation value is not positive int type")
 
     def check_rule_key(self, rule_dict, key: str):
+        """Check if key is inside and with the good type
+
+        :param rule_dict: Dictionnary with all the parameters for the rule
+        :param key: key which must be checked
+
+        :raise KeyError: The given key is non-acceptable
+        :raise TypeError: One or more parameters are with a non-acceptable type
+        :raise ValueError: One or more parameters are with a non-acceptable value
+        """
         if key not in rule_keys:
             raise KeyError(f"Unreadable key : {key}. Accepeted key are {rule_keys}")
         else:
             if key == 'name':
                 if not isinstance(rule_dict[key], str):
-                    raise Exception(f"The name value must be str type")
+                    raise TypeError(f"The name value must be str type")
             elif key == 'type':
                 if rule_dict[key] not in accept_type:
-                    raise KeyError(f"The type value {rule_dict[key]} is incorrect in {type(self)}")
+                    raise ValueError(f"The type value {rule_dict[key]} is incorrect in {type(self)} {self.name}")
             elif key == 'parameters' and rule_dict[key] is not None:
-                self.check_param(rule_dict[key])
+                self.check_parameters(rule_dict[key])
 
-    def read_rule(self, key: str, value):
+    def read_rule(self, key: str, value: Union[str, dict]):
+        """Change value of key attributes
+
+        :param key: Attribute to change
+        :param value: New value
+        """
         if key == 'name':
             self.name = value
         elif key == 'type':
@@ -147,23 +189,23 @@ class Rule:
 
 
 class SupRule(Rule):
-    """Super class for System and FuncUnit
+    """Super class for Model and FuncUnit
 
 
-    :param name: Neme of the element
+    :param name: Name of the element
     :param parameters: Dictionary with the parameters name and value
-    :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param mandatory: Set of mandatory sub element
     :param accessory: Set of accessory sub element
     :param forbidden: Set of forbidden sub element
     :param neutral: Set of neutral sub element
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, type: str = "", mandatory: set = None,
+    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", mandatory: set = None,
                  accessory: set = None, forbidden: set = None, neutral: set = None):
         """Constructor Method
         """
-        super().__init__(name, parameters, type)
+        super().__init__(name, parameters, mtype)
         self.mandatory = mandatory if mandatory is not None else set()
         self.accessory = accessory if accessory is not None else set()
         self.forbidden = forbidden if forbidden is not None else set()
@@ -176,28 +218,23 @@ class SupRule(Rule):
             {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
 
     @property
-    def size(self):
+    def size(self) -> int:
+        """Get the number of items added
+
+        :return: number of model inside
+        """
         return len(self.mandatory.union(self.accessory, self.forbidden, self.neutral))
 
-    def mandatory_name(self):
-        return [elem.name for elem in self.mandatory]
+    def check_parameters(self, param_dict: dict):
+        """Check if all parameters are inside and with the good type
 
-    def accessory_name(self):
-        return [elem.name for elem in self.accessory]
+        :param param_dict: Dictionnary with all the parameters for the rule
 
-    def forbidden_name(self):
-        return [elem.name for elem in self.forbidden]
-
-    def neutral_name(self):
-        return [elem.name for elem in self.neutral]
-
-    def check_param(self, param_dict: dict):
+        :raise KeyError: One or more mandatory parameters are missing
+        :raise TypeError: One or more parameters are with a non-acceptable type
+        :raise ValueError: One or more parameters are with a non-acceptable value
+        :raise Exception: Manage an unexpected error
         """
-        Verify with boolean the condition parameters
-
-        :param param_dict: Message to print if problem with parameters
-        """
-        super(SupRule, self).check_param(param_dict)
         for param in suprules_params:
             try:
                 param_val = param_dict[param]
@@ -209,9 +246,23 @@ class SupRule(Rule):
                 if not isinstance(param_val, int) or param_val < 0:
                     raise ValueError(f"The {param} value is not positive int type")
 
+    def check_suprule_key(self, rule_dict, key: str):
+        """Check if key is inside and with the good type
 
-class System(SupRule):
-    """Represent System rules which describe biological system
+        :param rule_dict: Dictionnary with all the parameters for the rule
+        :param key: key which must be checked
+
+        :raise KeyError: The given key is non-acceptable
+        :raise TypeError: One or more parameters are with a non-acceptable type
+        :raise ValueError: One or more parameters are with a non-acceptable value
+        """
+        super().check_rule_key(rule_dict, key)
+        if key == 'parameters' and rule_dict[key] is not None:
+            self.check_parameters(rule_dict[key])
+
+
+class Model(SupRule):
+    """Represent Model rules which describe biological system
 
      :param name: Neme of the element
      :param parameters: Dictionary with the parameters name and value
@@ -219,14 +270,17 @@ class System(SupRule):
      :param accessory: Set of accessory sub element
      :param forbidden: Set of forbidden sub element
      :param neutral: Set of neutral sub element
+     :param canonical: List of canonical models
      """
 
     def __init__(self, name: str = "", parameters: dict = None, mandatory: set = None, accessory: set = None,
-                 forbidden: set = None, neutral: set = None):
+                 forbidden: set = None, neutral: set = None, canonical: list = None):
         """Constructor Method
         """
-        super().__init__(name, parameters, mandatory, accessory, forbidden, neutral)
+        super().__init__(name=name, parameters=parameters, mandatory=mandatory, accessory=accessory,
+                         forbidden=forbidden, neutral=neutral)
         self.bool_param = False
+        self.canonical = canonical
 
     def __str__(self):
         out_dic = {"name": self.name, "type": self.type}
@@ -236,37 +290,54 @@ class System(SupRule):
                "\n\t".join(fu.__str__(ident="\n\t\t") for fu in self.func_units)
 
     @property
-    def func_units(self):
+    def func_units(self) -> Generator[FuncUnit, None, None]:
+        """ Access to all functional units in models
+
+        :return: A generator with all functional units
+        """
         for func_unit in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield func_unit
 
     @property
-    def families(self):
+    def families(self) -> Generator[Family, None, None]:
+        """Access to all families in models
+
+        :return: A generator with all families
+        """
         for func_unit in self.func_units:
             yield from func_unit.families
 
-    def func_unit_name(self):
-        return [fu.name for fu in self.func_units]
+    def check_model_dict(self, model_dict):
+        """Check if all keys and values are present and with good type before to add in model
 
-    def families_name(self):
-        return [fam.name for fam in self.families]
+        :param model_dict: Dictionnary with all model information
 
-    def check_system_dict(self, system_dict):
+        :raise KeyError: One or more keys are missing
+        :raise TypeError: One or more value are not with good type
+        :raise ValueError: One or more value are not non-acceptable
+        """
         try:
-            check_key(system_dict, rule_keys[:-1])
+            check_key(model_dict, rule_keys[:-1])
         except KeyError:
-            raise KeyError("One or more keys are missing in your file at system level")
+            raise KeyError("One or more keys are missing in your file at model level")
         else:
-            for key in system_dict.keys():
+            for key in model_dict.keys():
                 if key == 'func_units':
-                    if not isinstance(system_dict[key], list):
+                    if not isinstance(model_dict[key], list):
                         raise TypeError("func_unit value in json must be an array")
-                    if len(system_dict[key]) < 1:
-                        raise ValueError("System need at least one functional unit")
+                    if len(model_dict[key]) < 1:
+                        raise ValueError("Model need at least one functional unit")
+                elif key == 'canonical':
+                    if not isinstance(model_dict[key], list):
+                        raise TypeError("canonical value in json must be an array")
                 else:
-                    self.check_rule_key(system_dict, key)
+                    self.check_rule_key(model_dict, key)
 
-    def check_system(self):
+    def check_model(self):
+        """Check model consistency
+
+        :raise Exception: Model is not consistent
+        """
         if len(self.mandatory) < self.parameters["min_mandatory"]:
             raise Exception(f"There is less mandatory than the minimum mandatory in {self.name}")
         if len(self.forbidden) < self.parameters["max_forbidden"]:
@@ -278,27 +349,32 @@ class System(SupRule):
             logging.getLogger().warning(f"There is only one function unit in {self.name}. "
                                         f"It should be a mandatory type.")
 
-    def read_system(self, data_sys: dict):
-        """
-        Read system to parse in self attributes
+    def read_model(self, data_model: dict):
+        """Read model to parse in self attributes
 
-        :param data_sys: json data dictionary
+        :param data_model: json data dictionary
         """
-        self.check_system_dict(data_sys)
+        self.check_model_dict(data_model)
         fu_set = set()
-        for key, value in data_sys.items():
+        for key, value in data_model.items():
             if key == 'func_units':
                 for dict_fu in value:
                     f_unit = FuncUnit()
-                    f_unit.system = self
+                    f_unit.model = self
                     f_unit.read_func_unit(dict_fu)
                     fu_set.add(f_unit)
+            elif key == 'canonical':
+                self.canonical = value
             else:
                 self.read_rule(key, value)
         self.add_func_units(fu_set)
-        self.check_system()
+        self.check_model()
 
     def add_func_units(self, func_units: Set[FuncUnit]):
+        """Add a set of functional unit in the system
+
+        :param func_units: Functional unit which must be added
+        """
         for fu in func_units:
             if fu.parameters is None:
                 fu.parameters = self.parameters
@@ -306,8 +382,7 @@ class System(SupRule):
             self.add_func_unit(fu)
 
     def add_func_unit(self, func_unit: FuncUnit):
-        """
-        Add function unit in function units dictionary of system
+        """Add a function unit in model
 
         :param func_unit: function unit
         """
@@ -326,50 +401,64 @@ class FuncUnit(SupRule):
 
     :param name: Neme of the element
     :param parameters: Dictionary with the parameters name and value
-    :param type: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param mandatory: Set of mandatory sub element
     :param accessory: Set of accessory sub element
     :param forbidden: Set of forbidden sub element
     :param neutral: Set of neutral sub element
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, type: str = "", mandatory: set = None,
-                 accessory: set = None, forbidden: set = None, neutral: set = None, system: System = None):
+    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", mandatory: set = None,
+                 accessory: set = None, forbidden: set = None, neutral: set = None, model: Model = None):
         """Constructor Method
         """
-        super().__init__(name, parameters, type, mandatory, accessory, forbidden, neutral)
-        self.system = system
+        super().__init__(name, parameters, mtype, mandatory, accessory, forbidden, neutral)
+        self.model = model
 
     def __str__(self, ident: str = "\n\t"):
         out_dic = {"name": self.name, "type": self.type,
-                   "system": self.system.name if self.system is not None else None}
+                   "model": self.model.name if self.model is not None else None}
         out_dic.update(
             {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
         return ", ".join([f"{k}: {v}" for k, v in out_dic.items()]) + ident + \
                ident.join(str(fam) for fam in self.families)
 
     @property
-    def families(self):
+    def families(self) -> Generator[Family, None, None]:
+        """Access to all families in functional unit
+
+        :return: A generator with all families
+        """
         for fam in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield fam
 
-    def families_name(self):
-        return [fam.name for fam in self.families]
+    def duplicate_fam(self, filter_type: str = None):
+        """Access to all families that are duplicated in functional unit
 
-    def duplicate_fam(self, filter: str = None):
-        assert filter in [None, 'mandatory', 'forbidden']
-
-        if filter is None:
+        :return: A generator with all families
+        """
+        assert filter_type in [None, 'mandatory', 'forbidden']
+        if filter_type is None:
             select_fam = self.families
-        elif filter == "mandatory":
+        elif filter_type == "mandatory":
             select_fam = self.mandatory
-        elif filter == "forbidden":
+        elif filter_type == "forbidden":
             select_fam = self.forbidden
+        else:
+            raise Exception("Unexpected error")
         for fam in select_fam:
-            if fam.duplicate > 1:
+            if fam.duplicate >= 1:
                 yield fam
 
     def check_fu_dict(self, fu_dict):
+        """Check if all keys and values are present and with good type before to add in functional unit
+
+        :param fu_dict: Dictionnary with all functional unit information
+
+        :raise KeyError: One or more keys are missing
+        :raise TypeError: One or more value are not with good type
+        :raise ValueError: One or more value are not non-acceptable
+        """
         try:
             check_key(fu_dict, rule_keys + ['families'])
         except KeyError:
@@ -380,16 +469,17 @@ class FuncUnit(SupRule):
                     if not isinstance(fu_dict[key], list):
                         raise TypeError("func_unit value in json must be an array")
                     if len(fu_dict[key]) < 1:
-                        raise ValueError("System need at least one functional unit")
+                        raise ValueError("Model need at least one functional unit")
                 else:
                     self.check_rule_key(fu_dict, key)
 
     def check_func_unit(self):
-        f_m = len(list(self.duplicate_fam(filter="mandatory")))
-        f_f = len(list(self.duplicate_fam(filter="forbidden")))
-        f_a = len(list(self.duplicate_fam()))
+        """Check functional unit consistency
 
-        if self.parameters["min_mandatory"] > len(self.mandatory) + len(list(self.duplicate_fam(filter="mandatory"))):
+        :raise Exception: Model is not consistent
+        """
+        if self.parameters["min_mandatory"] > len(self.mandatory) + len(list(
+                self.duplicate_fam(filter_type="mandatory"))):
             raise Exception(f"There is less mandatory than the minimum mandatory in {self.name}")
         if self.parameters["max_forbidden"] > len(self.forbidden):
             raise Exception(f"There is less forbidden than the maximum forbidden accepted in {self.name}")
@@ -401,11 +491,9 @@ class FuncUnit(SupRule):
                                         f"It should be a mandatory type.")
 
     def read_func_unit(self, data_fu: dict):
-        """
-        Read function unit
+        """Read functional unit
 
         :param data_fu: data json file of all function units
-
         """
         self.check_fu_dict(data_fu)
         for key, value in data_fu.items():
@@ -413,53 +501,69 @@ class FuncUnit(SupRule):
                 for fam_dict in value:
                     family = Family(func_unit=self)
                     family.read_family(fam_dict)
-                    self.add_fam(family)
+                    self.add_family(family)
             else:
                 self.read_rule(key, value)
 
-    def add_fam(self, fam: Family):
-        """
-        Add family in families dictionary of function unit
+    def add_family(self, family: Family):
+        """Add family in families functional unit
 
-        :param fam: a family
+        :param family: a family
         """
-        if fam.type == 'mandatory':
-            self.mandatory.add(fam)
-        elif fam.type == "accessory":
-            self.accessory.add(fam)
-        elif fam.type == "forbidden":
-            self.forbidden.add(fam)
+        if family.type == 'mandatory':
+            self.mandatory.add(family)
+        elif family.type == "accessory":
+            self.accessory.add(family)
+        elif family.type == "forbidden":
+            self.forbidden.add(family)
         else:
-            self.neutral.add(fam)
+            self.neutral.add(family)
 
 
 class Family(Rule):
-    def __init__(self, name: str = "", parameters: dict = None, type: str = "", relation: str = "",
+    """Represent family model definition rule
+
+    :param name: Neme of the element
+    :param parameters: Dictionary with the parameters name and value
+    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param relation:
+    :param func_unit: Functional unit in which is the family
+    """
+    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", relation: str = "",
                  func_unit: FuncUnit = None):
         """Constructor Method
         """
-        super().__init__(name, parameters, type)
+        super().__init__(name, parameters, mtype)
         self.relation = relation
         self.func_unit = func_unit
 
     def __repr__(self):
         return f"Family name : {self.name}, type : {self.type}, " \
                f"Functional Unit : {self.func_unit.name if self.func_unit is not None else 'Unknow'}, " \
-               f"System : {self.system.name if self.system is not None else 'Unknow'}"
+               f"Model : {self.model.name if self.model is not None else 'Unknow'}"
 
     def __str__(self):
         out_dic = {"name": self.name, "type": self.type, "relation": self.relation,
                    "functional unit": self.func_unit.name if self.func_unit is not None else None,
-                   "system": self.system.name if self.system is not None else None}
+                   "model": self.model.name if self.model is not None else None}
         out_dic.update(
             {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
         return ", ".join([f"{k}: {v}" for k, v in out_dic.items()])
 
     @property
-    def system(self):
-        return self.func_unit.system
+    def model(self) -> Model:
+        """Get the model in which is family"""
+        return self.func_unit.model
 
     def check_fam_dict(self, fam_dict):
+        """Check if all keys and values are present and with good type before to add in family
+
+        :param fam_dict: Dictionnary with all family information
+
+        :raise KeyError: One or more keys are missing
+        :raise TypeError: One or more value are not with good type
+        :raise ValueError: One or more value are not non-acceptable
+        """
         try:
             check_key(fam_dict, rule_keys + ['relation'])
         except KeyError:
@@ -479,8 +583,7 @@ class Family(Rule):
                     self.check_rule_key(fam_dict, key)
 
     def read_family(self, data_fam: dict):
-        """
-        Read family
+        """Read family
 
         :param data_fam: data json file with families
         """
@@ -492,13 +595,3 @@ class Family(Rule):
                 self.duplicate = value
             else:
                 self.read_rule(key, value)
-
-
-if __name__ == "__main__":
-    import json
-
-    with open("./rule_one.json", 'r') as json_file:
-        data = json.load(json_file)
-        system = System()
-        system.read_system(data)
-        print(system.func_units)

@@ -20,7 +20,7 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 import matplotlib.pyplot as plt
 
 # local libraries
-from panorama.detection.systems import Systems, System, FuncUnit
+from panorama.detection.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.geneFamily import GeneFamily
@@ -40,16 +40,16 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
         raise Exception("Annotation source not in pangenome")
 
 
-def read_systems(systems_path: Path, disable_bar: bool = False) -> Systems:
-    """ Read all json files systems in the directory
+def read_systems(systems_path: Path, disable_bar: bool = False) -> Models:
+    """ Read all json files value in the directory
 
-    :param systems_path: path of systems directory
+    :param systems_path: path of value directory
     """
-    systems = Systems()
+    systems = Models()
     for file in tqdm(list(systems_path.glob("*.json")), unit='system', desc="Read system", disable=disable_bar):
         with open(file.resolve().as_posix()) as json_file:
             data = json.load(json_file)
-            system = System()
+            system = Model()
             try:
                 system.read_system(data)
             except Exception:
@@ -59,21 +59,21 @@ def read_systems(systems_path: Path, disable_bar: bool = False) -> Systems:
     return systems
 
 
-def min_mandatory_func_unit(system: System, func_unit: FuncUnit):
+def min_mandatory_func_unit(system: Model, func_unit: FuncUnit):
     if func_unit.parameters["min_mandatory"] is not None:
         return func_unit.parameters["min_mandatory"]
     else:
         return system.parameters["min_mandatory"]
 
 
-def max_forbidden_func_unit(system: System, func_unit: FuncUnit):
+def max_forbidden_func_unit(system: Model, func_unit: FuncUnit):
     if func_unit.parameters["max_forbidden"] is not None:
         return func_unit.parameters["max_forbidden"]
     else:
         return system.parameters["max_forbidden"]
 
 
-def min_total_func_unit(system: System, func_unit: FuncUnit):
+def min_total_func_unit(system: Model, func_unit: FuncUnit):
     if func_unit.parameters["min_total"] is not None:
         return func_unit.parameters["min_total"]
     else:
@@ -121,7 +121,7 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-# def bool_condition(system: System, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
+# def bool_condition(system: Model, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
 #                    count_forbidden: int):
 #     bool_list = [False, False, False, False]
 #     if len(list_mandatory) <= len(func_unit.families.keys()) - min_mandatory_func_unit(system, func_unit):
@@ -144,7 +144,7 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict
     return nb_pred
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
+def verify_param(g: nx.Graph(), fam2annot: dict, system: Model, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
     """
     Verify parameters
 
@@ -205,9 +205,9 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: System, func_unit: Func
     return pred_dict
 
 
-def search_system(system: System, annot2fam: dict):
-    if system.name in ['disarm_type_I']:
-        print("pika")
+def search_system(system: Model, annot2fam: dict):
+    # if system.name in ['disarm_type_I']:
+    #     print("pika")
     for func_unit in system.func_units:
         pred_dict = {}
         nb_pred = 0
@@ -222,7 +222,7 @@ def search_system(system: System, annot2fam: dict):
             return pred_dict, system.name
 
 
-def system_to_module(pangenome: Pangenome, system: System, predictions: set):
+def system_to_module(pangenome: Pangenome, system: Model, predictions: set):
     """Associate a system to modules"""
     for module in pangenome.modules:
         for prediction in predictions:
@@ -231,7 +231,7 @@ def system_to_module(pangenome: Pangenome, system: System, predictions: set):
     pass
 
 
-def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system: System, source: str):
+def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system: Model, source: str):
     mandatory_family = [fam.name for fam in system.families if fam.type == 'mandatory']
     accessory_family = [fam.name for fam in system.families if fam.type == 'accessory']
     for fu in system.func_units:
@@ -287,9 +287,20 @@ def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system
     #                     proj_dict[org.name].add(system.name)
     #                 else:
     #                     proj_dict[org.name] = {system.name}
+def filter_sys_projection(proj_dict: dict, systems: Models):
+    for organism, sys_list in proj_dict.items():
+        remove_sys = set()
+        for sys_name in sys_list:
+            system = systems.get_sys(sys_name)
+            if system.canonical is not None:
+                for canonical_sys in system.canonical:
+                    if canonical_sys in sys_list:
+                        remove_sys.add(sys_name)
+        for rm_sys in remove_sys:
+            proj_dict[organism].remove(rm_sys)
 
 
-def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
+def search_systems(systems: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
     """
     Search present system in the pangenome
     :param systems:
@@ -316,24 +327,25 @@ def search_systems(systems: Systems, pangenome: Pangenome, source: str, threads:
                 future.add_done_callback(lambda p: progress.update())
                 if result is not None:
                     prediction_results[result[1]] = result[0]
-                    # system_to_module(pangenome, systems.get_sys(result[1]), result[0].values())
+                    # system_to_module(pangenome, value.get_sys(result[1]), result[0].values())
                     project_system(pangenome, proj_dict, result[0], systems.get_sys(result[1]), source)
+    filter_sys_projection(proj_dict, systems)
     proj = pd.DataFrame.from_dict(proj_dict, orient='index')
-    sys_df = pd.DataFrame(prediction_results, columns=['System',
-                                                       'Nb Detection']).sort_values('System').reset_index(drop=True)
+    sys_df = pd.DataFrame(prediction_results, columns=['Model',
+                                                       'Nb Detection']).sort_values('Model').reset_index(drop=True)
     proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
-                header=[f"System {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system5.tsv", sep="\t", header=['System', "Nb_detected"])
+                header=[f"Model {i}" for i in range(1, proj.shape[1] + 1)])
+    sys_df.to_csv("system5.tsv", sep="\t", header=['Model', "Nb_detected"])
 
 
 def launch(args):
     """
-    Launch functions to detect systems in pangenomes
+    Launch functions to detect value in pangenomes
 
     :param args: Argument given
     """
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    systems = read_systems(args.systems)
+    systems = read_systems(args.value)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
@@ -366,8 +378,8 @@ def parser_detection(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument('-s', '--systems', required=False, type=Path, default=None,
-                          help="Path to systems directory")
+    required.add_argument('-s', '--value', required=False, type=Path, default=None,
+                          help="Path to value directory")
     required.add_argument("-S", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
     optional = parser.add_argument_group(title="Optional arguments")

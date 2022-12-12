@@ -16,7 +16,6 @@ import pandas as pd
 
 # local libraries
 from panorama.utils import check_tsv_sanity
-from panorama.detection.systems import System, Systems
 from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
@@ -53,17 +52,6 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
                                  need_annotation_fam=True, disable_bar=disable_bar)
         else:
             check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
-
-
-def check_presence_family(system: System, annot2fam: dict, one_family: bool):
-    if one_family is False or None:
-        if set(system.families.keys()).intersection(annot2fam.keys()) == system.families.keys():
-            return True
-        else:
-            return False
-    else:
-        for annot in system.families.keys():
-            return len(annot2fam.get(annot))
 
 
 def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
