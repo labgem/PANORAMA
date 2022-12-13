@@ -8,7 +8,6 @@ import argparse
 from pathlib import Path
 import logging
 import json
-import threading
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from itertools import combinations
@@ -17,7 +16,6 @@ from itertools import combinations
 import networkx as nx
 import pandas as pd
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
-import matplotlib.pyplot as plt
 
 # local libraries
 from panorama.detection.models import Models, Model, FuncUnit
@@ -40,51 +38,29 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
         raise Exception("Annotation source not in pangenome")
 
 
-def read_systems(systems_path: Path, disable_bar: bool = False) -> Models:
+def read_models(models_path: Path, disable_bar: bool = False) -> Models:
     """ Read all json files value in the directory
 
-    :param systems_path: path of value directory
+    :param models_path: path of models directory
     """
-    systems = Models()
-    for file in tqdm(list(systems_path.glob("*.json")), unit='system', desc="Read system", disable=disable_bar):
+    models = Models()
+    for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
         with open(file.resolve().as_posix()) as json_file:
             data = json.load(json_file)
-            system = Model()
+            model = Model()
             try:
-                system.read_system(data)
+                model.read_model(data)
+            except KeyError:
+                raise KeyError(f"One or more key in {file} are missing.")
+            except TypeError:
+                raise TypeError(f"One or more attribute are not with the good type in {file}.")
+            except ValueError:
+                raise ValueError(f"One or more attribute are not with an acceptable value in {file}.")
             except Exception:
-                raise Exception(f"Problem to read json {file}")
+                raise Exception(f"Unexpected problem to read json {file}")
             else:
-                systems.add_sys(system)
-    return systems
-
-
-def min_mandatory_func_unit(system: Model, func_unit: FuncUnit):
-    if func_unit.parameters["min_mandatory"] is not None:
-        return func_unit.parameters["min_mandatory"]
-    else:
-        return system.parameters["min_mandatory"]
-
-
-def max_forbidden_func_unit(system: Model, func_unit: FuncUnit):
-    if func_unit.parameters["max_forbidden"] is not None:
-        return func_unit.parameters["max_forbidden"]
-    else:
-        return system.parameters["max_forbidden"]
-
-
-def min_total_func_unit(system: Model, func_unit: FuncUnit):
-    if func_unit.parameters["min_total"] is not None:
-        return func_unit.parameters["min_total"]
-    else:
-        return system.parameters["min_total"]
-
-
-def list_mandatory_family(func_unit: FuncUnit):
-    list_mandatory = []
-    for fam in func_unit.mandatory:
-        list_mandatory.append(fam)
-    return list_mandatory
+                models.add_model(model)
+    return models
 
 
 def get_annotation_to_families(pangenome: Pangenome, source: str):
@@ -103,36 +79,22 @@ def get_annotation_to_families(pangenome: Pangenome, source: str):
 def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     """
     Recover all families in the function unit
-    :param func_unit: function unit object of system
+    :param func_unit: function unit object of model
     :param annot2fam: dictionary of annotated families
     :return families: dictionary of families interesting
     """
     families = dict()
     fam2annot = dict()
-    for fam_sys in func_unit.families:
-        # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_sys}", annot)})
-        if fam_sys.name in annot2fam:
-            for gf in annot2fam[fam_sys.name]:
+    for fam_model in func_unit.families:
+        # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_model}", annot)})
+        if fam_model.name in annot2fam:
+            for gf in annot2fam[fam_model.name]:
                 families[gf.name] = gf
                 if gf.name in fam2annot:
-                    fam2annot[gf.name].add(fam_sys)
+                    fam2annot[gf.name].add(fam_model)
                 else:
-                    fam2annot[gf.name] = {fam_sys}
+                    fam2annot[gf.name] = {fam_model}
     return families, fam2annot
-
-
-# def bool_condition(system: Model, func_unit: FuncUnit, list_mandatory: list, group: set, pred_dict: dict,
-#                    count_forbidden: int):
-#     bool_list = [False, False, False, False]
-#     if len(list_mandatory) <= len(func_unit.families.keys()) - min_mandatory_func_unit(system, func_unit):
-#         bool_list[0] = True
-#     if group not in pred_dict.values():
-#         bool_list[1] = True
-#     if count_forbidden <= max_forbidden_func_unit(system, func_unit):
-#         bool_list[2] = True
-#     if len(group) - count_forbidden >= min_mandatory_func_unit(system, func_unit):
-#         bool_list[3] = True
-#     return bool_list
 
 
 def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict, nb_pred: int):
@@ -144,7 +106,7 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict
     return nb_pred
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, system: Model, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
+def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
     """
     Verify parameters
 
@@ -205,10 +167,10 @@ def verify_param(g: nx.Graph(), fam2annot: dict, system: Model, func_unit: FuncU
     return pred_dict
 
 
-def search_system(system: Model, annot2fam: dict):
-    # if system.name in ['disarm_type_I']:
+def search_model(model: Model, annot2fam: dict):
+    # if model.name in ['disarm_type_I']:
     #     print("pika")
-    for func_unit in system.func_units:
+    for func_unit in model.func_units:
         pred_dict = {}
         nb_pred = 0
         if func_unit.parameters['min_total'] == 1:
@@ -217,13 +179,13 @@ def search_system(system: Model, annot2fam: dict):
         g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
         # nx.draw(g)
         # plt.show()
-        pred_dict = verify_param(g, fam2annot, system, func_unit, pred_dict, nb_pred)
+        pred_dict = verify_param(g, fam2annot, model, func_unit, pred_dict, nb_pred)
         if len(pred_dict) > 0:
-            return pred_dict, system.name
+            return pred_dict, model.name
 
 
-def system_to_module(pangenome: Pangenome, system: Model, predictions: set):
-    """Associate a system to modules"""
+def model_to_module(pangenome: Pangenome, model: Model, predictions: set):
+    """Associate a model to modules"""
     for module in pangenome.modules:
         for prediction in predictions:
             if prediction.issubset(module.families):
@@ -231,12 +193,12 @@ def system_to_module(pangenome: Pangenome, system: Model, predictions: set):
     pass
 
 
-def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system: Model, source: str):
-    mandatory_family = [fam.name for fam in system.families if fam.type == 'mandatory']
-    accessory_family = [fam.name for fam in system.families if fam.type == 'accessory']
-    for fu in system.func_units:
+def project_model(pangenome: Pangenome, proj_dict: dict, pred_res: dict, model: Model, source: str):
+    mandatory_family = [fam.name for fam in model.families if fam.type == 'mandatory']
+    accessory_family = [fam.name for fam in model.families if fam.type == 'accessory']
+    for fu in model.func_units:
         for organism in pangenome.organisms:
-            # if organism.name in ['GCF_000472745.1_ASM47274v1_genomic'] and system.name == 'DRT_Other':
+            # if organism.name in ['GCF_000472745.1_ASM47274v1_genomic'] and model.name == 'DRT_Other':
             #     print("pika")
             for prediction in pred_res.values():
                 for combi_pred in combinations(prediction, fu.parameters["min_total"]):
@@ -251,11 +213,12 @@ def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system
                                     elif annotation in accessory_family:
                                         accessory_dict[annotation] = True
                         if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
-                            if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
+                            if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters[
+                                'min_total']:
                                 if organism.name in proj_dict:
-                                    proj_dict[organism.name].add(system.name)
+                                    proj_dict[organism.name].add(model.name)
                                 else:
-                                    proj_dict[organism.name] = {system.name}
+                                    proj_dict[organism.name] = {model.name}
             # print("pikapi")
     # for keys, value in pred_res.items():
     #     for gf_combi in combinations(value, 2):
@@ -284,26 +247,28 @@ def project_system(pangenome: Pangenome, proj_dict: dict, pred_res: dict, system
     #                         mandatory_dict[annotation] = True
     #             if all(x for x in mandatory_dict.values()):
     #                 if org.name in proj_dict:
-    #                     proj_dict[org.name].add(system.name)
+    #                     proj_dict[org.name].add(model.name)
     #                 else:
-    #                     proj_dict[org.name] = {system.name}
-def filter_sys_projection(proj_dict: dict, systems: Models):
-    for organism, sys_list in proj_dict.items():
-        remove_sys = set()
-        for sys_name in sys_list:
-            system = systems.get_sys(sys_name)
-            if system.canonical is not None:
-                for canonical_sys in system.canonical:
-                    if canonical_sys in sys_list:
-                        remove_sys.add(sys_name)
-        for rm_sys in remove_sys:
-            proj_dict[organism].remove(rm_sys)
+    #                     proj_dict[org.name] = {model.name}
 
 
-def search_systems(systems: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
+def filter_model_projection(proj_dict: dict, models: Models):
+    for organism, model_list in proj_dict.items():
+        remove_model = set()
+        for model_name in model_list:
+            model = models.get_model(model_name)
+            if model.canonical is not None:
+                for canonical_model in model.canonical:
+                    if canonical_model in model_list:
+                        remove_model.add(model_name)
+        for rm_model in remove_model:
+            proj_dict[organism].remove(rm_model)
+
+
+def search_models(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
     """
-    Search present system in the pangenome
-    :param systems:
+    Search present model in the pangenome
+    :param models:
     :param pangenome:
     :param source:
     :param threads:
@@ -315,10 +280,10 @@ def search_systems(systems: Models, pangenome: Pangenome, source: str, threads: 
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        with tqdm(total=systems.size, unit='system', disable=disable_bar) as progress:
+        with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
-            for system in systems:
-                future = executor.submit(search_system, system, annot2fam)
+            for model in models:
+                future = executor.submit(search_model, model, annot2fam)
                 futures.append(future)
 
             prediction_results = {}
@@ -327,15 +292,15 @@ def search_systems(systems: Models, pangenome: Pangenome, source: str, threads: 
                 future.add_done_callback(lambda p: progress.update())
                 if result is not None:
                     prediction_results[result[1]] = result[0]
-                    # system_to_module(pangenome, value.get_sys(result[1]), result[0].values())
-                    project_system(pangenome, proj_dict, result[0], systems.get_sys(result[1]), source)
-    filter_sys_projection(proj_dict, systems)
+                    # model_to_module(pangenome, value.get_model(result[1]), result[0].values())
+                    project_model(pangenome, proj_dict, result[0], models.get_model(result[1]), source)
+    filter_model_projection(proj_dict, models)
     proj = pd.DataFrame.from_dict(proj_dict, orient='index')
-    sys_df = pd.DataFrame(prediction_results, columns=['Model',
-                                                       'Nb Detection']).sort_values('Model').reset_index(drop=True)
+    model_df = pd.DataFrame(prediction_results, columns=['Model',
+                                                         'Nb Detection']).sort_values('Model').reset_index(drop=True)
     proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
                 header=[f"Model {i}" for i in range(1, proj.shape[1] + 1)])
-    sys_df.to_csv("system5.tsv", sep="\t", header=['Model', "Nb_detected"])
+    model_df.to_csv("model5.tsv", sep="\t", header=['Model', "Nb_detected"])
 
 
 def launch(args):
@@ -345,12 +310,12 @@ def launch(args):
     :param args: Argument given
     """
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    systems = read_systems(args.value)
+    models = read_models(args.value)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
-        res = search_systems(systems, pangenome, args.source, args.threads, args.disable_prog_bar)
+        res = search_models(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
         # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
