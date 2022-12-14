@@ -5,11 +5,9 @@
 from __future__ import annotations
 import argparse
 import csv
-import json
 import logging
 from pathlib import Path
 import tempfile
-from tqdm import tqdm
 
 # installed libraries
 import pandas as pd
@@ -19,7 +17,7 @@ from panorama.utils import check_tsv_sanity
 from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.annotation import Annotation
+from annotation import Annotation
 from panorama.pangenomes import Pangenome
 
 

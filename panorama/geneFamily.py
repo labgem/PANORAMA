@@ -2,13 +2,13 @@
 # coding: utf8
 
 # default libraries
-from typing import Dict, Generator, List, Union
+from typing import Generator, List
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
 
 # local libraries
-from panorama.annotation import Annotation
+from annotation import Annotation
 
 
 class GeneFamily(Fam):

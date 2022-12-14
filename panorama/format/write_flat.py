@@ -7,28 +7,28 @@ import argparse
 import logging
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
-import os
 from tqdm import tqdm
-import collections
 
 # installed libraries
 import numpy as np
 import pandas as pd
-import pyhmmer
 
 # local libraries
-from panorama.annotate.hmm_search import profile_gfs
-from panorama.format.read_binaries import check_pangenome_info
-from panorama.utils import check_tsv_sanity
-from panorama.geneFamily import GeneFamily
-from panorama.pangenomes import Pangenome
+from annotate.hmm_search import profile_gfs
+from format.read_binaries import check_pangenome_info
+from utils import check_tsv_sanity, mkdir
+from system import System
+from geneFamily import GeneFamily
+from pangenomes import Pangenome
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
     # out_df = pd.DataFrame({"Pangenome": [], "Family": []})
     nb_source = len(pangenome.annotation_source)
     source_list = list(pangenome.annotation_source)
-    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
+    column_name = np.array(
+        f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(
+            ','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
         annot_array = np.empty((gf.max_annotation_by_source()[1], 2 + nb_source * 3), dtype=object)
@@ -71,6 +71,49 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, hmm: bool = False, thr
 
                 for future in futures:
                     future.result()
+
+
+def write_system_projection(system: System):
+    projection = []
+    system_orgs = set.intersection(*list([gf.organisms for gf in system.gene_families]))
+    for organism in system_orgs:
+        org_projection = [system.ID, system.name, organism.name]
+        for gf in system.gene_families.intersection(organism.families):
+            genes = gf.get_genes_per_org(organism)
+            for gene in genes:
+                projection.append(org_projection + [gf.name, gf.partition, gene.name, gene.start, gene.stop, gene.strand])
+    projection_df = pd.DataFrame(projection).drop_duplicates()
+    return projection_df
+
+
+def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 1,
+                             force: bool = False, disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        logging.getLogger().info('Write system projection')
+        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
+            futures = []
+            for system in pangenome.systems:
+                future = executor.submit(write_system_projection, system)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+                results = []
+                for future in futures:
+                    result = future.result()
+                    results.append(result)
+    systems_projection = pd.DataFrame()
+    for result in results:
+        systems_projection = pd.concat([systems_projection, result], ignore_index=True)
+    systems_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
+                                  "gene", "start", "stop", "strand"]
+    systems_projection.sort_values(by=["system number", "system name", "organism", "gene family", "start"],
+                                   ascending=[True, True, True, True, False], inplace=True)
+    mkdir(f"{output}/projection_systems", force=force)
+    for organism_name in systems_projection["organism"].unique():
+        org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
+        org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
+        org_df.to_csv(f"{output}/projection_systems/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems.tsv", sep="\t", index=False)
 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,

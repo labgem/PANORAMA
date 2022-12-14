@@ -14,14 +14,14 @@ from itertools import combinations
 
 # installed libraries
 import networkx as nx
-import pandas as pd
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.detection.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.annotation import System
+from panorama.format.write_flat import write_systems_projection
+from system import System
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
@@ -175,7 +175,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
     return detected_system
 
 
-def search_model(model: Model, annot2fam: dict):
+def search_system(model: Model, annot2fam: dict):
     for func_unit in model.func_units:
         pred_dict = {}
         nb_pred = 0
@@ -268,7 +268,7 @@ def filter_model_projection(proj_dict: dict, models: Models):
             proj_dict[organism].remove(rm_model)
 
 
-def search_models(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
+def search_systems(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
     """
     Search present model in the pangenome
     :param models:
@@ -286,13 +286,13 @@ def search_models(models: Models, pangenome: Pangenome, source: str, threads: in
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
-                future = executor.submit(search_model, model, annot2fam)
+                future = executor.submit(search_system, model, annot2fam)
+                future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
             detected_systems = []
             for future in futures:
                 result = future.result()
-                future.add_done_callback(lambda p: progress.update())
                 detected_systems += result
                     # project_model(pangenome, proj_dict, result[0], models.get_model(result[1]), source)
     # filter_model_projection(proj_dict, models)
@@ -316,8 +316,12 @@ def launch(args):
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
-        search_models(models, pangenome, args.source, args.threads, args.disable_prog_bar)
+        search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
+        logging.getLogger().info(f"Write system projection")
+        write_systems_projection(pangenome=pangenome, output="results", threads=args.threads,
+                                 force=args.force, disable_bar=args.disable_prog_bar)
+        logging.getLogger().info(f"Projection written")
         # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
         # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 

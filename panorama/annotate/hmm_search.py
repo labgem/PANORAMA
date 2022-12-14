@@ -16,9 +16,9 @@ import pyhmmer
 import pandas as pd
 
 # local libraries
-from panorama.geneFamily import GeneFamily
-from panorama.pangenomes import Pangenome
-from panorama.utils import path_is_dir, path_is_file
+from geneFamily import GeneFamily
+from pangenomes import Pangenome
+from utils import path_is_dir, path_is_file
 
 res_col_names = ['Gene_family', 'Accession', 'protein_name', 'e_value',
                  'score', 'bias', 'secondary_name', 'Description']

@@ -2,15 +2,15 @@
 # coding: utf8
 
 # default libraries
-from typing import Dict, Generator, List, Union
+from typing import Generator, List
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
-from panorama.annotation import Annotation, System
+from annotation import Annotation
+from system import System
 from panorama.geneFamily import GeneFamily
-
 
 
 class Pangenome(Pan):
@@ -133,6 +133,8 @@ class Pangenome(Pan):
             system.ID = len(self._system_getter) + 1
             self._system_getter[system.ID] = system
 
+    def number_of_systems(self):
+        return len(self._system_getter)
 
 
 
