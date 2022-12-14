@@ -76,6 +76,7 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
     :raise KeyError: One or more keys are missing or non-acceptable
     :raise TypeError: One or more value are not with good type
     :raise ValueError: One or more value are not non-acceptable
+    :raise Exception: Manage unexpected error
     """
     param_keys = [] if param_keys is None else param_keys
 
@@ -108,8 +109,9 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
                     raise TypeError("families value in json must be an array")
                 if len(value) < 1:
                     raise ValueError("Functional unit need at least one families")
-            elif key == 'canonical' and not isinstance(value, list):
-                raise TypeError("canonical value in json must be an array")
+            elif key == 'canonical':
+                if not isinstance(value, list):
+                    raise TypeError("canonical value in json must be an array")
             elif key == 'relation':
                 if value is not None:
                     if not isinstance(value, str):
@@ -237,7 +239,7 @@ class Model:
         self.accessory = accessory if accessory is not None else set()
         self.forbidden = forbidden if forbidden is not None else set()
         self.neutral = neutral if neutral is not None else set()
-        self.canonical = canonical
+        self.canonical = canonical if canonical is not None else []
 
     def __repr__(self):
         return f"name: {self.name}, number of FU: {self.size[0]}, number of families: {self.size[1]}"

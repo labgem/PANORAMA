@@ -8,7 +8,7 @@ from typing import Dict, Generator, List, Union
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
-from panorama.annotation import Annotation
+from panorama.annotation import Annotation, System
 from panorama.geneFamily import GeneFamily
 
 
@@ -28,6 +28,7 @@ class Pangenome(Pan):
         super().__init__()
         self._source_index = None
         self._annotation_index = None
+        self._system_getter = {}
         self.name = name
         self.taxid = taxid
 
@@ -48,8 +49,28 @@ class Pangenome(Pan):
     def gene_families(self) -> List[GeneFamily]:
         return super().gene_families
 
-    # @property
-    # def annotation(self) -> Set[Annotation]:
+    def _create_gene_family(self, name: str) -> GeneFamily:
+        """Creates a gene family object with the given `name`
+
+        :param name: the name to give to the gene family. Must not exist already.
+        :return: the created GeneFamily object
+        """
+
+        new_fam = GeneFamily(family_id=self.max_fam_id, name=name)
+        self.max_fam_id += 1
+        self._famGetter[new_fam.name] = new_fam
+        return new_fam
+
+    def get_gene_family(self, name: str) -> GeneFamily:
+        return super().get_gene_family(name)
+    # def get_gene_family(self, name: str) -> Union[GeneFamily, None]:
+    #     try:
+    #         fam = super().get_gene_family(name)
+    #     except KeyError:
+    #         return None
+    #     else:
+    #         return fam
+
     @property
     def annotation_source(self) -> set:
         source_set = set()
@@ -91,27 +112,29 @@ class Pangenome(Pan):
             if fam.get_source(source) is not None:
                 yield fam
 
-    def _create_gene_family(self, name: str) -> GeneFamily:
-        """Creates a gene family object with the given `name`
-
-        :param name: the name to give to the gene family. Must not exist already.
-        :return: the created GeneFamily object
+    @property
+    def systems(self) -> Generator[System, None, None]:
+        """Get all systems in pangenome
         """
+        for system in self._system_getter.values():
+            yield system
 
-        new_fam = GeneFamily(family_id=self.max_fam_id, name=name)
-        self.max_fam_id += 1
-        self._famGetter[new_fam.name] = new_fam
-        return new_fam
+    def add_system(self, system: System):
+        same_sys = False
 
-    def get_gene_family(self, name: str) -> GeneFamily:
-        return super().get_gene_family(name)
-    # def get_gene_family(self, name: str) -> Union[GeneFamily, None]:
-    #     try:
-    #         fam = super().get_gene_family(name)
-    #     except KeyError:
-    #         return None
-    #     else:
-    #         return fam
+        for system_in in self.systems:
+            if system_in.name == system.name or system.name in system_in.canonical:
+                if system_in.gene_families.issubset(system.gene_families):
+                    system.ID = system_in.ID
+                    self._system_getter[system_in.ID] = system
+                    same_sys = True
+
+        if not same_sys:
+            system.ID = len(self._system_getter) + 1
+            self._system_getter[system.ID] = system
+
+
+
 
 
 class Pangenomes:

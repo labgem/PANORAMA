@@ -2,12 +2,13 @@
 # coding: utf8
 
 # default libraries
-from typing import Union, List
+from typing import List, Set, Union
 
 #installed libraries
 from pandas import isna
-# local libraries
 
+# local libraries
+from panorama.detection.models import Model
 
 class Annotation:
     """
@@ -26,6 +27,8 @@ class Annotation:
     def __init__(self, source: str, accession: str, name: str,
                  secondary_names: Union[str, List[str]] = None, description: str = None,
                  score: float = None, e_val: float = None, bias: float = None):
+        """Constructor Method
+        """
         assert any(x is not None for x in [score, e_val])
         self.source = source
         self.accession = accession
@@ -43,3 +46,34 @@ class Annotation:
             return secondary_names
         elif secondary_names is None or isna(secondary_names):
             return ''
+
+
+class System:
+    """
+    This represents a biological system detected in pangenome.
+
+
+    :param system_id: source of the annotation
+    :param gene_families: source accesion identifier
+    """
+
+    def __init__(self, system_id: int, model: Model, gene_families: Set = None):
+        """Constructor Method
+        """
+        self.ID = system_id
+        self.model = model
+        self.gene_families = gene_families
+
+    def __repr__(self):
+        return f"System ID: {self.ID}, Name: {self.name}"
+
+    def __len__(self):
+        return len(self.gene_families)
+
+    @property
+    def name(self):
+        return self.model.name
+
+    @property
+    def canonical(self):
+        return self.model.canonical

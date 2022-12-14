@@ -21,6 +21,7 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 from panorama.detection.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
+from panorama.annotation import System
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
@@ -29,7 +30,7 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
-    :param disable_bar: Disable bar
+    :param disable_bar: Disable progress bar
     """
     if source in pangenome.status["annotation_source"]:
         check_pangenome_info(pangenome, need_annotations=True, need_families=True,
@@ -39,9 +40,15 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
-    """ Read all json files value in the directory
+    """Read all json files value in the directory
 
     :param models_path: path of models directory
+    :param disable_bar: Disable progress bar
+
+    :raise KeyError: One or more keys are missing or non-acceptable
+    :raise TypeError: One or more value are not with good type
+    :raise ValueError: One or more value are not non-acceptable
+    :raise Exception: Manage unexpected error
     """
     models = Models()
     for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
@@ -112,6 +119,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
 
     """
     seen = set()
+    detected_system = []
 
     def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
         nextlevel = {node}
@@ -128,8 +136,9 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
 
     def check_cc(cc: set, fam2annot: dict, func_unit: FuncUnit):
         count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
-        forbidden_list, mandatory_list, accessory_list = (func_unit.forbidden_name(), func_unit.mandatory_name(),
-                                                          func_unit.accessory_name())
+        forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
+                                                          list(map(lambda x: x.name, func_unit.mandatory)),
+                                                          list(map(lambda x: x.name, func_unit.accessory)))
         for node in cc:
             annotations = fam2annot.get(node.name)
             if annotations is not None:
@@ -159,17 +168,14 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
         if node not in seen:
             cc = extract_cc(node, g, seen)  # extract coonnect component
             if check_cc(cc, fam2annot, func_unit):
-                pred_dict[nb_pred] = cc
-                nb_pred += 1
+                detected_system.append(System(system_id=0, model=model, gene_families=cc))
             else:
                 remove_node |= cc
     g.remove_nodes_from(remove_node)
-    return pred_dict
+    return detected_system
 
 
 def search_model(model: Model, annot2fam: dict):
-    # if model.name in ['disarm_type_I']:
-    #     print("pika")
     for func_unit in model.func_units:
         pred_dict = {}
         nb_pred = 0
@@ -177,11 +183,8 @@ def search_model(model: Model, annot2fam: dict):
             nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
         g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
-        # nx.draw(g)
-        # plt.show()
-        pred_dict = verify_param(g, fam2annot, model, func_unit, pred_dict, nb_pred)
-        if len(pred_dict) > 0:
-            return pred_dict, model.name
+        detected_system = verify_param(g, fam2annot, model, func_unit, pred_dict, nb_pred)
+        return detected_system
 
 
 def model_to_module(pangenome: Pangenome, model: Model, predictions: set):
@@ -286,22 +289,20 @@ def search_models(models: Models, pangenome: Pangenome, source: str, threads: in
                 future = executor.submit(search_model, model, annot2fam)
                 futures.append(future)
 
-            prediction_results = {}
+            detected_systems = []
             for future in futures:
                 result = future.result()
                 future.add_done_callback(lambda p: progress.update())
-                if result is not None:
-                    prediction_results[result[1]] = result[0]
-                    # model_to_module(pangenome, value.get_model(result[1]), result[0].values())
-                    project_model(pangenome, proj_dict, result[0], models.get_model(result[1]), source)
-    filter_model_projection(proj_dict, models)
-    proj = pd.DataFrame.from_dict(proj_dict, orient='index')
-    model_df = pd.DataFrame(prediction_results, columns=['Model',
-                                                         'Nb Detection']).sort_values('Model').reset_index(drop=True)
-    proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
-                header=[f"Model {i}" for i in range(1, proj.shape[1] + 1)])
-    model_df.to_csv("model5.tsv", sep="\t", header=['Model', "Nb_detected"])
-
+                detected_systems += result
+                    # project_model(pangenome, proj_dict, result[0], models.get_model(result[1]), source)
+    # filter_model_projection(proj_dict, models)
+    # proj = pd.DataFrame.from_dict(proj_dict, orient='index')
+    # model_df = pd.DataFrame(proj_dict, columns=['Model', 'Nb Detection']).sort_values('Model').reset_index(drop=True)
+    # proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
+    #             header=[f"Model {i}" for i in range(1, proj.shape[1] + 1)])
+    # model_df.to_csv("model5.tsv", sep="\t", header=['Model', "Nb_detected"])
+    for system in detected_systems:  # TODO pass in mp step
+        pangenome.add_system(system)
 
 def launch(args):
     """
@@ -315,8 +316,9 @@ def launch(args):
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
-        res = search_models(models, pangenome, args.source, args.threads, args.disable_prog_bar)
-        logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
+        search_models(models, pangenome, args.source, args.threads, args.disable_prog_bar)
+        logging.getLogger().info("Annotation Done")
+        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
         # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
