@@ -104,23 +104,22 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, pred_dict: dict, nb_pred: int):
+def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str):
+    detected_systems = []
     for mandatory_fam in func_unit.mandatory:
         if mandatory_fam.name in annot2fam:
             for pan_fam in annot2fam[mandatory_fam.name]:
-                pred_dict[nb_pred] = {pan_fam}
-                nb_pred += 1
-    return nb_pred
+                detected_systems.append(System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
+    return detected_systems
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, pred_dict: dict, nb_pred: int):
+def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str):
     """
     Verify parameters
 
     """
     seen = set()
-    detected_system = []
-
+    detected_systems = []
     def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
         nextlevel = {node}
         cc = set()
@@ -168,23 +167,24 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
         if node not in seen:
             cc = extract_cc(node, g, seen)  # extract coonnect component
             if check_cc(cc, fam2annot, func_unit):
-                detected_system.append(System(system_id=0, model=model, gene_families=cc))
+                detected_systems.append(System(system_id=0, model=model, gene_families=cc, source=source))
             else:
                 remove_node |= cc
     g.remove_nodes_from(remove_node)
-    return detected_system
+    return detected_systems
 
 
-def search_system(model: Model, annot2fam: dict):
+def search_system(model: Model, annot2fam: dict, source: str):
+    if model.name == "qatABCD_other":
+        print("pika")
     for func_unit in model.func_units:
-        pred_dict = {}
-        nb_pred = 0
+        detected_systems = []
         if func_unit.parameters['min_total'] == 1:
-            nb_pred = search_fu_with_one_fam(func_unit, annot2fam, pred_dict, nb_pred)
+            detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
         g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
-        detected_system = verify_param(g, fam2annot, model, func_unit, pred_dict, nb_pred)
-        return detected_system
+        detected_systems += verify_param(g, fam2annot, model, func_unit, source)
+        return detected_systems
 
 
 def model_to_module(pangenome: Pangenome, model: Model, predictions: set):
@@ -279,14 +279,13 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
 
     :return:
     """
-    proj_dict = {}
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
 
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
-                future = executor.submit(search_system, model, annot2fam)
+                future = executor.submit(search_system, model, annot2fam, source)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 

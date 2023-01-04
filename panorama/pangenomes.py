@@ -120,13 +120,17 @@ class Pangenome(Pan):
             yield system
 
     def add_system(self, system: System):
+        if system.name == "qatABCD_other":
+            print("pika")
         same_sys = False
-
         for system_in in self.systems:
-            if system_in.name == system.name or system.name in system_in.canonical:
+            if system_in.name == system.name or system.name in system_in.canonical_models:
                 if system_in.gene_families.issubset(system.gene_families):
+                    if system_in.name == "qatABCD_other":
+                        print("pika")
                     system.ID = system_in.ID
-                    self._system_getter[system_in.ID] = system
+                    system.add_canonical(system_in)
+                    self._system_getter[system.ID] = system
                     same_sys = True
 
         if not same_sys:

@@ -2,7 +2,8 @@
 # coding: utf8
 
 # default libraries
-from typing import Set
+from __future__ import annotations
+from typing import Set, Union
 
 # installed libraries
 
@@ -20,12 +21,14 @@ class System:
     :param gene_families: source accesion identifier
     """
 
-    def __init__(self, system_id: int, model: Model, gene_families: Set[GeneFamily] = None):
+    def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None):
         """Constructor Method
         """
-        self.ID = system_id
+        self.ID = system_id if isinstance(system_id, str) else str(system_id)
         self.model = model
+        self.source = source
         self.gene_families = gene_families
+        self.canonical = set()
 
     def __repr__(self):
         return f"System ID: {self.ID}, Name: {self.name}"
@@ -38,5 +41,11 @@ class System:
         return self.model.name
 
     @property
-    def canonical(self):
+    def canonical_models(self):
         return self.model.canonical
+
+    def add_canonical(self, system: System):
+        system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
+        self.canonical.add(system)
+
+

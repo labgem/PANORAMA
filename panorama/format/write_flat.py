@@ -4,11 +4,12 @@
 # default libraries
 from __future__ import annotations
 import argparse
+import itertools
 import logging
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-
+from copy import copy
 # installed libraries
 import numpy as np
 import pandas as pd
@@ -73,15 +74,92 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, hmm: bool = False, thr
                     future.result()
 
 
+def write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu):
+    def search_diagonal(matrix: np.ndarray, min_necessary: int = None):
+        r_diags = []
+        min_necessary = matrix.shape[0] if min_necessary is None else min_necessary
+        nonull_matrix = matrix[:, ~np.all(matrix == 0, axis=0)]
+        diags = [nonull_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
+                 if len(nonull_matrix.diagonal(i).tolist()) >= min_necessary]
+        for comb_cols in itertools.permutations(range(0, nonull_matrix.shape[1]), 2):
+            copy_matrix = copy(nonull_matrix)
+            copy_matrix[:, [comb_cols[1], comb_cols[0]]] = nonull_matrix[:, comb_cols]
+            diags.extend(copy_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
+                         if len(copy_matrix.diagonal(i).tolist()) >= min_necessary)
+        for diag in diags:
+            for comb in [diag[i: i + min_necessary] for i in range(0, len(diag) - min_necessary + 1)]:
+                if all(x > 0 for x in comb):
+                    r_diags.append(comb)
+        r_diags.sort()
+        a = list(r_diag for r_diag, _ in itertools.groupby(r_diags))
+        return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
+
+    org_projection = [system.ID, system.name, organism.name]
+    select_families = system.gene_families.intersection(organism.families)
+    mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}
+    accessory_index = {accessory: index for index, accessory in enumerate(accessory_family,
+                                                                          start=1 + len(mandatory_family))}
+    nb_annotation = len(mandatory_family) + len(accessory_family)
+    bool_projection = False
+    for comb_gf in itertools.permutations(select_families, fu.parameters['min_total']):
+        mandatory_matrix = np.zeros((len(comb_gf), len(mandatory_family)))
+        all_matrix = np.concatenate((mandatory_matrix, np.zeros((len(comb_gf), len(accessory_family)))), axis=1)
+        coordinate_dict = {}
+        for index_gf, gf in enumerate(comb_gf):
+            for index_annot, annot in enumerate(mandatory_family + accessory_family, start=1):
+                coordinate_dict[index_gf * nb_annotation + index_annot] = (gf, annot)
+            if gf.get_source(system.source) is not None:
+                for annotation in [annot.name for annot in gf.get_source(system.source)]:
+                    if annotation in mandatory_family:
+                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                      mandatory_index[annotation]
+                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                mandatory_index[annotation]
+                    elif annotation in accessory_family:
+                        all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                accessory_index[annotation]
+        if len(search_diagonal(mandatory_matrix, fu.parameters['min_mandatory'])) > 0:
+            search_diag = search_diagonal(all_matrix)
+            if len(search_diag) > 0:
+                for diag in search_diag:
+                    for coord in diag:
+                        gf, annotation = coordinate_dict[coord]
+                        genes = gf.get_genes_per_org(organism)
+                        for gene in genes:
+                            projection.append(org_projection + [gf.name, gf.named_partition, annotation,
+                                                                gene.name, gene.start, gene.stop, gene.strand])
+                bool_projection = True
+    return bool_projection
+    # if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
+    #     if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
+    #         for gf in system.gene_families.intersection(organism.families):
+    #             genes = gf.get_genes_per_org(organism)
+    #             for gene in genes:
+    #                 projection.append(org_projection + [gf.name, gf.partition, gene.name,
+    #                                                     gene.start, gene.stop, gene.strand])
+
+
 def write_system_projection(system: System):
+    if system.name == "qatABCD":
+        print("pika")
+
     projection = []
-    system_orgs = set.intersection(*list([gf.organisms for gf in system.gene_families]))
+    mandatory_family = [fam.name for fam in system.model.families if fam.type == 'mandatory']
+    accessory_family = [fam.name for fam in system.model.families if fam.type == 'accessory']
+    system_orgs = set.union(*list([gf.organisms for gf in system.gene_families]))
+    # system_orgs = set.intersection(*list([gf.organisms for gf in system.gene_families]))
+    fu = list(system.model.func_units)[0]
     for organism in system_orgs:
-        org_projection = [system.ID, system.name, organism.name]
-        for gf in system.gene_families.intersection(organism.families):
-            genes = gf.get_genes_per_org(organism)
-            for gene in genes:
-                projection.append(org_projection + [gf.name, gf.partition, gene.name, gene.start, gene.stop, gene.strand])
+        find_projection = write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu)
+        if not find_projection:
+            for canonical_system in system.canonical:
+                canonical_mandatory_family = [fam.name for fam in canonical_system.model.families
+                                              if fam.type == 'mandatory']
+                canonical_accessory_family = [fam.name for fam in canonical_system.model.families
+                                              if fam.type == 'accessory']
+                canonical_fu = list(canonical_system.model.func_units)[0]
+                write_sys_to_organism(canonical_system, organism, projection, canonical_mandatory_family,
+                                      canonical_accessory_family, canonical_fu)
     projection_df = pd.DataFrame(projection).drop_duplicates()
     return projection_df
 
@@ -105,15 +183,17 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
     for result in results:
         systems_projection = pd.concat([systems_projection, result], ignore_index=True)
     systems_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
-                                  "gene", "start", "stop", "strand"]
-    systems_projection.sort_values(by=["system number", "system name", "organism", "gene family", "start"],
-                                   ascending=[True, True, True, True, False], inplace=True)
+                                  "annotation name", "gene", "start", "stop", "strand"]
+    systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
+                                   ascending=[True, True, True, True, True], inplace=True)
     mkdir(f"{output}/projection_systems", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
-        org_df.to_csv(f"{output}/projection_systems/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems.tsv", sep="\t", index=False)
+        org_df.sort_values(by=["system number", "system name", "start", "stop"],
+                           ascending=[True, True, True, True], inplace=True)
+        org_df.to_csv(f"{output}/projection_systems2/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,
