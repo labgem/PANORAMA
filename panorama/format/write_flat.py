@@ -4,12 +4,14 @@
 # default libraries
 from __future__ import annotations
 import argparse
+from concurrent.futures import ThreadPoolExecutor
+from copy import copy
 import itertools
 import logging
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from copy import copy
+from typing import List
+
 # installed libraries
 import numpy as np
 import pandas as pd
@@ -24,7 +26,12 @@ from pangenomes import Pangenome
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
-    # out_df = pd.DataFrame({"Pangenome": [], "Family": []})
+    """ Write a tsv file with all annotation and sources present in pangenomes
+
+    :param pangenome: Pangenome with all annotations
+    :param output: Path to output directory
+    :param disable_bar: allow to disable the progress bar
+    """
     nb_source = len(pangenome.annotation_source)
     source_list = list(pangenome.annotation_source)
     column_name = np.array(
@@ -54,18 +61,30 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar
 
 
 def write_hmm(gf: GeneFamily, output: Path):
+    """ Write an HMM profile for a gene family
+
+    :param gf: Gene family with HMM
+    :param output: Path to output directory
+    """
     with open(f"{output.absolute().as_posix()}/{gf.name}.hmm", 'wb') as hmm_file:
         gf.hmm.write(hmm_file)
 
 
-def write_hmm_profile(pangenome: Pangenome, output: Path, hmm: bool = False, threads: int = 1,
+def write_hmm_profile(pangenome: Pangenome, output: Path, threads: int = 1,
                       disable_bar: bool = False):
+    """Write an HMM profile for all gene families in pangenome
+
+    :param pangenome: Pangenome with gene families
+    :param output: Path to output directory
+    :param threads: number of threads available
+    :param disable_bar: allow to disable progress bar
+    """
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=pangenome.number_of_gene_families(), unit='file',
                   desc='write gene families hmm/profile', disable=disable_bar) as progress:
             futures = []
             for gf in pangenome.gene_families:
-                if hmm:
+                if gf.hmm is not None:
                     future = executor.submit(write_hmm, gf, output)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -74,8 +93,26 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, hmm: bool = False, thr
                     future.result()
 
 
-def write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu):
-    def search_diagonal(matrix: np.ndarray, min_necessary: int = None):
+def write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu) -> bool:
+    """ Project system to organism
+
+    :param system: Detected system
+    :param organism: organism in pangenome
+    :param projection: projection list output
+    :param mandatory_family: list of mandatory families in system
+    :param accessory_family: list of accessory family in system
+    :param fu: functional unit
+
+    :return: True if a projection occurs in organism
+    """
+    def search_diagonal(matrix: np.ndarray, min_necessary: int = None) -> List[List[int]]:
+        """Search any possible diagonals in matrix to confirm system projection
+
+        :param matrix: matrix with present family in system and pangenome
+        :param min_necessary: minimum length of diagonal to project
+
+        :return: list of diagonals found
+        """
         r_diags = []
         min_necessary = matrix.shape[0] if min_necessary is None else min_necessary
         nonull_matrix = matrix[:, ~np.all(matrix == 0, axis=0)]
@@ -91,7 +128,6 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                 if all(x > 0 for x in comb):
                     r_diags.append(comb)
         r_diags.sort()
-        a = list(r_diag for r_diag, _ in itertools.groupby(r_diags))
         return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
 
     org_projection = [system.ID, system.name, organism.name]
@@ -111,10 +147,8 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
             if gf.get_source(system.source) is not None:
                 for annotation in [annot.name for annot in gf.get_source(system.source)]:
                     if annotation in mandatory_family:
-                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
-                                                                                      mandatory_index[annotation]
-                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
-                                                                                mandatory_index[annotation]
+                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + mandatory_index[annotation]
+                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + mandatory_index[annotation]
                     elif annotation in accessory_family:
                         all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
                                                                                 accessory_index[annotation]
@@ -130,24 +164,19 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                                                                 gene.name, gene.start, gene.stop, gene.strand])
                 bool_projection = True
     return bool_projection
-    # if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
-    #     if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters['min_total']:
-    #         for gf in system.gene_families.intersection(organism.families):
-    #             genes = gf.get_genes_per_org(organism)
-    #             for gene in genes:
-    #                 projection.append(org_projection + [gf.name, gf.partition, gene.name,
-    #                                                     gene.start, gene.stop, gene.strand])
 
 
-def write_system_projection(system: System):
-    if system.name == "qatABCD":
-        print("pika")
+def write_system_projection(system: System) -> pd.DataFrame:
+    """Project system on all pangenome organisms
 
+    :param system: system to project
+
+    :return: Dataframe result of projection
+    """
     projection = []
     mandatory_family = [fam.name for fam in system.model.families if fam.type == 'mandatory']
     accessory_family = [fam.name for fam in system.model.families if fam.type == 'accessory']
     system_orgs = set.union(*list([gf.organisms for gf in system.gene_families]))
-    # system_orgs = set.intersection(*list([gf.organisms for gf in system.gene_families]))
     fu = list(system.model.func_units)[0]
     for organism in system_orgs:
         find_projection = write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu)
@@ -166,6 +195,14 @@ def write_system_projection(system: System):
 
 def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 1,
                              force: bool = False, disable_bar: bool = False):
+    """ Write all systems in pangenomes and project on organisms
+
+    :param pangenome: Pangenome to project
+    :param output: Path to output directory
+    :param threads:  Number of threads available
+    :param force: Force to write into the output directory
+    :param disable_bar: Allow to disable progress bar
+    """
     with ThreadPoolExecutor(max_workers=threads) as executor:
         logging.getLogger().info('Write system projection')
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
@@ -186,7 +223,7 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
                                   "annotation name", "gene", "start", "stop", "strand"]
     systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
                                    ascending=[True, True, True, True, True], inplace=True)
-    mkdir(f"{output}/projection_systems", force=force)
+    mkdir(f"{output}/projection_systems2", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
@@ -198,6 +235,14 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,
                      disable_bar: bool = False, **kwargs):
+    """Launcher to write flat file from pangenomes
+
+    :param pangenome: Pangenome with information to write
+    :param output: Path to output directory
+    :param annotation: Launch annotation write function
+    :param hmm: Launch hmm write function
+    :param disable_bar: disable progress bar
+    """
     need_annotations = False
     need_families = False
     need_graph = False
@@ -215,7 +260,6 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: boo
     if hmm:
         need_families = True
         need_annotations = True
-        # need_gene_sequences = True
 
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
@@ -230,7 +274,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: boo
         msa_format = kwargs.get('msa_format', 'afa')
         threads = kwargs.get('threads', 1)
         profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
-        write_hmm_profile(pangenome, output, hmm, threads, disable_bar)
+        write_hmm_profile(pangenome, output, threads, disable_bar)
 
 
 def launch(args):
@@ -239,9 +283,6 @@ def launch(args):
 
     :param args: Argument given
     """
-    # check_parameter(args)
-    # systems_to_path = args.systems.absolute()
-    # systems = read_systems(systems_to_path)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])

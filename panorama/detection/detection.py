@@ -10,7 +10,6 @@ import logging
 import json
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from itertools import combinations
 
 # installed libraries
 import networkx as nx
@@ -26,10 +25,11 @@ from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
-def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
+def check_pangenome_detection(pangenome: Pangenome, source: str, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
+    :param source: Source used to detect system
     :param disable_bar: Disable progress bar
     """
     if source in pangenome.status["annotation_source"]:
@@ -93,7 +93,6 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     families = dict()
     fam2annot = dict()
     for fam_model in func_unit.families:
-        # families.update({annot: pan_fam for annot, pan_fam in annot2fam.items() if re.match(f"^{fam_model}", annot)})
         if fam_model.name in annot2fam:
             for gf in annot2fam[fam_model.name]:
                 families[gf.name] = gf
@@ -120,6 +119,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
     """
     seen = set()
     detected_systems = []
+
     def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
         nextlevel = {node}
         cc = set()
@@ -187,85 +187,12 @@ def search_system(model: Model, annot2fam: dict, source: str):
         return detected_systems
 
 
-def model_to_module(pangenome: Pangenome, model: Model, predictions: set):
+def model_to_module(pangenome: Pangenome, predictions: set):
     """Associate a model to modules"""
     for module in pangenome.modules:
         for prediction in predictions:
             if prediction.issubset(module.families):
                 print("pika")
-    pass
-
-
-def project_model(pangenome: Pangenome, proj_dict: dict, pred_res: dict, model: Model, source: str):
-    mandatory_family = [fam.name for fam in model.families if fam.type == 'mandatory']
-    accessory_family = [fam.name for fam in model.families if fam.type == 'accessory']
-    for fu in model.func_units:
-        for organism in pangenome.organisms:
-            # if organism.name in ['GCF_000472745.1_ASM47274v1_genomic'] and model.name == 'DRT_Other':
-            #     print("pika")
-            for prediction in pred_res.values():
-                for combi_pred in combinations(prediction, fu.parameters["min_total"]):
-                    if set(combi_pred).issubset(organism.families):
-                        mandatory_dict = {mandatory: False for mandatory in mandatory_family}
-                        accessory_dict = {accessory: False for accessory in accessory_family}
-                        for gf in prediction:
-                            if gf.get_source(source) is not None:
-                                for annotation in [annot.name for annot in gf.get_source(source)]:
-                                    if annotation in mandatory_family:
-                                        mandatory_dict[annotation] = True
-                                    elif annotation in accessory_family:
-                                        accessory_dict[annotation] = True
-                        if sum(mandatory_dict.values()) >= fu.parameters['min_mandatory']:
-                            if sum(mandatory_dict.values()) + sum(accessory_dict.values()) >= fu.parameters[
-                                'min_total']:
-                                if organism.name in proj_dict:
-                                    proj_dict[organism.name].add(model.name)
-                                else:
-                                    proj_dict[organism.name] = {model.name}
-            # print("pikapi")
-    # for keys, value in pred_res.items():
-    #     for gf_combi in combinations(value, 2):
-    #         org_inter = set()
-    #         for fam in gf_combi:
-    #             if len(org_inter) == 0:
-    #                 org_inter = fam.organisms
-    #             else:
-    #                 org_inter = org_inter.intersection(fam.organisms)
-    #         for org in org_inter:
-    #             if org.name in ['GCF_006539645.1_ASM653964v1_genomic', 'GCF_001038185.1_ASM103818v1_genomic',
-    #                             'GCF_000807315.1_ASM80731v1_genomic', 'GCF_014194605.1_ASM1419460v1_genomic',
-    #                             'GCF_009864815.1_ASM986481v1_genomic', 'GCF_013752735.1_ASM1375273v1_genomic',
-    #                             'GCF_000472985.1_ASM47298v1_genomic', 'GCF_000773865.1_ASM77386v1_genomic',
-    #                             'GCF_000284375.1_ASM28437v1_genomic']:
-    #                 print("pika")
-    #             gf_present = set()
-    #             for contig in org.contigs:
-    #                 for gene in contig.genes:
-    #                     if gene.family in gf_combi:
-    #                         gf_present.add(gene.family)
-    #             mandatory_dict = {mandatory: False for mandatory in mandatory_family}
-    #             for gf in gf_present:
-    #                 for annotation in [annot.name for annot in gf.get_source(source)]:
-    #                     if annotation in mandatory_family:
-    #                         mandatory_dict[annotation] = True
-    #             if all(x for x in mandatory_dict.values()):
-    #                 if org.name in proj_dict:
-    #                     proj_dict[org.name].add(model.name)
-    #                 else:
-    #                     proj_dict[org.name] = {model.name}
-
-
-def filter_model_projection(proj_dict: dict, models: Models):
-    for organism, model_list in proj_dict.items():
-        remove_model = set()
-        for model_name in model_list:
-            model = models.get_model(model_name)
-            if model.canonical is not None:
-                for canonical_model in model.canonical:
-                    if canonical_model in model_list:
-                        remove_model.add(model_name)
-        for rm_model in remove_model:
-            proj_dict[organism].remove(rm_model)
 
 
 def search_systems(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
@@ -293,15 +220,9 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
             for future in futures:
                 result = future.result()
                 detected_systems += result
-                    # project_model(pangenome, proj_dict, result[0], models.get_model(result[1]), source)
-    # filter_model_projection(proj_dict, models)
-    # proj = pd.DataFrame.from_dict(proj_dict, orient='index')
-    # model_df = pd.DataFrame(proj_dict, columns=['Model', 'Nb Detection']).sort_values('Model').reset_index(drop=True)
-    # proj.to_csv("projection5.tsv", sep="\t", index=['Organisms'], index_label='Organisms',
-    #             header=[f"Model {i}" for i in range(1, proj.shape[1] + 1)])
-    # model_df.to_csv("model5.tsv", sep="\t", header=['Model', "Nb_detected"])
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
+
 
 def launch(args):
     """
@@ -314,15 +235,13 @@ def launch(args):
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
-        check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+        check_pangenome_detection(pangenome, source=args.source, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
         logging.getLogger().info(f"Write system projection")
         write_systems_projection(pangenome=pangenome, output="results", threads=args.threads,
                                  force=args.force, disable_bar=args.disable_prog_bar)
         logging.getLogger().info(f"Projection written")
-        # logging.getLogger().info(f"Write Annotation in pangenome {pangenome_name}")
-        # write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

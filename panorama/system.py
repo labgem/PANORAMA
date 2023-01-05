@@ -3,7 +3,7 @@
 
 # default libraries
 from __future__ import annotations
-from typing import Set, Union
+from typing import List, Set, Union
 
 # installed libraries
 
@@ -37,15 +37,22 @@ class System:
         return len(self.gene_families)
 
     @property
-    def name(self):
+    def name(self) -> str:
+        """Name of the system inhereted by the model
+
+        :return: name of the system
+        """
         return self.model.name
 
-    @property
-    def canonical_models(self):
+    def canonical_models(self) -> List[str]:
+        """List of the canonical models
+
+        :return: canonical models
+        """
         return self.model.canonical
 
     def add_canonical(self, system: System):
+        """Add a canonical system"""
+
         system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
         self.canonical.add(system)
-
-

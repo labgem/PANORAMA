@@ -2,7 +2,7 @@
 # coding: utf8
 
 # default libraries
-from typing import Generator, List
+from typing import Generator, List, Tuple, Union
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
@@ -20,7 +20,7 @@ class GeneFamily(Fam):
 
     def __init__(self, family_id: int, name: str):
         super().__init__(family_id, name)
-        self._annotationGetter = {}  # Key = source, Value = ordered list of best annotation for one source
+        self._annotationGetter = {}  # Key = source, Value = ordered list of the best annotation for one source
         self.hmm = None
         self.profile = None
         self.optimized_profile = None
@@ -30,15 +30,26 @@ class GeneFamily(Fam):
 
     @property
     def annotations(self) -> Generator[Annotation, None, None]:
+        """Generate annotations in gene families
+
+        :return: Gene family annotation"""
         for annot_list in self._annotationGetter.values():
             for annotation in annot_list:
                 yield annotation
 
     @property
     def sources(self) -> List[str]:
+        """ Get all source annotation in gene family
+
+        :return: List of annotation source
+        """
         return list(self._annotationGetter.keys())
 
-    def max_annotation_by_source(self):
+    def max_annotation_by_source(self) -> Tuple[str, int]:
+        """Get the maximum number of annotation for one source
+
+        :return: Name of the source with the maximum annotation and the number of annotation corresponding
+        """
         max_annot = 0
         max_source = None
         for source, annotations in self._annotationGetter.items():
@@ -47,14 +58,29 @@ class GeneFamily(Fam):
                 max_source = source
         return max_source, max_annot
 
-    def get_source(self, name: str) -> List[Annotation]:
+    def get_source(self, name: str) -> Union[List[Annotation], None]:
+        """ Get the annotation for a specific source in gene family
+
+        :param name: Name of the source
+
+        :return: All the annotation from the source if exist else None
+        """
         return self._annotationGetter[name] if name in self.sources else None
 
-    def get_annotations(self, name: str, accession: str) -> Generator[Annotation, None, None]:
+    def get_annotations(self, name: Union[List[str], str], accession: Union[List[str], str]) -> Generator[Annotation, None, None]:
+        """Get annotation by name or accession in gene family
+
+        :param name: Names of annotation searched
+        :param accession: Accession number of annotation searched
+
+        :return: annotation searched
+        """
         assert name is not None and accession is not None
+        name = name if isinstance(name, list) else [name]
+        accession = accession if isinstance(accession, list) else [accession]
 
         for annotation in self.annotations:
-            if annotation.name == name or annotation.accession == accession:
+            if annotation.name in name or annotation.accession in accession:
                 yield annotation
 
     def add_annotation(self, source: str, annotation: Annotation, max_prediction: int = None):
