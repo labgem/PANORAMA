@@ -153,14 +153,17 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
         for hit in top_hits:
             cog = hit.best_domain.alignment
+            target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from))/len(cog.target_sequence)
+            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from))/len(cog.hmm_sequence)
             hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
             add_res = False
-            if pd.isna(hmm_info['score_threshold']):
-                if hit.evalue < hmm_info['eval_threshold']:
-                    add_res = True
-            else:
-                if hit.score > hmm_info['score_threshold']:
-                    add_res = True
+            if target_covery >= hmm_info["target_cov_threshold"] and hmm_covery >= hmm_info["hmm_cov_threshold"]:
+                if pd.isna(hmm_info['score_threshold']):
+                    if hit.evalue < hmm_info['eval_threshold']:
+                        add_res = True
+                else:
+                    if hit.score > hmm_info['score_threshold']:
+                        add_res = True
             if add_res:
                 res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
                                   hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
