@@ -129,7 +129,8 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                     r_diags.append(comb)
         r_diags.sort()
         return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
-
+    if organism.name == "GCF_000773865.1_ASM77386v1_genomic" and system.name == "DMS_other":
+        print("carapuce")
     org_projection = [system.ID, system.name, organism.name]
     select_families = system.gene_families.intersection(organism.families)
     mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}

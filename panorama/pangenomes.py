@@ -29,6 +29,8 @@ class Pangenome(Pan):
         self._source_index = None
         self._annotation_index = None
         self._system_getter = {}
+        self._name2system = {}
+        self._max_id_system = 0
         self.name = name
         self.taxid = taxid
 
@@ -143,17 +145,41 @@ class Pangenome(Pan):
         :param system: Detected system that will be added
         """
         same_sys = False
+        canonical_systems = []
+        drop_sys_key = []
         for system_in in self.systems:
-            if system_in.name == system.name or system.name in system_in.canonical_models():
-                if system_in.gene_families.issubset(system.gene_families):
-                    system.ID = system_in.ID
-                    system.add_canonical(system_in)
-                    self._system_getter[system.ID] = system
+            if system_in.name == system.name and system_in.gene_families.issubset(system.gene_families):
+                # A system with this name already exist and system in pangenome is subset of new system
+                system.ID = system_in.ID
+                self._system_getter[system.ID] = system
+                same_sys = True
+            elif system.name in system_in.canonical_models():
+                # System in pangenome is a canonical system for new system
+                if len(system.gene_families.intersection(system_in.gene_families)) > 0:
+                # if system_in.gene_families.issubset(system.gene_families):
+                    canonical_systems.append(system_in)
+                    drop_sys_key.append(system_in.ID)
+                # else:
+                #     if system.gene_families.issubset(system_in.gene_families):
+                #         print("bulbizar")
+            elif system_in.name in system.canonical_models():
+                # New system is a canonical system for a system in pangenome
+                if len(system.gene_families.intersection(system_in.gene_families)) > 0:
+                # if system.gene_families.issubset(system_in.gene_families):
+                    system_in.add_canonical(system)
                     same_sys = True
+                # else:
+                #     if system_in.gene_families.issubset(system.gene_families):
+                #         print("salamèche")
 
         if not same_sys:
-            system.ID = len(self._system_getter) + 1
+            self._max_id_system += 1
+            system.ID = self._max_id_system
             self._system_getter[system.ID] = system
+            for canonical_system in canonical_systems:
+                system.add_canonical(canonical_system)
+        self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
+
 
     def number_of_systems(self) -> int:
         """Get the number of systems in the pangenomes"""

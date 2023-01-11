@@ -90,36 +90,51 @@ class GeneFamily(Fam):
         :param annotation: Identifier of the annotation
         :param max_prediction:
         """
-        for annot in self.get_annotations(name=annotation.name, accession=annotation.accession):
-            if annot.source == source:
-                self.get_source(source).remove(annot)
+        # for annot in self.get_annotations(name=annotation.name, accession=annotation.accession):
+        #     if annot.source == source:
+        #         if annot.score is not None and annotation.score is not None:
+        #             if annot.score < annotation.score:
+
 
         source_annot = self.get_source(source)
+        same_name = False
         if source_annot is not None:
             index_annot = 0
             insert_bool = False
             while index_annot < len(source_annot):
                 current_annot = source_annot[index_annot]
+                if current_annot.name == annotation.name:
+                    same_name = True
                 if current_annot.score is not None and annotation.score is not None:
                     if current_annot.score < annotation.score:
-                        source_annot.insert(index_annot, annotation)
-                        insert_bool = True
+                        if same_name:
+                            source_annot[index_annot] = annotation
+                        else:
+                            source_annot.insert(index_annot, annotation)
+                            insert_bool = True
                     elif current_annot.score == annotation.score:
                         if current_annot.e_val is not None and annotation.e_val is not None:
                             if current_annot.e_val > annotation.e_val:
-                                source_annot.insert(index_annot, annotation)
-                                insert_bool = True
+                                if same_name:
+                                    source_annot[index_annot] = annotation
+                                else:
+                                    source_annot.insert(index_annot, annotation)
+                                    insert_bool = True
                 elif current_annot.e_val is not None and annotation.e_val is not None:
                     if current_annot.e_val > annotation.e_val:
-                        source_annot.insert(index_annot, annotation)
-                        insert_bool = True
-                if not insert_bool:
+                        if same_name:
+                            source_annot[index_annot] = annotation
+                        else:
+                            source_annot.insert(index_annot, annotation)
+                            insert_bool = True
+                if not insert_bool and not same_name:
                     index_annot += 1
                 else:
                     break
             if not insert_bool:
-                if max_prediction is None or len(source_annot) < max_prediction:
-                    source_annot.append(annotation)
+                if not same_name:
+                    if max_prediction is None or len(source_annot) < max_prediction:
+                        source_annot.append(annotation)
             else:
                 if max_prediction is not None and len(source_annot) > max_prediction:
                     del source_annot[max_prediction:]

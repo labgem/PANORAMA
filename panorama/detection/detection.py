@@ -103,22 +103,22 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str):
+def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, graph: nx.Graph):
     detected_systems = []
     for mandatory_fam in func_unit.mandatory:
         if mandatory_fam.name in annot2fam:
             for pan_fam in annot2fam[mandatory_fam.name]:
-                detected_systems.append(System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
+                if pan_fam not in graph.nodes:
+                    detected_systems.append(System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
     return detected_systems
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str):
+def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str, detected_systems: list):
     """
     Verify parameters
 
     """
     seen = set()
-    detected_systems = []
 
     def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
         nextlevel = {node}
@@ -175,15 +175,15 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
 
 
 def search_system(model: Model, annot2fam: dict, source: str):
-    if model.name == "qatABCD_other":
+    if model.name == "DRT_class_I":
         print("pika")
     for func_unit in model.func_units:
         detected_systems = []
-        if func_unit.parameters['min_total'] == 1:
-            detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source)
         families, fam2annot = dict_families_context(func_unit, annot2fam)
         g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
-        detected_systems += verify_param(g, fam2annot, model, func_unit, source)
+        if func_unit.parameters['min_total'] == 1:
+            detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
+        verify_param(g, fam2annot, model, func_unit, source, detected_systems)
         return detected_systems
 
 
@@ -271,6 +271,8 @@ def parser_detection(parser):
                           help="Path to value directory")
     required.add_argument("-S", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
+    required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
+                          help='Output directory')
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
