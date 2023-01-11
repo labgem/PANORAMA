@@ -5,6 +5,7 @@
 import os
 import collections
 import logging
+import re
 from pathlib import Path
 from typing import List, Generator, Tuple, Union
 from tqdm import tqdm
@@ -27,6 +28,8 @@ meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "sc
 meta_dtype = {"accession": "string", "hmm_name": "string", "protein_name": "string", "secondary_name": "string",
               "score_threshold": "float", "eval_threshold": "float", "hmm_cov_threshold": "float",
               "target_cov_threshold": "float", "description": "string"}
+seq_length = {}
+hmm_length = {}
 
 
 def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmmer.easel.DigitalSequence]:
@@ -36,6 +39,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
 
     :return: list of digitalised gene family sequences
     """
+    global seq_length
     digit_gf_sequence = []
     logging.getLogger().info("Digitalized gene families sequences")
     for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
@@ -43,6 +47,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
         seq = pyhmmer.easel.TextSequence(name=bit_name,
                                          sequence=family.sequence if family.hmm is None
                                          else family.hmm.consensus.upper() + '*')
+        seq_length[seq.name] = len(seq.sequence)
         digit_gf_sequence.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
     return digit_gf_sequence
 
@@ -107,6 +112,11 @@ def read_hmm(hmm_dir: Generator, disable_bar: bool = False):
     for hmm_file in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         try:
             hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
+            with open(hmm_file, 'r') as file:
+                line = file.readline()
+                while not re.search('LENG', line):
+                    line = file.readline()
+                hmm_length[hmm.name] = int(line.split(' ')[-1])
         except ValueError as val_error:
             raise ValueError(f'{hmm_file} {val_error}')
         except Exception as error:
@@ -153,8 +163,10 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
         for hit in top_hits:
             cog = hit.best_domain.alignment
-            target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from))/len(cog.target_sequence)
-            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from))/len(cog.hmm_sequence)
+            if cog.hmm_name.decode('UTF-8') == "retron_XI":
+                print("pika")
+            target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from))/seq_length[cog.target_name]
+            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from))/hmm_length[cog.hmm_name]
             hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
             add_res = False
             if target_covery >= hmm_info["target_cov_threshold"] and hmm_covery >= hmm_info["hmm_cov_threshold"]:
