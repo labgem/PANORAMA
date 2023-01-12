@@ -39,7 +39,8 @@ class Annotation:
         self.e_val = e_val
         self.bias = bias
 
-    def _write_secondary_names(self, secondary_names: Union[str, List[str]]):
+    @staticmethod
+    def _write_secondary_names(secondary_names: Union[str, List[str]]):
         if isinstance(secondary_names, list):
             return ','.join(secondary_names)
         elif isinstance(secondary_names, str):

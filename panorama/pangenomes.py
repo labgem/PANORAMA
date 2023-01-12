@@ -156,21 +156,13 @@ class Pangenome(Pan):
             elif system.name in system_in.canonical_models():
                 # System in pangenome is a canonical system for new system
                 if len(system.gene_families.intersection(system_in.gene_families)) > 0:
-                # if system_in.gene_families.issubset(system.gene_families):
                     canonical_systems.append(system_in)
                     drop_sys_key.append(system_in.ID)
-                # else:
-                #     if system.gene_families.issubset(system_in.gene_families):
-                #         print("bulbizar")
             elif system_in.name in system.canonical_models():
                 # New system is a canonical system for a system in pangenome
                 if len(system.gene_families.intersection(system_in.gene_families)) > 0:
-                # if system.gene_families.issubset(system_in.gene_families):
                     system_in.add_canonical(system)
                     same_sys = True
-                # else:
-                #     if system_in.gene_families.issubset(system.gene_families):
-                #         print("salamèche")
 
         if not same_sys:
             self._max_id_system += 1
@@ -179,7 +171,6 @@ class Pangenome(Pan):
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)
         self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
-
 
     def number_of_systems(self) -> int:
         """Get the number of systems in the pangenomes"""

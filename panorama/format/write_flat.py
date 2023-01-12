@@ -67,7 +67,7 @@ def write_hmm(gf: GeneFamily, output: Path):
     :param output: Path to output directory
     """
     with open(f"{output.absolute().as_posix()}/{gf.name}.hmm", 'wb') as hmm_file:
-        gf.hmm.write(hmm_file)
+        gf.HMM.write(hmm_file)
 
 
 def write_hmm_profile(pangenome: Pangenome, output: Path, threads: int = 1,
@@ -84,7 +84,7 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, threads: int = 1,
                   desc='write gene families hmm/profile', disable=disable_bar) as progress:
             futures = []
             for gf in pangenome.gene_families:
-                if gf.hmm is not None:
+                if gf.HMM is not None:
                     future = executor.submit(write_hmm, gf, output)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -224,14 +224,14 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
                                   "annotation name", "gene", "start", "stop", "strand"]
     systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
                                    ascending=[True, True, True, True, True], inplace=True)
-    mkdir(f"{output}/projection_systems2", force=force)
+    mkdir(f"{output}/projection_systems1", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/projection_systems2/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
+        org_df.to_csv(f"{output}/projection_systems1/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems1.tsv", sep="\t", index=False)
 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,

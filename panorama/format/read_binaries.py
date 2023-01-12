@@ -62,8 +62,8 @@ def get_status(pangenome, pangenome_file):
 
 
 def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
-    """
-    Read information about gene families in pangenome hdf5 file to add in pangenome object
+    """Read information about gene families in pangenome hdf5 file to add in pangenome object
+
     :param pangenome: Pangenome object without gene families information
     :param h5f: Pangenome HDF5 file with gene families information
     :param disable_bar: Disable the progress bar
@@ -96,6 +96,7 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, n
     :param need_spots: get hotspot
     :param need_gene_sequences: get gene sequences
     :param need_modules: get modules
+    :param need_annotation_fam: get annotation for gene families
     :param disable_bar: Allow to disable the progress bar
     """
     if need_annotation_fam:

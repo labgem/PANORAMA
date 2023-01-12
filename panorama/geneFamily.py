@@ -14,6 +14,7 @@ from annotation import Annotation
 class GeneFamily(Fam):
     """
     This represents a single gene family. It will be a node in the pangenome graph, and be aware of its genes and edges.
+
     :param family_id: The internal identifier to give to the gene family
     :param name: The name of the gene family (to be printed in output files)
     """
@@ -29,7 +30,8 @@ class GeneFamily(Fam):
         return f"GF {self.ID}: {self.name}"
 
     @property
-    def hmm(self) -> Union[HMM, None]:
+    def HMM(self) -> HMM:
+        """Return gf HMM"""
         return self._hmm
 
     @property
@@ -94,12 +96,6 @@ class GeneFamily(Fam):
         :param annotation: Identifier of the annotation
         :param max_prediction:
         """
-        # for annot in self.get_annotations(name=annotation.name, accession=annotation.accession):
-        #     if annot.source == source:
-        #         if annot.score is not None and annotation.score is not None:
-        #             if annot.score < annotation.score:
-
-
         source_annot = self.get_source(source)
         same_name = False
         if source_annot is not None:

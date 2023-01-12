@@ -10,6 +10,7 @@ import logging
 import json
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
+from typing import Dict, List, Set
 
 # installed libraries
 import networkx as nx
@@ -31,12 +32,14 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, disable_bar: bo
     :param pangenome: Pangenome object
     :param source: Source used to detect system
     :param disable_bar: Disable progress bar
+
+    :raise KeyError: Provided source is not in the pangenome
     """
     if source in pangenome.status["annotation_source"]:
         check_pangenome_info(pangenome, need_annotations=True, need_families=True,
                              need_annotation_fam=True, need_modules=True, disable_bar=disable_bar)
     else:
-        raise Exception("Annotation source not in pangenome")
+        raise KeyError("Annotation source not in pangenome.")
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
@@ -70,7 +73,14 @@ def read_models(models_path: Path, disable_bar: bool = False) -> Models:
     return models
 
 
-def get_annotation_to_families(pangenome: Pangenome, source: str):
+def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, Set[GeneFamily]]:
+    """ Get for eache annotation a set of families with this annotation
+
+    :param pangenome: Pangenome with gene families
+    :param source: name of the annotation source
+
+    :return: Dictionnary with for each annotation a set of gene families
+    """
     annot2fam = {}
     for gf in pangenome.gene_families:
         annotations = gf.get_source(source)
@@ -84,10 +94,11 @@ def get_annotation_to_families(pangenome: Pangenome, source: str):
 
 
 def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
-    """
-    Recover all families in the function unit
+    """Recover all families in the function unit
+
     :param func_unit: function unit object of model
     :param annot2fam: dictionary of annotated families
+
     :return families: dictionary of families interesting
     """
     families = dict()
@@ -103,7 +114,16 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, graph: nx.Graph):
+def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, graph: nx.Graph) -> List[System]:
+    """Search defense system with only one family necessary
+
+    :param func_unit: Functional unit
+    :param annot2fam: Dictionnary which link annotation with gene family
+    :param source: name of the annotation source
+    :param graph: connected component graph
+
+    :return: Detected system in pangenome
+    """
     detected_systems = []
     for mandatory_fam in func_unit.mandatory:
         if mandatory_fam.name in annot2fam:
@@ -113,14 +133,28 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, gr
     return detected_systems
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str, detected_systems: list):
-    """
-    Verify parameters
+def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str,
+                 detected_systems: list):
+    """Check if the models parameters are respected
 
+    :param g: Connected component graph
+    :param fam2annot: dictionary of families interesting
+    :param model: Defined model
+    :param func_unit: Functional unit
+    :param source: annotation source
+    :param detected_systems: detected system list
     """
     seen = set()
 
-    def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set):
+    def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[GeneFamily]:
+        """ Get connected component of the gene family
+
+        :param node: node corresponding to gene family
+        :param graph: graph of connected component
+        :param seen: set of already check gene families
+
+        :return: set of connected component
+        """
         nextlevel = {node}
         cc = set()
         while len(nextlevel) > 0:
@@ -133,7 +167,15 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
                     nextlevel |= set(graph.neighbors(v))
         return cc
 
-    def check_cc(cc: set, fam2annot: dict, func_unit: FuncUnit):
+    def check_cc(cc: set, fam2annot: dict, func_unit: FuncUnit) -> bool:
+        """Check parameters
+
+        :param cc: set of connected component
+        :param fam2annot: link between gene family and annotation
+        :param func_unit:functional unit
+
+        :return: Boolean true if parameter respected
+        """
         count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
         forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
                                                           list(map(lambda x: x.name, func_unit.mandatory)),
@@ -171,12 +213,17 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
             else:
                 remove_node |= cc
     g.remove_nodes_from(remove_node)
-    return detected_systems
 
 
-def search_system(model: Model, annot2fam: dict, source: str):
-    if model.name == "DRT_class_I":
-        print("pika")
+def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
+    """Search if model system is in pangenome
+
+    :param model: model to search
+    :param annot2fam: Dictionnary with for each annotation a set of gene families
+    :param source: name of the annotation source
+
+    :return: Systems detected
+    """
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
@@ -198,13 +245,11 @@ def model_to_module(pangenome: Pangenome, predictions: set):
 def search_systems(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
     """
     Search present model in the pangenome
-    :param models:
-    :param pangenome:
-    :param source:
-    :param threads:
-    :param disable_bar:
-
-    :return:
+    :param models: Models to search in pangenomes
+    :param pangenome: Pangenome with gene families
+    :param source: name of the annotation source
+    :param threads: number of available threads
+    :param disable_bar: Disable progress bar
     """
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
 

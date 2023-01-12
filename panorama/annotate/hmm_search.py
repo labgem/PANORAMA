@@ -7,7 +7,7 @@ import collections
 import logging
 import re
 from pathlib import Path
-from typing import List, Generator, Tuple, Union
+from typing import List, Generator, Tuple
 from tqdm import tqdm
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -36,6 +36,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     """Digitalised pangenome gene families sequences for hmmsearch
 
     :param pangenome: Pangenome object with gene families
+    :param disable_bar: Disable bar
 
     :return: list of digitalised gene family sequences
     """
@@ -46,16 +47,25 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name,
                                          sequence=family.sequence if family.hmm is None
-                                         else family.hmm.consensus.upper() + '*')
+                                         else family.HMM.consensus.upper() + '*')
         seq_length[seq.name] = len(seq.sequence)
         digit_gf_sequence.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
     return digit_gf_sequence
 
 
 def get_msa():
-    pass
+    logging.getLogger().warning("In Dev")
+
 
 def profile_gf(gf: GeneFamily, msa_file: Path,  msa_format: str = "afa", ):
+    """ Compute a profile for a gene family
+
+    :param gf: Gene family to profile
+    :param msa_file: path to file containing msa
+    :param msa_format: format used to write msa
+
+    :raise Exception: Problem to compute profile
+    """
     alphabet = pyhmmer.easel.Alphabet.amino()
     builder = pyhmmer.plan7.Builder(alphabet)
     background = pyhmmer.plan7.Background(alphabet)
@@ -69,13 +79,21 @@ def profile_gf(gf: GeneFamily, msa_file: Path,  msa_format: str = "afa", ):
                 msa = next(easel_msa)
                 msa.name = gf.name.encode('UTF-8')
                 msa.accession = f"PAN{gf.ID}".encode('UTF-8')
-                gf.hmm, gf.profile, gf.optimized_profile = builder.build_msa(msa, background)
+                gf._hmm, gf.profile, gf.optimized_profile = builder.build_msa(msa, background)
         except Exception as error:
             raise Exception(f"The following error happened with file {msa_file} : {error}")
 
 
-def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa", threads: int = 1, disable_bar: bool = False):
-    """Create an HMM profile for each gene families"""
+def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa",
+                threads: int = 1, disable_bar: bool = False):
+    """Create an HMM profile for each gene families
+
+    :param pangenome: Pangenome contaning gene families to profile
+    :param msa_path: path to file containing msa
+    :param msa_format: format used to write msa
+    :param threads: Number of available threads
+    :param disable_bar: Disable progress bar
+    """
     if msa_path is None:
         get_msa()
     else:
@@ -94,7 +112,13 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
                     future.result()
 
 
-def read_metadata(metadata: Path):
+def read_metadata(metadata: Path) -> Tuple[pd.DataFrame, dict]:
+    """ Read metadata associate with HMM
+
+    :param metadata: PAth to metadata
+
+    :return: metadata dataframe and dictionnary associate hmm name with protein and secondary name
+    """
     metadata_df = pd.read_csv(metadata, delimiter="\t", names=meta_col_names,
                               dtype=meta_dtype, header=0).set_index('accession')
     metadata_df['description'] = metadata_df["description"].fillna('unknown')
@@ -105,7 +129,14 @@ def read_metadata(metadata: Path):
     return metadata_df, hmm_to_metaname
 
 
-def read_hmm(hmm_dir: Generator, disable_bar: bool = False):
+def read_hmm(hmm_dir: Generator, disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
+    """Read HMM file to create HMM object
+
+    :param hmm_dir: Directory with the HMM
+    :param disable_bar: Disable progress bar
+
+    :return: List of HMM object
+    """
     hmms = []
     hmm_list_path = list(hmm_dir)
     logging.getLogger().info("Read HMM")
@@ -156,6 +187,16 @@ def split_hmm_file(hmm_path: Path, tmpdir: tempfile.TemporaryDirectory) -> List[
 def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
                          hmm_meta: pd.DataFrame = None, threads: int = 1,
                          disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+    """Compute HMMer alignment between gene families sequences and HMM
+
+    :param hmm_list: List of HMM
+    :param gf_sequences: List of gene families sequences
+    :param hmm_meta: Metadata associate with HMM
+    :param threads: Number of available threads
+    :param disable_bar: Disable progress bar
+
+    :return: Alignment results
+    """
     res = []
     result = collections.namedtuple("Result", res_col_names)
     logging.getLogger().info("Align gene families to HMM")
@@ -184,15 +225,16 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     return res
 
 
-def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None, mode: str = 'fast', msa: Path = None,
-                   tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
+def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
+                   mode: str = 'fast', msa: Path = None, tmpdir: Path = Path(tempfile.gettempdir()),
+                   threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
     """ Launch hmm search against pangenome gene families and HMM
 
     :param pangenome: Pangenome with gene families
     :param hmm_path: Path to one file with multiple HMM or a directory with one HMM by file
-    :param meta:
-    :param mode:
-    :param msa:
+    :param meta: Path to metadata associate with HMM
+    :param mode: alignment method used
+    :param msa: Path to msa results
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param disable_bar: allow to disable progress bar
@@ -225,77 +267,9 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None, mode
 if __name__ == "__main__":
     # default libraries
     import argparse
-    from time import time
-    # installed libraries
-    from ppanggolin.formats.readBinaries import check_pangenome_info
+
     # local libraries
     from panorama.utils import check_log, set_verbosity_level
-
-
-    def plot_res(pred_size_max, nb_pred, run_time):
-        import matplotlib.pyplot as plt
-
-        fig, ax = plt.subplots()
-        fig.subplots_adjust(right=0.75)
-
-        twin1 = ax.twinx()
-
-        p1, = ax.plot(range(1, pred_size_max + 1), nb_pred, 'r.', label="Nombre de prédiction total")
-        p2, = twin1.plot(range(1, pred_size_max + 1), run_time, 'bx', label="Temps de calcul")
-
-        ax.set_xlabel("Nombre maximum de prédiction par familles")
-        ax.set_ylabel("Nombre de prédiction total")
-        twin1.set_ylabel("Temps de calcul (s)")
-
-        tkw = dict(size=4, width=1.5)
-        ax.tick_params(axis='y', colors=p1.get_color(), **tkw)
-        twin1.tick_params(axis='y', colors=p2.get_color(), **tkw)
-        ax.tick_params(axis='x', **tkw)
-
-        # Shrink current axis by 20%
-        box = ax.get_position()
-        ax.set_position([box.x0, box.y0 + box.height * 0.1,
-                         box.width, box.height * 0.9])
-
-        # Put a legend to the right of the current axis
-        ax.legend(loc='upper center', bbox_to_anchor=(0.5, 1.1), handles=[p1, p2],
-                  fancybox=True, shadow=True, ncol=2)
-
-        plt.show()
-
-
-    def plot_stat(pred_size_max, res_stat):
-        import matplotlib.pyplot as plt
-        fig, ax = plt.subplots()
-        p1 = ax.plot(range(1, pred_size_max + 1), [res.mean for res in res_stat],
-                     'ro', label="Moyenne")
-        p2 = ax.plot(range(1, pred_size_max + 1), [res.min for res in res_stat],
-                     'bo', label="Minimum")
-        p3 = ax.plot(range(1, pred_size_max + 1), [res.max for res in res_stat],
-                     'go', label="Maximum")
-
-        ax.errorbar(range(1, pred_size_max + 1), [res.mean for res in res_stat],
-                    yerr=[res.std for res in res_stat], fmt="+", capsize=6)
-
-        ax.set_xlabel("Nombre maximum de prédiction par familles")
-        ax.set_ylabel("Nombre de prédiction par famille")
-
-        # Put a legend to the right of the current axis
-        ax.legend(loc='upper center', fancybox=True, shadow=True, ncol=2)
-
-        plt.show()
-
-
-    def test_hmm_search(args: argparse.Namespace):
-        pangenome = Pangenome(name="pangenome")
-        pangenome.add_file(pangenome_file=args.pangenome)
-        check_pangenome_info(pangenome, need_families=True)
-        res_df = annot_with_hmm(pangenome=pangenome, hmm_path=args.hmm, method=args.method, tmpdir=args.tmpdir,
-                                meta=args.meta, max_prediction=args.max_prediction,
-                                threads=args.threads, disable_bar=args.disable_prog_bar)
-        res_df.to_csv(path_or_buf="hmm_res.tsv", sep="\t")
-        return res_df
-
 
     main_parser = argparse.ArgumentParser(
         description="Comparative Pangenomic analyses toolsbox",
@@ -322,23 +296,3 @@ if __name__ == "__main__":
                         help="Force writing in output directory and in pangenome output file.")
     main_args = main_parser.parse_args()
     set_verbosity_level(main_args)
-
-    res_df = test_hmm_search(main_args)
-
-    # run_time = []
-    # nb_pred = []
-    # stat = collections.namedtuple("Stat", ['min', 'max', 'mean', "std"])
-    # res_stat = []
-    # max_pred = main_args.max_prediction
-    # for i in range(1, max_pred + 1):
-    #     print(i)
-    #     b_time = time()
-    #     main_args.max_prediction = i
-    #     res_df = test_hmm_search(main_args)
-    #     res_vc = res_df['Gene_family'].value_counts()
-    #     res_stat.append(stat(res_vc.min(), res_vc.max(), res_vc.mean(), res_vc.std()))
-    #     nb_pred.append(res_vc.sum())
-    #     run_time.append(time() - b_time)
-    # print(nb_pred, run_time)
-    # plot_res(max_pred, nb_pred, run_time)
-    # plot_stat(max_pred, res_stat)

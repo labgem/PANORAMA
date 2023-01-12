@@ -75,6 +75,7 @@ def write_gene_fam_annot(pangenome: Pangenome, h5f: tables.File, source: str, di
     Writing a table containing the protein sequences of each family
     :param pangenome: Pangenome with gene families computed
     :param h5f: HDF5 file to write gene families
+    :param source: name of the annotation source
     :param disable_bar: Disable progress bar
     """
     if '/geneFamiliesAnnot' not in h5f:
@@ -99,6 +100,7 @@ def write_gene_fam_annot(pangenome: Pangenome, h5f: tables.File, source: str, di
             annot_row.append()
     source_table.flush()
 
+
 def write_status(pangenome: Pangenome, h5f: tables.File):
     """
     Write pangenome status in HDF5 file
@@ -112,6 +114,7 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
                                                                                   "inFile"] else False
     status_group._v_attrs.annotation_source = pangenome.annotation_source
 
+
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
                     rgp: bool = False, spots: bool = False, modules: bool = False, annotation: bool = False, **kargs):
     """
@@ -123,11 +126,11 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
         :param rgp: remove rgp information
         :param spots: remove spots information
         :param modules: remove modules information
+        :param annotation: remove annotation
         """
 
     h5f = tables.open_file(pangenome.file, "a")
     status_group = h5f.root.status
-    info_group = h5f.root.info
 
     super_erase_pangenome(pangenome, graph, gene_families, partition, rgp, spots, modules)
 
@@ -152,7 +155,6 @@ def write_pangenome(pangenome: Pangenome, file_path: Path, disable_bar: bool = F
 
     :param pangenome: pangenome object
     :param file_path: HDF5 file to save pangenome if not given the original file is used
-    :param force: force to write on pangenome if information already exist
     :param disable_bar: Allow to disable progress bar
     """
 
