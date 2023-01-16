@@ -8,7 +8,7 @@ from typing import Generator, List, Tuple, Union
 from ppanggolin.geneFamily import GeneFamily as Fam
 from pyhmmer.plan7 import HMM
 # local libraries
-from annotation import Annotation
+from panorama.annotation import Annotation
 
 
 class GeneFamily(Fam):

@@ -17,11 +17,11 @@ import networkx as nx
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
-from panorama.detection.models import Models, Model, FuncUnit
+from panorama.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_flat import write_systems_projection
-from system import System
+from panorama.system import System
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
@@ -43,7 +43,7 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, disable_bar: bo
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
-    """Read all json files value in the directory
+    """Read all json files models in the directory
 
     :param models_path: path of models directory
     :param disable_bar: Disable progress bar
@@ -184,20 +184,17 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
             annotations = fam2annot.get(node.name)
             if annotations is not None:
                 for annot in annotations:
-                    if annot.type == 'forbidden':  # if node is forbidden
-                        if annot.name in forbidden_list:
-                            count_forbidden += 1
-                            forbidden_list.remove(annot.name)
-                            if count_forbidden > func_unit.parameters["max_forbidden"]:
-                                return False
-                    elif annot.type == 'mandatory':  # if node is mandatory
-                        if annot.name in mandatory_list:
-                            count_mandatory += 1
-                            mandatory_list.remove(annot.name)
-                    if annot.type == 'accessory':  # if node is accessory
-                        if annot.name in accessory_list:
-                            count_accesory += 1
-                            accessory_list.remove(annot.name)
+                    if annot.type == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
+                        count_forbidden += 1
+                        forbidden_list.remove(annot.name)
+                        if count_forbidden > func_unit.parameters["max_forbidden"]:
+                            return False
+                    elif annot.type == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                        count_mandatory += 1
+                        mandatory_list.remove(annot.name)
+                    elif annot.type == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                        count_accesory += 1
+                        accessory_list.remove(annot.name)
         if count_mandatory >= func_unit.parameters['min_mandatory'] and \
                 count_accesory + count_mandatory >= func_unit.parameters['min_total']:
             return True
@@ -271,12 +268,12 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
 
 def launch(args):
     """
-    Launch functions to detect value in pangenomes
+    Launch functions to detect models in pangenomes
 
     :param args: Argument given
     """
     pan_to_path = check_tsv_sanity(args.pangenomes)
-    models = read_models(args.value)
+    models = read_models(args.models)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
@@ -284,7 +281,7 @@ def launch(args):
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
         logging.getLogger().info(f"Write system projection")
-        write_systems_projection(pangenome=pangenome, output="results", threads=args.threads,
+        write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
                                  force=args.force, disable_bar=args.disable_prog_bar)
         logging.getLogger().info(f"Projection written")
 
@@ -297,7 +294,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("annotation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("detection", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_detection(parser)
     return parser
 
@@ -312,9 +309,9 @@ def parser_detection(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument('-s', '--value', required=False, type=Path, default=None,
-                          help="Path to value directory")
-    required.add_argument("-S", "--source", required=True, type=str, nargs="?",
+    required.add_argument('-m', '--models', required=False, type=Path, default=None,
+                          help="Path to model directory")
+    required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')

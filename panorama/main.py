@@ -15,6 +15,7 @@ import pkg_resources
 from panorama.utils import check_log, set_verbosity_level
 import panorama.info
 import panorama.annotate
+import panorama.detection
 import panorama.dbGraph
 import panorama.format.write_flat
 
@@ -28,7 +29,8 @@ def cmd_line():
     desc += "\n"
     desc += "  Global:\n"
     desc += "       info            Provide and compare information through pangenomes\n"
-    desc += "       annotation      Annotate families and assign processus to modules in pangenome\n"
+    desc += "       annotation      Annotate pangenome gene families with HMM or TSV file\n"
+    desc += "       detection       Detect systems in pangenome based on one annotation source\n"
     desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries\n"
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
     desc += "\n"
@@ -43,6 +45,7 @@ def cmd_line():
 
     subs = [panorama.info.subparser(subparsers),
             panorama.annotate.subparser(subparsers),
+            panorama.detection.subparser(subparsers),
             panorama.dbGraph.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers)]
 
@@ -77,6 +80,8 @@ def main():
         panorama.info.launch(args)
     elif args.subcommand == "annotation":
         panorama.annotate.launch(args)
+    elif args.subcommand == "detection":
+        panorama.detection.launch(args)
     elif args.subcommand == "graph-db":
         panorama.dbGraph.launch(args)
     elif args.subcommand == "write":

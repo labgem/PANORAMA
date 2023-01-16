@@ -8,7 +8,7 @@ from typing import List, Set, Union
 # installed libraries
 
 # local libraries
-from panorama.detection.models import Model
+from panorama.models import Model
 from panorama.geneFamily import GeneFamily
 
 

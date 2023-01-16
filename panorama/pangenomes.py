@@ -8,8 +8,8 @@ from typing import Generator, List, Set, Union
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
-from annotation import Annotation
-from system import System
+from panorama.annotation import Annotation
+from panorama.system import System
 from panorama.geneFamily import GeneFamily
 
 

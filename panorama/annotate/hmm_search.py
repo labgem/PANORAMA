@@ -17,9 +17,9 @@ import pyhmmer
 import pandas as pd
 
 # local libraries
-from geneFamily import GeneFamily
-from pangenomes import Pangenome
-from utils import path_is_dir, path_is_file
+from panorama.pangenomes import Pangenome
+from panorama.geneFamily import GeneFamily
+from panorama.utils import path_is_dir, path_is_file
 
 res_col_names = ['Gene_family', 'Accession', 'protein_name', 'e_value',
                  'score', 'bias', 'secondary_name', 'Description']
@@ -46,7 +46,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name,
-                                         sequence=family.sequence if family.hmm is None
+                                         sequence=family.sequence if family.HMM is None
                                          else family.HMM.consensus.upper() + '*')
         seq_length[seq.name] = len(seq.sequence)
         digit_gf_sequence.append(seq.digitize(pyhmmer.easel.Alphabet.amino()))
@@ -204,8 +204,6 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
         for hit in top_hits:
             cog = hit.best_domain.alignment
-            if cog.hmm_name.decode('UTF-8') == "retron_XI":
-                print("pika")
             target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from))/seq_length[cog.target_name]
             hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from))/hmm_length[cog.hmm_name]
             hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]

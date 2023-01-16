@@ -17,12 +17,12 @@ import numpy as np
 import pandas as pd
 
 # local libraries
-from annotate.hmm_search import profile_gfs
-from format.read_binaries import check_pangenome_info
-from utils import check_tsv_sanity, mkdir
-from system import System
-from geneFamily import GeneFamily
-from pangenomes import Pangenome
+from panorama.annotate.hmm_search import profile_gfs
+from panorama.format.read_binaries import check_pangenome_info
+from panorama.utils import check_tsv_sanity, mkdir
+from panorama.system import System
+from panorama.geneFamily import GeneFamily
+from panorama.pangenomes import Pangenome
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
