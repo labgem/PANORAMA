@@ -2,7 +2,7 @@
 # coding: utf8
 
 # default libraries
-from typing import Generator, List, Set, Union
+from typing import Generator, Iterable, List, Set, Union
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
@@ -11,6 +11,8 @@ from ppanggolin.pangenome import Pangenome as Pan
 from panorama.annotation import Annotation
 from panorama.system import System
 from panorama.geneFamily import GeneFamily
+from panorama.region import Module
+
 
 
 class Pangenome(Pan):
@@ -175,7 +177,9 @@ class Pangenome(Pan):
     def number_of_systems(self) -> int:
         """Get the number of systems in the pangenomes"""
         return len(self._system_getter)
-
+    
+    def add_modules(self, modules: Iterable[Module]):
+        super().add_modules({Module(module_id=module.ID, families=module.families) for module in modules})
 
 class Pangenomes:
     """

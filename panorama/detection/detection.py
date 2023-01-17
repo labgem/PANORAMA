@@ -22,6 +22,7 @@ from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_flat import write_systems_projection
 from panorama.system import System
+from panorama.region import Module
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
@@ -231,14 +232,6 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
         return detected_systems
 
 
-def model_to_module(pangenome: Pangenome, predictions: set):
-    """Associate a model to modules"""
-    for module in pangenome.modules:
-        for prediction in predictions:
-            if prediction.issubset(module.families):
-                print("pika")
-
-
 def search_systems(models: Models, pangenome: Pangenome, source: str, threads: int = 1, disable_bar: bool = False):
     """
     Search present model in the pangenome
@@ -266,6 +259,27 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
         pangenome.add_system(system)
 
 
+def systems_to_module(module: Module, systems: Set[System]):
+    for system in systems:
+        if system.gene_families.issubset(module.families):
+            print("pika", system.name, module.ID, "\n")
+            module.add_system(system)
+
+
+def systems_to_modules(pangenome: Pangenome, threads: int = 1, disable_bar: bool = False):
+    """Associate a model to modules"""
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=pangenome.number_of_modules(), unit='module', disable=disable_bar) as progress:
+            futures = []
+            for module in pangenome.modules:
+                future = executor.submit(systems_to_module, module, pangenome.systems)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+            for future in futures:
+                future.result()
+
+
 def launch(args):
     """
     Launch functions to detect models in pangenomes
@@ -281,9 +295,10 @@ def launch(args):
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
         logging.getLogger().info(f"Write system projection")
-        write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
-                                 force=args.force, disable_bar=args.disable_prog_bar)
-        logging.getLogger().info(f"Projection written")
+        systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
+        # write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
+        #                          force=args.force, disable_bar=args.disable_prog_bar)
+        # logging.getLogger().info(f"Projection written")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
