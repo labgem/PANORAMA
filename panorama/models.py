@@ -4,7 +4,10 @@
 # default libraries
 from __future__ import annotations
 import logging
+from pathlib import Path
 from typing import Dict, List, Generator, Set, Tuple, Union
+from tqdm import tqdm
+import json
 
 suprules_params = ['min_mandatory', 'max_forbidden', 'min_total']
 keys_param = suprules_params.append('max_separation')
@@ -183,6 +186,34 @@ class Models:
                 else:
                     families_dict[family.name].append(model)
         return families_dict
+
+    def read(self, models_path: Path, disable_bar: bool = False) -> Models:
+        """Read all json files models in the directory
+
+        :param models_path: path of models directory
+        :param disable_bar: Disable progress bar
+
+        :raise KeyError: One or more keys are missing or non-acceptable
+        :raise TypeError: One or more value are not with good type
+        :raise ValueError: One or more value are not non-acceptable
+        :raise Exception: Manage unexpected error
+        """
+        for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
+            with open(file.resolve().as_posix()) as json_file:
+                data = json.load(json_file)
+                model = Model()
+                try:
+                    model.read_model(data)
+                except KeyError:
+                    raise KeyError(f"One or more key in {file} are missing.")
+                except TypeError:
+                    raise TypeError(f"One or more attribute are not with the good type in {file}.")
+                except ValueError:
+                    raise ValueError(f"One or more attribute are not with an acceptable value in {file}.")
+                except Exception:
+                    raise Exception(f"Unexpected problem to read json {file}")
+                else:
+                    self.add_model(model)
 
     def get_model(self, name: str) -> Model:
         """

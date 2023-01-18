@@ -5,6 +5,7 @@
 import logging
 from tqdm import tqdm
 from typing import List
+from pathlib import Path
 
 # installed libraries
 import tables
@@ -13,6 +14,8 @@ from ppanggolin.formats import check_pangenome_info as check_pp
 
 # local libraries
 from panorama.annotation import Annotation
+from panorama.system import System
+from panorama.models import Models
 from panorama.pangenomes import Pangenome
 
 
@@ -69,10 +72,12 @@ def get_status(pangenome, pangenome_file):
 def read_gene_families_annotations_by_source(pangenome: Pangenome, source_table, disable_bar: bool = False):
     for row in tqdm(read_chunks(source_table), total=source_table.nrows, unit="annotation", disable=disable_bar):
         gf = pangenome.get_gene_family(row["geneFam"].decode())
-        annotation = Annotation(source=source_table.name, name=row['name'].decode(), accession=row["accession"].decode(),
+        annotation = Annotation(source=source_table.name, name=row['name'].decode(),
+                                accession=row["accession"].decode(),
                                 secondary_names=row["secondary_names"].decode(), score=row["score"],
                                 description=row["description"].decode(), e_val=row["e_val"], bias=row["bias"])
         gf.add_annotation(source=source_table.name, annotation=annotation)
+
 
 def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, sources: List[str] = None,
                                    disable_bar: bool = False):
@@ -94,13 +99,47 @@ def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, sourc
     pangenome.status["annotations"] = "Loaded"
 
 
+def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, disable_bar: bool = False):
+    systems = {}
+    for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="system", disable=disable_bar):
+        curr_sys = systems.get(row["ID"].decode())
+        model = models.get_model(row["name"])
+        if curr_sys is None:
+            curr_sys = System(system_id=row["ID"].decode(), model=model,
+                              source=system_table.name)
+        curr_sys.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
+    logging.getLogger().info(f"Add system from {system_table.name} to pangenome...")
+    for system in tqdm(systems.values(), unit="system", disable=disable_bar):
+        pangenome.add_system(system)
+
+
+def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: Path, source: str,
+                 disable_bar: bool = False):
+    """Read information about systems in pangenome hdf5 file to add in pangenome object
+
+    :param pangenome: Pangenome object without gene families information
+    :param h5f: Pangenome HDF5 file with gene families information
+    :param disable_bar: Disable the progress bar
+    """
+    models = Models()
+    models.read(models_path, disable_bar)
+    systems_table = h5f.get_node("/systems", source)
+    logging.getLogger().info(f"Read system from {source}...")
+    read_systems_by_source(pangenome, systems_table, models, disable_bar)
+    logging.getLogger().debug(f"{source} has been read and added")
+    pangenome.status["systems"] = "Loaded"
+
+
 def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, need_families: bool = False,
                          need_graph: bool = False, need_partitions: bool = False, need_rgp: bool = False,
                          need_spots: bool = False, need_gene_sequences: bool = False, need_modules: bool = False,
-                         need_annotations_fam: bool = False, sources: List[str] = None, disable_bar: bool = False):
+                         need_annotations_fam: bool = False, sources: List[str] = None,
+                         need_systems: bool = False, models_path: Path = None,
+                         disable_bar: bool = False):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`
+    :param models_path:
     :param pangenome: Pangenome object without some information
     :param need_annotations: get annotations
     :param need_families: get gene families
@@ -130,5 +169,11 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, n
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
     h5f = tables.open_file(filename, "r")
     if need_annotations_fam:
+        assert sources is not None
         read_gene_families_annotations(pangenome, h5f, sources=sources, disable_bar=disable_bar)
+
+    if need_systems:
+        assert models_path is not None and sources is not None
+        read_systems(pangenome, h5f, models_path, sources, disable_bar)
+
     h5f.close()

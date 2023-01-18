@@ -7,7 +7,6 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 import logging
-import json
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from typing import Dict, List, Set
@@ -67,22 +66,7 @@ def read_models(models_path: Path, disable_bar: bool = False) -> Models:
     :raise Exception: Manage unexpected error
     """
     models = Models()
-    for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
-        with open(file.resolve().as_posix()) as json_file:
-            data = json.load(json_file)
-            model = Model()
-            try:
-                model.read_model(data)
-            except KeyError:
-                raise KeyError(f"One or more key in {file} are missing.")
-            except TypeError:
-                raise TypeError(f"One or more attribute are not with the good type in {file}.")
-            except ValueError:
-                raise ValueError(f"One or more attribute are not with an acceptable value in {file}.")
-            except Exception:
-                raise Exception(f"Unexpected problem to read json {file}")
-            else:
-                models.add_model(model)
+    models.read(models_path, disable_bar)
     return models
 
 
@@ -337,7 +321,7 @@ def parser_detection(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument('-m', '--models', required=False, type=Path, default=None,
+    required.add_argument('-m', '--models', required=True, type=Path, default=None,
                           help="Path to model directory")
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')

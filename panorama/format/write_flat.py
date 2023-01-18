@@ -25,6 +25,16 @@ from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
+def check_flat_parameters(systems: bool = False, hmm: bool = False, **kwargs):
+    if hmm:
+        if kwargs["msa_path"] is None or kwargs["msa_format"] is None:
+            raise Exception("To write HMM you need to give msa files and format")
+    if systems:
+        if kwargs["models_path"] is None or kwargs["source"] is None:
+            raise Exception("To read system and write flat related, "
+                            "it's necessary to give models and annotation source.")
+
+
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
     """ Write a tsv file with all annotation and sources present in pangenomes
 
@@ -32,8 +42,8 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar
     :param output: Path to output directory
     :param disable_bar: allow to disable the progress bar
     """
-    nb_source = len(pangenome.annotation_source)
-    source_list = list(pangenome.annotation_source)
+    nb_source = len(pangenome.annotations_sources)
+    source_list = list(pangenome.annotations_sources)
     column_name = np.array(
         f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(
             ','))
@@ -234,8 +244,8 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
     systems_projection.to_csv(f"{output}/systems1.tsv", sep="\t", index=False)
 
 
-def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: bool = False,
-                     disable_bar: bool = False, **kwargs):
+def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False,
+                     hmm: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pangenome: Pangenome with information to write
@@ -253,6 +263,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: boo
     need_modules = False
     need_gene_sequences = False
     need_annotations_fam = False
+    need_systems = False
 
     if annotation:
         need_families = True
@@ -262,10 +273,16 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, hmm: boo
         need_families = True
         need_annotations = True
 
+    if systems:
+        need_systems = True
+
+    check_flat_parameters(systems, hmm, **kwargs)
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-                         need_annotation_fam=need_annotations_fam, disable_bar=disable_bar)
+                         need_annotations_fam=need_annotations_fam, need_systems=need_systems,
+                         models_path=kwargs["models_path"], sources=[kwargs["source"]],
+                         disable_bar=disable_bar)
 
     if annotation:
         write_annotation_to_families(pangenome, output)
@@ -288,8 +305,10 @@ def launch(args):
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
-        write_flat_files(pangenome, output=args.output, annotation=args.annotation, hmm=args.hmm,
-                         msa_path=args.msa, threads=args.threads, disable_bar=args.disable_prog_bar)
+        write_flat_files(pangenome, output=args.output, annotation=args.annotation,
+                         systems=args.systems, models_path=args.models, source=args.source,
+                         hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
+                         threads=args.threads, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -318,15 +337,21 @@ def parser_write(parser):
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--annotation", required=False, action="store_true",
+    optional.add_argument("--annotations", required=False, action="store_true",
                           help="Write all the annotations from families")
+    optional.add_argument("--systems", required=False, action="store_true",
+                          help="Write all the systems in pangenomes and project on genomes")
+    optional.add_argument('--models', required=False, type=Path, default=None,
+                          help="Path to model directory")
+    required.add_argument("--source", required=False, type=str, nargs="?", default=None,
+                          help='Name of the annotation source where panorama as to select in pangenomes')
     optional.add_argument("--hmm", required=False, action="store_true",
                           help="Write an hmm for each gene families in pangenomes")
     optional.add_argument("--msa", required=False, type=Path, default=None,
                           help="To create a HMM profile for families, you can give a msa of each gene in families."
                                "This msa could be get from ppanggolin (See ppanggolin msa). "
                                "If no msa provide Panorama will launch one.")
-    optional.add_argument("--msa-format", required=False, type=str, default="afa",
+    optional.add_argument("--msa_format", required=False, type=str, default="afa",
                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
                                    "clustal", "clustallike", "phylip", "phylips"],
                           help="Format of the input MSA.")

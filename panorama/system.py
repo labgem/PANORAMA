@@ -27,7 +27,7 @@ class System:
         self.ID = system_id if isinstance(system_id, str) else str(system_id)
         self.model = model
         self.source = source
-        self.gene_families = gene_families
+        self.gene_families = gene_families if gene_families is not None else set()
         self.canonical = set()
 
     def __repr__(self):
@@ -56,3 +56,6 @@ class System:
 
         system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
         self.canonical.add(system)
+
+    def add_family(self, gene_family: GeneFamily):
+        self.gene_families.add(gene_family)
