@@ -119,6 +119,7 @@ def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_canonical_len: i
         "geneFam": tables.StringCol(itemsize=max_gf_name_len)
     }
 
+
 def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
     """
     Get maximum size of gene families information
@@ -126,6 +127,7 @@ def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
     :param source: Name of the annotation source
     :return: Maximum size of each element
     """
+
     def compare_len(system: System, max_id_len, max_name_len, max_gf_name_len):
         if len(system.ID) > max_id_len:
             max_id_len = len(system.name)
@@ -196,15 +198,16 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     status_group = h5f.root.status
 
     status_group._v_attrs.annotations = True if pangenome.status["annotations"] in ["Computed", "Loaded",
-                                                                                  "inFile"] else False
-    if hasattr(status_group._v_attrs, "annotations_source"):
-        status_group._v_attrs.annotations_source.add(*pangenome.annotations_sources)
+                                                                                    "inFile"] else False
+    if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
+                                                                                                     "Loaded"]:
+        status_group._v_attrs.annotations_sources.add(*pangenome.annotations_sources)
     else:
-        status_group._v_attrs.annotations_source = pangenome.annotations_sources
+        status_group._v_attrs.annotations_sources = pangenome.annotations_sources
 
     status_group._v_attrs.systems = True if pangenome.status["systems"] in ["Computed", "Loaded",
-                                                                              "inFile"] else False
-    if hasattr(status_group._v_attrs, "systems_sources"):
+                                                                            "inFile"] else False
+    if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
         status_group._v_attrs.systems_sources.add(*pangenome.systems_sources)
     else:
         status_group._v_attrs.systems_sources = pangenome.systems_sources
@@ -274,13 +277,13 @@ def write_pangenome(pangenome: Pangenome, file_path: Path, disable_bar: bool = F
         assert source is not None
         logging.getLogger().info("Writing gene families annotations...")
         write_gene_fam_annot(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
-        pangenome.status["annotation"] = "Loaded"
+        pangenome.status["annotations"] = "Loaded"
 
     if pangenome.status["systems"] == "Computed":
         assert source is not None
         logging.getLogger().info("Writing detected systems...")
         write_systems(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
-        pangenome.status["annotation"] = "Loaded"
+        pangenome.status["systems"] = "Loaded"
 
     write_status(pangenome, h5f)
     h5f.close()

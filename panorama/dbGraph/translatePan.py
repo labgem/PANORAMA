@@ -175,7 +175,7 @@ def launch(args):
     pangenome = Pangenome(name=args.pangenome.stem)
     pangenome.add_file(args.pangenome)
     check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_graph=True, need_partitions=True,
-                         need_rgp=True, need_spots=True, need_modules=True, need_annotation_fam=True)
+                         need_rgp=True, need_spots=True, need_modules=True, need_annotations_fam=True)
     give_gene_tmp_id(pangenome)
     write_json(pangenome, args.out_directory, compress=False)
     logging.getLogger().info("Translate pangenome in json Done")

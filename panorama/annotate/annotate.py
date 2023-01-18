@@ -42,23 +42,13 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
     :param force: erase if an annotation for the provide source already exist
     :param disable_bar: Disable bar
     """
-    try:
-        _ = pangenome.status["annotation_source"]
-    except KeyError:
-        check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
-    else:
-        if source in pangenome.status["annotation_source"]:
-            if not force:
-                raise Exception(f"An annotation corresponding to the source : '{source}' already exist in pangenome."
-                                f"Change the source name or add the option --force to erase")
-            else:
-                erase_pangenome(pangenome, annotation=True, source=source)
-        if pangenome.status['annotation'] == 'inFile':
-            # Source annotation was removed but other sources could be loaded
-            check_pangenome_info(pangenome, need_annotations=True, need_families=True,
-                                 need_annotation_fam=True, disable_bar=disable_bar)
+    if "annotations_sources" in pangenome.status and source in pangenome.status["annotations_sources"]:
+        if force:
+            erase_pangenome(pangenome, annotations=True, source=source)
         else:
-            check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
+            raise Exception(f"An annotation corresponding to the source : '{source}' already exist in pangenome."
+                            f"Add the option --force to erase")
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
 
 
 def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, source: str = None,
@@ -110,7 +100,7 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
     annotation_to_families(annotation_df, pangenome, source, max_prediction)
-    pangenome.status["annotation"] = "Computed"
+    pangenome.status["annotations"] = "Computed"
 
 
 def launch(args):
