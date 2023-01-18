@@ -168,7 +168,7 @@ class Pangenome(Pan):
 
         if not same_sys:
             self._max_id_system += 1
-            system.ID = self._max_id_system
+            system.ID = str(self._max_id_system)
             self._system_getter[system.ID] = system
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)

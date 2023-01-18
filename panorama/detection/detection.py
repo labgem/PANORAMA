@@ -20,7 +20,7 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 from panorama.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.format.write_flat import write_systems_projection
+from panorama.format.write_binaries import write_pangenome
 from panorama.system import System
 from panorama.region import Module
 from panorama.geneFamily import GeneFamily
@@ -257,12 +257,12 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
+    pangenome.status["detection"] = "Computed"
 
 
 def systems_to_module(module: Module, systems: Set[System]):
     for system in systems:
         if system.gene_families.issubset(module.families):
-            print("pika", system.name, module.ID, "\n")
             module.add_system(system)
 
 
@@ -296,6 +296,7 @@ def launch(args):
         logging.getLogger().info("Annotation Done")
         logging.getLogger().info(f"Write system projection")
         systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
+        write_pangenome(pangenome, pangenome_info["path"], disable_bar=args.disable_prog_bar)
         # write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
         #                          force=args.force, disable_bar=args.disable_prog_bar)
         # logging.getLogger().info(f"Projection written")

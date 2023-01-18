@@ -83,12 +83,11 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
             logging.getLogger().warning(
                 f"Family {row['Gene_family']} does not exist in pangenome. If you give a tsv check name."
                 f"If you're using hmm annotation, please post an issue on our github.")
-    pangenome.status["annotation"] = "Computed"
 
 
 def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None, mode: str = 'fast', msa: Path = None,
                     source: str = None, max_prediction: int = 1, tmpdir: Path = Path(tempfile.gettempdir()),
-                    threads: int = 1, disable_bar: bool = False) -> dict:
+                    threads: int = 1, disable_bar: bool = False):
     """ Main function to add annotation to pangenome from tsv file
 
     :param pangenome: Pangenome object to ppanggolin
@@ -102,8 +101,6 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     :param tmpdir: Path to temporary directory
     :param threads: Number of available threads
     :param disable_bar: Disable bar
-
-    :return: Dictionnary with for each annotation a set of corresponding gene families
     """
     if tsv is not None:
         annotation_df = pd.read_csv(tsv, sep="\t", header=None, quoting=csv.QUOTE_NONE, names=res_col_names)
@@ -112,7 +109,8 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
                                        disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
-    return annotation_to_families(annotation_df, pangenome, source, max_prediction)
+    annotation_to_families(annotation_df, pangenome, source, max_prediction)
+    pangenome.status["annotation"] = "Computed"
 
 
 def launch(args):

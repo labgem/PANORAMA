@@ -13,6 +13,7 @@ from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pang
 
 # local libraries
 from panorama.geneFamily import GeneFamily
+from panorama.system import System
 from panorama.pangenomes import Pangenome
 
 
@@ -55,8 +56,6 @@ def get_annot_len(select_gf: List[GeneFamily], source: str) -> (int, int):
         if len(gf.name) > max_gf_name_len:
             max_gf_name_len = len(gf.name)
         for annotation in gf.get_source(name=source):
-            if isinstance(annotation.name, float):
-                print('pika')
             if len(annotation.name) > max_name_len:
                 max_name_len = len(annotation.name)
             if len(annotation.accession) > max_accession_len:
@@ -101,6 +100,104 @@ def write_gene_fam_annot(pangenome: Pangenome, h5f: tables.File, source: str, di
     source_table.flush()
 
 
+def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_source_name: int = 1,
+                max_canonical_len: int = 1, max_gf_name_len: int = 1) -> dict:
+    """
+    Create a formated table for gene families annotation description
+    :param max_name_len:
+    :param max_accession_len:
+    :param max_secondary_names_len:
+    :param max_description_len:
+    :param max_gf_name_len:
+
+    :return: Formated table
+    """
+    return {
+        "ID": tables.StringCol(itemsize=max_id_len),
+        "name": tables.StringCol(itemsize=max_name_len),
+        "canonical": tables.StringCol(itemsize=max_canonical_len),
+        "source": tables.StringCol(itemsize=max_source_name),
+        "geneFam": tables.StringCol(itemsize=max_gf_name_len)
+    }
+
+def get_system_len(pangenome: Pangenome) -> (int, int):
+    """
+    Get maximum size of gene families information
+    :param select_gf: selected gene families from source
+    :param source: Name of the annotation source
+    :return: Maximum size of each element
+    """
+    def compare_len(system: System, max_id_len, max_name_len, max_source_name, max_gf_name_len):
+        if len(system.ID) > max_id_len:
+            max_id_len = len(system.name)
+        if len(system.name) > max_name_len:
+            max_name_len = len(system.name)
+        if len(system.source) > max_source_name:
+            max_source_name = len(system.source)
+        for gf in system.gene_families:
+            if len(gf.name) > max_gf_name_len:
+                max_gf_name_len = len(gf.name)
+        return max_id_len, max_name_len, max_source_name, max_gf_name_len
+
+    max_id_len, max_name_len, max_source_name, max_canonical_len, max_gf_name_len, expected_rows = (1, 1, 1, 1, 1, 0)
+
+    for system in pangenome.systems:
+        max_id_len, max_name_len, max_source_name, max_gf_name_len = compare_len(system, max_id_len, max_name_len,
+                                                                                 max_source_name, max_gf_name_len)
+        canonical_name_len = 0
+        for canonical in system.canonical:
+            canonical_name_len += len(canonical.name)
+            max_id_len, max_name_len, max_source_name, max_gf_name_len = compare_len(canonical, max_id_len,
+                                                                                     max_name_len, max_source_name,
+                                                                                     max_gf_name_len)
+            expected_rows += 1
+        if canonical_name_len > max_canonical_len:
+            max_canonical_len = canonical_name_len + len(system.canonical) - 1
+        expected_rows += 1
+
+    return max_id_len, max_name_len, max_source_name, max_canonical_len, max_gf_name_len, expected_rows
+
+
+def write_systems(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
+    """
+    Writing a table containing all systems detected in pangenome
+
+    :param pangenome: Pangenome with gene families computed
+    :param h5f: HDF5 file to write gene families
+    :param disable_bar: Disable progress bar
+    """
+    if '/systems' in h5f:
+        h5f.remove_node("/", "systems", recursive=True)
+    # else:
+    #     annot_group = h5f.root.systems
+    system_len = get_system_len(pangenome)
+    system_table = h5f.create_table("/", "systems", description=system_desc(*system_len[:-1]),
+                                    expectedrows=system_len[-1])
+    system_row = system_table.row
+    for system in tqdm(pangenome.systems, unit="system", disable=disable_bar):
+        for gf in system.gene_families:
+            system_row["ID"] = system.ID
+            system_row["name"] = system.name
+            system_row["source"] = system.source
+            system_row["geneFam"] = gf.name
+            system_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
+            system_row.append()
+        for canonical in system.canonical:
+            for gf in canonical.gene_families:
+                system_row["geneFam"] = gf.name
+                system_row["ID"] = canonical.ID
+                system_row["name"] = canonical.name
+                system_row["source"] = canonical.source
+                system_row.append()
+        # gf_table = h5f.create_table(system_group, 'gene_families')
+        # system_row["secondary_names"] = annotation.secondary_names
+    # for gf in tqdm(select_gf, unit='Gene family', desc=f'Source = {source}', disable=disable_bar):
+    #     for annotation in gf.get_source(name=source):
+    #
+    #         annot_row.append()
+    system_table.flush()
+
+
 def write_status(pangenome: Pangenome, h5f: tables.File):
     """
     Write pangenome status in HDF5 file
@@ -114,9 +211,13 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
                                                                                   "inFile"] else False
     status_group._v_attrs.annotation_source = pangenome.annotation_source
 
+    status_group._v_attrs.detection = True if pangenome.status["detection"] in ["Computed", "Loaded",
+                                                                                "inFile"] else False
+
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
-                    rgp: bool = False, spots: bool = False, modules: bool = False, annotation: bool = False, **kargs):
+                    rgp: bool = False, spots: bool = False, modules: bool = False, annotation: bool = False,
+                    source: str = None):
     """
         Erases tables from a pangenome .h5 file
         :param pangenome: Pangenome
@@ -127,6 +228,7 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
         :param spots: remove spots information
         :param modules: remove modules information
         :param annotation: remove annotation
+        :param source: annotation source
         """
 
     h5f = tables.open_file(pangenome.file, "a")
@@ -135,13 +237,13 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
     super_erase_pangenome(pangenome, graph, gene_families, partition, rgp, spots, modules)
 
     if '/geneFamiliesAnnot' in h5f and annotation:
-        assert 'source' in kargs.keys()
+        assert source is not None
         annotation_table = h5f.root.geneFamiliesAnnot
-        if kargs['source'] in annotation_table:
-            logging.getLogger().info(f"Erasing the formerly computed annotation from source {kargs['source']}")
-            h5f.remove_node("/geneFamiliesAnnot", f"{kargs['source']}")
-            status_group._v_attrs.annotation_source.remove(kargs['source'])
-            pangenome.status["annotation_source"].remove(f"{kargs['source']}")
+        if source in annotation_table:
+            logging.getLogger().info(f"Erasing the formerly computed annotation from source {source}")
+            h5f.remove_node("/geneFamiliesAnnot", f"{source}")
+            status_group._v_attrs.annotation_source.remove(source)
+            pangenome.status["annotation_source"].remove(f"{source}")
         if len(status_group._v_attrs.annotation_source) == 0:
             h5f.remove_node("/", "geneFamiliesAnnot")
             status_group._v_attrs.annotation = False
@@ -149,21 +251,27 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
     h5f.close()
 
 
-def write_pangenome(pangenome: Pangenome, file_path: Path, disable_bar: bool = False, **kargs):
+def write_pangenome(pangenome: Pangenome, file_path: Path, disable_bar: bool = False, source: str = None):
     """
     Writes or updates a pangenome file
 
     :param pangenome: pangenome object
     :param file_path: HDF5 file to save pangenome if not given the original file is used
     :param disable_bar: Allow to disable progress bar
+    :param source: annotation source
     """
 
     h5f = tables.open_file(file_path, "a")
 
     if pangenome.status["annotation"] == "Computed":
-        assert 'source' in kargs.keys()
+        assert source is not None
         logging.getLogger().info("Writing gene families annotations...")
-        write_gene_fam_annot(pangenome=pangenome, h5f=h5f, source=kargs['source'], disable_bar=disable_bar)
+        write_gene_fam_annot(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
+        pangenome.status["annotation"] = "Loaded"
+
+    if pangenome.status["detection"] == "Computed":
+        logging.getLogger().info("Writing detected systems...")
+        write_systems(pangenome=pangenome, h5f=h5f, disable_bar=disable_bar)
         pangenome.status["annotation"] = "Loaded"
 
     write_status(pangenome, h5f)
