@@ -89,7 +89,7 @@ class Pangenome(Pan):
             return fam
 
     @property
-    def annotation_source(self) -> Set[str]:
+    def annotations_sources(self) -> Set[str]:
         """returns all the annotation source in the pangenomes
 
         :return: set of annotation source
@@ -140,6 +140,18 @@ class Pangenome(Pan):
         """
         for system in self._system_getter.values():
             yield system
+
+    @property
+    def systems_sources(self):
+        sources = set()
+        for system in self.systems:
+            sources.add(system.source)
+        return sources
+
+    def get_system_by_source(self, source: str):
+        for system in self.systems:
+            if system.source == source:
+                yield system
 
     def add_system(self, system: System):
         """Add a detected system in the pangenome

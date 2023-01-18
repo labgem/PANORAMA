@@ -20,14 +20,14 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 from panorama.models import Models, Model, FuncUnit
 from panorama.utils import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.format.write_binaries import write_pangenome
+from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.system import System
 from panorama.region import Module
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
-def check_pangenome_detection(pangenome: Pangenome, source: str, disable_bar: bool = False):
+def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
@@ -36,11 +36,23 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, disable_bar: bo
 
     :raise KeyError: Provided source is not in the pangenome
     """
-    if source in pangenome.status["annotation_source"]:
-        check_pangenome_info(pangenome, need_annotations=True, need_families=True,
-                             need_annotation_fam=True, need_modules=True, disable_bar=disable_bar)
+    if "systems_sources" in pangenome.status and source in pangenome.status["systems_sources"]:
+        if force:
+            erase_pangenome(pangenome, systems=True, source=source)
+        else:
+            raise Exception(f"Systems are already detected based on the annotation source : {source}."
+                            f" Use the --force option to erase the already computed systems.")
+    try:
+        _ = pangenome.status["annotations_sources"]
+    except Exception:
+        raise Exception("There is no annotation in your pangenome. "
+                        "Please see the command annotation before to detect systems")
     else:
-        raise KeyError("Annotation source not in pangenome.")
+        if source in pangenome.status["annotations_sources"]:
+            check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_modules=True,
+                                 need_annotations_fam=True, sources=[source], disable_bar=disable_bar)
+        else:
+            raise KeyError("Annotation source not in pangenome.")
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
@@ -257,7 +269,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
-    pangenome.status["detection"] = "Computed"
+    pangenome.status["systems"] = "Computed"
 
 
 def systems_to_module(module: Module, systems: Set[System]):
@@ -291,12 +303,12 @@ def launch(args):
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
-        check_pangenome_detection(pangenome, source=args.source, disable_bar=args.disable_prog_bar)
+        check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("Annotation Done")
         logging.getLogger().info(f"Write system projection")
         systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
-        write_pangenome(pangenome, pangenome_info["path"], disable_bar=args.disable_prog_bar)
+        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
         # write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
         #                          force=args.force, disable_bar=args.disable_prog_bar)
         # logging.getLogger().info(f"Projection written")
