@@ -8,7 +8,7 @@ import sys
 import logging
 from pathlib import Path
 import csv
-from typing import TextIO, Dict
+from typing import TextIO, Dict, Union
 import pkg_resources
 
 
@@ -105,7 +105,7 @@ def path_is_file(path: Path) -> bool:
         return False
 
 
-def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[int, Path]]:
+def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
     """ Check if the given tsv is readable for the next PANORAMA step
 
     :param tsv_path: Path to tsv file with list of pangenome
@@ -117,8 +117,8 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[int, Path]]:
     """
     pan_to_path = {}
     try:
-        file = open(tsv_path.absolute(), 'r')
-        tsv = csv.reader(file, delimiter="\t")
+        p_file = open(tsv_path.absolute(), 'r')
+        tsv = csv.reader(p_file, delimiter="\t")
     except IOError as ios_error:
         raise IOError(ios_error)
     except Exception as exception_error:
@@ -134,7 +134,7 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[int, Path]]:
                                 f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
             if not Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}").exists():
                 raise IOError(f"The given path {tsv_path.parent.absolute().as_posix()}/{line[1]} not exist")
-            pan_to_path[line[0]] = {"path": Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}"),
+            pan_to_path[line[0]] = {"path": f"{tsv_path.parent.absolute().as_posix()}/{line[1]}",
                                     "taxid": line[2] if len(line) > 2 else None}
-        file.close()
+        p_file.close()
         return pan_to_path

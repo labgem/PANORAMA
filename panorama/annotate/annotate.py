@@ -146,7 +146,7 @@ def parser_annot(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument("--source", required=True, type=str, nargs="?",
+    required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source. Default use name of annnotation file or directory.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
     exclusive_mode.add_argument('--tsv', type=Path, nargs='?',

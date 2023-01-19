@@ -201,16 +201,18 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
                                                                                     "inFile"] else False
     if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
                                                                                                      "Loaded"]:
-        status_group._v_attrs.annotations_sources.add(*pangenome.annotations_sources)
-    else:
-        status_group._v_attrs.annotations_sources = pangenome.annotations_sources
+        if len(status_group._v_attrs.annotations_sources) > 0:
+            status_group._v_attrs.annotations_sources.add(*pangenome.systems_sources)
+        else:
+            status_group._v_attrs.annotations_sources = pangenome.systems_sources
 
     status_group._v_attrs.systems = True if pangenome.status["systems"] in ["Computed", "Loaded",
                                                                             "inFile"] else False
     if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
-        status_group._v_attrs.systems_sources.add(*pangenome.systems_sources)
-    else:
-        status_group._v_attrs.systems_sources = pangenome.systems_sources
+        if len(status_group._v_attrs.systems_sources) > 0:
+            status_group._v_attrs.systems_sources.add(*pangenome.systems_sources)
+        else:
+            status_group._v_attrs.systems_sources = pangenome.systems_sources
 
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
@@ -261,7 +263,7 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
     h5f.close()
 
 
-def write_pangenome(pangenome: Pangenome, file_path: Path, disable_bar: bool = False, source: str = None):
+def write_pangenome(pangenome: Pangenome, file_path: str, disable_bar: bool = False, source: str = None):
     """
     Writes or updates a pangenome file
 

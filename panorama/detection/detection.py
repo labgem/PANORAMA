@@ -48,8 +48,8 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
                         "Please see the command annotation before to detect systems")
     else:
         if source in pangenome.status["annotations_sources"]:
-            check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_modules=True,
-                                 need_annotations_fam=True, sources=[source], disable_bar=disable_bar)
+            check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_annotations_fam=True,
+                                 sources=[source], disable_bar=disable_bar)
         else:
             raise KeyError("Annotation source not in pangenome.")
 
@@ -289,13 +289,13 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
-        logging.getLogger().info("Annotation Done")
-        logging.getLogger().info(f"Write system projection")
-        systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
+        logging.getLogger().info("System detection Done")
+        logging.getLogger().info(f"Write systems in pangenome")
+        # systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
         write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
         # write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
         #                          force=args.force, disable_bar=args.disable_prog_bar)
-        # logging.getLogger().info(f"Projection written")
+        logging.getLogger().info(f"Systems written")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

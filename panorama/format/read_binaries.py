@@ -19,7 +19,7 @@ from panorama.models import Models
 from panorama.pangenomes import Pangenome
 
 
-def get_status(pangenome, pangenome_file):
+def get_status(pangenome, pangenome_file: str):
     """
         Checks which elements are already present in the file.
     """
@@ -101,12 +101,13 @@ def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, sourc
 
 def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, disable_bar: bool = False):
     systems = {}
-    for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="system", disable=disable_bar):
+    for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="line", disable=disable_bar):
         curr_sys = systems.get(row["ID"].decode())
-        model = models.get_model(row["name"])
+        model = models.get_model(row["name"].decode())
         if curr_sys is None:
             curr_sys = System(system_id=row["ID"].decode(), model=model,
                               source=system_table.name)
+            systems[row["ID"].decode()] = curr_sys
         curr_sys.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
     logging.getLogger().info(f"Add system from {system_table.name} to pangenome...")
     for system in tqdm(systems.values(), unit="system", disable=disable_bar):
@@ -130,12 +131,9 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: Path, sour
     pangenome.status["systems"] = "Loaded"
 
 
-def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, need_families: bool = False,
-                         need_graph: bool = False, need_partitions: bool = False, need_rgp: bool = False,
-                         need_spots: bool = False, need_gene_sequences: bool = False, need_modules: bool = False,
-                         need_annotations_fam: bool = False, sources: List[str] = None,
+def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = False, sources: List[str] = None,
                          need_systems: bool = False, models_path: Path = None,
-                         disable_bar: bool = False):
+                         disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`
@@ -154,14 +152,13 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, n
     """
     if need_annotations_fam:
         if pangenome.status["genesClustered"] == "inFile":
-            need_families = True
+            kwargs["need_families"] = True
         elif pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
             raise Exception("Your pangenome has no gene families. See the 'cluster' subcommand of ppanggolin.")
-        else:  # gene families are in pangenome
-            need_families = False
 
-    check_pp(pangenome, need_annotations, need_families, need_graph, need_partitions, need_rgp,
-             need_spots, need_gene_sequences, need_modules, disable_bar=disable_bar)
+
+
+    check_pp(pangenome=pangenome, disable_bar=disable_bar, **kwargs)
 
     if hasattr(pangenome, "file"):
         filename = pangenome.file
@@ -174,6 +171,6 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations: bool = False, n
 
     if need_systems:
         assert models_path is not None and sources is not None
-        read_systems(pangenome, h5f, models_path, sources, disable_bar)
+        read_systems(pangenome, h5f, models_path, sources[0], disable_bar)
 
     h5f.close()

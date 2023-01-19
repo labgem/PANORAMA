@@ -25,14 +25,11 @@ from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 
-def check_flat_parameters(systems: bool = False, hmm: bool = False, **kwargs):
-    if hmm:
-        if kwargs["msa_path"] is None or kwargs["msa_format"] is None:
-            raise Exception("To write HMM you need to give msa files and format")
-    if systems:
-        if kwargs["models_path"] is None or kwargs["source"] is None:
-            raise Exception("To read system and write flat related, "
-                            "it's necessary to give models and annotation source.")
+def check_flat_parameters(args):
+    if args.hmm and (args.msa is None or args.msa_format is None):
+        raise Exception("To write HMM you need to give msa files and format")
+    if args.systems and (args.models is None or args.source is None):
+        raise Exception("To read system and write flat related, it's necessary to give models and annotation source.")
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
@@ -115,6 +112,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
 
     :return: True if a projection occurs in organism
     """
+
     def search_diagonal(matrix: np.ndarray, min_necessary: int = None) -> List[List[int]]:
         """Search any possible diagonals in matrix to confirm system projection
 
@@ -139,6 +137,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                     r_diags.append(comb)
         r_diags.sort()
         return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
+
     if organism.name == "GCF_000773865.1_ASM77386v1_genomic" and system.name == "DMS_other":
         print("carapuce")
     org_projection = [system.ID, system.name, organism.name]
@@ -158,8 +157,10 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
             if gf.get_source(system.source) is not None:
                 for annotation in [annot.name for annot in gf.get_source(system.source)]:
                     if annotation in mandatory_family:
-                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + mandatory_index[annotation]
-                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + mandatory_index[annotation]
+                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                      mandatory_index[annotation]
+                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                mandatory_index[annotation]
                     elif annotation in accessory_family:
                         all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
                                                                                 accessory_index[annotation]
@@ -215,7 +216,6 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
     :param disable_bar: Allow to disable progress bar
     """
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().info('Write system projection')
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
             futures = []
             for system in pangenome.systems:
@@ -240,12 +240,12 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/projection_systems1/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems1.tsv", sep="\t", index=False)
+        org_df.to_csv(f"{output}/projection_systems2/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False,
-                     hmm: bool = False, disable_bar: bool = False, **kwargs):
+                     hmm: bool = False, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pangenome: Pangenome with information to write
@@ -274,9 +274,11 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_annotations = True
 
     if systems:
+        need_annotations = True
+        need_families = True
+        need_annotations_fam = True
         need_systems = True
 
-    check_flat_parameters(systems, hmm, **kwargs)
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
@@ -294,6 +296,12 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
         write_hmm_profile(pangenome, output, threads, disable_bar)
 
+    if systems:
+        logging.getLogger().info("Begin write systems projection")
+        write_systems_projection(pangenome=pangenome, output=output, threads=threads,
+                                 force=force, disable_bar=disable_bar)
+        logging.getLogger().info(f"Projection written")
+
 
 def launch(args):
     """
@@ -301,14 +309,15 @@ def launch(args):
 
     :param args: Argument given
     """
+    check_flat_parameters(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
-        write_flat_files(pangenome, output=args.output, annotation=args.annotation,
+        write_flat_files(pangenome, output=args.output, annotation=args.annotations,
                          systems=args.systems, models_path=args.models, source=args.source,
                          hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
-                         threads=args.threads, disable_bar=args.disable_prog_bar)
+                         threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

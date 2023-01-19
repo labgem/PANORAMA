@@ -3,6 +3,7 @@
 
 # default libraries
 from typing import Generator, Iterable, List, Set, Union
+from pathlib import Path
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
@@ -36,13 +37,12 @@ class Pangenome(Pan):
         self.name = name
         self.taxid = taxid
 
-    def add_file(self, pangenome_file):
+    def add_file(self, pangenome_file: str):
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,
         and anything that is computed will be saved to this file when
         :func:`ppanggolin.formats.writeBinaries.writePangenome` is called.
         :param pangenome_file: A string representing the filepath to the hdf5 pan file
         to be either used or created
-        :type pangenome_file: str
         """
         from panorama.format.read_binaries import get_status
         # importing on call instead of importing on top to avoid cross-reference problems.
