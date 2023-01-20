@@ -4,13 +4,15 @@
 # default libraries
 from __future__ import annotations
 import argparse
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
+import collections
 import itertools
 import logging
 from pathlib import Path
 from tqdm import tqdm
-from typing import List
+from typing import Collection, List, Set
 
 # installed libraries
 import numpy as np
@@ -21,6 +23,7 @@ from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.utils import check_tsv_sanity, mkdir
 from panorama.system import System
+from panorama.region import Module
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
@@ -28,7 +31,7 @@ from panorama.pangenomes import Pangenome
 def check_flat_parameters(args):
     if args.hmm and (args.msa is None or args.msa_format is None):
         raise Exception("To write HMM you need to give msa files and format")
-    if args.systems and (args.models is None or args.source is None):
+    if (args.systems or args.systems_asso is not None) and (args.models is None or args.source is None):
         raise Exception("To read system and write flat related, it's necessary to give models and annotation source.")
 
 
@@ -244,8 +247,56 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
     systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
 
 
-def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False,
-                     hmm: bool = False, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
+def write_systems_to_modules(pangenome: Pangenome, output: Path, systems2modules: List[Collection[str, List[Module]]]):
+    list_to_df = []
+    df_collection = collections.namedtuple("df_lines", ["system_id", "system_name", "module_id", "common_families"])
+    for system_id, modules_list in systems2modules:
+        system = pangenome.get_system(system_id)
+        for module in modules_list:
+            common_fam = system.gene_families.intersection(module.families)
+            list_to_df.append(df_collection(system_id, system.name, module.ID,
+                                            ",".join([gf.name for gf in common_fam])))
+    df = pd.DataFrame(list_to_df)
+    outpath = Path(output, "systems2modules").with_suffix(".tsv")
+    df.to_csv(path_or_buf=outpath, sep="\t")
+
+
+def system_to_modules(system: System, modules: Set[Module]):
+    modules_present = []
+    for module in modules:
+        if system.gene_families.issubset(module.families):
+            module.add_system(system)
+            modules_present.append(module)
+    return system.ID, modules_present
+
+
+def systems_to_modules(pangenome: Pangenome, output: Path, threads: int = 1, disable_bar: bool = False):
+    """Associate a model to modules"""
+    systems2modules = collections.namedtuple("systems2modules", ['system_ID', 'modules_list'])
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
+            futures = []
+            for system in pangenome.systems:
+                future = executor.submit(system_to_modules, system, pangenome.modules)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+                for canonical in system.canonical:
+                    future = executor.submit(system_to_modules, canonical, pangenome.modules)
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+
+            results = []
+            for future in futures:
+                res = future.result()
+                if len(res[1]) > 0:
+                    results.append(systems2modules(res[0], res[1]))
+
+    write_systems_to_modules(pangenome, output, results)
+
+
+def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
+                     systems_asso: List[str] = None,
+                     threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pangenome: Pangenome with information to write
@@ -276,8 +327,18 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     if systems:
         need_annotations = True
         need_families = True
-        need_annotations_fam = True
         need_systems = True
+        need_annotations_fam = True
+
+    if systems_asso is not None:
+        need_systems = True
+        need_families = True
+        if systems_asso in ["modules", "all"]:
+            need_modules = True
+        if systems_asso in ["rgp", "all"]:
+            need_regions = True
+        if systems_asso in ["spots", "all"]:
+            need_spots = True
 
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
@@ -302,6 +363,14 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
                                  force=force, disable_bar=disable_bar)
         logging.getLogger().info(f"Projection written")
 
+    if systems_asso is not None:
+        if systems_asso in ["modules", "all"]:
+            systems_to_modules(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
+        if systems_asso in ["rgp", "all"]:
+            systems_to_modules(pangenome=pangenome, threads=threads, disable_bar=disable_bar)
+        if systems_asso in ["spots", "all"]:
+            systems_to_modules(pangenome=pangenome, threads=threads, disable_bar=disable_bar)
+
 
 def launch(args):
     """
@@ -315,7 +384,8 @@ def launch(args):
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         write_flat_files(pangenome, output=args.output, annotation=args.annotations,
-                         systems=args.systems, models_path=args.models, source=args.source,
+                         systems=args.systems, systems_asso=args.systems_asso,
+                         models_path=args.models, source=args.source,
                          hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
                          threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
 
@@ -350,6 +420,9 @@ def parser_write(parser):
                           help="Write all the annotations from families")
     optional.add_argument("--systems", required=False, action="store_true",
                           help="Write all the systems in pangenomes and project on genomes")
+    optional.add_argument("--systems_asso", required=False, type=str, default=None,
+                          choices=["all", "modules", "rgp", "spots"],
+                          help="Write association between systems and others pangenomes elements")
     optional.add_argument('--models', required=False, type=Path, default=None,
                           help="Path to model directory")
     required.add_argument("--source", required=False, type=str, nargs="?", default=None,

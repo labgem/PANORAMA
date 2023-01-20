@@ -256,26 +256,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
     pangenome.status["systems"] = "Computed"
 
 
-def systems_to_module(module: Module, systems: Set[System]):
-    for system in systems:
-        if system.gene_families.issubset(module.families):
-            module.add_system(system)
-
-
-def systems_to_modules(pangenome: Pangenome, threads: int = 1, disable_bar: bool = False):
-    """Associate a model to modules"""
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        with tqdm(total=pangenome.number_of_modules(), unit='module', disable=disable_bar) as progress:
-            futures = []
-            for module in pangenome.modules:
-                future = executor.submit(systems_to_module, module, pangenome.systems)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-
-            for future in futures:
-                future.result()
-
-
 def launch(args):
     """
     Launch functions to detect models in pangenomes

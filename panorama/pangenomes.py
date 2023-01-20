@@ -148,6 +148,25 @@ class Pangenome(Pan):
             sources.add(system.source)
         return sources
 
+    def get_system(self, system_ID: str) -> System:
+        try:
+            system = self._system_getter[system_ID]
+        except KeyError:
+            uncanonical_id = system_ID.split('.')[0]
+            find_in_canonical = False
+            if len(uncanonical_id) > 0:
+                uncanonical_system = self.get_system(uncanonical_id)
+                for canonical in uncanonical_system.canonical:
+                    if canonical.ID == system_ID:
+                        find_in_canonical = True
+                        return canonical
+                if not find_in_canonical:
+                    raise KeyError(f"There is no system with ID = {system_ID} in pangenome")
+            else:
+                raise KeyError(f"There is no system with ID = {system_ID} in pangenome")
+        else:
+            return system
+
     def get_system_by_source(self, source: str):
         for system in self.systems:
             if system.source == source:
@@ -188,7 +207,10 @@ class Pangenome(Pan):
 
     def number_of_systems(self) -> int:
         """Get the number of systems in the pangenomes"""
-        return len(self._system_getter)
+        nb_systems = 0
+        for system in self.systems:
+            nb_systems += 1 + len(system.canonical)
+        return nb_systems
     
     def add_modules(self, modules: Iterable[Module]):
         super().add_modules({Module(module_id=module.ID, families=module.families) for module in modules})
