@@ -12,11 +12,12 @@ import itertools
 import logging
 from pathlib import Path
 from tqdm import tqdm
-from typing import Collection, List, Set
+from typing import Collection, Dict, List, Set
 
 # installed libraries
 import numpy as np
 import pandas as pd
+from ppanggolin.region import Region, Spot
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gfs
@@ -294,6 +295,62 @@ def systems_to_modules(pangenome: Pangenome, output: Path, threads: int = 1, dis
     write_systems_to_modules(pangenome, output, results)
 
 
+def write_systems_to_rgp(pangenome: Pangenome, output: Path, systems2rgp: List[Collection[str, List[Region]]],
+                         rgp2spot: Dict[Region, Spot]):
+    list_to_df = []
+    df_collection = collections.namedtuple("df_lines", ["system_id", "system_name", "rgp_id", "spot_id",
+                                                        "common_families"])
+    for system_id, rgp_list in systems2rgp:
+        system = pangenome.get_system(system_id)
+        for rgp in rgp_list:
+            common_fam = system.gene_families.intersection(rgp.families)
+            spot_id = rgp2spot[rgp.name] if rgp.name in rgp2spot else None
+            list_to_df.append(df_collection(system_id, system.name, rgp.name, spot_id,
+                                            ",".join([gf.name for gf in common_fam])))
+    df = pd.DataFrame(list_to_df)
+    outpath = Path(output, "systems2rgp").with_suffix(".tsv")
+    df.to_csv(path_or_buf=outpath, sep="\t")
+
+
+def system_to_rgp(system: System, regions: Set[Region]):
+    rgp_present = []
+    for rgp in regions:
+        if system.gene_families.issubset(rgp.families):
+            rgp_present.append(rgp)
+    return system.ID, rgp_present
+
+
+def systems_to_rgp(pangenome: Pangenome, output: Path, threads: int = 1, disable_bar: bool = False):
+    """Associate a systems to RGP"""
+    systems2rgp = collections.namedtuple("systems2rgp", ['system_ID', 'rgp_list'])
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
+            futures = []
+            for system in pangenome.systems:
+                future = executor.submit(system_to_rgp, system, pangenome.regions)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+                for canonical in system.canonical:
+                    future = executor.submit(system_to_modules, canonical, pangenome.modules)
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+
+            results = []
+            for future in futures:
+                res = future.result()
+                if len(res[1]) > 0:
+                    results.append(systems2rgp(res[0], res[1]))
+    region2spot = {}
+    for spot in pangenome.spots:
+        for region in spot.regions:
+            region2spot[region.name] = spot.ID
+    write_systems_to_rgp(pangenome, output, results, region2spot)
+
+
+def systems_to_spots():
+    raise NotImplementedError()
+
+
 def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
                      systems_asso: List[str] = None,
                      threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
@@ -335,9 +392,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_families = True
         if systems_asso in ["modules", "all"]:
             need_modules = True
-        if systems_asso in ["rgp", "all"]:
+        if systems_asso in ["rgp", "spots", "all"]:
+            need_annotations = True
             need_regions = True
-        if systems_asso in ["spots", "all"]:
             need_spots = True
 
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
@@ -367,9 +424,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         if systems_asso in ["modules", "all"]:
             systems_to_modules(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
         if systems_asso in ["rgp", "all"]:
-            systems_to_modules(pangenome=pangenome, threads=threads, disable_bar=disable_bar)
+            systems_to_rgp(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
         if systems_asso in ["spots", "all"]:
-            systems_to_modules(pangenome=pangenome, threads=threads, disable_bar=disable_bar)
+            systems_to_spots()
 
 
 def launch(args):
