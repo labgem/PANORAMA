@@ -229,8 +229,9 @@ def write_systems(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, 
     return systems_data_list
 
 
-def write_proksee_organism(pangenome: Pangenome, organism: Organism, output: Path, proksee_data: dict,
+def write_proksee_organism(pangenome: Pangenome, organism: Organism, output: Path, template: Path,
                            features: List[str] = None):
+    proksee_data = read_data(template=template, features=features)
     if "name" not in proksee_data["cgview"]["captions"]:
         proksee_data["cgview"]["captions"][0]["name"] = f"{organism.name} annotated with PANORAMA"
     proksee_data["cgview"]["sequence"]["contigs"] = write_contig(organism)
@@ -261,16 +262,13 @@ def write_proksee(pangenome: Pangenome, output: Path, features: List[str] = None
         organisms = [organism for organism in pangenome.organisms if organism.name in organisms_list]
     else:
         organisms = pangenome.organisms
-    proksee_data = read_data(template=template, features=features)
-    # with ThreadPoolExecutor(max_workers=threads) as executor:
-    #     with tqdm(total=pangenome.number_of_organisms(), unit='organisms', disable=disable_bar) as progress:
-    #         futures = []
-    #         for organism in organisms:
-    #             future = executor.submit(write_proksee_organism, pangenome, organism, output, proksee_data, features)
-    #             future.add_done_callback(lambda p: progress.update())
-    #             futures.append(future)
-    #
-    #         for future in futures:
-    #             future.result()
-    for organism in organisms:
-        write_proksee_organism(pangenome, organism, output, proksee_data, features)
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        with tqdm(total=pangenome.number_of_organisms(), unit='organisms', disable=disable_bar) as progress:
+            futures = []
+            for organism in organisms:
+                future = executor.submit(write_proksee_organism, pangenome, organism, output, template, features)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+            for future in futures:
+                future.result()
