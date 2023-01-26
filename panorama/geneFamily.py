@@ -140,3 +140,4 @@ class GeneFamily(Fam):
                     del source_annot[max_prediction:]
         else:
             self._annotationGetter[source] = [annotation]
+

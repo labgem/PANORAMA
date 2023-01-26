@@ -166,7 +166,7 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = Fals
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
     h5f = tables.open_file(filename, "r")
     if need_annotations_fam:
-        assert sources is not None
+        # assert sources is not None
         read_gene_families_annotations(pangenome, h5f, sources=sources, disable_bar=disable_bar)
 
     if need_systems:

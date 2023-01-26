@@ -22,6 +22,7 @@ from ppanggolin.region import Region, Spot
 # local libraries
 from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
+from panorama.format.write_proksee import write_proksee
 from panorama.utils import check_tsv_sanity, mkdir
 from panorama.system import System
 from panorama.region import Module
@@ -32,8 +33,10 @@ from panorama.pangenomes import Pangenome
 def check_flat_parameters(args):
     if args.hmm and (args.msa is None or args.msa_format is None):
         raise Exception("To write HMM you need to give msa files and format")
-    if (args.systems or args.systems_asso is not None) and (args.models is None or args.source is None):
-        raise Exception("To read system and write flat related, it's necessary to give models and annotation source.")
+    if args.systems or args.systems_asso is not None or "systems" in args.proksee:
+        if args.models is None or args.sources is None:
+            raise Exception("To read system and write flat related, "
+                            "it's necessary to give models and annotation source.")
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
@@ -353,6 +356,7 @@ def systems_to_spots():
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
                      systems_asso: List[str] = None,
+                     proksee: List[str] = None, proksee_template: Path = None, organisms_list: List[str] = None,
                      threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
@@ -397,6 +401,23 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
             need_regions = True
             need_spots = True
 
+    if proksee is not None:
+        need_annotations = True
+        need_gene_sequences = True
+        need_families = True,
+        need_partitions = True,
+        if "rgp" in proksee or "all" in proksee:
+            need_regions = True
+        if "spots" in proksee or "all" in proksee:
+            need_regions = True
+            need_spots = True
+        if "modules" in proksee or "all" in proksee:
+            need_modules = True
+        if "annotations" in proksee or "all" in proksee:
+            need_annotations = True
+        if "systems" in proksee or "all" in proksee:
+            need_systems = True
+
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
@@ -428,6 +449,10 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         if systems_asso in ["spots", "all"]:
             systems_to_spots()
 
+    if proksee:
+        write_proksee(pangenome=pangenome, output=output, features=proksee, template=proksee_template,
+                      organisms_list=organisms_list, threads=threads, disable_bar=disable_bar)
+
 
 def launch(args):
     """
@@ -437,12 +462,14 @@ def launch(args):
     """
     check_flat_parameters(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
+    mkdir(args.output, force=args.force)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
         pangenome.add_file(pangenome_info["path"])
         write_flat_files(pangenome, output=args.output, annotation=args.annotations,
                          systems=args.systems, systems_asso=args.systems_asso,
-                         models_path=args.models, source=args.source,
+                         models_path=args.models, source=args.sources,
+                         proksee=args.proksee, proksee_template=args.proksee_template, organisms_list=args.organisms,
                          hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
                          threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
 
@@ -482,8 +509,12 @@ def parser_write(parser):
                           help="Write association between systems and others pangenomes elements")
     optional.add_argument('--models', required=False, type=Path, default=None,
                           help="Path to model directory")
-    required.add_argument("--source", required=False, type=str, nargs="?", default=None,
+    optional.add_argument("--sources", required=False, type=str, nargs="?", default=None,
                           help='Name of the annotation source where panorama as to select in pangenomes')
+    optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
+                          choices=["all", "base", "modules", "rgp", "spots", "annotations", "systems"])
+    optional.add_argument("--proksee_template", required=False, type=Path, default=None, nargs='?')
+    optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
     optional.add_argument("--hmm", required=False, action="store_true",
                           help="Write an hmm for each gene families in pangenomes")
     optional.add_argument("--msa", required=False, type=Path, default=None,
