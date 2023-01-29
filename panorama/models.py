@@ -535,7 +535,7 @@ class Family:
     """
 
     def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", relation: str = "",
-                 duplicate: int = 0, func_unit: FuncUnit = None):
+                 duplicate: int = 0, func_unit: FuncUnit = None):  #, canonical: list = None):
         """Constructor Method
         """
         self.name = name
@@ -544,6 +544,7 @@ class Family:
         self.duplicate = duplicate
         self.relation = relation
         self.func_unit = func_unit
+        # self.canonical = canonical if canonical is not None else []
 
     def __repr__(self):
         return f"Family name : {self.name}, type : {self.type}, " \
