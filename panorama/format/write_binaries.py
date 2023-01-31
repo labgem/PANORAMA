@@ -202,7 +202,7 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
                                                                                                      "Loaded"]:
         if len(status_group._v_attrs.annotations_sources) > 0:
-            status_group._v_attrs.annotations_sources.add(*pangenome.systems_sources)
+            status_group._v_attrs.annotations_sources.add(*pangenome.annotations_sources)
         else:
             status_group._v_attrs.annotations_sources = pangenome.systems_sources
 
