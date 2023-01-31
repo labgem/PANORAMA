@@ -26,10 +26,8 @@ def check_parameter(args):
 
     :param args: argument list
 
-    :raise argparse.ArgumentError: Problème with argument consistency
+    :raise argparse.ArgumentError: Problem with argument consistency
     """
-    if args.tsv is None and args.hmm is None:
-        raise argparse.ArgumentError(message="You did not provide tsv or hmm for annotation", argument=None)
     if args.hmm is not None and args.meta is None:
         raise argparse.ArgumentError(message="You did not provide metadata file to annotate with HMM", argument=None)
 

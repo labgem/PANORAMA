@@ -55,6 +55,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
 
 def get_msa():
     logging.getLogger().warning("In Dev")
+    raise NotImplementedError
 
 
 def profile_gf(gf: GeneFamily, msa_file: Path,  msa_format: str = "afa", ):
