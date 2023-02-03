@@ -58,7 +58,7 @@ def get_msa():
     raise NotImplementedError
 
 
-def profile_gf(gf: GeneFamily, msa_file: Path,  msa_format: str = "afa", ):
+def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
     """ Compute a profile for a gene family
 
     :param gf: Gene family to profile
@@ -113,7 +113,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
                     future.result()
 
 
-def read_metadata(metadata: Path) -> Tuple[pd.DataFrame, dict]:
+def read_metadata(metadata: Path) -> pd.DataFrame:
     """ Read metadata associate with HMM
 
     :param metadata: PAth to metadata
@@ -123,11 +123,11 @@ def read_metadata(metadata: Path) -> Tuple[pd.DataFrame, dict]:
     metadata_df = pd.read_csv(metadata, delimiter="\t", names=meta_col_names,
                               dtype=meta_dtype, header=0).set_index('accession')
     metadata_df['description'] = metadata_df["description"].fillna('unknown')
-    hmm_full_name = collections.namedtuple("HMM_full_name", ['protein_name', 'secondary_name'])
-    hmm_to_metaname = {}
-    for index, row in metadata_df.iterrows():
-        hmm_to_metaname[row[0]] = hmm_full_name(row[1], row[2])
-    return metadata_df, hmm_to_metaname
+    # hmm_full_name = collections.namedtuple("HMM_full_name", ['protein_name', 'secondary_name'])
+    # hmm_to_metaname = {}
+    # for index, row in metadata_df.iterrows():
+    #     hmm_to_metaname[row[0]] = hmm_full_name(row[1], row[2])
+    return metadata_df  # , hmm_to_metaname
 
 
 def read_hmm(hmm_dir: Generator, disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
@@ -144,16 +144,21 @@ def read_hmm(hmm_dir: Generator, disable_bar: bool = False) -> List[pyhmmer.plan
     for hmm_file in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         try:
             hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
-            with open(hmm_file, 'r') as file:
-                line = file.readline()
-                while not re.search('LENG', line):
-                    line = file.readline()
-                hmm_length[hmm.name] = int(line.split(' ')[-1])
-        except ValueError as val_error:
-            raise ValueError(f'{hmm_file} {val_error}')
         except Exception as error:
             raise Exception(f'Unexpected error on HMM file {hmm_file}, caused by {error}')
         else:
+            try:
+                with open(hmm_file, 'r') as file:
+                    line = file.readline()
+                    while not re.search('LENG', line):
+                        line = file.readline()
+                    hmm_length[hmm.name] = int(line.split(' ')[-1])
+            except ValueError as val_error:
+                raise ValueError(f'{hmm_file} {val_error}')
+            except Exception as error:
+                raise Exception(f'Unexpected error to get HMM length on file {hmm_file}.'
+                                f'Error caused by {error}')
+
             hmms.append(hmm)
     return hmms
 
@@ -202,23 +207,31 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     result = collections.namedtuple("Result", res_col_names)
     logging.getLogger().info("Align gene families to HMM")
     bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
-    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads):
+    bit_cutoffs = "gathering" if hmm_meta is None else None
+    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, bit_cutoffs=bit_cutoffs):
         for hit in top_hits:
             cog = hit.best_domain.alignment
-            target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from))/seq_length[cog.target_name]
-            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from))/hmm_length[cog.hmm_name]
-            hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
-            add_res = False
-            if target_covery >= hmm_info["target_cov_threshold"] and hmm_covery >= hmm_info["hmm_cov_threshold"]:
-                if pd.isna(hmm_info['score_threshold']):
-                    if hit.evalue < hmm_info['eval_threshold']:
-                        add_res = True
-                else:
-                    if hit.score > hmm_info['score_threshold']:
-                        add_res = True
-            if add_res:
-                res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                                  hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
+            target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) / seq_length[
+                cog.target_name]
+            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_length[cog.hmm_name]
+            if hmm_meta is not None:
+                hmm_info = hmm_meta.loc[cog.hmm_accession.decode('UTF-8')]
+                add_res = False
+                if target_covery >= hmm_info["target_cov_threshold"] and hmm_covery >= hmm_info["hmm_cov_threshold"]:
+                    if pd.isna(hmm_info['score_threshold']):
+                        if hit.evalue < hmm_info['eval_threshold']:
+                            add_res = True
+                    else:
+                        if hit.score > hmm_info['score_threshold']:
+                            add_res = True
+                if add_res:
+                    res.append(
+                        result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
+                               hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
+            else:
+                res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'),
+                                  cog.hmm_name.decode('UTF-8'), hit.evalue, hit.score, hit.bias, "",
+                                  "unknow" if hit.description is None else hit.description.decode('UTF-8')))
         bar.update()
     bar.close()
     return res
@@ -249,7 +262,10 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
             raise ValueError(f"{mode} unrecognized mode")
     gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
     tmp_dir = tempfile.TemporaryDirectory(prefix="hmm_panorama", dir=tmpdir)
-    metadata, hmm_to_metaname = read_metadata(meta)
+    if meta is not None:
+        metadata = read_metadata(meta)
+    else:
+        metadata = None
     # Get list of HMM with Plan7 data model
     if path_is_file(hmm_path):
         split_hmm_file(hmm_path, tmp_dir)
@@ -261,37 +277,3 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
         raise Exception("Unexpected error")
     res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
     return pd.DataFrame(res)
-
-
-if __name__ == "__main__":
-    # default libraries
-    import argparse
-
-    # local libraries
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(
-        description="Comparative Pangenomic analyses toolsbox",
-        formatter_class=argparse.RawTextHelpFormatter)
-
-    req = main_parser.add_argument_group(title="Required for test")
-    req.add_argument("-p", "--pangenome", required=True, type=Path,
-                     help="Pangenome.h5 file to test annotation with hmmer")
-    req.add_argument("--hmm", required=True, type=Path,
-                     help="HMM file to test annotation with hmmer")
-    req.add_argument("--meta", required=True, type=Path,
-                     help="Metadata link to HMM with protein name, description and cutoff")
-    opt = main_parser.add_argument_group(title="Optional argument")
-    opt.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
-                     help="directory for storing temporary files")
-    opt.add_argument("--threads", required=False, type=int, default=1)
-    common = main_parser.add_argument_group(title="Common argument")
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    main_args = main_parser.parse_args()
-    set_verbosity_level(main_args)

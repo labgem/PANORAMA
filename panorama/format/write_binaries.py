@@ -81,6 +81,7 @@ def write_gene_fam_annot(pangenome: Pangenome, h5f: tables.File, source: str, di
         annot_group = h5f.create_group("/", "geneFamiliesAnnot", "Gene families functional annotations")
     else:
         annot_group = h5f.root.geneFamiliesAnnot
+    # h5f.remove_node("/geneFamiliesAnnot", "DFinder_5")
     select_gf = list(pangenome.get_gf_by_sources(source=source))
     annot_len = get_annot_len(select_gf, source)
     source_table = h5f.create_table(annot_group, source, annot_desc(*annot_len[:-1]),
@@ -197,22 +198,23 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     super_write_status(pangenome, h5f)  # call write_status from ppanggolin
     status_group = h5f.root.status
 
-    status_group._v_attrs.annotations = True if pangenome.status["annotations"] in ["Computed", "Loaded",
-                                                                                    "inFile"] else False
-    if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
-                                                                                                     "Loaded"]:
-        if len(status_group._v_attrs.annotations_sources) > 0:
-            status_group._v_attrs.annotations_sources.add(*pangenome.annotations_sources)
+    if "annotations" in pangenome.status and pangenome.status["annotations"] in ["Computed", "Loaded", "inFile"]:
+        status_group._v_attrs.annotations = True
+        if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
+                                                                                                         "Loaded"]:
+            status_group._v_attrs.annotations_sources |= pangenome.annotations_sources
         else:
-            status_group._v_attrs.annotations_sources = pangenome.systems_sources
-
-    status_group._v_attrs.systems = True if pangenome.status["systems"] in ["Computed", "Loaded",
-                                                                            "inFile"] else False
-    if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
-        if len(status_group._v_attrs.systems_sources) > 0:
-            status_group._v_attrs.systems_sources.add(*pangenome.systems_sources)
+            status_group._v_attrs.annotations_sources = pangenome.annotations_sources
+    else:
+        status_group._v_attrs.annotations = False
+    if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"]:
+        status_group._v_attrs.systems = True
+        if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
+            status_group._v_attrs.systems_sources |= pangenome.systems_sources
         else:
             status_group._v_attrs.systems_sources = pangenome.systems_sources
+    else:
+        status_group._v_attrs.systems = False
 
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
@@ -275,13 +277,13 @@ def write_pangenome(pangenome: Pangenome, file_path: str, disable_bar: bool = Fa
 
     h5f = tables.open_file(file_path, "a")
 
-    if pangenome.status["annotations"] == "Computed":
+    if "annotations" in pangenome.status and pangenome.status["annotations"] == "Computed":
         assert source is not None
         logging.getLogger().info("Writing gene families annotations...")
         write_gene_fam_annot(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
         pangenome.status["annotations"] = "Loaded"
 
-    if pangenome.status["systems"] == "Computed":
+    if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
         assert source is not None
         logging.getLogger().info("Writing detected systems...")
         write_systems(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)

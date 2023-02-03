@@ -21,15 +21,15 @@ from panorama.annotation import Annotation
 from panorama.pangenomes import Pangenome
 
 
-def check_parameter(args):
-    """Check argument parameters consistency
-
-    :param args: argument list
-
-    :raise argparse.ArgumentError: Problem with argument consistency
-    """
-    if args.hmm is not None and args.meta is None:
-        raise argparse.ArgumentError(message="You did not provide metadata file to annotate with HMM", argument=None)
+# def check_parameter(args):
+#     """Check argument parameters consistency
+#
+#     :param args: argument list
+#
+#     :raise argparse.ArgumentError: Problem with argument consistency
+#     """
+#     if args.hmm is not None and args.meta is None:
+#         raise argparse.ArgumentError(message="You did not provide metadata file to annotate with HMM", argument=None)
 
 
 def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
@@ -69,7 +69,7 @@ def annotation_to_families(annotation_df: pd.DataFrame, pangenome: Pangenome, so
             gene_fam.add_annotation(source=source, annotation=annotation, max_prediction=max_prediction)
         else:
             logging.getLogger().warning(
-                f"Family {row['Gene_family']} does not exist in pangenome. If you give a tsv check name."
+                f"Family {row.Gene_family} does not exist in pangenome. If you give a tsv check name."
                 f"If you're using hmm annotation, please post an issue on our github.")
 
 
@@ -107,7 +107,7 @@ def launch(args):
 
     :param args: Argument given
     """
-    check_parameter(args)
+    # check_parameter(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     for pangenome_name, pangenome_info in pan_to_path.items():
         pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
@@ -155,7 +155,7 @@ def parser_annot(parser):
                                           description="All of the following arguments are required,"
                                                       " if you're using HMM mode :")
     hmm_param.add_argument("--meta", required=False, type=Path, default=None,
-                           help="Metadata link to HMM with protein name, description and cutoff")
+                           help="Metadata link to HMM. If no one is given information in HMM will be used")
     hmm_param.add_argument("--mode", required=False, type=str, default='fast', choices=['fast', 'profile'],
                            help="Choose the mode use to align HMM database and gene families. "
                                 "Fast will align the reference sequence of gene family against HMM."
