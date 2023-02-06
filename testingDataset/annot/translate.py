@@ -3,8 +3,9 @@
 
 # default libraries
 import argparse
+import logging
 import re
-
+import tempfile
 import yaml
 import json
 from pathlib import Path
@@ -122,6 +123,59 @@ def translate_xml(root, data_json: dict):
     :param data_json: json dictionary translated
     :param name_file: name of xml file
     """
+
+    def translate_gene(elem):
+        try:
+            name = "".join(elem.get('name').split('__')[1:])
+        except KeyError:
+            Exception(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
+        else:
+            dict_elem = {'name': name, 'type': 'neutral', 'parameters': {"max_separation": 0}}
+
+            for attrib, value in elem.attrib.items():
+                if attrib == 'presence':
+                    dict_elem['type'] = value
+                elif attrib == 'inter_gene_max_space':
+                    dict_elem['parameters']['max_separation'] = int(value)
+
+            for relation in elem:
+                if relation.tag == "exchangeables":
+                    dict_elem["exangeables"] = []
+                    for gene in relation:
+                        try:
+                            name = "".join(elem.get('name').split('__')[1:])
+                        except KeyError:
+                            Exception(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
+                        else:
+                            dict_elem["exangeables"].append(name)
+                else:
+                    logging.getLogger().warning("Unexpected relation")
+            return dict_elem
+
+    def translate_fu(elem):
+        try:
+            name = elem.get('name')
+        except KeyError:
+            Exception(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
+        else:
+            dict_elem = {'name': name, 'type': 'neutral', "families": [],
+                         'parameters': {"max_separation": 0, 'max_forbidden': 0,
+                                        'min_mandatory': 1, "min_total": 1}}
+
+            for attrib, value in elem.attrib.items():
+                if attrib == 'presence':
+                    dict_elem['type'] = value
+                elif attrib == 'min_mandatory_genes_required':
+                    dict_elem['parameters']['min_mandatory'] = int(value)
+                elif attrib == 'min_genes_required':
+                    dict_elem['parameters']['min_total'] = int(value)
+                elif attrib == 'inter_gene_max_space':
+                    dict_elem['parameters']['max_separation'] = int(value)
+
+            for family in elem:
+                dict_elem["families"].append(translate_gene(family))
+            return dict_elem
+
     if root.attrib is not None:  # Read attributes root
         for parameter, number in root.attrib.items():
             if parameter == 'inter_gene_max_space':
@@ -131,47 +185,56 @@ def translate_xml(root, data_json: dict):
             elif parameter == 'min_genes_required':
                 data_json['parameters']['min_total'] = int(number)
     data_json['parameters']['max_forbidden'] = 0
-    for fu_field in root:
-        try:
-            name_fu = "".join(fu_field.get('name').split('__')[1:])
-        except KeyError:
-            Exception(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
-        else:
-            dict_fu = {'name': name_fu, 'type': str(), 'families': [],
-                       'parameters': {'max_forbidden': 0, 'min_mandatory': 1}}
-            for attrib, value in fu_field.attrib.items():
-                if attrib == 'presence':
-                    dict_fu['type'] = value
-                elif attrib == 'inter_gene_max_space':
-                    dict_fu['parameters']['max_separation'] = int(value)
-            if len(dict_fu['type']) == 0:  # No type
-                dict_fu['type'] = "neutral"
-            # Write FU as Fam
-            dict_fu["families"].append({'name': name_fu,
-                                        'type': "mandatory",
-                                        'relation': None,
-                                        'parameters': {'max_separation': dict_fu['parameters']['max_separation']}
-                                        if 'max_separation' in dict_fu['parameters'] else {}}
-                                       )
-            if len(list(fu_field)) > 0:
-                families = list(fu_field)[0]
-                for fam_field in families:
-                    fam_dict = {'name': "".join(fam_field.get('name').split('__')[1:]),
-                                'type': "mandatory",
-                                'relation': None,
-                                'parameters': {}}
-                    if fam_field.tag in ['homologs', 'analogs']:
-                        relation = fam_field.tag
-                    else:
-                        relation = None
-                    fam_dict['relation'] = relation
-                    for attribute, string in fam_field.attrib.items():
-                        if attribute == 'presence':
-                            dict_fam['type'] = string
-                        if attribute == 'inter_gene_max_space':
-                            dict_fam['parameters']['max_separation'] = int(string)
-                    dict_fu['families'].append(fam_dict)
-            data_json['func_units'].append(dict_fu)
+
+    fu_list = []
+    fam_list = []
+    for elem in root:
+        if elem.tag == "gene":
+            fam_list.append(translate_gene(elem))
+
+        elif elem.tag == "functional_unit":
+            fu_list.append(translate_fu(elem))
+    if len(fu_list) == 0:  # only genes
+        fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list, 'parameters': {}})
+    for fu in fu_list:
+        data_json["func_units"].append(fu)
+
+
+def add_fu_field(model_file: Path, tmp: Path):
+    with open(model_file, "r") as model:
+        lines = model.readlines()
+    lines = list(filter(lambda element: element != "\n", lines))
+    lines = list(filter(lambda element: element != " \n", lines))
+    newfile_path = tmp.joinpath(model_file.name)
+    with open(newfile_path, "w") as model_test:
+        index = 0
+        in_fu = False
+        while index < len(lines):
+            line = lines[index]
+            if re.search("^#########################", line):
+                index += 2
+            elif re.search("^ *#+ ", line):
+                in_fu = True
+                fu_name = line.replace("#", "").replace(" ", "").replace("\n", "")
+                presence = re.findall(r'presence="(\w+)"', lines[index + 1])[0]
+                model_test.write(f'<functional_unit name="{fu_name}" presence="{presence}" '
+                                 f'min_mandatory_genes_required="1" min_genes_required="1">\n')
+            elif re.search('</gene>', line) and in_fu:
+                model_test.write(line)
+                if re.search("^#", lines[index + 1]):
+                    model_test.write("</functional_unit>\n")
+            elif re.search('</model>', line) and in_fu:
+                model_test.write("</functional_unit>\n")
+                model_test.write(line)
+            # elif re.search("<gene.*/>", line) and not in_fu:
+            #     fu_name = re.findall(r'name="(\w+)"', line)[0]
+            #     presence = re.findall(r'presence="(\w+)"', line)[0]
+            #     model_test.write(f"<functional_unit name={fu_name}, presence={presence}, "
+            #                      f'min_mandatory_genes_required="1" min_genes_required="1">\n')
+            else:
+                model_test.write(line)
+            index += 1
+    return newfile_path
 
 
 def write(path_output: Path, name: str, dict_data: dict):
@@ -215,9 +278,10 @@ def launch(args: argparse.Namespace):
             translate_yaml(data, data_json, meta_df, canonical_sys)
             write(translate_path, name_file, data_json)
     elif args.format == "xml":
-        for file in systems_path.glob("*.xml"):
+        for file in systems_path.rglob("*.xml"):
+            new_file = add_fu_field(file, args.tmpdir)
             data_json = {"name": file.stem, 'func_units': [], 'parameters': dict()}
-            root = read_xml(file)
+            root = read_xml(new_file)
             translate_xml(root, data_json)
             write(translate_path, file.stem, data_json)
     else:
@@ -248,6 +312,8 @@ def parse_annot(parser: argparse.ArgumentParser):
                                          description="All of the following arguments are optional :")
     optional.add_argument("--meta", required=False, type=Path,
                           help='metadata')
+    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+                          help="directory for storing temporary files")
 
 
 if __name__ == "__main__":
