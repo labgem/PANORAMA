@@ -4,7 +4,6 @@
 # default libraries
 from __future__ import annotations
 import argparse
-import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import collections
@@ -23,7 +22,7 @@ from ppanggolin.region import Region, Spot
 from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_proksee import write_proksee
-from panorama.utils import check_tsv_sanity, mkdir
+from panorama.utils.overall import check_tsv_sanity, mkdir
 from panorama.system import System
 from panorama.region import Module
 from panorama.geneFamily import GeneFamily

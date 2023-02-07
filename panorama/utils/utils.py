@@ -29,7 +29,7 @@ def launch(args):
     outdir = mkdir(output=args.output, force=args.force)
     if args.translate:
         launch_translate(models=args.models, source=args.source, output=outdir,
-                         meta=args.meta, tmpdir=args.tmpdir)
+                         meta_data=args.meta, tmpdir=args.tmpdir)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -40,7 +40,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("utils", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("utility", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_utils(parser)
     return parser
 

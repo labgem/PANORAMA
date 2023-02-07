@@ -12,7 +12,8 @@ import argparse
 import pkg_resources
 
 # local modules
-from panorama.utils import check_log, set_verbosity_level
+import panorama.utils
+from panorama.utils.overall import check_log, set_verbosity_level
 import panorama.info
 import panorama.annotate
 import panorama.detection
@@ -33,6 +34,7 @@ def cmd_line():
     desc += "       detection       Detect systems in pangenome based on one annotation source\n"
     desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries\n"
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
+    desc += "       utility         Some utility command to run analyses more easily\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -47,7 +49,8 @@ def cmd_line():
             panorama.annotate.subparser(subparsers),
             panorama.detection.subparser(subparsers),
             panorama.dbGraph.subparser(subparsers),
-            panorama.format.write_flat.subparser(subparsers)]
+            panorama.format.write_flat.subparser(subparsers),
+            panorama.utils.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -86,6 +89,8 @@ def main():
         panorama.dbGraph.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
+    elif args.subcommand == "utility":
+        panorama.utils.launch(args)
 
 
 if __name__ == '__main__':

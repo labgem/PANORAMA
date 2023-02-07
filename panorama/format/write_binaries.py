@@ -5,7 +5,6 @@
 import logging
 from tqdm import tqdm
 from typing import List
-from pathlib import Path
 # installed libraries
 import tables
 from ppanggolin.formats.writeBinaries import write_status as super_write_status

@@ -17,7 +17,7 @@ import pandas as pd
 
 # local librairies
 from panorama.pangenomes import Pangenome
-from panorama.utils import check_tsv_sanity
+from panorama.utils.overall import check_tsv_sanity
 from panorama.dbGraph.translatePan import create_dict, give_gene_tmp_id
 from panorama.panDB import PangenomeLoader
 from panorama.format.read_binaries import check_pangenome_info

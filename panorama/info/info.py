@@ -15,7 +15,7 @@ from multiprocessing import get_context, Manager
 
 # local libraries
 from panorama.pangenomes import Pangenome
-from panorama.utils import check_tsv_sanity, mkdir
+from panorama.utils.overall import check_tsv_sanity, mkdir
 from panorama.info.module import get_module_info, export_modules
 from panorama.info.content import get_content_info, export_content
 

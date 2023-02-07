@@ -17,11 +17,10 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.models import Models, Model, FuncUnit
-from panorama.utils import check_tsv_sanity
+from panorama.utils.overall import check_tsv_sanity
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.system import System
-from panorama.region import Module
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
