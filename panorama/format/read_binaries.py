@@ -3,19 +3,19 @@
 
 # default libraries
 import logging
-from tqdm import tqdm
 from typing import List
 from pathlib import Path
 
 # installed libraries
 import tables
+from tqdm import tqdm
 from ppanggolin.formats import read_chunks
 from ppanggolin.formats import check_pangenome_info as check_pp
 
 # local libraries
 from panorama.annotation import Annotation
-from panorama.system import System
 from panorama.models import Models
+from panorama.system import System
 from panorama.pangenomes import Pangenome
 
 
@@ -155,8 +155,6 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = Fals
             kwargs["need_families"] = True
         elif pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
             raise Exception("Your pangenome has no gene families. See the 'cluster' subcommand of ppanggolin.")
-
-
 
     check_pp(pangenome=pangenome, disable_bar=disable_bar, **kwargs)
 

@@ -12,8 +12,8 @@ import argparse
 import pkg_resources
 
 # local modules
-import panorama.utils
-from panorama.utils.overall import check_log, set_verbosity_level
+from panorama.utils import check_log, set_verbosity_level
+import panorama.utility
 import panorama.info
 import panorama.annotate
 import panorama.detection
@@ -50,7 +50,7 @@ def cmd_line():
             panorama.detection.subparser(subparsers),
             panorama.dbGraph.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
-            panorama.utils.subparser(subparsers)]
+            panorama.utility.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
         common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
@@ -90,7 +90,7 @@ def main():
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
     elif args.subcommand == "utility":
-        panorama.utils.launch(args)
+        panorama.utility.launch(args)
 
 
 if __name__ == '__main__':

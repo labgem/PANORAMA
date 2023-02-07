@@ -2,8 +2,6 @@
 # coding: utf8
 
 # default libraries
-import logging
-from typing import Dict, Generator, List, Union
 
 # installed libraries
 from ppanggolin.region import Module as Mod

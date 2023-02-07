@@ -13,23 +13,12 @@ import tempfile
 import pandas as pd
 
 # local libraries
-from panorama.utils.overall import check_tsv_sanity
+from panorama.utils import check_tsv_sanity
 from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
-from panorama.annotation import Annotation
+from annotation import Annotation
 from panorama.pangenomes import Pangenome
-
-
-# def check_parameter(args):
-#     """Check argument parameters consistency
-#
-#     :param args: argument list
-#
-#     :raise argparse.ArgumentError: Problem with argument consistency
-#     """
-#     if args.hmm is not None and args.meta is None:
-#         raise argparse.ArgumentError(message="You did not provide metadata file to annotate with HMM", argument=None)
 
 
 def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):

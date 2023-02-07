@@ -3,10 +3,11 @@
 
 # default libraries
 import logging
-from tqdm import tqdm
 from typing import List
+
 # installed libraries
 import tables
+from tqdm import tqdm
 from ppanggolin.formats.writeBinaries import write_status as super_write_status
 from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pangenome
 

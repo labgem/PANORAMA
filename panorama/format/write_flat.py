@@ -10,22 +10,22 @@ import collections
 import itertools
 import logging
 from pathlib import Path
-from tqdm import tqdm
 from typing import Collection, Dict, List, Set
 
 # installed libraries
 import numpy as np
 import pandas as pd
+from tqdm import tqdm
 from ppanggolin.region import Region, Spot
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_proksee import write_proksee
-from panorama.utils.overall import check_tsv_sanity, mkdir
+from panorama.utils import check_tsv_sanity, mkdir
+from panorama.geneFamily import GeneFamily
 from panorama.system import System
 from panorama.region import Module
-from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
 
 

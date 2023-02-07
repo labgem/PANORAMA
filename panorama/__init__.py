@@ -1,6 +1,6 @@
-from .annotation import *
-from .models import *
-from .system import *
-from .pangenomes import *
-from .geneFamily import *
-from .region import *
+from .annotation import Annotation
+from .geneFamily import GeneFamily
+from .models import Models, Model
+from .system import System
+from .region import Module
+from .pangenomes import Pangenomes, Pangenome

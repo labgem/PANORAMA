@@ -3,7 +3,6 @@
 
 # default libraries
 from typing import Generator, Iterable, List, Set, Union
-from pathlib import Path
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan

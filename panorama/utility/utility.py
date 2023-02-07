@@ -9,8 +9,8 @@ import tempfile
 # install libraries
 
 # local libraries
-from panorama.utils.overall import mkdir
-from panorama.utils.translate import launch_translate
+from panorama.utils import mkdir
+from panorama.utility.translate import launch_translate
 
 
 def check_parameters(args):
@@ -72,7 +72,7 @@ def parser_utils(parser):
 
 
 if __name__ == "__main__":
-    from panorama.utils.overall import set_verbosity_level, check_log
+    from overall import set_verbosity_level, check_log
     main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
                                           formatter_class=argparse.RawTextHelpFormatter)
     parser_utils(main_parser)

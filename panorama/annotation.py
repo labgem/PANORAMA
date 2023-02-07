@@ -7,9 +7,6 @@ from typing import List, Union
 # installed libraries
 from pandas import isna
 
-# local libraries
-
-
 class Annotation:
     """
     This represents an annotation for one or more Gene families.
