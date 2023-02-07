@@ -12,7 +12,7 @@ from lxml import etree as et
 
 # installed libraries
 import pandas as pd
-
+from tqdm import tqdm
 
 # local libraries
 
@@ -150,10 +150,10 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_padloc(models: Path, meta: Path):
+def translate_padloc(models: Path, meta: Path, disable_bar: bool = False):
     list_data = []
     meta_df = parse_meta_padloc(meta)
-    for model in models.rglob("*.yaml"):
+    for model in tqdm(list(models.rglob("*.yaml")), unit="file", disable=disable_bar):
         canonical_sys = search_canonical_padloc(model.stem, models)
         data = read_yaml(model)
         list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
@@ -277,13 +277,13 @@ def parse_defense_finder(model_file: Path, tmpdir: Path):
     return newfile_path
 
 
-def translate_defense_finder(models: Path, tmpdir: Path = None):
+def translate_defense_finder(models: Path, tmpdir: Path = None, disable_bar: bool = False):
     assert tmpdir is not None and isinstance(tmpdir, Path)
 
     with tempfile.TemporaryDirectory(prefix="Dfinder_", dir=tmpdir) as tmp:
         tmp_path = Path(tmp)
         list_data = []
-        for model in models.rglob("*.xml"):
+        for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
             try:
                 parse_defense_finder(model, tmp_path)
             except Exception:
@@ -293,18 +293,19 @@ def translate_defense_finder(models: Path, tmpdir: Path = None):
     return list_data
 
 
-def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, tmpdir: Path = None):
+def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, tmpdir: Path = None,
+                     disable_bar: bool = False):
     if source == "padloc":
         logging.getLogger().info("Begin to translate padloc models...")
-        list_data = translate_padloc(models=models, meta=meta_data)
-    elif source == "defense-finder ":
+        list_data = translate_padloc(models=models, meta=meta_data, disable_bar=disable_bar)
+    elif source == "defense-finder":
         logging.getLogger().info("Begin to translate defense finder models...")
-        list_data = translate_defense_finder(models=models, tmpdir=tmpdir)
+        list_data = translate_defense_finder(models=models, tmpdir=tmpdir, disable_bar=disable_bar)
     elif source == "macsy-finder":
         raise NotImplementedError
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")
-    logging.getLogger().info("Write models for PANORAMA")
-    for data in list_data:
+    logging.getLogger().info("Write models for PANORAMA...")
+    for data in tqdm(list_data, unit="model", disable=disable_bar):
         write(output, data)

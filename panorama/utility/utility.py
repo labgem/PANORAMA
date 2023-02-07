@@ -29,7 +29,7 @@ def launch(args):
     outdir = mkdir(output=args.output, force=args.force)
     if args.translate:
         launch_translate(models=args.models, source=args.source, output=outdir,
-                         meta_data=args.meta, tmpdir=args.tmpdir)
+                         meta_data=args.meta, tmpdir=args.tmpdir, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
