@@ -184,14 +184,14 @@ def translate_defense_finder_model(root, model_name: str):
 
             for relation in elem:
                 if relation.tag == "exchangeables":
-                    dict_elem["exangeables"] = []
+                    dict_elem["exchangeables"] = []
                     for gene in relation:
                         try:
                             name = "".join(gene.get('name').split('__')[1:])
                         except KeyError:
                             raise KeyError(f"In {data_json['name']} of Defense Finder, one gene doesn't have a name")
                         else:
-                            dict_elem["exangeables"].append(name)
+                            dict_elem["exchangeables"].append(name)
                 else:
                     logging.getLogger().warning("Unexpected relation")
             return dict_elem
@@ -240,7 +240,9 @@ def translate_defense_finder_model(root, model_name: str):
         elif elem.tag == "functional_unit":
             fu_list.append(translate_fu(elem))
     if len(fu_list) == 0:  # only genes
-        fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list, 'parameters': {}})
+        fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list,
+                        'parameters': data_json["parameters"]})
+        data_json["parameters"] = {"max_forbidden": 0, "max_separation": 1, "min_mandatory": 1, "min_total": 1}
     for fu in fu_list:
         data_json["func_units"].append(fu)
     return data_json

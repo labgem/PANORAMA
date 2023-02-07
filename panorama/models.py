@@ -126,6 +126,11 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
                     raise TypeError("duplicate value from family in json must be an int or null")
                 if value < 0:
                     raise ValueError("Dupplication must be positive")
+            elif key == 'exchangeables':
+                if not isinstance(value, list):
+                    raise TypeError("exchangeables value from family in json must be a lsit or null")
+                if not all(isinstance(elem, str) for elem in value):
+                    raise ValueError("Exchangeables families must be a string")
             else:
                 raise KeyError(f"{key} is not an acceptable attribute")
 
@@ -205,7 +210,7 @@ class Models:
                 try:
                     model.read_model(data)
                 except KeyError:
-                    raise KeyError(f"One or more key in {file} are missing.")
+                    raise KeyError(f"Problem with one or more key in {file} are missing.")
                 except TypeError:
                     raise TypeError(f"One or more attribute are not with the good type in {file}.")
                 except ValueError:
@@ -545,7 +550,6 @@ class Family:
         self.relation = relation
         self.func_unit = func_unit
         self.exchangeables = exchangeables if exchangeables is not None else []
-        # self.canonical = canonical if canonical is not None else []
 
     def __repr__(self):
         return f"Family name : {self.name}, type : {self.type}, " \
@@ -590,3 +594,5 @@ class Family:
             self.relation = data_fam['relation']
         if 'duplicate' in data_fam and data_fam["duplicate"] is not None:
             self.duplicate = data_fam['duplicate']
+        if 'exchangeables' in data_fam and data_fam["exchangeables"] is not None:
+            self.exchangeables = data_fam['exchangeables']
