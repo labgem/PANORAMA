@@ -28,7 +28,8 @@ def launch(args):
     check_parameters(args)
     outdir = mkdir(output=args.output, force=args.force)
     if args.translate:
-        launch_translate(models=args.models, source=args.source, output=outdir, meta=args.meta, tmpdir=args.tmpdir)
+        launch_translate(models=args.models, source=args.source, output=outdir,
+                         meta=args.meta, tmpdir=args.tmpdir)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
