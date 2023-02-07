@@ -16,6 +16,11 @@ import pandas as pd
 
 # local libraries
 
+
+meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "score_threshold",
+                  "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
+
+
 def read_yaml(model):
     """
     Open yaml file and return data file
@@ -64,12 +69,26 @@ def write(path_output: Path, dict_data: dict):
         json.dump(dict_data, my_file, indent=2)
 
 
+def parse_meta_padloc(meta: Path) -> pd.DataFrame:
+    df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 8, 9, 10], header=0)
+    df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
+    df['temp'].fillna('', inplace=True)
+    df['secondary.name'].fillna('', inplace=True)
+    df['secondary_name'] = df['temp'] + df['secondary.name']
+    df = df.drop('protein.name', axis=1)
+    df = df.drop('secondary.name', axis=1)
+    df = df.drop('temp', axis=1)
+    df = df.iloc[:, [0, 1, 6, 7, 3, 4, 5, 2]]
+    df.insert(4, 'score_threshold', None)
+    df.columns = meta_col_names
+    return df
+
+
 def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame = None, canonical: list = None):
     """
     Translate the yaml data in json dictionary
 
     :param data_yaml: data yaml file to translate
-    :param data_json: json dictionary translated
     """
     assert canonical is not None and isinstance(canonical, list)
     assert meta is not None and isinstance(meta, pd.DataFrame)
@@ -131,9 +150,9 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_padloc(models: Path, meta: Path = None):
-    meta_df = pd.read_csv(filepath_or_buffer=meta.absolute().as_posix(), sep='\t', header=0)
+def translate_padloc(models: Path, meta: Path):
     list_data = []
+    meta_df = parse_meta_padloc(meta)
     for model in models.rglob("*.yaml"):
         canonical_sys = search_canonical_padloc(model.stem, models)
         data = read_yaml(model)
@@ -252,11 +271,6 @@ def parse_defense_finder(model_file: Path, tmpdir: Path):
             elif re.search('</model>', line) and in_fu:
                 model_test.write("</functional_unit>\n")
                 model_test.write(line)
-            # elif re.search("<gene.*/>", line) and not in_fu:
-            #     fu_name = re.findall(r'name="(\w+)"', line)[0]
-            #     presence = re.findall(r'presence="(\w+)"', line)[0]
-            #     model_test.write(f"<functional_unit name={fu_name}, presence={presence}, "
-            #                      f'min_mandatory_genes_required="1" min_genes_required="1">\n')
             else:
                 model_test.write(line)
             index += 1
@@ -265,6 +279,7 @@ def parse_defense_finder(model_file: Path, tmpdir: Path):
 
 def translate_defense_finder(models: Path, tmpdir: Path = None):
     assert tmpdir is not None and isinstance(tmpdir, Path)
+
     with tempfile.TemporaryDirectory(prefix="Dfinder_", dir=tmpdir) as tmp:
         tmp_path = Path(tmp)
         list_data = []
@@ -278,11 +293,11 @@ def translate_defense_finder(models: Path, tmpdir: Path = None):
     return list_data
 
 
-def launch_translate(models: Path, source: str, output: Path, meta: Path = None, tmpdir: Path = None):
+def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, tmpdir: Path = None):
     if source == "padloc":
         logging.getLogger().info("Begin to translate padloc models...")
-        list_data = translate_padloc(models=models, meta=meta)
-    elif source == "defense-finder":
+        list_data = translate_padloc(models=models, meta=meta_data)
+    elif source == "defense-finder ":
         logging.getLogger().info("Begin to translate defense finder models...")
         list_data = translate_defense_finder(models=models, tmpdir=tmpdir)
     elif source == "macsy-finder":
