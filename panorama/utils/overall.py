@@ -138,3 +138,4 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                                     "taxid": line[2] if len(line) > 2 else None}
         p_file.close()
         return pan_to_path
+

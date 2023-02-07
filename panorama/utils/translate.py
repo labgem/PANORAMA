@@ -1,0 +1,295 @@
+#!/usr/bin/env python3
+# coding:utf-8
+import logging
+# default libraries
+import re
+import tempfile
+from typing import List
+import yaml
+import json
+from pathlib import Path
+from lxml import etree as et
+
+# installed libraries
+import pandas as pd
+
+
+# local libraries
+
+def read_yaml(model):
+    """
+    Open yaml file and return data file
+
+    :param model: yaml file
+    :return: data : data yaml file
+    """
+    try:
+        model_file = open(model, "r")
+    except IOError as ioerror:
+        raise IOError(f"Problem to open {model}. The foolowing error is direct cause\n{ioerror}")
+    except Exception as error:
+        raise Exception(f"Unexepected Problem to read {model}. The foolowing error is direct cause\n{error}")
+    else:
+        data = yaml.safe_load(model_file)
+        model_file.close()
+        return data
+
+
+def read_xml(model):
+    """
+    Open xml file and return the data root
+
+    :param model: xml file
+    :return: data root
+    """
+    try:
+        my_tree = et.parse(model.absolute().as_posix())
+    except IOError as ioerror:
+        raise IOError(f"Problem to open {model}. The foolowing error is direct cause\n{ioerror}")
+    except Exception as error:
+        raise Exception(f"Unexepected Problem to read {model}. The foolowing error is direct cause\n{error}")
+    else:
+        my_root = my_tree.getroot()
+        return my_root
+
+
+def write(path_output: Path, dict_data: dict):
+    """
+    Create new json file and write json data dictionary
+
+    :param path_output: path of output directory
+    :param dict_data: json dictionary translated
+    """
+    with open(f"{path_output}/{dict_data['name']}.json", "w") as my_file:
+        json.dump(dict_data, my_file, indent=2)
+
+
+def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame = None, canonical: list = None):
+    """
+    Translate the yaml data in json dictionary
+
+    :param data_yaml: data yaml file to translate
+    :param data_json: json dictionary translated
+    """
+    assert canonical is not None and isinstance(canonical, list)
+    assert meta is not None and isinstance(meta, pd.DataFrame)
+
+    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame, fam_type: str):
+        family_list = []
+        for fam_name in families_list:
+            if fam_name != 'NA':
+                if fam_name in secondary_names:
+                    filter_df = meta.loc[meta['secondary_name'] == fam_name]
+                    prime_names = filter_df['protein_name'].dropna().unique().tolist()
+                    for prime in prime_names:
+                        family_list.append({'name': prime,
+                                            'type': fam_type,
+                                            'relation': None,
+                                            'parameters': None})
+                family_list.append({'name': fam_name,
+                                    'type': fam_type,
+                                    'relation': None,
+                                    'parameters': None})
+        return family_list
+
+    data_json = {"name": model_name, 'func_units': [{'name': model_name, 'type': 'mandatory',
+                                                     'parameters': {'max_forbidden': 0}}],
+                 'parameters': {"max_forbidden": 0, "max_separation": 1, "min_mandatory": 1, "min_total": 1}}
+    if len(canonical) > 0:
+        data_json['canonical'] = canonical
+    secondary_names = meta['secondary_name'].dropna().unique().tolist()
+    family_list = list()
+    for key, value in data_yaml.items():
+        if key == 'maximum_separation':
+            data_json['func_units'][0]['parameters']['max_separation'] = value
+        elif key == 'minimum_core':
+            data_json['func_units'][0]['parameters']['min_mandatory'] = value
+        elif key == 'minimum_total':
+            data_json['func_units'][0]['parameters']['min_total'] = value
+        elif key == 'core_genes':
+            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
+                                      fam_type='mandatory')
+        elif key == 'optional_genes':
+            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
+                                      fam_type='accessory')
+        elif key == 'prohibited_genes':
+            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
+                                      fam_type='forbidden')
+    data_json['func_units'][0]['families'] = family_list
+    return data_json
+
+
+def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
+    canonical_sys = []
+    if re.search("_other", model_name):
+        basename = re.split("_other", model_name)[0]
+        for canon_file in models.glob("*.yaml"):
+            name_canon = canon_file.stem
+            if (re.search(f"{basename}_", name_canon) or re.search(f"{basename}$", name_canon)) \
+                    and name_canon != model_name:
+                canonical_sys.append(name_canon)
+    return canonical_sys
+
+
+def translate_padloc(models: Path, meta: Path = None):
+    meta_df = pd.read_csv(filepath_or_buffer=meta.absolute().as_posix(), sep='\t', header=0)
+    list_data = []
+    for model in models.rglob("*.yaml"):
+        canonical_sys = search_canonical_padloc(model.stem, models)
+        data = read_yaml(model)
+        list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
+    return list_data
+
+
+def translate_defense_finder_model(root, model_name: str):
+    """
+    Translate the xml data in json dictionary
+
+    :param root: root of xml data
+    :param model_name: name of the model
+    """
+
+    def translate_gene(elem):
+        try:
+            name = "".join(elem.get('name').split('__')[1:])
+        except KeyError:
+            raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
+        else:
+            dict_elem = {'name': name, 'type': 'neutral', 'parameters': {"max_separation": 0}}
+
+            for attrib, value in elem.attrib.items():
+                if attrib == 'presence':
+                    dict_elem['type'] = value
+                elif attrib == 'inter_gene_max_space':
+                    dict_elem['parameters']['max_separation'] = int(value)
+
+            for relation in elem:
+                if relation.tag == "exchangeables":
+                    dict_elem["exangeables"] = []
+                    for gene in relation:
+                        try:
+                            name = "".join(gene.get('name').split('__')[1:])
+                        except KeyError:
+                            raise KeyError(f"In {data_json['name']} of Defense Finder, one gene doesn't have a name")
+                        else:
+                            dict_elem["exangeables"].append(name)
+                else:
+                    logging.getLogger().warning("Unexpected relation")
+            return dict_elem
+
+    def translate_fu(elem):
+        try:
+            name = elem.get('name')
+        except KeyError:
+            raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
+        else:
+            dict_elem = {'name': name, 'type': 'neutral', "families": [],
+                         'parameters': {"max_separation": 0, 'max_forbidden': 0,
+                                        'min_mandatory': 1, "min_total": 1}}
+
+            for attrib, value in elem.attrib.items():
+                if attrib == 'presence':
+                    dict_elem['type'] = value
+                elif attrib == 'min_mandatory_genes_required':
+                    dict_elem['parameters']['min_mandatory'] = int(value)
+                elif attrib == 'min_genes_required':
+                    dict_elem['parameters']['min_total'] = int(value)
+                elif attrib == 'inter_gene_max_space':
+                    dict_elem['parameters']['max_separation'] = int(value)
+
+            for family in elem:
+                dict_elem["families"].append(translate_gene(family))
+            return dict_elem
+
+    data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
+    if root.attrib is not None:  # Read attributes root
+        for parameter, number in root.attrib.items():
+            if parameter == 'inter_gene_max_space':
+                data_json['parameters']['max_separation'] = int(number)
+            elif parameter == 'min_mandatory_genes_required':
+                data_json['parameters']['min_mandatory'] = int(number)
+            elif parameter == 'min_genes_required':
+                data_json['parameters']['min_total'] = int(number)
+    data_json['parameters']['max_forbidden'] = 0
+
+    fu_list = []
+    fam_list = []
+    for elem in root:
+        if elem.tag == "gene":
+            fam_list.append(translate_gene(elem))
+
+        elif elem.tag == "functional_unit":
+            fu_list.append(translate_fu(elem))
+    if len(fu_list) == 0:  # only genes
+        fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list, 'parameters': {}})
+    for fu in fu_list:
+        data_json["func_units"].append(fu)
+    return data_json
+
+
+def parse_defense_finder(model_file: Path, tmpdir: Path):
+    with open(model_file, "r") as model:
+        lines = model.readlines()
+    lines = list(filter(lambda element: not re.search("^ ?\n", element), lines))
+    newfile_path = tmpdir.joinpath(model_file.name)
+    with open(newfile_path, "w") as model_test:
+        index = 0
+        in_fu = False
+        while index < len(lines):
+            line = lines[index]
+            if re.search("^###############+", line):
+                index += 2
+            elif re.search("^#+ ", line):
+                in_fu = True
+                fu_name = line.replace("#", "").replace(" ", "").replace("\n", "")
+                presence = re.findall(r'presence="(\w+)"', lines[index + 1])[0]
+                model_test.write(f'<functional_unit name="{fu_name}" presence="{presence}" '
+                                 f'min_mandatory_genes_required="1" min_genes_required="1">\n')
+            elif re.search('</gene>', line) and in_fu:
+                model_test.write(line)
+                if re.search("^#", lines[index + 1]):
+                    model_test.write("</functional_unit>\n")
+            elif re.search('</model>', line) and in_fu:
+                model_test.write("</functional_unit>\n")
+                model_test.write(line)
+            # elif re.search("<gene.*/>", line) and not in_fu:
+            #     fu_name = re.findall(r'name="(\w+)"', line)[0]
+            #     presence = re.findall(r'presence="(\w+)"', line)[0]
+            #     model_test.write(f"<functional_unit name={fu_name}, presence={presence}, "
+            #                      f'min_mandatory_genes_required="1" min_genes_required="1">\n')
+            else:
+                model_test.write(line)
+            index += 1
+    return newfile_path
+
+
+def translate_defense_finder(models: Path, tmpdir: Path = None):
+    assert tmpdir is not None and isinstance(tmpdir, Path)
+    with tempfile.TemporaryDirectory(prefix="Dfinder_", dir=tmpdir) as tmp:
+        tmp_path = Path(tmp)
+        list_data = []
+        for model in models.rglob("*.xml"):
+            try:
+                parse_defense_finder(model, tmp_path)
+            except Exception:
+                raise Exception(f"Problem to parse {model.name}")
+            root = read_xml(model)
+            list_data.append(translate_defense_finder_model(root, model.stem))
+    return list_data
+
+
+def launch_translate(models: Path, source: str, output: Path, meta: Path = None, tmpdir: Path = None):
+    if source == "padloc":
+        logging.getLogger().info("Begin to translate padloc models...")
+        list_data = translate_padloc(models=models, meta=meta)
+    elif source == "defense-finder":
+        logging.getLogger().info("Begin to translate defense finder models...")
+        list_data = translate_defense_finder(models=models, tmpdir=tmpdir)
+    elif source == "macsy-finder":
+        raise NotImplementedError
+    else:
+        raise ValueError(f"The given source: {source} is not recognize. "
+                         f"Please choose between padloc, defense-finder or macsy-finder")
+    logging.getLogger().info("Write models for PANORAMA")
+    for data in list_data:
+        write(output, data)
