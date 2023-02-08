@@ -179,7 +179,7 @@ class Pangenome(Pan):
         same_sys = False
         canonical_systems = []
         drop_sys_key = []
-        for system_in in self.systems:
+        for system_in in self.get_system_by_source(system.source):
             if system_in.name == system.name and system_in.gene_families.issubset(system.gene_families):
                 # A system with this name already exist and system in pangenome is subset of new system
                 system.ID = system_in.ID
@@ -204,11 +204,12 @@ class Pangenome(Pan):
                 system.add_canonical(canonical_system)
         self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
 
-    def number_of_systems(self) -> int:
+    def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:
         """Get the number of systems in the pangenomes"""
         nb_systems = 0
-        for system in self.systems:
-            nb_systems += 1 + len(system.canonical)
+        systems = self.systems if source is None else self.get_system_by_source(source)
+        for system in systems:
+            nb_systems += 1 + len(system.canonical) if with_canonical else 1
         return nb_systems
     
     def add_modules(self, modules: Iterable[Module]):

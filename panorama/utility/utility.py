@@ -106,7 +106,7 @@ def parser_utils(parser):
 
 
 if __name__ == "__main__":
-    from overall import set_verbosity_level, check_log
+    from panorama.utils import set_verbosity_level, check_log
 
     main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
                                           formatter_class=argparse.RawTextHelpFormatter)
