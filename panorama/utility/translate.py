@@ -17,10 +17,6 @@ from tqdm import tqdm
 # local libraries
 
 
-meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "score_threshold",
-                  "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
-
-
 def read_yaml(model):
     """
     Open yaml file and return data file
@@ -69,7 +65,9 @@ def write(path_output: Path, dict_data: dict):
         json.dump(dict_data, my_file, indent=2)
 
 
-def parse_meta_padloc(meta: Path) -> pd.DataFrame:
+def parse_meta_padloc(meta: Path, output: Path) -> pd.DataFrame:
+    meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "score_threshold",
+                      "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
     df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 8, 9, 10], header=0)
     df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
     df['temp'].fillna('', inplace=True)
@@ -81,6 +79,7 @@ def parse_meta_padloc(meta: Path) -> pd.DataFrame:
     df = df.iloc[:, [0, 1, 6, 7, 3, 4, 5, 2]]
     df.insert(4, 'score_threshold', None)
     df.columns = meta_col_names
+    df.to_csv(output / "padloc_meta.tsv", sep="\t", header=meta_col_names)
     return df
 
 
@@ -150,9 +149,9 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_padloc(models: Path, meta: Path, disable_bar: bool = False):
+def translate_padloc(models: Path, meta: Path, output: Path, disable_bar: bool = False):
     list_data = []
-    meta_df = parse_meta_padloc(meta)
+    meta_df = parse_meta_padloc(meta, output)
     for model in tqdm(list(models.rglob("*.yaml")), unit="file", disable=disable_bar):
         canonical_sys = search_canonical_padloc(model.stem, models)
         data = read_yaml(model)
@@ -299,7 +298,7 @@ def launch_translate(models: Path, source: str, output: Path, meta_data: Path = 
                      disable_bar: bool = False):
     if source == "padloc":
         logging.getLogger().info("Begin to translate padloc models...")
-        list_data = translate_padloc(models=models, meta=meta_data, disable_bar=disable_bar)
+        list_data = translate_padloc(models=models, meta=meta_data, output=output, disable_bar=disable_bar)
     elif source == "defense-finder":
         logging.getLogger().info("Begin to translate defense finder models...")
         list_data = translate_defense_finder(models=models, tmpdir=tmpdir, disable_bar=disable_bar)

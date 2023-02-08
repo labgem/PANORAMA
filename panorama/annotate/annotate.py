@@ -17,7 +17,7 @@ from panorama.utils import check_tsv_sanity
 from panorama.annotate.hmm_search import annot_with_hmm, res_col_names
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import check_pangenome_info
-from annotation import Annotation
+from panorama.annotation import Annotation
 from panorama.pangenomes import Pangenome
 
 

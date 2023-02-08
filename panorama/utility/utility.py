@@ -92,7 +92,8 @@ def parser_utils(parser):
                            help="Available sources that we know how to translate. "
                                 "The directory will be read recursively to catch all models.")
     translate.add_argument("--meta", required=False, type=Path,
-                           help='For Padloc we use the metadata file to translate models.')
+                           help='For Padloc we use the metadata file to translate models. '
+                                'A padloc_meta.tsv will be generated for PANORAMA to annotate in the output directory')
     check_model = parser.add_argument_group(title="Check models arguments",
                                             description="Arguments necessary to check if models are readable")
     check_model.add_argument("--models", required=False, type=Path, nargs="?", default=None,

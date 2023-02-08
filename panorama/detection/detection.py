@@ -270,10 +270,7 @@ def launch(args):
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
         logging.getLogger().info("System detection Done")
         logging.getLogger().info(f"Write systems in pangenome")
-        # systems_to_modules(pangenome=pangenome, threads=args.threads, disable_bar=args.disable_prog_bar)
         write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
-        # write_systems_projection(pangenome=pangenome, output=args.output, threads=args.threads,
-        #                          force=args.force, disable_bar=args.disable_prog_bar)
         logging.getLogger().info(f"Systems written")
 
 
@@ -304,8 +301,6 @@ def parser_detection(parser):
                           help="Path to model directory")
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
-    required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
-                          help='Output directory')
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")

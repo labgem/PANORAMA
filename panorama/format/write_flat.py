@@ -32,7 +32,7 @@ from panorama.pangenomes import Pangenome
 def check_flat_parameters(args):
     if args.hmm and (args.msa is None or args.msa_format is None):
         raise Exception("To write HMM you need to give msa files and format")
-    if args.systems or args.systems_asso is not None or "systems" in args.proksee:
+    if args.systems or args.systems_asso is not None or any(elem in ["systems", "all"] for elem in args.proksee):
         if args.models is None or args.sources is None:
             raise Exception("To read system and write flat related, "
                             "it's necessary to give models and annotation source.")
@@ -211,7 +211,7 @@ def write_system_projection(system: System) -> pd.DataFrame:
     return projection_df
 
 
-def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 1,
+def write_systems_projection(pangenome: Pangenome, output: Path, source: str, threads: int = 1,
                              force: bool = False, disable_bar: bool = False):
     """ Write all systems in pangenomes and project on organisms
 
@@ -240,14 +240,14 @@ def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 
                                   "annotation name", "gene", "start", "stop", "strand"]
     systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
                                    ascending=[True, True, True, True, True], inplace=True)
-    mkdir(f"{output}/projection_systems1", force=force)
+    mkdir(f"{output}/projection_{source}", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/projection_systems2/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
+        org_df.to_csv(f"{output}/projection_{source}/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems_{source}.tsv", sep="\t", index=False)
 
 
 def write_systems_to_modules(pangenome: Pangenome, output: Path, systems2modules: List[Collection[str, List[Module]]]):
@@ -375,7 +375,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     need_gene_sequences = False
     need_annotations_fam = False
     need_systems = False
-
+    sources = None
     if annotation:
         need_families = True
         need_annotations_fam = True
@@ -389,10 +389,12 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_families = True
         need_systems = True
         need_annotations_fam = True
+        sources = [kwargs["source"]]
 
     if systems_asso is not None:
         need_systems = True
         need_families = True
+        sources = [kwargs["source"]]
         if systems_asso in ["modules", "all"]:
             need_modules = True
         if systems_asso in ["rgp", "spots", "all"]:
@@ -415,17 +417,19 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         if "annotations" in proksee or "all" in proksee:
             need_annotations = True
         if "systems" in proksee or "all" in proksee:
+            sources = [kwargs["source"]]
             need_systems = True
 
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                          need_annotations_fam=need_annotations_fam, need_systems=need_systems,
-                         models_path=kwargs["models_path"], sources=[kwargs["source"]],
+                         models_path=kwargs["models_path"], sources=sources,
                          disable_bar=disable_bar)
 
     if annotation:
         write_annotation_to_families(pangenome, output)
+        logging.getLogger().info(f"Annotation has been written in {output}/families_annotations.tsv")
 
     if hmm:
         msa_path = kwargs.get('msa_path', None)
@@ -436,7 +440,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
 
     if systems:
         logging.getLogger().info("Begin write systems projection")
-        write_systems_projection(pangenome=pangenome, output=output, threads=threads,
+        write_systems_projection(pangenome=pangenome, output=output, source=kwargs["source"], threads=threads,
                                  force=force, disable_bar=disable_bar)
         logging.getLogger().info(f"Projection written")
 
@@ -498,32 +502,38 @@ def parser_write(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')
+    process = parser.add_argument_group(title="Flat output file choose arguments")
+    process.add_argument("--annotations", required=False, action="store_true",
+                         help="Write all the annotations from families")
+    process.add_argument("--systems", required=False, action="store_true",
+                         help="Write all the systems in pangenomes and project on genomes")
+    process.add_argument("--systems_asso", required=False, type=str, default=None,
+                         choices=["all", "modules", "rgp", "spots"],
+                         help="Write association between systems and others pangenomes elements")
+    process.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
+                         choices=["all", "base", "modules", "rgp", "spots", "annotations", "systems"])
+    process.add_argument("--hmm", required=False, action="store_true",
+                         help="Write an hmm for each gene families in pangenomes")
+    sys_param = parser.add_argument_group(title="Argument relative to systems")
+    sys_param.add_argument('--models', required=False, type=Path, default=None,
+                           help="Path to model directory")
+    sys_param.add_argument("--sources", required=False, type=str, nargs="?", default=None,
+                           help='Name of the annotation source where panorama as to select in pangenomes')
+    prok_param = parser.add_argument_group(title="Argument relative to proksee output")
+    prok_param.add_argument("--proksee_template", required=False, type=Path, default=None, nargs='?')
+    prok_param.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
+    hmm_param = parser.add_argument_group(title="HMM arguments",
+                                          description="All of the following arguments are required,"
+                                                      " if you're using HMM mode :")
+    hmm_param.add_argument("--msa", required=False, type=Path, default=None,
+                           help="To create a HMM profile for families, you can give a msa of each gene in families."
+                                "This msa could be get from ppanggolin (See ppanggolin msa). "
+                                "If no msa provide Panorama will launch one.")
+    hmm_param.add_argument("--msa_format", required=False, type=str, default="afa",
+                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                                    "clustal", "clustallike", "phylip", "phylips"],
+                           help="Format of the input MSA.")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--annotations", required=False, action="store_true",
-                          help="Write all the annotations from families")
-    optional.add_argument("--systems", required=False, action="store_true",
-                          help="Write all the systems in pangenomes and project on genomes")
-    optional.add_argument("--systems_asso", required=False, type=str, default=None,
-                          choices=["all", "modules", "rgp", "spots"],
-                          help="Write association between systems and others pangenomes elements")
-    optional.add_argument('--models', required=False, type=Path, default=None,
-                          help="Path to model directory")
-    optional.add_argument("--sources", required=False, type=str, nargs="?", default=None,
-                          help='Name of the annotation source where panorama as to select in pangenomes')
-    optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                          choices=["all", "base", "modules", "rgp", "spots", "annotations", "systems"])
-    optional.add_argument("--proksee_template", required=False, type=Path, default=None, nargs='?')
-    optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
-    optional.add_argument("--hmm", required=False, action="store_true",
-                          help="Write an hmm for each gene families in pangenomes")
-    optional.add_argument("--msa", required=False, type=Path, default=None,
-                          help="To create a HMM profile for families, you can give a msa of each gene in families."
-                               "This msa could be get from ppanggolin (See ppanggolin msa). "
-                               "If no msa provide Panorama will launch one.")
-    optional.add_argument("--msa_format", required=False, type=str, default="afa",
-                          choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-                                   "clustal", "clustallike", "phylip", "phylips"],
-                          help="Format of the input MSA.")
     optional.add_argument("--threads", required=False, type=int, default=1)
 
 
