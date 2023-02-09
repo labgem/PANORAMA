@@ -92,7 +92,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     assert canonical is not None and isinstance(canonical, list)
     assert meta is not None and isinstance(meta, pd.DataFrame)
 
-    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame, fam_type: str):
+    def add_family(families_list: List[str], secondary_names: List[str], max_separation: int, meta: pd.DataFrame, fam_type: str):
         family_list = []
         for fam_name in families_list:
             if fam_name != 'NA':
@@ -103,37 +103,40 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                         family_list.append({'name': prime,
                                             'type': fam_type,
                                             'relation': None,
-                                            'parameters': None})
+                                            'parameters': {"max_separation": max_separation}})
                 family_list.append({'name': fam_name,
                                     'type': fam_type,
                                     'relation': None,
-                                    'parameters': None})
+                                    'parameters': {"max_separation": max_separation}})
         return family_list
 
-    data_json = {"name": model_name, 'func_units': [{'name': model_name, 'type': 'mandatory',
-                                                     'parameters': {'max_forbidden': 0}}],
+    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "core_genes", "optional_genes", "prohibited_genes"]
+    if not all(key in padloc_keys for key in data_yaml.keys()):
+        raise KeyError(f"Unexpected key in PADLOC model : {model_name}."
+                       f"authorized keys are : {', '.join(padloc_keys)}")
+
+    data_json = {"name": model_name, 'func_units': [],
                  'parameters': {"max_forbidden": 0, "max_separation": 1, "min_mandatory": 1, "min_total": 1}}
     if len(canonical) > 0:
         data_json['canonical'] = canonical
     secondary_names = meta['secondary_name'].dropna().unique().tolist()
+    func_unit = {'name': model_name, 'type': 'mandatory', 'parameters': {'max_forbidden': 0}}
+    func_unit['parameters']['max_separation'] = data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0
+    func_unit['parameters']['min_mandatory'] = data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1
+    func_unit['parameters']['min_total'] = data_yaml["min_total"] if "min_total" in data_yaml else 1
+
     family_list = list()
-    for key, value in data_yaml.items():
-        if key == 'maximum_separation':
-            data_json['func_units'][0]['parameters']['max_separation'] = value
-        elif key == 'minimum_core':
-            data_json['func_units'][0]['parameters']['min_mandatory'] = value
-        elif key == 'minimum_total':
-            data_json['func_units'][0]['parameters']['min_total'] = value
-        elif key == 'core_genes':
-            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
-                                      fam_type='mandatory')
-        elif key == 'optional_genes':
-            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
-                                      fam_type='accessory')
-        elif key == 'prohibited_genes':
-            family_list += add_family(families_list=value, secondary_names=secondary_names, meta=meta,
-                                      fam_type='forbidden')
-    data_json['func_units'][0]['families'] = family_list
+    family_list += add_family(families_list=data_yaml["core_genes"] if "core_genes" in data_yaml else [],
+                              secondary_names=secondary_names, meta=meta, fam_type='mandatory',
+                              max_separation=func_unit['parameters']['max_separation'])
+    family_list += add_family(families_list=data_yaml["optional_genes"] if "optional_genes" in data_yaml else [],
+                              secondary_names=secondary_names, meta=meta, fam_type='accessory',
+                              max_separation=func_unit['parameters']['max_separation'])
+    family_list += add_family(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
+                              secondary_names=secondary_names, meta=meta, fam_type='forbidden',
+                              max_separation=func_unit['parameters']['max_separation'])
+    func_unit["families"] = family_list
+    data_json['func_units'].append(func_unit)
     return data_json
 
 
