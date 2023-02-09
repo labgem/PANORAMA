@@ -343,6 +343,8 @@ class Model:
         if self.parameters["min_total"] > self.size[0] + len(list(self.duplicate_fu())):
             raise Exception(f"There is less functional units than the minimum total"
                             f" of functional unit needed in {self.name}")
+        if self.parameters["min_mandatory"] > self.parameters['min_total']:
+            raise Exception("Minimun mandatory value is greater than minimum total.")
         if len(self.neutral) == 1 and self.size[0] == 1:
             logging.getLogger().warning(f"There is only one family in {self.name}. "
                                         f"It should be a mandatory type.")
@@ -469,6 +471,8 @@ class FuncUnit:
         if self.parameters["min_total"] > self.size + len(list(self.duplicate_fam())):
             raise Exception(f"There is less families than the minimum total"
                             f" of functional unit needed in {self.name}")
+        if self.parameters["min_mandatory"] > self.parameters['min_total']:
+            raise Exception("Minimun mandatory value is greater than minimum total.")
         if len(self.neutral) == 1 and self.size == 1:
             logging.getLogger().warning(f"There is only one family in {self.name}. "
                                         f"It should be a mandatory type.")

@@ -123,7 +123,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     func_unit = {'name': model_name, 'type': 'mandatory', 'parameters': {'max_forbidden': 0}}
     func_unit['parameters']['max_separation'] = data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0
     func_unit['parameters']['min_mandatory'] = data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1
-    func_unit['parameters']['min_total'] = data_yaml["min_total"] if "min_total" in data_yaml else 1
+    func_unit['parameters']['min_total'] = data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
 
     family_list = list()
     family_list += add_family(families_list=data_yaml["core_genes"] if "core_genes" in data_yaml else [],

@@ -222,6 +222,7 @@ def write_systems_projection(pangenome: Pangenome, output: Path, source: str, th
     :param disable_bar: Allow to disable progress bar
     """
     with ThreadPoolExecutor(max_workers=threads) as executor:
+        logging.getLogger().info(f'Write system projection for source : {source}')
         with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system', disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(source):
