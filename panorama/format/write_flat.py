@@ -36,6 +36,9 @@ def check_flat_parameters(args):
         if args.models is None or args.sources is None:
             raise Exception("To read system and write flat related, "
                             "it's necessary to give models and annotation source.")
+        if len(args.models) != len(args.sources):
+            raise Exception("To read systems from differents sources you need to give "
+                            "one models directory by corresponding source.")
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
@@ -442,8 +445,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     if proksee is not None:
         need_annotations = True
         need_gene_sequences = True
-        need_families = True,
-        need_partitions = True,
+        need_families = True
+        need_partitions = True
+        need_annotations_fam = True
         if "rgp" in proksee or "all" in proksee:
             need_regions = True
         if "spots" in proksee or "all" in proksee:
@@ -490,8 +494,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
             systems_to_spots(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
 
     if proksee:
-        write_proksee(pangenome=pangenome, output=output, features=proksee, template=proksee_template,
-                      organisms_list=organisms_list, threads=threads, disable_bar=disable_bar)
+        write_proksee(pangenome=pangenome, output=output, features=proksee, sources=kwargs['sources'],
+                      template=proksee_template, organisms_list=organisms_list,
+                      threads=threads, disable_bar=disable_bar)
 
 
 def launch(args):
