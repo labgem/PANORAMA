@@ -50,8 +50,8 @@ def write_legend_items(legend_data: dict, features: List[str], sources: List[str
         legend_data["items"].append({"name": "Module", "swatchColor": f"rgba({','.join(map(str, colors.pop(3)))},1)", "decoration": "arc"})
     if "systems" in features or "all" in features:
         for source in sources:
-            legend_data["items"].append({"name": source, "decoration": "arc",
-                                         "swatchColor": f"rgba({','.join(map(str, colors.pop(randint(0, len(colors)))))},1)"})
+            color = ','.join(map(str, colors.pop(randint(0, len(colors) - 1))))
+            legend_data["items"].append({"name": source, "decoration": "arc", "swatchColor": f"rgba({color},1)"})
 
 
 def write_tracks(features: List[str]):
@@ -277,7 +277,7 @@ def write_proksee(pangenome: Pangenome, output: Path, features: List[str] = None
                   template: Path = None, organisms_list: List[str] = None, threads: int = 1, disable_bar: bool = False):
     assert features is not None
     if template is None:
-        template = Path(__file__).parent.joinpath("cgview_template").with_suffix(".json")
+        template = Path(__file__).parent.joinpath("proksee_template").with_suffix(".json")
     if organisms_list is not None:
         organisms = [organism for organism in pangenome.organisms if organism.name in organisms_list]
     else:
