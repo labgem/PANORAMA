@@ -107,6 +107,14 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
                     fam2annot[gf.name].add(fam_model)
                 else:
                     fam2annot[gf.name] = {fam_model}
+        for exchangeable in fam_model.exchangeables:
+            if exchangeable in annot2fam:
+                for gf in annot2fam[exchangeable]:
+                    families[gf.name] = gf
+                    if gf.name in fam2annot:
+                        fam2annot[gf.name].add(fam_model)
+                    else:
+                        fam2annot[gf.name] = {fam_model}
     return families, fam2annot
 
 
@@ -126,6 +134,12 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, gr
             for pan_fam in annot2fam[mandatory_fam.name]:
                 if pan_fam not in graph.nodes:
                     detected_systems.append(System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
+        for exchangeable in mandatory_fam.exchangeables:
+            if exchangeable in annot2fam:
+                for pan_fam in annot2fam[exchangeable]:
+                    if pan_fam not in graph.nodes:
+                        detected_systems.append(System(system_id=0, model=func_unit.model,
+                                                       source=source, gene_families={pan_fam}))
     return detected_systems
 
 

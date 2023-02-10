@@ -17,7 +17,6 @@ import pyhmmer
 import pandas as pd
 
 # local libraries
-from panorama.utils import path_is_dir, path_is_file
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
@@ -53,7 +52,8 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     return digit_gf_sequence
 
 
-def get_msa():
+def get_msa(tmpdir: Path):
+    _ = tempfile.TemporaryDirectory(prefix="msa_panorama", dir=tmpdir)
     logging.getLogger().warning("In Dev")
     raise NotImplementedError
 
@@ -86,7 +86,7 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
 
 
 def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa",
-                threads: int = 1, disable_bar: bool = False):
+                tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
     """Create an HMM profile for each gene families
 
     :param pangenome: Pangenome contaning gene families to profile
@@ -96,7 +96,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
     :param disable_bar: Disable progress bar
     """
     if msa_path is None:
-        get_msa()
+        get_msa(tmpdir)
     else:
         msa_file_list = list(msa_path.iterdir())
         with ThreadPoolExecutor(max_workers=threads) as executor:
@@ -123,14 +123,10 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     metadata_df = pd.read_csv(metadata, delimiter="\t", names=meta_col_names,
                               dtype=meta_dtype, header=0).set_index('accession')
     metadata_df['description'] = metadata_df["description"].fillna('unknown')
-    # hmm_full_name = collections.namedtuple("HMM_full_name", ['protein_name', 'secondary_name'])
-    # hmm_to_metaname = {}
-    # for index, row in metadata_df.iterrows():
-    #     hmm_to_metaname[row[0]] = hmm_full_name(row[1], row[2])
     return metadata_df  # , hmm_to_metaname
 
 
-def read_hmm(hmm_dir: Generator, disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
+def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
     """Read HMM file to create HMM object
 
     :param hmm_dir: Directory with the HMM
@@ -141,53 +137,32 @@ def read_hmm(hmm_dir: Generator, disable_bar: bool = False) -> List[pyhmmer.plan
     hmms = []
     hmm_list_path = list(hmm_dir)
     logging.getLogger().info("Read HMM")
-    for hmm_file in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
-        try:
-            hmm = next(pyhmmer.plan7.HMMFile(hmm_file))
-        except Exception as error:
-            raise Exception(f'Unexpected error on HMM file {hmm_file}, caused by {error}')
-        else:
+    for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
+        # if hmm_path.stem == "RM__Type_I_MTases":
+        #     print("pika")
+        end = False
+        hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
+        while not end:
             try:
-                with open(hmm_file, 'r') as file:
-                    line = file.readline()
-                    while not re.search('LENG', line):
-                        line = file.readline()
-                    hmm_length[hmm.name] = int(line.split(' ')[-1])
-            except ValueError as val_error:
-                raise ValueError(f'{hmm_file} {val_error}')
+                hmm = next(hmm_file)
+            except StopIteration:
+                end = True
             except Exception as error:
-                raise Exception(f'Unexpected error to get HMM length on file {hmm_file}.'
-                                f'Error caused by {error}')
-
-            hmms.append(hmm)
-    return hmms
-
-
-def split_hmm_file(hmm_path: Path, tmpdir: tempfile.TemporaryDirectory) -> List[Path]:
-    """ Split a big HMM file into multiple temporary files with one HMM by file for multithreading
-
-    :param hmm_path: Path to HMM file
-    :param tmpdir: Temporary directory to store HMM file
-
-    :return: list of path to temporary HMM file
-    """
-    hmm_list = []
-    with open(hmm_path.absolute().as_posix(), 'r') as hmm_file:
-        counter = 0
-        lines = [hmm_file.readline()]
-        for line in hmm_file.readlines():
-            if line.startswith('HMMER'):
-                hmm_list.append(Path(f"{tmpdir.name}/HMM_{counter}.hmm"))
-                new_hmm_file = open(hmm_list[-1].as_posix(), 'w')
-                new_hmm_file.write("\n".join(lines))
-                counter += 1
-                lines = [line]
+                raise Exception(f'Unexpected error on HMM file {hmm_path}, caused by {error}')
             else:
-                lines.append(line)
-        hmm_list.append(Path(f"{tmpdir.name}/HMM_{counter}.hmm"))
-        new_hmm_file = open(hmm_list[-1].as_posix(), 'w')
-        new_hmm_file.write("\n".join(lines))
-    return hmm_list
+                try:
+                    with open(hmm_path, 'r') as file:
+                        line = file.readline()
+                        while not re.search('LENG', line):
+                            line = file.readline()
+                        hmm_length[hmm.name] = int(line.split(' ')[-1])
+                except ValueError as val_error:
+                    raise ValueError(f'{hmm_path} {val_error}')
+                except Exception as error:
+                    raise Exception(f'Unexpected error to get HMM length on file {hmm_path}.'
+                                    f'Error caused by {error}')
+                hmms.append(hmm)
+    return hmms
 
 
 def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
@@ -255,25 +230,17 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
     """
     logging.getLogger().info("Begin HMM searching")
     if mode == 'profile':
-        profile_gfs(pangenome, msa, threads=threads, disable_bar=disable_bar)
+        profile_gfs(pangenome, msa, tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
         logging.getLogger().debug("Gene families HMM and profile computation... Done")
     else:
         if mode != 'fast':
             raise ValueError(f"{mode} unrecognized mode")
     gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
-    tmp_dir = tempfile.TemporaryDirectory(prefix="hmm_panorama", dir=tmpdir)
     if meta is not None:
         metadata = read_metadata(meta)
     else:
         metadata = None
     # Get list of HMM with Plan7 data model
-    if path_is_file(hmm_path):
-        split_hmm_file(hmm_path, tmp_dir)
-        hmms = read_hmm(hmm_dir=Path(tmp_dir.name).iterdir(), disable_bar=disable_bar)
-
-    elif path_is_dir(hmm_path):
-        hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
-    else:
-        raise Exception("Unexpected error")
+    hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
     res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
     return pd.DataFrame(res)

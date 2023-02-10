@@ -4,7 +4,7 @@ import logging
 # default libraries
 import re
 import tempfile
-from typing import List
+from typing import Dict, List
 import yaml
 import json
 from pathlib import Path
@@ -162,7 +162,7 @@ def translate_padloc(models: Path, meta: Path, output: Path, disable_bar: bool =
     return list_data
 
 
-def translate_defense_finder_model(root, model_name: str):
+def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, List[str]]):
     """
     Translate the xml data in json dictionary
 
@@ -170,14 +170,16 @@ def translate_defense_finder_model(root, model_name: str):
     :param model_name: name of the model
     """
 
-    def translate_gene(elem):
+    def translate_gene(elem, hmm_dict: Dict[str, List[str]], max_separation: int = 0):
         try:
             name = "".join(elem.get('name').split('__')[1:])
         except KeyError:
             raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
         else:
-            dict_elem = {'name': name, 'type': 'neutral', 'parameters': {"max_separation": 0}}
-
+            dict_elem = {'name': name, 'type': 'neutral', 'parameters': {"max_separation": max_separation}}
+            exchangeable_set = set()
+            if name in hmm_dict:
+                exchangeable_set |= set(hmm_dict[name])
             for attrib, value in elem.attrib.items():
                 if attrib == 'presence':
                     dict_elem['type'] = value
@@ -186,19 +188,22 @@ def translate_defense_finder_model(root, model_name: str):
 
             for relation in elem:
                 if relation.tag == "exchangeables":
-                    dict_elem["exchangeables"] = []
                     for gene in relation:
                         try:
-                            name = "".join(gene.get('name').split('__')[1:])
+                            exchangeable_name = "".join(gene.get('name').split('__')[1:])
                         except KeyError:
                             raise KeyError(f"In {data_json['name']} of Defense Finder, one gene doesn't have a name")
                         else:
-                            dict_elem["exchangeables"].append(name)
+                            exchangeable_set.add(exchangeable_name)
+                            if exchangeable_name in hmm_dict:
+                                exchangeable_set |= set(hmm_dict[exchangeable_name])
                 else:
                     logging.getLogger().warning("Unexpected relation")
+            if len(exchangeable_set) > 0:
+                dict_elem["exchangeables"] = list(exchangeable_set.difference({name}))
             return dict_elem
 
-    def translate_fu(elem):
+    def translate_fu(elem, hmm_dict: Dict[str, List[str]]):
         try:
             name = elem.get('name')
         except KeyError:
@@ -219,9 +224,11 @@ def translate_defense_finder_model(root, model_name: str):
                     dict_elem['parameters']['max_separation'] = int(value)
 
             for family in elem:
-                dict_elem["families"].append(translate_gene(family))
+                dict_elem["families"].append(translate_gene(family, hmm_dict, dict_elem['parameters']['max_separation']))
             return dict_elem
 
+    if model_name == 'PrrC':
+        print("pika")
     data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
     if root.attrib is not None:  # Read attributes root
         for parameter, number in root.attrib.items():
@@ -237,10 +244,10 @@ def translate_defense_finder_model(root, model_name: str):
     fam_list = []
     for elem in root:
         if elem.tag == "gene":
-            fam_list.append(translate_gene(elem))
+            fam_list.append(translate_gene(elem, hmm_dict, data_json['parameters']['max_separation']))
 
         elif elem.tag == "functional_unit":
-            fu_list.append(translate_fu(elem))
+            fu_list.append(translate_fu(elem, hmm_dict))
     if len(fu_list) == 0:  # only genes
         fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list,
                         'parameters': data_json["parameters"]})
@@ -248,6 +255,22 @@ def translate_defense_finder_model(root, model_name: str):
     for fu in fu_list:
         data_json["func_units"].append(fu)
     return data_json
+
+
+def parse_dfinder_hmm(hmms_path: Path):
+    hmm_dict = {}
+    for hmm_path in hmms_path.glob('*.hmm'):
+        hmm_names = []
+        with open(hmm_path, 'r') as hmm_file:
+            for line in hmm_file.readlines():
+                if re.search('NAME', line):
+                    hmm_names.append(re.split(' +', line.replace("\n", ""))[1])
+        if len(hmm_names) > 1:
+            hmm_dict[hmm_path.stem.split('__')[-1]] = hmm_names
+        else:
+            if hmm_names[0] != hmm_path.stem.split('__')[-1]:
+                hmm_dict[hmm_path.stem.split('__')[-1]] = hmm_names
+    return hmm_dict
 
 
 def parse_defense_finder(model_file: Path, tmpdir: Path):
@@ -281,9 +304,9 @@ def parse_defense_finder(model_file: Path, tmpdir: Path):
     return newfile_path
 
 
-def translate_defense_finder(models: Path, tmpdir: Path = None, disable_bar: bool = False):
+def translate_defense_finder(models: Path, hmms_path: Path, tmpdir: Path, disable_bar: bool = False):
     assert tmpdir is not None and isinstance(tmpdir, Path)
-
+    hmm_dict = parse_dfinder_hmm(hmms_path)
     with tempfile.TemporaryDirectory(prefix="Dfinder_", dir=tmpdir) as tmp:
         tmp_path = Path(tmp)
         list_data = []
@@ -293,18 +316,18 @@ def translate_defense_finder(models: Path, tmpdir: Path = None, disable_bar: boo
             except Exception:
                 raise Exception(f"Problem to parse {model.name}")
             root = read_xml(model)
-            list_data.append(translate_defense_finder_model(root, model.stem))
+            list_data.append(translate_defense_finder_model(root, model.stem, hmm_dict))
     return list_data
 
 
-def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, tmpdir: Path = None,
-                     disable_bar: bool = False):
+def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, hmms_path: Path = None,
+                     tmpdir: Path = None, disable_bar: bool = False):
     if source == "padloc":
         logging.getLogger().info("Begin to translate padloc models...")
         list_data = translate_padloc(models=models, meta=meta_data, output=output, disable_bar=disable_bar)
     elif source == "defense-finder":
         logging.getLogger().info("Begin to translate defense finder models...")
-        list_data = translate_defense_finder(models=models, tmpdir=tmpdir, disable_bar=disable_bar)
+        list_data = translate_defense_finder(models=models, hmms_path=hmms_path, tmpdir=tmpdir, disable_bar=disable_bar)
     elif source == "macsy-finder":
         raise NotImplementedError
     else:

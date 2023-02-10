@@ -27,6 +27,10 @@ def check_parameters(args):
             raise argparse.ArgumentError(argument=args.meta,
                                          message="If you're using padloc as source, "
                                                  "it's necessary to give metadata file associate")
+        if args.source == "defense-finder" and args.hmm is None:
+            raise argparse.ArgumentError(argument=args.hmm,
+                                         message="If you're using defense-finder as source, "
+                                                 "it's necessary to give hmm path to get hidden information")
 
 
 def check_models(models_path: Path, disable_bar: bool = False) -> Models:
@@ -53,7 +57,7 @@ def launch(args):
     check_parameters(args)
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force)
-        launch_translate(models=args.translate, source=args.source, output=outdir,
+        launch_translate(models=args.translate, source=args.source, output=outdir, hmms_path=args.hmm,
                          meta_data=args.meta, tmpdir=args.tmpdir, disable_bar=args.disable_prog_bar)
         try:
             logging.getLogger().info("Check models translation...")
@@ -94,6 +98,8 @@ def parser_utils(parser):
     translate.add_argument("--meta", required=False, type=Path,
                            help='For Padloc we use the metadata file to translate models. '
                                 'A padloc_meta.tsv will be generated for PANORAMA to annotate in the output directory')
+    translate.add_argument("--hmm", required=False, type=Path,
+                           help='For Defense finder we need HMM to get all hidden information to translate models.')
     check_model = parser.add_argument_group(title="Check models arguments",
                                             description="Arguments necessary to check if models are readable")
     check_model.add_argument("--models", required=False, type=Path, nargs="?", default=None,

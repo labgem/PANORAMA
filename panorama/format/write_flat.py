@@ -192,19 +192,28 @@ def write_system_projection(system: System) -> pd.DataFrame:
 
     :return: Dataframe result of projection
     """
-    projection = []
-    mandatory_family = [fam.name for fam in system.model.families if fam.type == 'mandatory']
-    accessory_family = [fam.name for fam in system.model.families if fam.type == 'accessory']
+    projection, mandatory_family, accessory_family = ([], [], [])
+    for fam in system.model.families:
+        if fam.type == 'mandatory':
+            mandatory_family.append(fam.name)
+            mandatory_family += fam.exchangeables
+        if fam.type == 'accessory':
+            accessory_family.append(fam.name)
+            accessory_family += fam.exchangeables
     system_orgs = set.union(*list([gf.organisms for gf in system.gene_families]))
     fu = list(system.model.func_units)[0]
     for organism in system_orgs:
         find_projection = write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu)
         if not find_projection:
             for canonical_system in system.canonical:
-                canonical_mandatory_family = [fam.name for fam in canonical_system.model.families
-                                              if fam.type == 'mandatory']
-                canonical_accessory_family = [fam.name for fam in canonical_system.model.families
-                                              if fam.type == 'accessory']
+                canonical_mandatory_family, canonical_accessory_family = ([], [])
+                for fam in canonical_system.model.families:
+                    if fam.type == 'mandatory':
+                        canonical_mandatory_family.append(fam.name)
+                        canonical_mandatory_family += fam.exchangeables
+                    if fam.type == 'accessory':
+                        canonical_accessory_family.append(fam.name)
+                        canonical_accessory_family += fam.exchangeables
                 canonical_fu = list(canonical_system.model.func_units)[0]
                 write_sys_to_organism(canonical_system, organism, projection, canonical_mandatory_family,
                                       canonical_accessory_family, canonical_fu)
