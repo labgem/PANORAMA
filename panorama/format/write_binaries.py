@@ -207,12 +207,14 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
             status_group._v_attrs.annotations_sources = pangenome.annotations_sources
     else:
         status_group._v_attrs.annotations = False
-    status_group._v_attrs.systems = True if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"] else False
-    if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
-        status_group._v_attrs.systems_sources |= pangenome.systems_sources
+    if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"]:
+        status_group._v_attrs.systems = True
+        if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
+            status_group._v_attrs.systems_sources |= pangenome.systems_sources
+        else:
+            status_group._v_attrs.systems_sources = pangenome.systems_sources
     else:
-        status_group._v_attrs.systems_sources = pangenome.systems_sources
-
+        status_group._v_attrs.systems = False
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
                     rgp: bool = False, spots: bool = False, modules: bool = False, annotations: bool = False,

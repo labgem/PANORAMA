@@ -13,7 +13,7 @@ from typing import Dict, List, Tuple
 from uuid import uuid4
 
 # installed libraries
-from bokeh.palettes import TolRainbow, Category20
+from bokeh.palettes import Category20
 from ppanggolin.genome import Organism, Contig, Gene
 from ppanggolin.region import Spot
 
