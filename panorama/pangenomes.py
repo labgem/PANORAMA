@@ -8,7 +8,6 @@ from typing import Generator, Iterable, List, Set, Union
 from ppanggolin.pangenome import Pangenome as Pan
 
 # local libraries
-from panorama.annotation import Annotation
 from panorama.system import System
 from panorama.geneFamily import GeneFamily
 from panorama.region import Module
@@ -35,6 +34,8 @@ class Pangenome(Pan):
         self._max_id_system = 0
         self.name = name
         self.taxid = taxid
+        self.status["metadata"].update({"systems": 'No'})
+        self.status["metasources"].update({"systems": []})
 
     def add_file(self, pangenome_file: str):
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,
@@ -86,52 +87,6 @@ class Pangenome(Pan):
             raise Exception(f"Unexpected problems to get {name} gene familiy in pangenome")
         else:
             return fam
-
-    @property
-    def annotations_sources(self) -> Set[str]:
-        """returns all the annotation source in the pangenomes
-
-        :return: set of annotation source
-        """
-        source_set = set()
-        for gf in self.gene_families:
-            for source_annotation in gf.sources:
-                source_set.add(source_annotation)
-        return source_set
-
-    @property
-    def annotations(self) -> Generator[Annotation, None, None]:
-        """Create a generator with all annotations in the pangenome
-
-        :return: set of annotation source
-        """
-        for gf in self.gene_families:
-            yield gf.annotations
-
-    def get_gf_by_annnotation(self, annotation: str = None, accession: str = None) -> Generator[GeneFamily, None, None]:
-        """ Get gene famlies with a specific annotation or source in pangenome
-
-        :param annotation: Name of the annotation
-        :param accession: Accesion identifier of the annotation
-
-        :return: Gene families with the annotation or source
-        """
-        assert annotation is not None and accession is not None
-
-        for fam in self.gene_families:
-            if len(list(fam.get_annotations(name=annotation, accession=accession))) > 0:
-                yield fam
-
-    def get_gf_by_sources(self, source: List[str]):
-        """ Get gene famlies with a specific source in pangenome
-
-        :param source: Name of the source
-
-        :return: Gene families with the source
-        """
-        for fam in self.gene_families:
-            if fam.get_source(source) is not None:
-                yield fam
 
     @property
     def systems(self) -> Generator[System, None, None]:

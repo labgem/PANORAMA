@@ -11,6 +11,7 @@ import tables
 from tqdm import tqdm
 from ppanggolin.formats import read_chunks
 from ppanggolin.formats import check_pangenome_info as check_pp
+from ppanggolin.formats import get_status as super_get_status
 
 # local libraries
 from panorama.annotation import Annotation
@@ -23,46 +24,10 @@ def get_status(pangenome, pangenome_file: str):
     """
         Checks which elements are already present in the file.
     """
+
+    super_get_status(pangenome, pangenome_file)
     h5f = tables.open_file(pangenome_file, "r")
-    logging.getLogger().info("Getting the current pangenome status")
     status_group = h5f.root.status
-    if status_group._v_attrs.genomesAnnotated:
-        pangenome.status["genomesAnnotated"] = "inFile"
-    if status_group._v_attrs.genesClustered:
-        pangenome.status["genesClustered"] = "inFile"
-    if status_group._v_attrs.geneSequences:
-        pangenome.status["geneSequences"] = "inFile"
-    if status_group._v_attrs.geneFamilySequences:
-        pangenome.status["geneFamilySequences"] = "inFile"
-    if status_group._v_attrs.NeighborsGraph:
-        pangenome.status["neighborsGraph"] = "inFile"
-
-    if 'Partitionned' in status_group._v_attrs._f_list():
-        # Partitionned keep working with older version
-        if status_group._v_attrs.Partitionned:
-            status_group._v_attrs.Partitioned = True
-        del status_group._v_attrs.Partitionned
-
-    if status_group._v_attrs.Partitioned:
-        pangenome.status["partitioned"] = "inFile"
-
-    if hasattr(status_group._v_attrs, "predictedRGP") and status_group._v_attrs.predictedRGP:
-        pangenome.status["predictedRGP"] = "inFile"
-
-    if hasattr(status_group._v_attrs, "spots") and status_group._v_attrs.spots:
-        pangenome.status["spots"] = "inFile"
-
-    if hasattr(status_group._v_attrs, "modules") and status_group._v_attrs.modules:
-        pangenome.status["modules"] = "inFile"
-
-    if "/info" in h5f:
-        info_group = h5f.root.info
-        pangenome.parameters = info_group._v_attrs.parameters
-
-    if hasattr(status_group._v_attrs, "annotations") and status_group._v_attrs.annotations:
-        pangenome.status["annotations"] = "inFile"
-        pangenome.status["annotations_sources"] = status_group._v_attrs.annotations_sources
-
     if hasattr(status_group._v_attrs, "systems") and status_group._v_attrs.systems:
         pangenome.status["systems"] = "inFile"
         pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
