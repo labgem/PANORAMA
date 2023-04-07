@@ -2,13 +2,12 @@
 # coding: utf8
 
 # default libraries
-from typing import Generator, List, Tuple, Union
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
 from pyhmmer.plan7 import HMM
 # local libraries
-from panorama.annotation import Annotation
+
 
 
 class GeneFamily(Fam):

@@ -35,27 +35,25 @@ def check_flat_parameters(args):
     if args.systems or args.systems_asso is not None or any(elem in ["systems", "all"] for elem in args.proksee):
         if args.models is None or args.sources is None:
             raise Exception("To read system and write flat related, "
-                            "it's necessary to give models and annotation source.")
+                            "it's necessary to give models and source.")
         if len(args.models) != len(args.sources):
             raise Exception("To read systems from differents sources you need to give "
                             "one models directory by corresponding source.")
 
 
-def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
-    """ Write a tsv file with all annotation and sources present in pangenomes
+def write_annotations_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
+    """ Write a tsv file with all annotations and sources present in pangenomes
 
     :param pangenome: Pangenome with all annotations
     :param output: Path to output directory
     :param disable_bar: allow to disable the progress bar
     """
-    nb_source = len(pangenome.annotations_sources)
-    source_list = list(pangenome.annotations_sources)
-    column_name = np.array(
-        f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(
-            ','))
+    nb_source = len(pangenome.metadata_sources("families"))
+    source_list = list(pangenome.metadata_sources("families"))
+    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
-        annot_array = np.empty((gf.max_annotation_by_source()[1], 2 + nb_source * 3), dtype=object)
+        annot_array = np.empty((gf.max_metadata_by_source()[1], 2 + nb_source * 3), dtype=object)
         if annot_array.shape[0] > 0:
             annot_array[:, 0] = pangenome.name
             annot_array[:, 1] = gf.name
@@ -64,10 +62,10 @@ def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar
                 index_annot = 0
                 if source in gf.sources:
                     for annotation in gf.get_source(source):
-                        annot_array[index_annot, index_source] = annotation.name
-                        annot_array[index_annot, index_source + 1] = annotation.accession
+                        annot_array[index_annot, index_source] = annotation.get("protein_name")
+                        annot_array[index_annot, index_source + 1] = annotation.get("accession")
                         annot_array[
-                            index_annot, index_source + 2] = annotation.secondary_names if annotation.secondary_names is not pd.NA else '-'
+                            index_annot, index_source + 2] = annotation.get("secondary_names") if annotation.get("secondary_names") is not pd.NA else '-'
                         index_annot += 1
                 index_source += 3
             array_list.append(annot_array)
@@ -162,7 +160,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
             for index_annot, annot in enumerate(mandatory_family + accessory_family, start=1):
                 coordinate_dict[index_gf * nb_annotation + index_annot] = (gf, annot)
             if gf.get_source(system.source) is not None:
-                for annotation in [annot.name for annot in gf.get_source(system.source)]:
+                for annotation in [annot.get("protein_name") for annot in gf.get_source(system.source)]:
                     if annotation in mandatory_family:
                         mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
                                                                                       mandatory_index[annotation]
@@ -425,12 +423,12 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     need_regions = False
     need_modules = False
     need_gene_sequences = False
-    need_annotations_fam = False
+    need_metadata = False
     need_systems = False
 
     if annotation:
         need_families = True
-        need_annotations_fam = True
+        need_metadata = True
 
     if hmm:
         need_families = True
@@ -440,7 +438,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_annotations = True
         need_families = True
         need_systems = True
-        need_annotations_fam = True
+        need_metadata = True
 
     if systems_asso is not None:
         need_systems = True
@@ -457,7 +455,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_gene_sequences = True
         need_families = True
         need_partitions = True
-        need_annotations_fam = True
+        need_metadata = True
         if "rgp" in proksee or "all" in proksee:
             need_regions = True
         if "spots" in proksee or "all" in proksee:
@@ -473,12 +471,12 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-                         need_annotations_fam=need_annotations_fam, need_systems=need_systems,
-                         models=kwargs["models"], sources=kwargs["sources"],
+                         need_metadata=need_metadata, need_systems=need_systems,
+                         models=kwargs["models"], sources=kwargs["sources"], metatype="families",
                          disable_bar=disable_bar)
 
     if annotation:
-        write_annotation_to_families(pangenome, output)
+        write_annotations_to_families(pangenome, output)
         logging.getLogger().info(f"Annotation has been written in {output}/families_annotations.tsv")
 
     if hmm:
@@ -493,7 +491,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         for source in kwargs["sources"]:
             write_systems_projection(pangenome=pangenome, output=output, source=source,
                                      threads=threads, force=force, disable_bar=disable_bar)
-        logging.getLogger().info(f"Projection written")
+        logging.getLogger().info("Projection written")
 
     if systems_asso is not None:
         if systems_asso in ["modules", "all"]:

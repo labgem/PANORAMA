@@ -14,7 +14,6 @@ from ppanggolin.formats import check_pangenome_info as check_pp
 from ppanggolin.formats import get_status as super_get_status
 
 # local libraries
-from panorama.annotation import Annotation
 from panorama.models import Models
 from panorama.system import System
 from panorama.pangenomes import Pangenome
@@ -114,8 +113,24 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None,
     :param models:
     :param disable_bar: Allow to disable the progress bar
     """
+    need_annotations = kwargs["need_annotations"] if "need_annotations" in kwargs else False
+    need_gene_sequences = kwargs["need_gene_sequences"] if "need_gene_sequences" in kwargs else False
+    need_families = kwargs["need_families"] if "need_families" in kwargs else False
+    need_partitions = kwargs["need_partitions"] if "need_partitions" in kwargs else False
+    need_graph = kwargs["need_graph"] if "need_graph" in kwargs else False
+    need_regions = kwargs["need_regions"] if "need_regions" in kwargs else False
+    need_spots = kwargs["need_spots"] if "need_spots" in kwargs else False
+    need_modules = kwargs["need_modules"] if "need_modules" in kwargs else False
+    need_metadata = kwargs["need_metadata"] if "need_metadata" in kwargs else False
 
-    check_pp(pangenome=pangenome, disable_bar=disable_bar, **kwargs)
+    check_pp(pangenome, need_annotations=need_annotations, need_families=need_families, need_graph=need_graph,
+             need_partitions=need_partitions, need_rgp=need_regions, need_spots=need_spots,
+             need_gene_sequences=need_gene_sequences, need_modules=need_modules, disable_bar=disable_bar)
+
+    if need_metadata:
+        for source in sources:
+            check_pp(pangenome=pangenome, need_metadata=need_metadata, metatype=kwargs["metatype"], source=source,
+                     disable_bar=disable_bar)
 
     if hasattr(pangenome, "file"):
         filename = pangenome.file
