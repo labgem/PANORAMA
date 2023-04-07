@@ -154,7 +154,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                                                                           start=1 + len(mandatory_family))}
     nb_annotation = len(mandatory_family) + len(accessory_family)
     bool_projection = False
-    for comb_gf in itertools.permutations(select_families, fu.parameters['min_total']):
+    for comb_gf in itertools.permutations(select_families, fu.min_total):
         mandatory_matrix = np.zeros((len(comb_gf), len(mandatory_family)))
         all_matrix = np.concatenate((mandatory_matrix, np.zeros((len(comb_gf), len(accessory_family)))), axis=1)
         coordinate_dict = {}
@@ -171,7 +171,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                     elif annotation in accessory_family:
                         all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
                                                                                 accessory_index[annotation]
-        if len(search_diagonal(mandatory_matrix, fu.parameters['min_mandatory'])) > 0:
+        if len(search_diagonal(mandatory_matrix, fu.min_mandatory)) > 0:
             search_diag = search_diagonal(all_matrix)
             if len(search_diag) > 0:
                 for diag in search_diag:
@@ -194,10 +194,10 @@ def write_system_projection(system: System) -> pd.DataFrame:
     """
     projection, mandatory_family, accessory_family = ([], [], [])
     for fam in system.model.families:
-        if fam.type == 'mandatory':
+        if fam.presence == 'mandatory':
             mandatory_family.append(fam.name)
             mandatory_family += fam.exchangeables
-        if fam.type == 'accessory':
+        if fam.presence == 'accessory':
             accessory_family.append(fam.name)
             accessory_family += fam.exchangeables
     system_orgs = set.union(*list([gf.organisms for gf in system.gene_families]))
@@ -208,10 +208,10 @@ def write_system_projection(system: System) -> pd.DataFrame:
             for canonical_system in system.canonical:
                 canonical_mandatory_family, canonical_accessory_family = ([], [])
                 for fam in canonical_system.model.families:
-                    if fam.type == 'mandatory':
+                    if fam.presence == 'mandatory':
                         canonical_mandatory_family.append(fam.name)
                         canonical_mandatory_family += fam.exchangeables
-                    if fam.type == 'accessory':
+                    if fam.presence == 'accessory':
                         canonical_accessory_family.append(fam.name)
                         canonical_accessory_family += fam.exchangeables
                 canonical_fu = list(canonical_system.model.func_units)[0]

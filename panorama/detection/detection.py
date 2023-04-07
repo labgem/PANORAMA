@@ -17,10 +17,10 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.utils import check_tsv_sanity
-from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
+from panorama.format.read_binaries import check_pangenome_info
 from panorama.geneFamily import GeneFamily
-from panorama.  models import Models, Model, FuncUnit
+from panorama.models import Models, Model, FuncUnit
 from panorama.system import System
 from panorama.pangenomes import Pangenome
 
@@ -34,23 +34,21 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
 
     :raise KeyError: Provided source is not in the pangenome
     """
-    if "systems_sources" in pangenome.status and source in pangenome.status["systems_sources"]:
+    if pangenome.status["systems"] == "inFile" and source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=source)
         else:
-            raise Exception(f"Systems are already detected based on the annotation source : {source}."
+            raise Exception(f"Systems are already detected based on the source : {source}."
                             f" Use the --force option to erase the already computed systems.")
-    try:
-        _ = pangenome.status["annotations_sources"]
-    except Exception:
-        raise Exception("There is no annotation in your pangenome. "
+    if pangenome.status["metadata"]["families"] == "inFile":
+        if source not in pangenome.status["metasources"]["families"]:
+            raise KeyError(f"There is no metadata associate to familie "
+                           f"from source {source} in pangenome {pangenome.name}.")
+    elif pangenome.status["metadata"]["families"] not in ["Computed", "Loaded"]:
+        raise Exception(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
                         "Please see the command annotation before to detect systems")
-    else:
-        if source in pangenome.status["annotations_sources"]:
-            check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_annotations_fam=True,
-                                 sources=[source], disable_bar=disable_bar)
-        else:
-            raise KeyError("Annotation source not in pangenome.")
+    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_metadata=True,
+                         metatype="families", source=source, disable_bar=disable_bar)
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
@@ -60,7 +58,7 @@ def read_models(models_path: Path, disable_bar: bool = False) -> Models:
     :param disable_bar: Disable progress bar
 
     :raise KeyError: One or more keys are missing or non-acceptable
-    :raise TypeError: One or more value are not with good type
+    :raise TypeError: One or more value are not with good presence
     :raise ValueError: One or more value are not non-acceptable
     :raise Exception: Manage unexpected error
     """
@@ -79,13 +77,13 @@ def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, S
     """
     annot2fam = {}
     for gf in pangenome.gene_families:
-        annotations = gf.get_source(source)
-        if annotations is not None:
-            for annotation in annotations:
-                if annotation.name in annot2fam:
-                    annot2fam[annotation.name].add(gf)
+        metadata = gf.get_source(source)
+        if metadata is not None:
+            for meta in metadata:
+                if meta.get("protein_name") in annot2fam:
+                    annot2fam[meta.get("protein_name")].add(gf)
                 else:
-                    annot2fam[annotation.name] = {gf}
+                    annot2fam[meta.get("protein_name")] = {gf}
     return annot2fam
 
 
@@ -194,19 +192,18 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
             annotations = fam2annot.get(node.name)
             if annotations is not None:
                 for annot in annotations:
-                    if annot.type == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
+                    if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
                         count_forbidden += 1
                         forbidden_list.remove(annot.name)
-                        if count_forbidden > func_unit.parameters["max_forbidden"]:
+                        if count_forbidden > func_unit.max_forbidden:
                             return False
-                    elif annot.type == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                    elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
                         count_mandatory += 1
                         mandatory_list.remove(annot.name)
-                    elif annot.type == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                    elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
                         count_accesory += 1
                         accessory_list.remove(annot.name)
-        if count_mandatory >= func_unit.parameters['min_mandatory'] and \
-                count_accesory + count_mandatory >= func_unit.parameters['min_total']:
+        if count_mandatory >= func_unit.min_mandatory and count_accesory + count_mandatory >= func_unit.min_total:
             return True
         else:
             return False
@@ -231,11 +228,13 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
 
     :return: Systems detected
     """
+    if model.name == "Abi2":
+        print("pika")
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.parameters["max_separation"] + 1, disable_bar=True)
-        if func_unit.parameters['min_total'] == 1:
+        g = compute_gene_context_graph(families, func_unit.max_separation + 1, disable_bar=True)
+        if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
         verify_param(g, fam2annot, model, func_unit, source, detected_systems)
         return detected_systems
@@ -282,10 +281,10 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
-        logging.getLogger().info("System detection Done")
-        logging.getLogger().info(f"Write systems in pangenome")
+        logging.getLogger().info(f"System detection done in pangenome {pangenome_name}")
+        logging.getLogger().info(f"Write systems in pangenome {pangenome_name}")
         write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
-        logging.getLogger().info(f"Systems written")
+        logging.getLogger().info(f"Systems written in pangenome {pangenome_name}")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

@@ -31,9 +31,9 @@ def get_genes(parent: Union[GeneFamily, Region, Contig]):
     genes_list = []
     for gene in parent.genes:
         genes_list.append({"name": gene.name,
-                           "genomic_type": gene.type,
+                           "genomic_type": gene.presence,
                            "is_fragment": bool(gene.is_fragment),
-                           # Prevent TypeError: Object of type bool_ is not JSON serializable
+                           # Prevent TypeError: Object of presence bool_ is not JSON serializable
                            "start": gene.start,
                            "stop": gene.stop,
                            "strand": gene.strand,
@@ -132,7 +132,7 @@ def write_spot(pangenome: Pangenome, out_dict: dict):
 def write_modules(pangenome: Pangenome, out_dict: dict):
     module: Module
     for module in pangenome.modules:
-        module_dict = {"name": int(module.ID),  # int prevent TypeError: Object of type uint32 is not JSON serializable
+        module_dict = {"name": int(module.ID),  # int prevent TypeError: Object of presence uint32 is not JSON serializable
                        "Family": []}
         for family in module.families:
             annot = family.get_annot("CARD")
