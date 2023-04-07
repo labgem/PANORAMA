@@ -170,20 +170,8 @@ def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
     :param disable_bar: Allow to disable progress bar
     :param source: annotation source
     """
-    try:
-        super_write_pangenome(pangenome, file_path, force, disable_bar)
-    except AssertionError:
-        try:
-            assert all([pangenome.status[step] in ["Computed", "Loaded", "inFile", 'No'] for step in pangenome.status
-                        if step not in ["metadata", "metasources", "systems_sources"]])
-            assert all([pangenome.status["metadata"][meta] in ["Computed", "Loaded", "inFile", 'No'] for meta in
-                        pangenome.status["metadata"]])
-        except AssertionError:
-            debug = [f"{step}: {pangenome.status[step] in ['Computed', 'Loaded', 'inFile', 'No']}" for step in
-                     pangenome.status if step not in ["metadata", "metasources"]]
-            logging.getLogger().debug(debug)
-            raise AssertionError("Something unexcpected happened. "
-                                 "Please post an issue on github with what you did to reach this error.")
+    super_write_pangenome(pangenome, file_path, force, disable_bar)
+
     h5f = tables.open_file(file_path, "a")
 
     if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
