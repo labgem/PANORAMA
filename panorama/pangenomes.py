@@ -27,15 +27,13 @@ class Pangenome(Pan):
         """Constructor method.
         """
         super().__init__()
-        self._source_index = None
-        self._annotation_index = None
         self._system_getter = {}
         self._name2system = {}
         self._max_id_system = 0
         self.name = name
         self.taxid = taxid
-        self.status["metadata"].update({"systems": 'No'})
-        self.status["metasources"].update({"systems": []})
+        self.status.update({"systems": 'No',
+                            "systems_sources": []})
 
     def add_file(self, pangenome_file: str):
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,
@@ -96,7 +94,7 @@ class Pangenome(Pan):
             yield system
 
     @property
-    def systems_sources(self):
+    def systems_sources(self) -> Set[str]:
         sources = set()
         for system in self.systems:
             sources.add(system.source)
@@ -121,7 +119,7 @@ class Pangenome(Pan):
         else:
             return system
 
-    def get_system_by_source(self, source: str):
+    def get_system_by_source(self, source: str) -> Generator[System, None, None]:
         for system in self.systems:
             if system.source == source:
                 yield system

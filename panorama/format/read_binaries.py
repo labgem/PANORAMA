@@ -101,30 +101,19 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
     pangenome.status["systems"] = "Loaded"
 
 
-def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = False, sources: List[str] = None,
+def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None,
                          need_systems: bool = False, models: List[Path] = None,
                          disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`
-    :param models_path:
+
     :param pangenome: Pangenome object without some information
-    :param need_annotations: get annotations
-    :param need_families: get gene families
-    :param need_graph: get graph
-    :param need_partitions: get partition
-    :param need_rgp: get RGP
-    :param need_spots: get hotspot
-    :param need_gene_sequences: get gene sequences
-    :param need_modules: get modules
-    :param need_annotations_fam: get annotations for gene families
+    :param need_systems:
+    :param sources:
+    :param models:
     :param disable_bar: Allow to disable the progress bar
     """
-    if need_annotations_fam:
-        if pangenome.status["genesClustered"] == "inFile":
-            kwargs["need_families"] = True
-        elif pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
-            raise Exception("Your pangenome has no gene families. See the 'cluster' subcommand of ppanggolin.")
 
     check_pp(pangenome=pangenome, disable_bar=disable_bar, **kwargs)
 
@@ -133,9 +122,6 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = Fals
     else:
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
     h5f = tables.open_file(filename, "r")
-    if need_annotations_fam:
-        # assert sources is not None
-        read_gene_families_annotations(pangenome, h5f, sources=sources, disable_bar=disable_bar)
 
     if need_systems:
         assert models is not None and sources is not None

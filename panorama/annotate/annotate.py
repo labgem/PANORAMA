@@ -9,10 +9,12 @@ from pathlib import Path
 import tempfile
 
 # installed libraries
-from ppanggolin.formats.writeBinaries import write_pangenome, erase_pangenome
 from ppanggolin.formats.readBinaries import check_pangenome_info
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
+
 # local libraries
+from panorama.format.write_binaries import write_pangenome, erase_pangenome
+from panorama.format.read_binaries import check_pangenome_info
 from panorama.utils import check_tsv_sanity
 from panorama.annotate.hmm_search import annot_with_hmm
 from panorama.pangenomes import Pangenome
@@ -28,7 +30,7 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
     """
     if pangenome.status["metadata"]["families"] == "inFile" and source in pangenome.status["metasources"]["families"]:
         if force:
-            erase_pangenome(pangenome, metadata=True, source=source, metatype="families")
+            erase_pangenome(pangenome, metadata=True, source=source)
         else:
             raise Exception(f"A metadata corresponding to the source : '{source}' already exist in pangenome."
                             f"Add the option --force to erase")

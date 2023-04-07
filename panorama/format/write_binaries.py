@@ -3,16 +3,15 @@
 
 # default libraries
 import logging
-from typing import List
 
 # installed libraries
 import tables
 from tqdm import tqdm
 from ppanggolin.formats.writeBinaries import write_status as super_write_status
 from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pangenome
+from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pangenome
 
 # local libraries
-from panorama.geneFamily import GeneFamily
 from panorama.system import System
 from panorama.pangenomes import Pangenome
 
@@ -114,15 +113,6 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     super_write_status(pangenome, h5f)  # call write_status from ppanggolin
     status_group = h5f.root.status
 
-    if "annotations" in pangenome.status and pangenome.status["annotations"] in ["Computed", "Loaded", "inFile"]:
-        status_group._v_attrs.annotations = True
-        if hasattr(status_group._v_attrs, "annotations_sources") and pangenome.status["annotations"] in ["Computed",
-                                                                                                         "Loaded"]:
-            status_group._v_attrs.annotations_sources |= pangenome.annotations_sources
-        else:
-            status_group._v_attrs.annotations_sources = pangenome.annotations_sources
-    else:
-        status_group._v_attrs.annotations = False
     if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"]:
         status_group._v_attrs.systems = True
         if hasattr(status_group._v_attrs, "systems_sources") and pangenome.status["systems"] in ["Computed", "Loaded"]:
@@ -131,6 +121,7 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
             status_group._v_attrs.systems_sources = pangenome.systems_sources
     else:
         status_group._v_attrs.systems = False
+
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
                     rgp: bool = False, spots: bool = False, modules: bool = False, metadata: bool = False,
@@ -157,7 +148,6 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
     if '/systems' in h5f and systems:
         assert source is not None
         systems_group = h5f.root.systems
-        systems_status = pangenome.status["metadata"]
         if source in systems_group:
             logging.getLogger().info(f"Erasing the formerly computed systems from source {source}")
             h5f.remove_node("/systems", source)
@@ -170,7 +160,8 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
     h5f.close()
 
 
-def write_pangenome(pangenome: Pangenome, file_path: str, disable_bar: bool = False, source: str = None):
+def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
+                    force: bool = False, disable_bar: bool = False):
     """
     Writes or updates a pangenome file
 
@@ -179,7 +170,20 @@ def write_pangenome(pangenome: Pangenome, file_path: str, disable_bar: bool = Fa
     :param disable_bar: Allow to disable progress bar
     :param source: annotation source
     """
-
+    try:
+        super_write_pangenome(pangenome, file_path, force, disable_bar)
+    except AssertionError:
+        try:
+            assert all([pangenome.status[step] in ["Computed", "Loaded", "inFile", 'No'] for step in pangenome.status
+                        if step not in ["metadata", "metasources", "systems_sources"]])
+            assert all([pangenome.status["metadata"][meta] in ["Computed", "Loaded", "inFile", 'No'] for meta in
+                        pangenome.status["metadata"]])
+        except AssertionError:
+            debug = [f"{step}: {pangenome.status[step] in ['Computed', 'Loaded', 'inFile', 'No']}" for step in
+                     pangenome.status if step not in ["metadata", "metasources"]]
+            logging.getLogger().debug(debug)
+            raise AssertionError("Something unexcpected happened. "
+                                 "Please post an issue on github with what you did to reach this error.")
     h5f = tables.open_file(file_path, "a")
 
     if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
