@@ -13,7 +13,8 @@ from typing import Dict, List, Set
 
 # installed libraries
 import networkx as nx
-from ppanggolin.context.searchGeneContext import compute_gene_context_graph
+from ppanggolin.region import GeneContext
+from ppanggolin.context.searchGeneContext import compute_gene_context_graph, compute_gene_context
 
 # local libraries
 from panorama.utils import check_tsv_sanity
@@ -184,7 +185,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
 
         :return: Boolean true if parameter respected
         """
-        count_forbidden, count_mandatory, count_accesory = (0, 0, 0)
+        count_forbidden, count_mandatory, count_total = (0, 0, 0)
         forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
                                                           list(map(lambda x: x.name, func_unit.mandatory)),
                                                           list(map(lambda x: x.name, func_unit.accessory)))
@@ -199,12 +200,18 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
                             return False
                     elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
                         count_mandatory += 1
+                        count_total += 1
                         mandatory_list.remove(annot.name)
                     elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
-                        count_accesory += 1
+                        count_total += 1
                         accessory_list.remove(annot.name)
-        if count_mandatory >= func_unit.min_mandatory and count_accesory + count_mandatory >= func_unit.min_total:
-            return True
+        if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
+                (count_total >= func_unit.min_total or func_unit.min_total == -1):
+            if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
+                    (func_unit.max_total >= count_total or func_unit.max_total == -1):
+                return True
+            else:
+                return False
         else:
             return False
 
@@ -228,7 +235,7 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
 
     :return: Systems detected
     """
-    if model.name == "Abi2":
+    if model.name == "CAS_Class1-Subtype-I-E":
         print("pika")
     for func_unit in model.func_units:
         detected_systems = []

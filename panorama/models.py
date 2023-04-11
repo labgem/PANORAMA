@@ -9,7 +9,8 @@ from typing import Dict, List, Generator, Set, Tuple, Union
 from tqdm import tqdm
 import json
 
-suprules_params = ['min_mandatory', 'max_forbidden', 'min_total']
+# TODO Try to add those variable in class
+suprules_params = ['min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
 keys_param = suprules_params.append('max_separation')
 rule_keys = ['name', 'parameters', 'presence']
 accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
@@ -52,21 +53,17 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
                 if value < -1:
                     raise ValueError("The max_separation value must be positive or "
                                      "egal to -1 to indicate an undefinied distance.")
-            elif key == "min_mandatory":
+            elif key in ["min_mandatory", "min_total", "max_mandatory", "max_total"]:
                 if not isinstance(value, int):
-                    raise TypeError("The min_mandatory value is not an integer")
-                if value < 0:
-                    raise ValueError("The min_mandatory value is not positive")
+                    raise TypeError(f"The {key} value is not an integer")
+                if value < -1:
+                    raise ValueError(f"The {key} value is not positive. "
+                                     "You can also use -1 value to skip the check on this poarameter.")
             elif key == "max_forbidden":
                 if not isinstance(value, int):
                     raise TypeError("The max_forbidden value is not an integer")
                 if value < 0:
                     raise ValueError("The max_forbidden value is not positive")
-            elif key == "min_total":
-                if not isinstance(value, int):
-                    raise TypeError("The min_total value is not an integer")
-                if value < 0:
-                    raise ValueError("The min_total value is not positive")
             elif key == 'duplicate':
                 if not isinstance(value, int):
                     raise TypeError("duplicate value from family in json must be an int")
@@ -311,16 +308,18 @@ class _FuFamFeatures:
 
 
 class _ModFuFeatures:
-    def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1,
-                 accessory: Set[FuncUnit, Family] = None, neutral: Set[FuncUnit, Family] = None, min_total: int = 1,
-                 forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0):
+    def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
+                 accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
+                 neutral: Set[FuncUnit, Family] = None, forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0):
         """Constructor Method
         """
-        self.min_mandatory = min_mandatory
-        self.min_total = min_total
-        self.max_forbidden = max_forbidden
         self.mandatory = mandatory if mandatory is not None else set()
+        self.min_mandatory = min_mandatory
+        self.max_mandatory = max_mandatory if max_mandatory is not None else len(self.mandatory)
         self.accessory = accessory if accessory is not None else set()
+        self.min_total = min_total
+        self.max_total = max_total if max_total is not None else len(self.mandatory) + len(self.accessory)
+        self.max_forbidden = max_forbidden
         self.forbidden = forbidden if forbidden is not None else set()
         self.neutral = neutral if neutral is not None else set()
         self._child_type = "Functional unit" if type(self) == Model else "Family"
@@ -368,6 +367,22 @@ class _ModFuFeatures:
         if len(self.mandatory) == 0:
             raise Exception(f"There is not mandatory {self._child_type}."
                             f"You should have at least one mandatory {self._child_type} mandatory presence.")
+
+    def add(self, child: Union[FuncUnit, Family]):
+        """Add a function unit in model
+
+        :param child: function unit
+        """
+        if isinstance(child, FuncUnit):
+            child.check_func_unit()
+        if child.presence == "mandatory":
+            self.mandatory.add(child)
+        elif child.presence == "accessory":
+            self.accessory.add(child)
+        elif child.presence == "forbidden":
+            self.forbidden.add(child)
+        else:
+            self.neutral.add(child)
 
 
 class Model(_BasicFeatures, _ModFuFeatures):
@@ -437,18 +452,20 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
     def _read(self, data_model: dict):
         mandatory_key = ['name', 'parameters', 'func_units']
-        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total']
+        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
 
         check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
         self.name = data_model["name"]
-        self.read_parameters(data_model["parameters"], mandatory=param_mandatory)
         for dict_fu in data_model["func_units"]:
             f_unit = FuncUnit.read_func_unit(dict_fu)
             f_unit.model = self
-            self.add_func_unit(f_unit)
+            self.add(f_unit)
         if 'canonical' in data_model and data_model["canonical"] is not None:
             self.canonical = data_model["canonical"]
+
+        param_default = {"max_mandatory": len(self.mandatory), "max_total": len(self.mandatory)+len(self.accessory)}
+        self.read_parameters(data_model["parameters"], mandatory=param_mandatory, default=param_default)
 
     @staticmethod
     def read_model(data_model: dict) -> Model:
@@ -459,21 +476,6 @@ class Model(_BasicFeatures, _ModFuFeatures):
         model = Model()
         model._read(data_model)
         return model
-
-    def add_func_unit(self, func_unit: FuncUnit):
-        """Add a function unit in model
-
-        :param func_unit: function unit
-        """
-        func_unit.check_func_unit()
-        if func_unit.presence == "mandatory":
-            self.mandatory.add(func_unit)
-        elif func_unit.presence == "accessory":
-            self.accessory.add(func_unit)
-        elif func_unit.presence == "forbidden":
-            self.forbidden.add(func_unit)
-        else:
-            self.neutral.add(func_unit)
 
 
 class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
@@ -554,33 +556,20 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
 
         self.name = data_fu["name"]
         self.presence = data_fu["presence"]
-        if "parameters" in data_fu:
-            param_default = {'duplicate': 0, 'min_total': data_fu["parameters"]["min_mandatory"], "max_forbidden": 0}
-            self.read_parameters(data_fu["parameters"], mandatory=param_mandatory, default=param_default)
         for fam_dict in data_fu["families"]:
             family = Family.read_family(fam_dict)
             family.func_unit = self
-            self.add_family(family)
+            self.add(family)
+        if "parameters" in data_fu:
+            param_default = {'duplicate': 0, 'min_total': data_fu["parameters"]["min_mandatory"], "max_forbidden": 0,
+                             'max_mandatory': len(self.mandatory), 'max_total': len(self.mandatory)+len(self.accessory)}
+            self.read_parameters(data_fu["parameters"], mandatory=param_mandatory, default=param_default)
 
     @staticmethod
     def read_func_unit(data_fu: dict) -> FuncUnit:
         func_unit = FuncUnit()
         func_unit._read(data_fu)
         return func_unit
-
-    def add_family(self, family: Family):
-        """Add family in families functional unit
-
-        :param family: a family
-        """
-        if family.presence == 'mandatory':
-            self.mandatory.add(family)
-        elif family.presence == "accessory":
-            self.accessory.add(family)
-        elif family.presence == "forbidden":
-            self.forbidden.add(family)
-        else:
-            self.neutral.add(family)
 
 
 class Family(_BasicFeatures, _FuFamFeatures):

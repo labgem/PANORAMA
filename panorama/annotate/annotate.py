@@ -9,7 +9,6 @@ from pathlib import Path
 import tempfile
 
 # installed libraries
-from ppanggolin.formats.readBinaries import check_pangenome_info
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries

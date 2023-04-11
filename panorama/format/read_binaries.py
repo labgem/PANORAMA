@@ -100,7 +100,7 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
     pangenome.status["systems"] = "Loaded"
 
 
-def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None,
+def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source: str = None,
                          need_systems: bool = False, models: List[Path] = None,
                          disable_bar: bool = False, **kwargs):
     """
@@ -128,9 +128,15 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None,
              need_gene_sequences=need_gene_sequences, need_modules=need_modules, disable_bar=disable_bar)
 
     if need_metadata:
-        for source in sources:
+        assert not all(x is not None for x in [source, sources])
+        assert not all(x is None for x in [source, sources])
+        if source is not None:
             check_pp(pangenome=pangenome, need_metadata=need_metadata, metatype=kwargs["metatype"], source=source,
                      disable_bar=disable_bar)
+        elif sources is not None:
+            for q_source in sources:
+                check_pp(pangenome=pangenome, need_metadata=need_metadata, metatype=kwargs["metatype"], source=q_source,
+                         disable_bar=disable_bar)
 
     if hasattr(pangenome, "file"):
         filename = pangenome.file

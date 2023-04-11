@@ -15,6 +15,7 @@ from typing import Collection, Dict, List, Set
 # installed libraries
 import numpy as np
 import pandas as pd
+import ppanggolin.metadata
 from tqdm import tqdm
 from ppanggolin.region import Region, Spot
 
@@ -41,15 +42,15 @@ def check_flat_parameters(args):
                             "one models directory by corresponding source.")
 
 
-def write_annotations_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
+def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: Set[str], disable_bar: bool = False):
     """ Write a tsv file with all annotations and sources present in pangenomes
 
     :param pangenome: Pangenome with all annotations
     :param output: Path to output directory
     :param disable_bar: allow to disable the progress bar
     """
-    nb_source = len(pangenome.metadata_sources("families"))
-    source_list = list(pangenome.metadata_sources("families"))
+    nb_source = len(sources)
+    source_list = list(sources)
     column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
@@ -62,10 +63,13 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, disable_ba
                 index_annot = 0
                 if source in gf.sources:
                     for annotation in gf.get_source(source):
+                        annotation: ppanggolin.metadata.Metadata
                         annot_array[index_annot, index_source] = annotation.get("protein_name")
-                        annot_array[index_annot, index_source + 1] = annotation.get("accession")
-                        annot_array[
-                            index_annot, index_source + 2] = annotation.get("secondary_names") if annotation.get("secondary_names") is not pd.NA else '-'
+                        annot_array[index_annot, index_source + 1] = annotation.get("Accession")
+                        if annotation.get("secondary_names", skip_error=True) not in [pd.NA, None]:
+                            annot_array[index_annot, index_source + 2] = annotation.get("secondary_names")
+                        else:
+                            annot_array[index_annot, index_source + 2] = '-'
                         index_annot += 1
                 index_source += 3
             array_list.append(annot_array)
@@ -429,6 +433,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     if annotation:
         need_families = True
         need_metadata = True
+        kwargs['sources'] = kwargs['sources'] if kwargs['sources'] is not None else pangenome.status['metasources']["families"]
 
     if hmm:
         need_families = True
@@ -476,7 +481,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
                          disable_bar=disable_bar)
 
     if annotation:
-        write_annotations_to_families(pangenome, output)
+        write_annotations_to_families(pangenome, output, sources=kwargs["sources"], disable_bar=disable_bar)
         logging.getLogger().info(f"Annotation has been written in {output}/families_annotations.tsv")
 
     if hmm:

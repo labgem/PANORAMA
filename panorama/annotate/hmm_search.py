@@ -138,8 +138,6 @@ def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) ->
     hmm_list_path = list(hmm_dir)
     logging.getLogger().info("Read HMM")
     for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
-        # if hmm_path.stem == "RM__Type_I_MTases":
-        #     print("pika")
         end = False
         hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
         while not end:
