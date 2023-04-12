@@ -235,7 +235,7 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
 
     :return: Systems detected
     """
-    if model.name == "CAS_Class1-Subtype-I-E":
+    if model.name == "AbiE":
         print("pika")
     for func_unit in model.func_units:
         detected_systems = []

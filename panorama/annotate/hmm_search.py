@@ -242,6 +242,6 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
     hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
     res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
     metadata_df = pd.DataFrame(res)
-    metadata_df.replace(to_replace='-', value=pd.NA, inplace=True)
-    metadata_df.replace(to_replace='', value=pd.NA, inplace=True)
+    # metadata_df.replace(to_replace='-', value=pd.NA, inplace=True)
+    # metadata_df.replace(to_replace='', value=pd.NA, inplace=True)
     return metadata_df

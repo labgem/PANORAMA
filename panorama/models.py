@@ -293,6 +293,8 @@ class _BasicFeatures:
                         parent = self.__getattribute__('_parent')
                         if hasattr(parent, param):
                             self.__setattr__(param, parent.__getattribute__(param))
+                        else:
+                            self.__setattr__(param, default[param])
                     else:
                         self.__setattr__(param, default[param])
 
@@ -457,15 +459,13 @@ class Model(_BasicFeatures, _ModFuFeatures):
         check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
         self.name = data_model["name"]
+        self.read_parameters(data_model["parameters"], mandatory=param_mandatory)
         for dict_fu in data_model["func_units"]:
             f_unit = FuncUnit.read_func_unit(dict_fu)
             f_unit.model = self
             self.add(f_unit)
         if 'canonical' in data_model and data_model["canonical"] is not None:
             self.canonical = data_model["canonical"]
-
-        param_default = {"max_mandatory": len(self.mandatory), "max_total": len(self.mandatory)+len(self.accessory)}
-        self.read_parameters(data_model["parameters"], mandatory=param_mandatory, default=param_default)
 
     @staticmethod
     def read_model(data_model: dict) -> Model:
@@ -551,8 +551,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         :param data_fu: data json file of all function units
         """
         mandatory_key = ['name', 'families', 'presence']
-        param_mandatory = ['max_separation', 'min_mandatory']
-        check_dict(data_fu, mandatory_keys=mandatory_key, param_keys=param_mandatory)
+        check_dict(data_fu, mandatory_keys=mandatory_key)
 
         self.name = data_fu["name"]
         self.presence = data_fu["presence"]
@@ -561,9 +560,9 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             family.func_unit = self
             self.add(family)
         if "parameters" in data_fu:
-            param_default = {'duplicate': 0, 'min_total': data_fu["parameters"]["min_mandatory"], "max_forbidden": 0,
-                             'max_mandatory': len(self.mandatory), 'max_total': len(self.mandatory)+len(self.accessory)}
-            self.read_parameters(data_fu["parameters"], mandatory=param_mandatory, default=param_default)
+            param_default = {'duplicate': 0, 'min_total': -1, 'min_mandatory': -1, "max_forbidden": 0,
+                             'max_separation': -1, 'max_mandatory': -1, 'max_total': -1}
+            self.read_parameters(data_fu["parameters"], default=param_default)
 
     @staticmethod
     def read_func_unit(data_fu: dict) -> FuncUnit:
