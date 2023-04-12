@@ -56,21 +56,21 @@ def write_legend_items(legend_data: dict, features: List[str], sources: List[str
 
 def write_tracks(features: List[str]):
     tracks = [{"name": "CDS", "separateFeaturesBy": "None", "position": "inside", "thicknessRatio": 1,
-               "dataType": "feature", "dataMethod": "type", "dataKeys": "CDS"},
+               "dataType": "feature", "dataMethod": "presence", "dataKeys": "CDS"},
               {"name": "Partition", "separateFeaturesBy": "None", "position": "inside", "thicknessRatio": 1,
                "dataType": "feature", "dataMethod": "tag", "dataKeys": "partition"}]
     if "rgp" in features or "all" in features:
         tracks.append({"name": "RGP", "separateFeaturesBy": "None", "position": "outside", "thicknessRatio": 1,
-                       "dataType": "feature", "dataMethod": "type", "dataKeys": "RGP"}),
+                       "dataType": "feature", "dataMethod": "presence", "dataKeys": "RGP"}),
     if "spots" in features or "all" in features:
         tracks.append({"name": "Spots", "separateFeaturesBy": "None", "position": "outside", "thicknessRatio": 1,
-                       "dataType": "feature", "dataMethod": "type", "dataKeys": "Spot"})
+                       "dataType": "feature", "dataMethod": "presence", "dataKeys": "Spot"})
     if "modules" in features or "all" in features:
         tracks.append({"name": "Module", "separateFeaturesBy": "None", "position": "outside", "thicknessRatio": 1,
-                       "dataType": "feature", "dataMethod": "type", "dataKeys": "Module"})
+                       "dataType": "feature", "dataMethod": "presence", "dataKeys": "Module"})
     if "systems" in features or "all" in features:
         tracks.append({"name": "Systems", "separateFeaturesBy": "None", "position": "outside", "thicknessRatio": 1,
-                       "dataType": "feature", "dataMethod": "type", "dataKeys": "System"})
+                       "dataType": "feature", "dataMethod": "presence", "dataKeys": "System"})
     return tracks
 
 
@@ -120,13 +120,13 @@ def write_genes(organism: Organism, sources: List[str]):
         annotations = {source: "|".join(list(map(str, gf.get_source(source)))) for source in gf.sources if
                        source in sources}
         genes_data_list.append({"name": gene.name,
-                                "type": gene.type,
+                                "presence": gene.presence,
                                 "contig": gene.contig.name,
                                 "start": gene.start,
                                 "stop": gene.stop,
                                 "strand": 1 if gene.strand == "+" else -1,
                                 "product": gene.product,
-                                "legend": gene.type,
+                                "legend": gene.presence,
                                 "tags": [],
                                 "meta": annotations
                                 })
@@ -137,7 +137,7 @@ def write_partition(organism: Organism):
     partition_data_list = []
     for gene in tqdm(organism.genes, total=organism.number_of_genes(), unit="genes", disable=True):
         partition_data_list.append({"name": gene.family.name,
-                                    "type": gene.family.named_partition,
+                                    "presence": gene.family.named_partition,
                                     "contig": gene.contig.name,
                                     "start": gene.start,
                                     "stop": gene.stop,
@@ -151,7 +151,7 @@ def write_rgp(pangenome: Pangenome, organism: Organism):
     for rgp in tqdm(pangenome.regions, unit="RGP", disable=True):
         if rgp.organism == organism:
             rgp_data_list.append({"name": rgp.name,
-                                  "type": "RGP",
+                                  "presence": "RGP",
                                   "contig": rgp.contig.name,
                                   "start": rgp.start,
                                   "stop": rgp.stop,
@@ -173,7 +173,7 @@ def write_spots(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, Li
             for gf in gf_intersection:
                 for gene in gf2genes[gf.name]:
                     spots_data_list.append({"name": str(spot.ID),
-                                            "type": "Spot",
+                                            "presence": "Spot",
                                             "start": gene.start,
                                             "stop": gene.stop,
                                             "contig": gene.contig.name,
@@ -197,7 +197,7 @@ def write_modules(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, 
             for gf in gf_intersection:
                 for gene in gf2genes[gf.name]:
                     modules_data_list.append({"name": str(module.ID),
-                                              "type": "Module",
+                                              "presence": "Module",
                                               "start": gene.start,
                                               "stop": gene.stop,
                                               "contig": gene.contig.name,
@@ -231,7 +231,7 @@ def write_systems(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, 
                                            annot.name in families_names]
 
                         systems_source_data_list.append({"name": str(sys.ID),
-                                                         "type": "System",
+                                                         "presence": "System",
                                                          "start": gene.start,
                                                          "stop": gene.stop,
                                                          "contig": gene.contig.name,

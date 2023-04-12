@@ -40,12 +40,17 @@ def check_models(models_path: Path, disable_bar: bool = False) -> Models:
     :param disable_bar: Disable progress bar
 
     :raise KeyError: One or more keys are missing or non-acceptable
-    :raise TypeError: One or more value are not with good type
+    :raise TypeError: One or more value are not with good presence
     :raise ValueError: One or more value are not non-acceptable
     :raise Exception: Manage unexpected error
     """
-    models = Models()
-    models.read(models_path, disable_bar)
+    try:
+        logging.getLogger().info("Check models translation...")
+        models = Models()
+        models.read(models_path, disable_bar)
+    except Exception:
+        raise Exception("Problem with translated models. Check that you give correct input and option. "
+                        "If nothing wrong please report an issue on our github.")
 
 
 def launch(args):
@@ -59,12 +64,8 @@ def launch(args):
         outdir = mkdir(output=args.output, force=args.force)
         launch_translate(models=args.translate, source=args.source, output=outdir, hmms_path=args.hmm,
                          meta_data=args.meta, tmpdir=args.tmpdir, disable_bar=args.disable_prog_bar)
-        try:
-            logging.getLogger().info("Check models translation...")
-            check_models(models_path=outdir, disable_bar=args.disable_prog_bar)
-        except Exception:
-            raise Exception("Problem with translated models. Check that you give correct input and option. "
-                            "If nothing wrong please report an issue on our github.")
+        check_models(models_path=outdir, disable_bar=args.disable_prog_bar)
+
     if args.models is not None:
         check_models(models_path=args.models, disable_bar=args.disable_prog_bar)
 

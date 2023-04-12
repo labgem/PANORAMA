@@ -6,7 +6,7 @@ from __future__ import annotations
 from typing import List, Set, Union
 
 # installed libraries
-
+from ppanggolin.metadata import MetaFeatures
 # local libraries
 from panorama.models import Model
 from panorama.geneFamily import GeneFamily

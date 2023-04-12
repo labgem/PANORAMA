@@ -20,7 +20,7 @@ import pandas as pd
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
-res_col_names = ['Gene_family', 'Accession', 'protein_name', 'e_value',
+res_col_names = ['families', 'Accession', 'protein_name', 'e_value',
                  'score', 'bias', 'secondary_name', 'Description']
 meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "score_threshold",
                   "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
@@ -138,8 +138,6 @@ def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) ->
     hmm_list_path = list(hmm_dir)
     logging.getLogger().info("Read HMM")
     for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
-        # if hmm_path.stem == "RM__Type_I_MTases":
-        #     print("pika")
         end = False
         hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
         while not end:
@@ -243,4 +241,7 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
     # Get list of HMM with Plan7 data model
     hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
     res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
-    return pd.DataFrame(res)
+    metadata_df = pd.DataFrame(res)
+    # metadata_df.replace(to_replace='-', value=pd.NA, inplace=True)
+    # metadata_df.replace(to_replace='', value=pd.NA, inplace=True)
+    return metadata_df

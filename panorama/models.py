@@ -9,9 +9,10 @@ from typing import Dict, List, Generator, Set, Tuple, Union
 from tqdm import tqdm
 import json
 
-suprules_params = ['min_mandatory', 'max_forbidden', 'min_total']
+# TODO Try to add those variable in class
+suprules_params = ['min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
 keys_param = suprules_params.append('max_separation')
-rule_keys = ['name', 'parameters', 'type']
+rule_keys = ['name', 'parameters', 'presence']
 accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
 
 
@@ -28,20 +29,20 @@ def check_key(parameter_data: Dict, need_key: List):
 
 
 def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
-    """Check if all parameters are inside and with the good type
+    """Check if all parameters are inside and with the good presence
 
     :param param_dict: Dictionnary with all the parameters for the rule
     :param mandatory_keys: list of the mandatory keys
 
     :raise KeyError: One or more mandatory parameters are missing
-    :raise TypeError: One or more parameters are with a non-acceptable type
+    :raise TypeError: One or more parameters are with a non-acceptable presence
     :raise ValueError: One or more parameters are with a non-acceptable value
     :raise Exception: Manage an unexpected error
     """
     try:
         check_key(param_dict, mandatory_keys)
     except KeyError:
-        raise KeyError(f"One or more attribute are missing in parameters")
+        raise KeyError("One or more attribute are missing in parameters")
     except Exception as error:
         raise Exception(f"Unexpected Error: {error} to get parameters")
     else:
@@ -49,35 +50,42 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
             if key == "max_separation":
                 if not isinstance(value, int):
                     raise TypeError("The max_separation value is not an integer")
-                if value < 0:
-                    raise ValueError("The max_separation value is not positive")
-            if key == "min_mandatory":
+                if value < -1:
+                    raise ValueError("The max_separation value must be positive or "
+                                     "egal to -1 to indicate an undefinied distance.")
+            elif key in ["min_mandatory", "min_total", "max_mandatory", "max_total"]:
                 if not isinstance(value, int):
-                    raise TypeError("The min_mandatory value is not an integer")
-                if value < 0:
-                    raise ValueError("The min_mandatory value is not positive")
-            if key == "max_forbidden":
+                    raise TypeError(f"The {key} value is not an integer")
+                if value < -1:
+                    raise ValueError(f"The {key} value is not positive. "
+                                     "You can also use -1 value to skip the check on this poarameter.")
+            elif key == "max_forbidden":
                 if not isinstance(value, int):
                     raise TypeError("The max_forbidden value is not an integer")
                 if value < 0:
                     raise ValueError("The max_forbidden value is not positive")
-            if key == "min_total":
+            elif key == 'duplicate':
                 if not isinstance(value, int):
-                    raise TypeError("The min_total value is not an integer")
+                    raise TypeError("duplicate value from family in json must be an int")
                 if value < 0:
-                    raise ValueError("The min_total value is not positive")
+                    raise ValueError("Dupplication must be positive")
+            elif key == 'overlap':
+                if not isinstance(value, bool):
+                    raise TypeError("Overlap value from family in json must be a boolean")
+            else:
+                raise KeyError(f"{key} is not an acceptable attribute in parameters")
 
 
 def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mandatory_keys: List[str],
                param_keys: List[str] = None):
-    """Check if all keys and values are present and with good type before to add in model
+    """Check if all keys and values are present and with good presence before to add in model
 
     :param data_dict: Dictionnary with all model information
     :param mandatory_keys: list of the mandatory keys
     :param param_keys: list of the mandatory keys for parameters
 
     :raise KeyError: One or more keys are missing or non-acceptable
-    :raise TypeError: One or more value are not with good type
+    :raise TypeError: One or more value are not with good presence
     :raise ValueError: One or more value are not non-acceptable
     :raise Exception: Manage unexpected error
     """
@@ -93,12 +101,12 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
         for key, value in data_dict.items():
             if key == 'name':
                 if not isinstance(value, str):
-                    raise TypeError(f"The name value must be str type")
-            elif key == 'type':
+                    raise TypeError("The name value must be str presence")
+            elif key == 'presence':
                 if not isinstance(value, str):
-                    raise TypeError(f"The type attribute must be a string")
+                    raise TypeError("The presence attribute must be a string")
                 if value not in accept_type:
-                    raise ValueError(f"Accepted type must be in {accept_type}")
+                    raise ValueError(f"Accepted presence must be in {accept_type}")
             elif key == 'parameters':
                 if value is not None:
                     check_parameters(value, param_keys)
@@ -115,20 +123,9 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
             elif key == 'canonical':
                 if not isinstance(value, list):
                     raise TypeError("canonical value in json must be an array")
-            elif key == 'relation':
-                if value is not None:
-                    if not isinstance(value, str):
-                        raise TypeError("relation value from family in json must be an str or null")
-                    if value not in ['homologs', 'analogs']:
-                        raise ValueError("Family relation must be null homologs or analogs")
-            elif key == 'duplicate':
-                if not isinstance(value, int):
-                    raise TypeError("duplicate value from family in json must be an int or null")
-                if value < 0:
-                    raise ValueError("Dupplication must be positive")
             elif key == 'exchangeables':
                 if not isinstance(value, list):
-                    raise TypeError("exchangeables value from family in json must be a lsit or null")
+                    raise TypeError("exchangeables value from family in json must be a list")
                 if not all(isinstance(elem, str) for elem in value):
                     raise ValueError("Exchangeables families must be a string")
             else:
@@ -199,20 +196,19 @@ class Models:
         :param disable_bar: Disable progress bar
 
         :raise KeyError: One or more keys are missing or non-acceptable
-        :raise TypeError: One or more value are not with good type
+        :raise TypeError: One or more value are not with good presence
         :raise ValueError: One or more value are not non-acceptable
         :raise Exception: Manage unexpected error
         """
         for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
             with open(file.resolve().as_posix()) as json_file:
                 data = json.load(json_file)
-                model = Model()
                 try:
-                    model.read_model(data)
+                    model = Model.read_model(data)
                 except KeyError:
                     raise KeyError(f"Problem with one or more key in {file} are missing.")
                 except TypeError:
-                    raise TypeError(f"One or more attribute are not with the good type in {file}.")
+                    raise TypeError(f"One or more attribute are not with the good presence in {file}.")
                 except ValueError:
                     raise ValueError(f"One or more attribute are not with an acceptable value in {file}.")
                 except Exception:
@@ -252,11 +248,147 @@ class Models:
             raise Exception(f"Model {model.name} already in set of value")
 
 
-class Model:
+class _BasicFeatures:
+
+    def __init__(self, name: str = "", max_separation: int = 0):
+        """Constructor Method
+        """
+        self.name = name
+        self.max_separation = max_separation
+
+    def __repr__(self):
+        return f"{self.__class__} name : {self.name}"
+
+    def __str__(self):
+        return f"{self.__class__} name : {self.name}"
+
+    def read_parameters(self, parameters: Dict[str, Union[str, int, bool]], mandatory: List[str] = None,
+                        default: Dict[str, Union[str, int, bool]] = None):
+        """Check parameters consistency
+
+        :raise Exception: Model is not consistent
+        """
+        if mandatory is not None:
+            for param in mandatory:
+                if param in parameters:
+                    self.__setattr__(param, parameters[param])
+                else:
+                    try:
+                        if hasattr(self, '_parent'):
+                            parent = self.__getattribute__('_parent')
+                            if hasattr(parent, param):
+                                self.__setattr__(param, parent.__getattribute__(param))
+                            else:
+                                raise AttributeError
+                        else:
+                            raise AttributeError
+                    except AttributeError:
+                        raise AttributeError(f"There is no value set for {param}")
+        if default is not None:
+            for param in default.keys():
+                if param in parameters:
+                    self.__setattr__(param, parameters[param])
+                else:
+                    if hasattr(self, '_parent'):
+                        parent = self.__getattribute__('_parent')
+                        if hasattr(parent, param):
+                            self.__setattr__(param, parent.__getattribute__(param))
+                    else:
+                        self.__setattr__(param, default[param])
+
+
+class _FuFamFeatures:
+
+    def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0):
+        """Constructor Method
+        """
+        self.presence = presence
+        self.duplicate = duplicate
+        self._parent = parent
+
+
+class _ModFuFeatures:
+    def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
+                 accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
+                 neutral: Set[FuncUnit, Family] = None, forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0):
+        """Constructor Method
+        """
+        self.mandatory = mandatory if mandatory is not None else set()
+        self.min_mandatory = min_mandatory
+        self.max_mandatory = max_mandatory if max_mandatory is not None else len(self.mandatory)
+        self.accessory = accessory if accessory is not None else set()
+        self.min_total = min_total
+        self.max_total = max_total if max_total is not None else len(self.mandatory) + len(self.accessory)
+        self.max_forbidden = max_forbidden
+        self.forbidden = forbidden if forbidden is not None else set()
+        self.neutral = neutral if neutral is not None else set()
+        self._child_type = "Functional unit" if type(self) == Model else "Family"
+
+    @property
+    def _children(self):
+        for child in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
+            yield child
+
+    def _duplicate(self, filter_type: str = None):
+        """Access to all families that are duplicated in functional unit
+
+        :return: A generator with all families
+        """
+        assert filter_type in [None, 'mandatory', 'accessory', 'forbidden', 'neutral']
+        if filter_type is None:
+            select_children = self._children
+        elif filter_type == "mandatory":
+            select_children = self.mandatory
+        elif filter_type == "forbidden":
+            select_children = self.forbidden
+        elif filter_type == "accessory":
+            select_children = self.accessory
+        elif filter_type == "neutral":
+            select_children = self.neutral
+        else:
+            raise Exception("Unexpected error")
+        for child in select_children:
+            if child.duplicate >= 1:
+                yield child
+
+    def _check(self):
+        """Check model consistency
+
+        :raise Exception: Model is not consistent
+        """
+        if self.min_mandatory > len(self.mandatory) + sum([child.duplicate for child in self._duplicate("mandatory")]):
+            raise Exception(f"There is less mandatory {self._child_type} than the minimum mandatory")
+        if self.max_forbidden > len(self.forbidden) + sum([child.duplicate for child in self._duplicate("forbidden")]):
+            raise Exception(f"There is less forbidden {self._child_type} than the maximum forbidden accepted")
+        if self.min_total > len(list(self._children)) + sum([child.duplicate for child in self._duplicate()]):
+            raise Exception(f"There is less {self._child_type} than the minimum total")
+        if self.min_mandatory > self.min_total:
+            raise Exception(f"Minimun mandatory {self._child_type} value is greater than minimum total.")
+        if len(self.mandatory) == 0:
+            raise Exception(f"There is not mandatory {self._child_type}."
+                            f"You should have at least one mandatory {self._child_type} mandatory presence.")
+
+    def add(self, child: Union[FuncUnit, Family]):
+        """Add a function unit in model
+
+        :param child: function unit
+        """
+        if isinstance(child, FuncUnit):
+            child.check_func_unit()
+        if child.presence == "mandatory":
+            self.mandatory.add(child)
+        elif child.presence == "accessory":
+            self.accessory.add(child)
+        elif child.presence == "forbidden":
+            self.forbidden.add(child)
+        else:
+            self.neutral.add(child)
+
+
+class Model(_BasicFeatures, _ModFuFeatures):
     """Represent Model rules which describe biological system
 
      :param name: Neme of the element
-     :param parameters: Dictionary with the parameters name and value
      :param mandatory: Set of mandatory sub element
      :param accessory: Set of accessory sub element
      :param forbidden: Set of forbidden sub element
@@ -264,36 +396,17 @@ class Model:
      :param canonical: List of canonical models
      """
 
-    def __init__(self, name: str = "", parameters: dict = None, mandatory: set = None, accessory: set = None,
-                 forbidden: set = None, neutral: set = None, canonical: list = None):
+    def __init__(self, name: str = "", mandatory: set = None, min_mandatory: int = 1, accessory: set = None,
+                 neutral: set = None, min_total: int = 1, forbidden: set = None, max_forbidden: int = 0,
+                 max_separation: int = 0, canonical: list = None):
         """Constructor Method
         """
 
-        self.name = name
-        self.parameters = parameters if parameters is not None else dict()
-        self.mandatory = mandatory if mandatory is not None else set()
-        self.accessory = accessory if accessory is not None else set()
-        self.forbidden = forbidden if forbidden is not None else set()
-        self.neutral = neutral if neutral is not None else set()
+        super().__init__(name=name, max_separation=max_separation)
+        super(_BasicFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
+                                             accessory=accessory, neutral=neutral, min_total=min_total,
+                                             forbidden=forbidden, max_forbidden=max_forbidden)
         self.canonical = canonical if canonical is not None else []
-
-    def __repr__(self):
-        return f"name: {self.name}, number of FU: {self.size[0]}, number of families: {self.size[1]}"
-
-    def __str__(self):
-        out_dic = {"name": self.name}
-        out_dic.update(
-            {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
-        return ", ".join([f"{k}: {v}" for k, v in out_dic.items()]) + "\n\t" + \
-            "\n\t".join(fu.__str__(ident="\n\t\t") for fu in self.func_units)
-
-    @property
-    def size(self) -> Tuple[int, int]:
-        """Get number of elements in model
-
-        :return: number of functional unit and number of families
-        """
-        return len(list(self.func_units)), len(list(self.families))
 
     @property
     def func_units(self) -> Generator[FuncUnit, None, None]:
@@ -301,8 +414,7 @@ class Model:
 
         :return: A generator with all functional units
         """
-        for func_unit in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
-            yield func_unit
+        yield from self._children
 
     @property
     def families(self) -> Generator[Family, None, None]:
@@ -313,115 +425,100 @@ class Model:
         for func_unit in self.func_units:
             yield from func_unit.families
 
+    @property
+    def size(self) -> Tuple[int, int]:
+        """Get number of elements in model
+
+        :return: number of functional unit and number of families
+        """
+        return len(list(self.func_units)), len(list(self.families))
+
     def duplicate_fu(self, filter_type: str = None):
         """Access to all families that are duplicated in functional unit
 
         :return: A generator with all families
         """
-        assert filter_type in [None, 'mandatory', 'forbidden']
-        if filter_type is None:
-            select_fu = self.func_units
-        elif filter_type == "mandatory":
-            select_fu = self.mandatory
-        elif filter_type == "forbidden":
-            select_fu = self.forbidden
-        else:
-            raise Exception("Unexpected error")
-        for fam in select_fu:
-            if fam.duplicate >= 1:
-                yield fam
+        yield from self._duplicate(filter_type)
 
     def check_model(self):
         """Check model consistency
 
         :raise Exception: Model is not consistent
         """
-        if self.parameters["min_mandatory"] > len(self.mandatory) + len(list(self.duplicate_fu("mandatory"))):
-            raise Exception(f"There is less mandatory functional units than the minimum mandatory in {self.name}")
-        if self.parameters["max_forbidden"] > len(self.forbidden) + len(list(self.duplicate_fu("forbidden"))):
-            raise Exception(f"There is less forbidden functional units than the maximum forbidden accepted in {self.name}")
-        if self.parameters["min_total"] > self.size[0] + len(list(self.duplicate_fu())):
-            raise Exception(f"There is less functional units than the minimum total"
-                            f" of functional unit needed in {self.name}")
-        if self.parameters["min_mandatory"] > self.parameters['min_total']:
-            raise Exception("Minimun mandatory value is greater than minimum total.")
-        if len(self.neutral) == 1 and self.size[0] == 1:
-            logging.getLogger().warning(f"There is only one family in {self.name}. "
-                                        f"It should be a mandatory type.")
+        try:
+            self._check()
+        except Exception:
+            raise Exception(f"Consistency not respected  in {self.name}")
 
-    def read_model(self, data_model: dict):
+    def _read(self, data_model: dict):
+        mandatory_key = ['name', 'parameters', 'func_units']
+        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
+
+        check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
+
+        self.name = data_model["name"]
+        for dict_fu in data_model["func_units"]:
+            f_unit = FuncUnit.read_func_unit(dict_fu)
+            f_unit.model = self
+            self.add(f_unit)
+        if 'canonical' in data_model and data_model["canonical"] is not None:
+            self.canonical = data_model["canonical"]
+
+        param_default = {"max_mandatory": len(self.mandatory), "max_total": len(self.mandatory)+len(self.accessory)}
+        self.read_parameters(data_model["parameters"], mandatory=param_mandatory, default=param_default)
+
+    @staticmethod
+    def read_model(data_model: dict) -> Model:
         """Read model to parse in self attributes
 
         :param data_model: json data dictionary
         """
-        mandatory_key = ['name', 'parameters', 'func_units']
-        param_keys = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total']
-
-        check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_keys)
-
-        self.name = data_model["name"]
-        self.parameters = data_model["parameters"]
-        for dict_fu in data_model["func_units"]:
-            f_unit = FuncUnit()
-            f_unit.model = self
-            f_unit.read_func_unit(dict_fu)
-            self.add_func_unit(f_unit)
-        if 'canonical' in data_model and data_model["canonical"] is not None:
-            self.canonical = data_model["canonical"]
-
-    def add_func_unit(self, func_unit: FuncUnit):
-        """Add a function unit in model
-
-        :param func_unit: function unit
-        """
-        func_unit.check_func_unit()
-        if func_unit.type == "mandatory":
-            self.mandatory.add(func_unit)
-        elif func_unit.type == "accessory":
-            self.accessory.add(func_unit)
-        elif func_unit.type == "forbidden":
-            self.forbidden.add(func_unit)
-        else:
-            self.neutral.add(func_unit)
+        model = Model()
+        model._read(data_model)
+        return model
 
 
-class FuncUnit:
+class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     """Represent functional unit definition rule
 
     :param name: Neme of the element
-    :param parameters: Dictionary with the parameters name and value
-    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
+    :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param mandatory: Set of mandatory sub element
     :param accessory: Set of accessory sub element
     :param forbidden: Set of forbidden sub element
     :param neutral: Set of neutral sub element
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", duplicate: int = 0,
-                 mandatory: set = None, accessory: set = None, forbidden: set = None, neutral: set = None,
-                 model: Model = None):
+    def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
+                 accessory: set = None, neutral: set = None, min_total: int = 1, max_separation: int = 0,
+                 forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None):
         """Constructor Method
         """
-        self.name = name
-        self.parameters = parameters if parameters is not None else dict()
-        self.type = mtype
-        self.duplicate = duplicate
-        self.mandatory = mandatory if mandatory is not None else set()
-        self.accessory = accessory if accessory is not None else set()
-        self.forbidden = forbidden if forbidden is not None else set()
-        self.neutral = neutral if neutral is not None else set()
-        self.model = model
+        super().__init__(name=name, max_separation=max_separation)
+        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model)
+        super(_FuFamFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
+                                             accessory=accessory, neutral=neutral, min_total=min_total,
+                                             forbidden=forbidden, max_forbidden=max_forbidden)
 
-    def __repr__(self):
-        return f"name: {self.name}, from: {self.model.name}, number of families: {self.size}"
+    @property
+    def model(self) -> Model:
+        return self._parent
 
-    def __str__(self, ident: str = "\n\t"):
-        out_dic = {"name": self.name, "type": self.type,
-                   "model": self.model.name if self.model is not None else None}
-        out_dic.update(
-            {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
-        return ", ".join([f"{k}: {v}" for k, v in out_dic.items()]) + ident + \
-            ident.join(str(fam) for fam in self.families)
+    @model.setter
+    def model(self, model: Model):
+        self._parent = model
+
+    @model.deleter
+    def model(self):
+        del self._parent
+
+    @property
+    def families(self) -> Generator[Family, None, None]:
+        """Access to all families in functional unit
+
+        :return: A generator with all families
+        """
+        yield from self._children
 
     @property
     def size(self) -> int:
@@ -431,172 +528,105 @@ class FuncUnit:
         """
         return len(list(self.families))
 
-    @property
-    def families(self) -> Generator[Family, None, None]:
-        """Access to all families in functional unit
-
-        :return: A generator with all families
-        """
-        for fam in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
-            yield fam
-
     def duplicate_fam(self, filter_type: str = None):
         """Access to all families that are duplicated in functional unit
 
         :return: A generator with all families
         """
-        assert filter_type in [None, 'mandatory', 'forbidden']
-        if filter_type is None:
-            select_fam = self.families
-        elif filter_type == "mandatory":
-            select_fam = self.mandatory
-        elif filter_type == "forbidden":
-            select_fam = self.forbidden
-        else:
-            raise Exception("Unexpected error")
-        for fam in select_fam:
-            if fam.duplicate >= 1:
-                yield fam
+        yield from self._duplicate(filter_type)
 
     def check_func_unit(self):
         """Check functional unit consistency
 
         :raise Exception: Model is not consistent
         """
-        if self.parameters["min_mandatory"] > len(self.mandatory) + len(list(
-                self.duplicate_fam(filter_type="mandatory"))):
-            raise Exception(f"There is less mandatory families than the minimum mandatory in {self.name}")
-        if self.parameters["max_forbidden"] > len(self.forbidden):
-            raise Exception(f"There is less forbidden families than the maximum forbidden accepted in {self.name}")
-        if self.parameters["min_total"] > self.size + len(list(self.duplicate_fam())):
-            raise Exception(f"There is less families than the minimum total"
-                            f" of functional unit needed in {self.name}")
-        if self.parameters["min_mandatory"] > self.parameters['min_total']:
-            raise Exception("Minimun mandatory value is greater than minimum total.")
-        if len(self.neutral) == 1 and self.size == 1:
-            logging.getLogger().warning(f"There is only one family in {self.name}. "
-                                        f"It should be a mandatory type.")
+        try:
+            self._check()
+        except Exception:
+            raise Exception(f"Consistency not respected  in model {self.model.name} at functional unit {self.name}")
 
-    def check_parameters(self):
-        """Check parameters consistency
-
-        :raise Exception: Model is not consistent
-        """
-        if "min_mandatory" not in self.parameters:
-            self.parameters["min_mandatory"] = self.model.parameters["min_mandatory"]
-            logging.getLogger().warning(f"No min_mandatory parameter given in functional unit: {self.name}. "
-                                        f"min_mandatory from system {self.model.name} will be used")
-        if "max_forbidden" not in self.parameters:
-            self.parameters["max_forbidden"] = self.model.parameters["max_forbidden"]
-            logging.getLogger().warning(f"No max_forbidden parameter given in functional unit: {self.name}. "
-                                        f"max_forbidden from system {self.model.name} will be used")
-        if "min_total" not in self.parameters:
-            self.parameters["min_total"] = self.model.parameters["min_total"]
-            logging.getLogger().warning(f"No min_total parameter given in functional unit: {self.name}. "
-                                        f"min_total from system {self.model.name} will be used")
-        if "max_separation" not in self.parameters:
-            self.parameters["max_separation"] = self.model.parameters["max_separation"]
-            logging.getLogger().warning(f"No max_separation parameter given in functional unit: {self.name}. "
-                                        f"max_separation from system {self.model.name} will be used")
-
-    def read_func_unit(self, data_fu: dict):
+    def _read(self, data_fu: dict):
         """Read functional unit
 
         :param data_fu: data json file of all function units
         """
-        mandatory_key = ['name', 'families', 'type']
-
-        check_dict(data_fu, mandatory_keys=mandatory_key)
+        mandatory_key = ['name', 'families', 'presence']
+        param_mandatory = ['max_separation', 'min_mandatory']
+        check_dict(data_fu, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
         self.name = data_fu["name"]
-        self.type = data_fu["type"]
-        if "parameters" in data_fu and data_fu["parameters"] is not None:
-            self.parameters = data_fu["parameters"]
-        self.check_parameters()
+        self.presence = data_fu["presence"]
         for fam_dict in data_fu["families"]:
-            family = Family(func_unit=self)
-            family.read_family(fam_dict)
-            self.add_family(family)
+            family = Family.read_family(fam_dict)
+            family.func_unit = self
+            self.add(family)
+        if "parameters" in data_fu:
+            param_default = {'duplicate': 0, 'min_total': data_fu["parameters"]["min_mandatory"], "max_forbidden": 0,
+                             'max_mandatory': len(self.mandatory), 'max_total': len(self.mandatory)+len(self.accessory)}
+            self.read_parameters(data_fu["parameters"], mandatory=param_mandatory, default=param_default)
 
-    def add_family(self, family: Family):
-        """Add family in families functional unit
-
-        :param family: a family
-        """
-        if family.type == 'mandatory':
-            self.mandatory.add(family)
-        elif family.type == "accessory":
-            self.accessory.add(family)
-        elif family.type == "forbidden":
-            self.forbidden.add(family)
-        else:
-            self.neutral.add(family)
+    @staticmethod
+    def read_func_unit(data_fu: dict) -> FuncUnit:
+        func_unit = FuncUnit()
+        func_unit._read(data_fu)
+        return func_unit
 
 
-class Family:
+class Family(_BasicFeatures, _FuFamFeatures):
     """Represent family model definition rule
 
     :param name: Neme of the element
-    :param parameters: Dictionary with the parameters name and value
-    :param mtype: Type of the rule (mandatory, accessory, forbidden or neutral)
-    :param relation:
+    :param max_separation: maximum intergene distance
+    :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param func_unit: Functional unit in which is the family
+    :param exchangeables: List of exhangeable families
     """
 
-    def __init__(self, name: str = "", parameters: dict = None, mtype: str = "", relation: str = "",
-                 duplicate: int = 0, func_unit: FuncUnit = None, exchangeables: list = None):
+    def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
+                 duplicate: int = 0, exchangeables: List[str] = None, overlap: bool = False):
         """Constructor Method
         """
-        self.name = name
-        self.parameters = parameters if parameters is not None else dict()
-        self.type = mtype
-        self.duplicate = duplicate
-        self.relation = relation
-        self.func_unit = func_unit
+        super().__init__(name=name, max_separation=max_separation)
+        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit)
         self.exchangeables = exchangeables if exchangeables is not None else []
+        self.overlap = overlap
 
-    def __repr__(self):
-        return f"Family name : {self.name}, type : {self.type}, " \
-               f"Functional Unit : {self.func_unit.name if self.func_unit is not None else 'Unknow'}, " \
-               f"Model : {self.model.name if self.model is not None else 'Unknow'}"
+    @property
+    def func_unit(self) -> FuncUnit:
+        return self._parent
 
-    def __str__(self):
-        out_dic = {"name": self.name, "type": self.type, "relation": self.relation,
-                   "functional unit": self.func_unit.name if self.func_unit is not None else None,
-                   "model": self.model.name if self.model is not None else None}
-        out_dic.update(
-            {k: v for k, v in self.parameters.items()} if self.parameters is not None else {"parameters": None})
-        return ", ".join([f"{k}: {v}" for k, v in out_dic.items()])
+    @func_unit.setter
+    def func_unit(self, model: FuncUnit):
+        self._parent = model
+
+    @func_unit.deleter
+    def func_unit(self):
+        del self._parent
 
     @property
     def model(self) -> Model:
         """Get the model in which is family"""
         return self.func_unit.model
 
-    def check_parameters(self):
-        """Check parameters consistency
+    def _read(self, data_fam: dict):
+        param_mandatory = ['max_separation']
+        param_default = {"overlap": False, "duplicate": 0}
 
-        :raise Exception: Model is not consistent
-        """
-        if "max_separation" not in self.parameters:
-            self.parameters["max_separation"] = self.model.parameters["max_separation"]
-            logging.getLogger().warning(f"No max_separation parameter given in family: {self.name}."
-                                        f"max_separation from functional unit: {self.func_unit.name} will be used")
+        check_dict(data_fam, mandatory_keys=['name', 'presence'],
+                   param_keys=param_mandatory + list(param_default.keys()))
+        self.name = data_fam['name']
+        self.presence = data_fam['presence']
+        if "parameters" in data_fam:
+            self.read_parameters(data_fam["parameters"], mandatory=param_mandatory, default=param_default)
+        if 'exchangeables' in data_fam:
+            self.exchangeables = data_fam["exchangeables"]
 
-    def read_family(self, data_fam: dict):
+    @staticmethod
+    def read_family(data_fam: dict) -> Family:
         """Read family
 
         :param data_fam: data json file with families
         """
-        check_dict(data_fam, mandatory_keys=['name', 'type'])
-        self.name = data_fam['name']
-        self.type = data_fam['type']
-        if "parameters" in data_fam and data_fam["parameters"] is not None:
-            self.parameters = data_fam["parameters"]
-        self.check_parameters()
-        if 'relation' in data_fam and data_fam["relation"] is not None:
-            self.relation = data_fam['relation']
-        if 'duplicate' in data_fam and data_fam["duplicate"] is not None:
-            self.duplicate = data_fam['duplicate']
-        if 'exchangeables' in data_fam and data_fam["exchangeables"] is not None:
-            self.exchangeables = data_fam['exchangeables']
+        fam = Family()
+        fam._read(data_fam)
+        return fam

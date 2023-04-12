@@ -1,4 +1,3 @@
-from .annotation import Annotation
 from .geneFamily import GeneFamily
 from .models import Models, Model
 from .system import System

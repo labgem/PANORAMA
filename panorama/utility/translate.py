@@ -14,6 +14,7 @@ from lxml import etree as et
 import pandas as pd
 from tqdm import tqdm
 
+
 # local libraries
 
 
@@ -92,49 +93,46 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     assert canonical is not None and isinstance(canonical, list)
     assert meta is not None and isinstance(meta, pd.DataFrame)
 
-    def add_family(families_list: List[str], secondary_names: List[str], max_separation: int, meta: pd.DataFrame, fam_type: str):
+    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame, fam_type: str):
         family_list = []
         for fam_name in families_list:
             if fam_name != 'NA':
+                fam_dict = {'name': fam_name,
+                            'presence': fam_type}
                 if fam_name in secondary_names:
                     filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                    prime_names = filter_df['protein_name'].dropna().unique().tolist()
-                    for prime in prime_names:
-                        family_list.append({'name': prime,
-                                            'type': fam_type,
-                                            'relation': None,
-                                            'parameters': {"max_separation": max_separation}})
-                family_list.append({'name': fam_name,
-                                    'type': fam_type,
-                                    'relation': None,
-                                    'parameters': {"max_separation": max_separation}})
+                    fam_dict.update({"exchangeables": filter_df['protein_name'].dropna().unique().tolist()})
+                family_list.append(fam_dict)
         return family_list
 
-    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "core_genes", "optional_genes", "prohibited_genes"]
+    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "core_genes", "optional_genes",
+                   "prohibited_genes"]
     if not all(key in padloc_keys for key in data_yaml.keys()):
         raise KeyError(f"Unexpected key in PADLOC model : {model_name}."
                        f"authorized keys are : {', '.join(padloc_keys)}")
 
     data_json = {"name": model_name, 'func_units': [],
-                 'parameters': {"max_forbidden": 0, "max_separation": 1, "min_mandatory": 1, "min_total": 1}}
+                 'parameters': {"max_forbidden": 0, "max_separation": 0, "min_mandatory": 1, "min_total": 1,
+                                "max_mandatory": -1, "max_total": -1}
+                 }
     if len(canonical) > 0:
         data_json['canonical'] = canonical
     secondary_names = meta['secondary_name'].dropna().unique().tolist()
-    func_unit = {'name': model_name, 'type': 'mandatory', 'parameters': {'max_forbidden': 0}}
-    func_unit['parameters']['max_separation'] = data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0
-    func_unit['parameters']['min_mandatory'] = data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1
-    func_unit['parameters']['min_total'] = data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
+    func_unit = {'name': model_name, 'presence': 'mandatory',
+                 'parameters': {
+                     "max_forbidden": 0,
+                     "max_separation": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
+                     "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
+                     "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1}
+                 }
 
     family_list = list()
     family_list += add_family(families_list=data_yaml["core_genes"] if "core_genes" in data_yaml else [],
-                              secondary_names=secondary_names, meta=meta, fam_type='mandatory',
-                              max_separation=func_unit['parameters']['max_separation'])
+                              secondary_names=secondary_names, meta=meta, fam_type='mandatory')
     family_list += add_family(families_list=data_yaml["optional_genes"] if "optional_genes" in data_yaml else [],
-                              secondary_names=secondary_names, meta=meta, fam_type='accessory',
-                              max_separation=func_unit['parameters']['max_separation'])
+                              secondary_names=secondary_names, meta=meta, fam_type='accessory')
     family_list += add_family(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
-                              secondary_names=secondary_names, meta=meta, fam_type='forbidden',
-                              max_separation=func_unit['parameters']['max_separation'])
+                              secondary_names=secondary_names, meta=meta, fam_type='forbidden')
     func_unit["families"] = family_list
     data_json['func_units'].append(func_unit)
     return data_json
@@ -162,7 +160,7 @@ def translate_padloc(models: Path, meta: Path, output: Path, disable_bar: bool =
     return list_data
 
 
-def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, List[str]]):
+def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, List[str]], canonical: List[str]):
     """
     Translate the xml data in json dictionary
 
@@ -170,21 +168,31 @@ def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, Li
     :param model_name: name of the model
     """
 
-    def translate_gene(elem, hmm_dict: Dict[str, List[str]], max_separation: int = 0):
+    def translate_gene(elem, hmm_dict: Dict[str, List[str]]):
         try:
             name = "".join(elem.get('name').split('__')[1:])
         except KeyError:
             raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
         else:
-            dict_elem = {'name': name, 'type': 'neutral', 'parameters': {"max_separation": max_separation}}
+            dict_elem = {'name': name, 'presence': 'neutral'}
             exchangeable_set = set()
             if name in hmm_dict:
                 exchangeable_set |= set(hmm_dict[name])
             for attrib, value in elem.attrib.items():
                 if attrib == 'presence':
-                    dict_elem['type'] = value
+                    dict_elem['presence'] = value
                 elif attrib == 'inter_gene_max_space':
+                    if parameter not in dict_elem:
+                        dict_elem["parameters"] = {}
                     dict_elem['parameters']['max_separation'] = int(value)
+                elif attrib == 'multi_system' and value == 1:
+                    if parameter not in dict_elem:
+                        dict_elem["parameters"] = {}
+                    dict_elem['parameters']['overlap'] = True
+                elif attrib == 'max_nb_genes':
+                    if parameter not in dict_elem:
+                        dict_elem["parameters"] = {}
+                    dict_elem['parameters']['max_total'] = -1
 
             for relation in elem:
                 if relation.tag == "exchangeables":
@@ -209,27 +217,27 @@ def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, Li
         except KeyError:
             raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
         else:
-            dict_elem = {'name': name, 'type': 'neutral', "families": [],
+            dict_elem = {'name': name, 'presence': 'neutral', "families": [],
                          'parameters': {"max_separation": 0, 'max_forbidden': 0,
                                         'min_mandatory': 1, "min_total": 1}}
 
             for attrib, value in elem.attrib.items():
                 if attrib == 'presence':
-                    dict_elem['type'] = value
+                    dict_elem['presence'] = value
                 elif attrib == 'min_mandatory_genes_required':
                     dict_elem['parameters']['min_mandatory'] = int(value)
                 elif attrib == 'min_genes_required':
                     dict_elem['parameters']['min_total'] = int(value)
                 elif attrib == 'inter_gene_max_space':
                     dict_elem['parameters']['max_separation'] = int(value)
+                elif attrib == 'max_nb_genes':
+                    dict_elem['parameters']['max_total'] = -1
 
             for family in elem:
-                dict_elem["families"].append(translate_gene(family, hmm_dict, dict_elem['parameters']['max_separation']))
+                dict_elem["families"].append(translate_gene(family, hmm_dict))
             return dict_elem
 
-    if model_name == 'PrrC':
-        print("pika")
-    data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
+    data_json = {"name": model_name, 'func_units': [], 'parameters': dict(), "canonical": canonical}
     if root.attrib is not None:  # Read attributes root
         for parameter, number in root.attrib.items():
             if parameter == 'inter_gene_max_space':
@@ -238,28 +246,37 @@ def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, Li
                 data_json['parameters']['min_mandatory'] = int(number)
             elif parameter == 'min_genes_required':
                 data_json['parameters']['min_total'] = int(number)
+            elif parameter == 'max_nb_genes':
+                data_json['parameters']['max_total'] = -1
     data_json['parameters']['max_forbidden'] = 0
 
     fu_list = []
     fam_list = []
     for elem in root:
         if elem.tag == "gene":
-            fam_list.append(translate_gene(elem, hmm_dict, data_json['parameters']['max_separation']))
-
+            fam_list.append(translate_gene(elem, hmm_dict))
         elif elem.tag == "functional_unit":
             fu_list.append(translate_fu(elem, hmm_dict))
     if len(fu_list) == 0:  # only genes
-        fu_list.append({'name': data_json["name"], 'type': 'mandatory', "families": fam_list,
-                        'parameters': data_json["parameters"]})
-        data_json["parameters"] = {"max_forbidden": 0, "max_separation": 1, "min_mandatory": 1, "min_total": 1}
-    for fu in fu_list:
-        data_json["func_units"].append(fu)
+        # nb_mandatory = sum(1 for fam in fam_list if fam["presence"] == "mandatory")
+        # nb_total = nb_mandatory + sum(1 for fam in fam_list if fam["presence"] == "accessory")
+        data_json["func_units"].append({'name': data_json["name"], 'presence': 'mandatory',
+                                        "families": fam_list, 'parameters': data_json["parameters"]})
+        data_json["func_units"][0]["parameters"].update({"max_mandatory": -1,
+                                                         # "max_total": data_json["parameters"]["max_total"]
+                                                         # if "max_total" in data_json["parameters"] else nb_total}
+                                                         "max_total": -1})
+        data_json["parameters"] = {"max_forbidden": 0, "max_separation": 1, "min_mandatory": -1, "min_total": -1,
+                                   "max_mandatory": -1, "max_total": -1}
+    else:
+        for fu in fu_list:
+            data_json["func_units"].append(fu)
     return data_json
 
 
 def parse_dfinder_hmm(hmms_path: Path):
     hmm_dict = {}
-    for hmm_path in hmms_path.glob('*.hmm'):
+    for hmm_path in tqdm(list(hmms_path.glob('*.hmm')), unit="HMM"):
         hmm_names = []
         with open(hmm_path, 'r') as hmm_file:
             for line in hmm_file.readlines():
@@ -304,19 +321,35 @@ def parse_defense_finder(model_file: Path, tmpdir: Path):
     return newfile_path
 
 
+def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
+    canonical_sys = []
+    if re.search("-Type-", model_name):
+        basename = re.split("-Type-", model_name)
+        base_class = basename[0]
+        base_type = basename[-1]
+        for canon_file in models.glob("*.xml"):
+            name_canon = canon_file.stem
+            if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
+                canonical_sys.append(name_canon)
+    elif model_name == "CAS_Cluster" or model_name == "CBASS":
+        for canon_file in models.glob("*.xml"):
+            if canon_file.stem != model_name:
+                canonical_sys.append(canon_file.stem)
+    return canonical_sys
+
+
 def translate_defense_finder(models: Path, hmms_path: Path, tmpdir: Path, disable_bar: bool = False):
     assert tmpdir is not None and isinstance(tmpdir, Path)
     hmm_dict = parse_dfinder_hmm(hmms_path)
-    with tempfile.TemporaryDirectory(prefix="Dfinder_", dir=tmpdir) as tmp:
-        tmp_path = Path(tmp)
-        list_data = []
-        for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
-            try:
-                parse_defense_finder(model, tmp_path)
-            except Exception:
-                raise Exception(f"Problem to parse {model.name}")
-            root = read_xml(model)
-            list_data.append(translate_defense_finder_model(root, model.stem, hmm_dict))
+    list_data = []
+    for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
+        canonical_sys = search_canonical_dfinder(model.stem, model.parent)
+        # try:
+        #     parse_defense_finder(model, tmp_path)
+        # except Exception:
+        #     raise Exception(f"Problem to parse {model.name}")
+        root = read_xml(model)
+        list_data.append(translate_defense_finder_model(root, model.stem, hmm_dict, canonical_sys))
     return list_data
 
 
