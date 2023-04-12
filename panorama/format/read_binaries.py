@@ -3,19 +3,19 @@
 
 # default libraries
 import logging
+from tqdm import tqdm
 from typing import List
 from pathlib import Path
 
 # installed libraries
 import tables
-from tqdm import tqdm
 from ppanggolin.formats import read_chunks
 from ppanggolin.formats import check_pangenome_info as check_pp
 
 # local libraries
 from panorama.annotation import Annotation
-from panorama.models import Models
 from panorama.system import System
+from panorama.models import Models
 from panorama.pangenomes import Pangenome
 
 
@@ -92,9 +92,9 @@ def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, sourc
         sources = pangenome.status["annotations_sources"]
 
     for source in sources:
-        annotations_table = h5f.get_node(annotations_group, source)
+        source_table = h5f.get_node(annotations_group, source)
         logging.getLogger().info(f"Read annotations from {source}...")
-        read_gene_families_annotations_by_source(pangenome, annotations_table, disable_bar)
+        read_gene_families_annotations_by_source(pangenome, source_table, disable_bar)
         logging.getLogger().debug(f"{source} has been read")
     pangenome.status["annotations"] = "Loaded"
 
@@ -114,7 +114,7 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
         pangenome.add_system(system)
 
 
-def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path], sources: List[str],
+def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: Path, source: str,
                  disable_bar: bool = False):
     """Read information about systems in pangenome hdf5 file to add in pangenome object
 
@@ -122,22 +122,17 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
     :param h5f: Pangenome HDF5 file with gene families information
     :param disable_bar: Disable the progress bar
     """
-    systems_group = h5f.root.systems
-    if sources is None:
-        sources = pangenome.status["systems_sources"]
-
-    for index, source in enumerate(sources):
-        models = Models()
-        models.read(models_path[index], disable_bar)
-        systems_table = h5f.get_node(systems_group, source)
-        logging.getLogger().info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, systems_table, models, disable_bar)
-        logging.getLogger().debug(f"{source} has been read and added")
+    models = Models()
+    models.read(models_path, disable_bar)
+    systems_table = h5f.get_node("/systems", source)
+    logging.getLogger().info(f"Read system from {source}...")
+    read_systems_by_source(pangenome, systems_table, models, disable_bar)
+    logging.getLogger().debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
 
 
 def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = False, sources: List[str] = None,
-                         need_systems: bool = False, models: List[Path] = None,
+                         need_systems: bool = False, models_path: Path = None,
                          disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
@@ -161,6 +156,8 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = Fals
         elif pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
             raise Exception("Your pangenome has no gene families. See the 'cluster' subcommand of ppanggolin.")
 
+    print(kwargs)
+
     check_pp(pangenome=pangenome, disable_bar=disable_bar, **kwargs)
 
     if hasattr(pangenome, "file"):
@@ -173,7 +170,7 @@ def check_pangenome_info(pangenome: Pangenome, need_annotations_fam: bool = Fals
         read_gene_families_annotations(pangenome, h5f, sources=sources, disable_bar=disable_bar)
 
     if need_systems:
-        assert models is not None and sources is not None
-        read_systems(pangenome, h5f, models, sources, disable_bar)
+        assert models_path is not None and sources is not None
+        read_systems(pangenome, h5f, models_path, sources[0], disable_bar)
 
     h5f.close()

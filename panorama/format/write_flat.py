@@ -4,18 +4,19 @@
 # default libraries
 from __future__ import annotations
 import argparse
+import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import collections
 import itertools
 import logging
 from pathlib import Path
+from tqdm import tqdm
 from typing import Collection, Dict, List, Set
 
 # installed libraries
 import numpy as np
 import pandas as pd
-from tqdm import tqdm
 from ppanggolin.region import Region, Spot
 
 # local libraries
@@ -23,22 +24,22 @@ from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info
 from panorama.format.write_proksee import write_proksee
 from panorama.utils import check_tsv_sanity, mkdir
-from panorama.geneFamily import GeneFamily
 from panorama.system import System
 from panorama.region import Module
+from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenome
+
+# For Quentin
+from collections import OrderedDict
 
 
 def check_flat_parameters(args):
     if args.hmm and (args.msa is None or args.msa_format is None):
         raise Exception("To write HMM you need to give msa files and format")
-    if args.systems or args.systems_asso is not None or any(elem in ["systems", "all"] for elem in args.proksee):
+    if args.systems or args.systems_asso is not None or "systems" in args.proksee:
         if args.models is None or args.sources is None:
             raise Exception("To read system and write flat related, "
                             "it's necessary to give models and annotation source.")
-        if len(args.models) != len(args.sources):
-            raise Exception("To read systems from differents sources you need to give "
-                            "one models directory by corresponding source.")
 
 
 def write_annotation_to_families(pangenome: Pangenome, output: Path, disable_bar: bool = False):
@@ -147,6 +148,8 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
         r_diags.sort()
         return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
 
+    if organism.name == "GCF_000773865.1_ASM77386v1_genomic" and system.name == "DMS_other":
+        print("carapuce")
     org_projection = [system.ID, system.name, organism.name]
     select_families = system.gene_families.intersection(organism.families)
     mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}
@@ -180,7 +183,7 @@ def write_sys_to_organism(system, organism, projection, mandatory_family, access
                         genes = gf.get_genes_per_org(organism)
                         for gene in genes:
                             projection.append(org_projection + [gf.name, gf.named_partition, annotation,
-                                                                gene.name, gene.start, gene.stop, gene.strand])
+                                                                gene.name, gene.start, gene.stop, gene.strand, gene.is_fragment])
                 bool_projection = True
     return bool_projection
 
@@ -192,35 +195,27 @@ def write_system_projection(system: System) -> pd.DataFrame:
 
     :return: Dataframe result of projection
     """
-    projection, mandatory_family, accessory_family = ([], [], [])
-    for fam in system.model.families:
-        if fam.type == 'mandatory':
-            mandatory_family.append(fam.name)
-            mandatory_family += fam.exchangeables
-        if fam.type == 'accessory':
-            accessory_family.append(fam.name)
-            accessory_family += fam.exchangeables
+    projection = []
+    mandatory_family = [fam.name for fam in system.model.families if fam.type == 'mandatory']
+    accessory_family = [fam.name for fam in system.model.families if fam.type == 'accessory']
     system_orgs = set.union(*list([gf.organisms for gf in system.gene_families]))
     fu = list(system.model.func_units)[0]
     for organism in system_orgs:
         find_projection = write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu)
         if not find_projection:
             for canonical_system in system.canonical:
-                canonical_mandatory_family, canonical_accessory_family = ([], [])
-                for fam in canonical_system.model.families:
-                    if fam.type == 'mandatory':
-                        canonical_mandatory_family.append(fam.name)
-                        canonical_mandatory_family += fam.exchangeables
-                    if fam.type == 'accessory':
-                        canonical_accessory_family.append(fam.name)
-                        canonical_accessory_family += fam.exchangeables
+                canonical_mandatory_family = [fam.name for fam in canonical_system.model.families
+                                              if fam.type == 'mandatory']
+                canonical_accessory_family = [fam.name for fam in canonical_system.model.families
+                                              if fam.type == 'accessory']
                 canonical_fu = list(canonical_system.model.func_units)[0]
                 write_sys_to_organism(canonical_system, organism, projection, canonical_mandatory_family,
                                       canonical_accessory_family, canonical_fu)
-    return pd.DataFrame(projection).drop_duplicates()
+    projection_df = pd.DataFrame(projection).drop_duplicates()
+    return projection_df
 
 
-def write_systems_projection(pangenome: Pangenome, output: Path, source: str, threads: int = 1,
+def write_systems_projection(pangenome: Pangenome, output: Path, threads: int = 1,
                              force: bool = False, disable_bar: bool = False):
     """ Write all systems in pangenomes and project on organisms
 
@@ -231,10 +226,9 @@ def write_systems_projection(pangenome: Pangenome, output: Path, source: str, th
     :param disable_bar: Allow to disable progress bar
     """
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().info(f'Write system projection for source : {source}')
-        with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system', disable=disable_bar) as progress:
+        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
             futures = []
-            for system in pangenome.get_system_by_source(source):
+            for system in pangenome.systems:
                 future = executor.submit(write_system_projection, system)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -247,81 +241,142 @@ def write_systems_projection(pangenome: Pangenome, output: Path, source: str, th
     for result in results:
         systems_projection = pd.concat([systems_projection, result], ignore_index=True)
     systems_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
-                                  "annotation name", "gene", "start", "stop", "strand"]
+                                  "annotation name", "gene", "start", "stop", "strand", "is_fragment"]
     systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
                                    ascending=[True, True, True, True, True], inplace=True)
-    mkdir(f"{output}/projection_{source}", force=force)
+    mkdir(f"{output}/projection_systems1", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8]]
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/projection_{source}/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems_{source}.tsv", sep="\t", index=False)
+        org_df.to_csv(f"{output}/projection_systems2/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/systems2.tsv", sep="\t", index=False)
 
 
-def write_systems_to_modules(pangenome: Pangenome, output: Path, systems2modules: List[Collection[str, List[Module]]]):
-    list_to_df = []
-    df_collection = collections.namedtuple("df_lines", ["system_id", "system_name", "system_source", "module_id", "common_families"])
-    for system_id, modules_list in systems2modules:
-        system = pangenome.get_system(system_id)
-        for module in modules_list:
-            common_fam = system.gene_families.intersection(module.families)
-            list_to_df.append(df_collection(system_id, system.name, system.source, module.ID,
-                                            ",".join([gf.name for gf in common_fam])))
-    df = pd.DataFrame(list_to_df)
-    outpath = Path(output, "systems2modules").with_suffix(".tsv")
-    df.to_csv(path_or_buf=outpath, sep="\t")
-
-
-def system_to_modules(system: System, modules: Set[Module]):
-    modules_present = []
-    for module in modules:
-        if system.gene_families.issubset(module.families):
-            module.add_system(system)
-            modules_present.append(module)
-    return system.ID, modules_present
-
-
-def systems_to_modules(pangenome: Pangenome, output: Path, threads: int = 1, disable_bar: bool = False):
-    """Associate a model to modules"""
-    systems2modules = collections.namedtuple("systems2modules", ['system_ID', 'modules_list'])
+def systems_to_features(pangenome: Pangenome, output: Path, rgp: bool = False, modules: bool = False,
+                        spots: bool = False, threads: int = 1, disable_bar: bool = False):
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
-            futures = []
+            futures_rgp = []
+            futures_modules = []
             for system in pangenome.systems:
-                future = executor.submit(system_to_modules, system, pangenome.modules)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-                for canonical in system.canonical:
-                    future = executor.submit(system_to_modules, canonical, pangenome.modules)
-                    future.add_done_callback(lambda p: progress.update())
-                    futures.append(future)
+                future_rgp = executor.submit(system_to_rgp, system, pangenome.regions)
+                future_rgp.add_done_callback(lambda p: progress.update())
+                futures_rgp.append(future_rgp)
+                #for canonical in system.canonical:
+                #    future_rgp = executor.submit(system_to_rgp, canonical, pangenome.regions)
+                #    future_rgp.add_done_callback(lambda p: progress.update())
+                #    futures_rgp.append(future_rgp)
 
-            results = []
-            for future in futures:
-                res = future.result()
-                if len(res[1]) > 0:
-                    results.append(systems2modules(res[0], res[1]))
+                future_modules = executor.submit(system_to_modules, system, pangenome.modules)
+                future_modules.add_done_callback(lambda p: progress.update())
+                futures_modules.append(future_modules)
+                #for canonical in system.canonical:
+                #    future_modules = executor.submit(system_to_modules, canonical, pangenome.modules)
+                #    future_modules.add_done_callback(lambda p: progress.update())
+                #    futures_modules.append(future_modules)
 
-    write_systems_to_modules(pangenome, output, results)
+            dict_system_rgp = {}
+            res_rgp_list = []
+            for future_rgp in futures_rgp:
+                res_rgp = future_rgp.result()
+                res_rgp_list.append(res_rgp)
+                if len(res_rgp[1]) > 0:
+                    dict_system_rgp[res_rgp[0]] = res_rgp[1]
+
+            dict_system_modules = {}
+            res_module_list = []
+            for future_modules in futures_modules:
+                res_module = future_modules.result()
+                res_module_list.append(res_module)
+                if len(res_module[1]) > 0:
+                    dict_system_modules[res_module[0]] = res_module[1]
+
+            dict_region_spot = {}
+            for spot in pangenome.spots:
+                for region in spot.regions:
+                    dict_region_spot[region.name] = spot.ID
+
+        dict_system_organism = {}
+        list_system_in_rgp = []
+        for res_rgp1 in res_rgp_list:
+            for res_rgp2 in res_rgp1[1]:
+                list_system_in_rgp.append(res_rgp1[0])
+                dict_system_organism.setdefault(res_rgp1[0], []).append(res_rgp2.organism.name)
+
+        for res_module1 in res_module_list:
+            bool1 = res_module1[0] in list_system_in_rgp
+            bool2 = res_module1[1] == []
+            if bool1 is False and bool2 is False:
+                for res_module2 in res_module1[1]:
+                    list_organism_of_mod = list(map(lambda x: x.name, res_module2.organisms))
+                    dict_system_organism[res_module1[0]] = list_organism_of_mod
+
+    write_systems_to_features(pangenome, output, dict_system_rgp, dict_system_modules, dict_region_spot,
+                              dict_system_organism, rgp, modules, spots)
 
 
-def write_systems_to_rgp(pangenome: Pangenome, output: Path, systems2rgp: List[Collection[str, List[Region]]],
-                         rgp2spot: Dict[Region, Spot]):
+def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rgp: Dict[System, Region],
+                              dict_system_modules: Dict[System, Module], dict_region_spots: Dict[Region, Spot],
+                              dict_system_organism: Dict[System, Organism],
+                              rgp: bool = False, modules: bool = False, spots: bool = False):
     list_to_df = []
-    df_collection = collections.namedtuple("df_lines", ["system_id", "system_name", "system_source",
-                                                        "rgp_id", "spot_id", "common_families"])
-    for system_id, rgp_list in systems2rgp:
-        system = pangenome.get_system(system_id)
-        for rgp in rgp_list:
-            common_fam = system.gene_families.intersection(rgp.families)
-            spot_id = rgp2spot[rgp.name] if rgp.name in rgp2spot else None
-            list_to_df.append(df_collection(system_id, system.name, system.source, rgp.name, spot_id,
-                                            ",".join([gf.name for gf in common_fam])))
-    df = pd.DataFrame(list_to_df)
-    outpath = Path(output, "systems2rgp").with_suffix(".tsv")
-    df.to_csv(path_or_buf=outpath, sep="\t")
+    df_collection = collections.namedtuple("system_rgp_module_spot",
+                                           ['system_ID', 'system_name', 'organism', 'rgp', 'module', 'spot'])
+    list_system_ID = list(OrderedDict.fromkeys(list(dict_system_rgp) + list(dict_system_modules)))
+
+    for system_ID in list_system_ID:
+        system = pangenome.get_system(system_ID)
+        rgp_list = dict_system_rgp.get(system_ID, None)
+        spot_list = []
+        if rgp_list is not None :
+            for rgp_element in rgp_list:
+                spot_list.append(dict_region_spots[rgp_element.name]) if rgp_element.name in dict_region_spots else spot_list.append("no_spot")
+            rgp_list = list(map(lambda x: x.name, rgp_list))
+        else:
+            spot_list = None
+        module_list = dict_system_modules.get(system_ID, None)
+        if module_list is not None:
+            module_list = list(map(lambda x: x.ID, module_list))
+        organism_list = dict_system_organism.get(system_ID, None)
+        list_to_df.append(df_collection(system_ID, system.name, organism_list, rgp_list, module_list, spot_list))
+
+    if rgp is True and modules is True and spots is True:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_rgp_modules_spots").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'module', 'spot', 'rgp']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
+
+    if rgp is True and modules is True and spots is False:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_rgp_modules").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'rgp', 'module']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
+
+    if rgp is True and modules is False and spots is True:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_rgp_spots").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'spot', 'rgp']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
+
+    if rgp is False and modules is True and spots is True:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_modules_spots").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'module', 'spot']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
+
+    if rgp is True and modules is False and spots is False:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_rgp").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'rgp']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
+
+    if rgp is False and modules is True and spots is False:
+        df = pd.DataFrame(list_to_df)
+        outpath = Path(output, "systems_to_modules").with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'organism', 'module']
+        df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
 
 def system_to_rgp(system: System, regions: Set[Region]):
@@ -331,78 +386,13 @@ def system_to_rgp(system: System, regions: Set[Region]):
             rgp_present.append(rgp)
     return system.ID, rgp_present
 
-
-def systems_to_rgp(pangenome: Pangenome, output: Path, threads: int = 1, disable_bar: bool = False):
-    """Associate a systems to RGP"""
-    systems2rgp = collections.namedtuple("systems2rgp", ['system_ID', 'rgp_list'])
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
-            futures = []
-            for system in pangenome.systems:
-                future = executor.submit(system_to_rgp, system, pangenome.regions)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-                for canonical in system.canonical:
-                    future = executor.submit(system_to_modules, canonical, pangenome.modules)
-                    future.add_done_callback(lambda p: progress.update())
-                    futures.append(future)
-
-            results = []
-            for future in futures:
-                res = future.result()
-                if len(res[1]) > 0:
-                    results.append(systems2rgp(res[0], res[1]))
-    region2spot = {}
-    for spot in pangenome.spots:
-        for region in spot.regions:
-            region2spot[region.name] = spot.ID
-    write_systems_to_rgp(pangenome, output, results, region2spot)
-
-
-def write_systems_to_spots(pangenome: Pangenome, output: Path, systems2spots: List[Collection[str, List[Spot]]]):
-    list_to_df = []
-    df_collection = collections.namedtuple("df_lines", ["system_id", "system_name", "system_source",
-                                                        "spot_id", "common_families"])
-    for system_id, spots_list in systems2spots:
-        system = pangenome.get_system(system_id)
-        for spot in spots_list:
-            common_fam = system.gene_families.intersection(spot.families)
-            list_to_df.append(df_collection(system_id, system.name, system.source, spot.ID,
-                                            ",".join([gf.name for gf in common_fam])))
-    df = pd.DataFrame(list_to_df)
-    outpath = Path(output, "systems2spots").with_suffix(".tsv")
-    df.to_csv(path_or_buf=outpath, sep="\t")
-
-
-def system_to_spots(system: System, spots: Set[Spot]):
-    spot_present = []
-    for spot in spots:
-        if system.gene_families.issubset(spot.families):
-            spot_present.append(spot)
-    return system.ID, spot_present
-
-
-def systems_to_spots(pangenome: Pangenome, output: Path, threads: int = 1, disable_bar: bool = False):
-    """Associate a systems to RGP"""
-    systems2spots = collections.namedtuple("systems2spots", ['system_ID', 'spots_list'])
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
-            futures = []
-            for system in pangenome.systems:
-                future = executor.submit(system_to_spots, system, pangenome.spots)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-                for canonical in system.canonical:
-                    future = executor.submit(system_to_modules, canonical, pangenome.modules)
-                    future.add_done_callback(lambda p: progress.update())
-                    futures.append(future)
-
-            results = []
-            for future in futures:
-                res = future.result()
-                if len(res[1]) > 0:
-                    results.append(systems2spots(res[0], res[1]))
-    write_systems_to_spots(pangenome, output, results)
+def system_to_modules(system: System, modules: Set[Module]):
+    modules_present = []
+    for module in modules:
+        if system.gene_families.issubset(module.families):
+            module.add_system(system)
+            modules_present.append(module)
+    return system.ID, modules_present
 
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
@@ -427,6 +417,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     need_gene_sequences = False
     need_annotations_fam = False
     need_systems = False
+    rgp = False
+    modules = False
+    spots = False
 
     if annotation:
         need_families = True
@@ -445,19 +438,24 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     if systems_asso is not None:
         need_systems = True
         need_families = True
-        if systems_asso in ["modules", "all"]:
-            need_modules = True
-        if systems_asso in ["rgp", "spots", "all"]:
-            need_annotations = True
-            need_regions = True
-            need_spots = True
+        need_annotations = True
+        need_regions = True
+        need_modules = True
+        need_spots = True
+        if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "all"]:
+            rgp = True
+        if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"]:
+            modules = True
+        if systems_asso in ["rgp-spots", "all"]:
+            spots = True
+        if systems_asso in ["modules-spots", "all"]:
+            spots = True
 
     if proksee is not None:
         need_annotations = True
         need_gene_sequences = True
-        need_families = True
-        need_partitions = True
-        need_annotations_fam = True
+        need_families = True,
+        need_partitions = True,
         if "rgp" in proksee or "all" in proksee:
             need_regions = True
         if "spots" in proksee or "all" in proksee:
@@ -474,12 +472,11 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                          need_annotations_fam=need_annotations_fam, need_systems=need_systems,
-                         models=kwargs["models"], sources=kwargs["sources"],
+                         models_path=kwargs["models_path"], sources=[kwargs["source"]],
                          disable_bar=disable_bar)
 
     if annotation:
         write_annotation_to_families(pangenome, output)
-        logging.getLogger().info(f"Annotation has been written in {output}/families_annotations.tsv")
 
     if hmm:
         msa_path = kwargs.get('msa_path', None)
@@ -490,23 +487,17 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
 
     if systems:
         logging.getLogger().info("Begin write systems projection")
-        for source in kwargs["sources"]:
-            write_systems_projection(pangenome=pangenome, output=output, source=source,
-                                     threads=threads, force=force, disable_bar=disable_bar)
+        write_systems_projection(pangenome=pangenome, output=output, threads=threads,
+                                 force=force, disable_bar=disable_bar)
         logging.getLogger().info(f"Projection written")
 
     if systems_asso is not None:
-        if systems_asso in ["modules", "all"]:
-            systems_to_modules(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
-        if systems_asso in ["rgp", "all"]:
-            systems_to_rgp(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
-        if systems_asso in ["spots", "all"]:
-            systems_to_spots(pangenome=pangenome, output=output, threads=threads, disable_bar=disable_bar)
+        systems_to_features(pangenome=pangenome, output=output, rgp=rgp, modules=modules, spots=spots,
+                            threads=threads, disable_bar=disable_bar)
 
     if proksee:
-        write_proksee(pangenome=pangenome, output=output, features=proksee, sources=kwargs['sources'],
-                      template=proksee_template, organisms_list=organisms_list,
-                      threads=threads, disable_bar=disable_bar)
+        write_proksee(pangenome=pangenome, output=output, features=proksee, template=proksee_template,
+                      organisms_list=organisms_list, threads=threads, disable_bar=disable_bar)
 
 
 def launch(args):
@@ -523,7 +514,7 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         write_flat_files(pangenome, output=args.output, annotation=args.annotations,
                          systems=args.systems, systems_asso=args.systems_asso,
-                         models=args.models, sources=args.sources,
+                         models_path=args.models, source=args.sources,
                          proksee=args.proksee, proksee_template=args.proksee_template, organisms_list=args.organisms,
                          hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
                          threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
@@ -554,40 +545,32 @@ def parser_write(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')
-    process = parser.add_argument_group(title="Flat output file choose arguments")
-    process.add_argument("--annotations", required=False, action="store_true",
-                         help="Write all the annotations from families")
-    process.add_argument("--systems", required=False, action="store_true",
-                         help="Write all the systems in pangenomes and project on genomes")
-    process.add_argument("--systems_asso", required=False, type=str, default=None,
-                         choices=["all", "modules", "rgp", "spots"],
-                         help="Write association between systems and others pangenomes elements")
-    process.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                         choices=["all", "base", "modules", "rgp", "spots", "annotations", "systems"])
-    process.add_argument("--hmm", required=False, action="store_true",
-                         help="Write an hmm for each gene families in pangenomes")
-    sys_param = parser.add_argument_group(title="Argument relative to systems")
-    sys_param.add_argument("--sources", required=False, type=str, nargs="+", default=None,
-                           help='Name of the annotation/systems sources where panorama as to select in pangenomes.'
-                                'Put source in same order than models to read models corresponding to source.')
-    sys_param.add_argument('--models', required=False, type=Path, nargs="+", default=None,
-                           help="Path to models directory. "
-                                "Put models in same order than sources to read models corresponding to source.")
-    prok_param = parser.add_argument_group(title="Argument relative to proksee output")
-    prok_param.add_argument("--proksee_template", required=False, type=Path, default=None, nargs='?')
-    prok_param.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
-    hmm_param = parser.add_argument_group(title="HMM arguments",
-                                          description="All of the following arguments are required,"
-                                                      " if you're using HMM mode :")
-    hmm_param.add_argument("--msa", required=False, type=Path, default=None,
-                           help="To create a HMM profile for families, you can give a msa of each gene in families."
-                                "This msa could be get from ppanggolin (See ppanggolin msa). "
-                                "If no msa provide Panorama will launch one.")
-    hmm_param.add_argument("--msa_format", required=False, type=str, default="afa",
-                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-                                    "clustal", "clustallike", "phylip", "phylips"],
-                           help="Format of the input MSA.")
     optional = parser.add_argument_group(title="Optional arguments")
+    optional.add_argument("--annotations", required=False, action="store_true",
+                          help="Write all the annotations from families")
+    optional.add_argument("--systems", required=False, action="store_true",
+                          help="Write all the systems in pangenomes and project on genomes")
+    optional.add_argument("--systems_asso", required=False, type=str, default=None,
+                          choices=["all", "rgp-modules", "rgp-spots", "modules-spots", "modules", "rgp", "spots"],
+                          help="Write association between systems and others pangenomes elements")
+    optional.add_argument('--models', required=False, type=Path, default=None,
+                          help="Path to model directory")
+    optional.add_argument("--sources", required=False, type=str, nargs="?", default=None,
+                          help='Name of the annotation source where panorama as to select in pangenomes')
+    optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
+                          choices=["all", "base", "modules", "rgp", "spots", "annotations", "systems"])
+    optional.add_argument("--proksee_template", required=False, type=Path, default=None, nargs='?')
+    optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
+    optional.add_argument("--hmm", required=False, action="store_true",
+                          help="Write an hmm for each gene families in pangenomes")
+    optional.add_argument("--msa", required=False, type=Path, default=None,
+                          help="To create a HMM profile for families, you can give a msa of each gene in families."
+                               "This msa could be get from ppanggolin (See ppanggolin msa). "
+                               "If no msa provide Panorama will launch one.")
+    optional.add_argument("--msa_format", required=False, type=str, default="afa",
+                          choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                                   "clustal", "clustallike", "phylip", "phylips"],
+                          help="Format of the input MSA.")
     optional.add_argument("--threads", required=False, type=int, default=1)
 
 
