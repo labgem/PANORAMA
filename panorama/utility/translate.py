@@ -119,11 +119,12 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
         data_json['canonical'] = canonical
     secondary_names = meta['secondary_name'].dropna().unique().tolist()
     func_unit = {'name': model_name, 'presence': 'mandatory',
-                 'parameters': {
-                     "max_forbidden": 0,
-                     "max_separation": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
-                     "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
-                     "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1}
+                 'parameters':
+                     {
+                         "max_separation": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
+                         "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
+                         "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
+                     }
                  }
 
     family_list = list()
