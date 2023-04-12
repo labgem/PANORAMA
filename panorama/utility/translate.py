@@ -112,7 +112,9 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                        f"authorized keys are : {', '.join(padloc_keys)}")
 
     data_json = {"name": model_name, 'func_units': [],
-                 'parameters': {"max_forbidden": 0, "max_separation": 0, "min_mandatory": 1, "min_total": 1}}
+                 'parameters': {"max_forbidden": 0, "max_separation": 0, "min_mandatory": 1, "min_total": 1,
+                                "max_mandatory": -1, "max_total": -1}
+                 }
     if len(canonical) > 0:
         data_json['canonical'] = canonical
     secondary_names = meta['secondary_name'].dropna().unique().tolist()
