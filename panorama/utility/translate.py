@@ -3,8 +3,9 @@
 import logging
 # default libraries
 import re
-import tempfile
 from typing import Dict, List
+
+import lxml.etree
 import yaml
 import json
 from pathlib import Path
@@ -160,8 +161,81 @@ def translate_padloc(models: Path, meta: Path, output: Path, disable_bar: bool =
         list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
     return list_data
 
+def translate_gene(elem: lxml.etree.Element, data: dict, hmm_dict: Dict[str, List[str]], splitter: str):
+    try:
+        name = "".join(elem.get('name').split(splitter)[1:])
+    except KeyError:
+        raise KeyError(f"In {data['name']} of MacSyFinder, one gene doesn't have a name")
+    else:
+        dict_elem = {'name': name, 'presence': 'neutral', "parameters": {}}
+        exchangeable_set = set()
+        if name in hmm_dict:
+            exchangeable_set |= set(hmm_dict[name])
+        for attrib, value in elem.attrib.items():
+            if attrib == 'presence':
+                dict_elem['presence'] = value
+            elif attrib == 'inter_gene_max_space':
+                dict_elem['parameters']['max_separation'] = int(value)
+            elif attrib == 'max_nb_genes':
+                dict_elem['parameters']['max_total'] = int(value)
+            elif attrib == 'multi_system' and (value == 1 or value == "True"):
+                dict_elem['parameters']['multi_system'] = True
+            elif attrib == "loner" and (value == 1 or value == "True"):
+                dict_elem["parameters"]["max_separation"] = -1
+            elif attrib == 'multi_model' and (value == 1 or value == "True"):
+                dict_elem['parameters']['multi_model'] = True
 
-def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, List[str]], canonical: List[str]):
+        for relation in elem:
+            if relation.tag == "exchangeables":
+                for gene in relation:
+                    try:
+                        exchangeable_name = splitter.join(gene.get('name').split(splitter)[1:])
+                    except KeyError:
+                        raise KeyError(f"In {data['name']}, one gene doesn't have a name")
+                    else:
+                        exchangeable_set.add(exchangeable_name)
+                        if exchangeable_name in hmm_dict:
+                            exchangeable_set |= set(hmm_dict[exchangeable_name])
+            else:
+                logging.getLogger().warning("Unexpected relation")
+        if len(exchangeable_set) > 0:
+            dict_elem["exchangeables"] = list(exchangeable_set.difference({name}))
+        return dict_elem
+
+
+def translate_fu(elem, data: dict, hmm_dict: Dict[str, List[str]], splitter: str):
+    try:
+        name = elem.get('name')
+    except KeyError:
+        raise KeyError(f"In {data['name']} of MacSyFinder, one gene doesn't have a name")
+    else:
+        dict_elem = {'name': name, 'presence': 'neutral', "families": [],
+                     'parameters': {}}
+
+        for attrib, value in elem.attrib.items():
+            if attrib == 'presence':
+                dict_elem['presence'] = value
+            elif attrib == 'min_mandatory_genes_required':
+                dict_elem['parameters']['min_mandatory'] = int(value)
+            elif attrib == 'min_genes_required':
+                dict_elem['parameters']['min_total'] = int(value)
+            elif attrib == 'inter_gene_max_space':
+                dict_elem['parameters']['max_separation'] = int(value)
+            elif attrib == 'max_nb_genes':
+                dict_elem['parameters']['max_total'] = -1
+            elif attrib == 'multi_system' and value == 1:
+                dict_elem['parameters']['multi_system'] = True
+            elif attrib == "loner" and (value == 1 or value is True):
+                dict_elem["parameters"]["max_separation"] = -1
+            elif attrib == 'multi_model' and value == 1:
+                dict_elem['parameters']['multi_model'] = True
+
+        for family in elem:
+            dict_elem["families"].append(translate_gene(family, data, hmm_dict, splitter))
+        return dict_elem
+
+
+def translate_macsyfinder_model(root, model_name: str, hmm_dict: Dict[str, List[str]], canonical: List[str], splitter: str):
     """
     Translate the xml data in json dictionary
 
@@ -169,104 +243,35 @@ def translate_defense_finder_model(root, model_name: str, hmm_dict: Dict[str, Li
     :param model_name: name of the model
     """
 
-    def translate_gene(elem, hmm_dict: Dict[str, List[str]]):
-        try:
-            name = "".join(elem.get('name').split('__')[1:])
-        except KeyError:
-            raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
-        else:
-            dict_elem = {'name': name, 'presence': 'neutral'}
-            exchangeable_set = set()
-            if name in hmm_dict:
-                exchangeable_set |= set(hmm_dict[name])
-            for attrib, value in elem.attrib.items():
-                if attrib == 'presence':
-                    dict_elem['presence'] = value
-                elif attrib == 'inter_gene_max_space':
-                    if parameter not in dict_elem:
-                        dict_elem["parameters"] = {}
-                    dict_elem['parameters']['max_separation'] = int(value)
-                elif attrib == 'multi_system' and value == 1:
-                    if parameter not in dict_elem:
-                        dict_elem["parameters"] = {}
-                    dict_elem['parameters']['overlap'] = True
-                elif attrib == 'max_nb_genes':
-                    if parameter not in dict_elem:
-                        dict_elem["parameters"] = {}
-                    dict_elem['parameters']['max_total'] = -1
-
-            for relation in elem:
-                if relation.tag == "exchangeables":
-                    for gene in relation:
-                        try:
-                            exchangeable_name = "".join(gene.get('name').split('__')[1:])
-                        except KeyError:
-                            raise KeyError(f"In {data_json['name']} of Defense Finder, one gene doesn't have a name")
-                        else:
-                            exchangeable_set.add(exchangeable_name)
-                            if exchangeable_name in hmm_dict:
-                                exchangeable_set |= set(hmm_dict[exchangeable_name])
-                else:
-                    logging.getLogger().warning("Unexpected relation")
-            if len(exchangeable_set) > 0:
-                dict_elem["exchangeables"] = list(exchangeable_set.difference({name}))
-            return dict_elem
-
-    def translate_fu(elem, hmm_dict: Dict[str, List[str]]):
-        try:
-            name = elem.get('name')
-        except KeyError:
-            raise KeyError(f"In {data_json['name']} of MacSyFinder, one gene doesn't have a name")
-        else:
-            dict_elem = {'name': name, 'presence': 'neutral', "families": [],
-                         'parameters': {"max_separation": 0, 'max_forbidden': 0,
-                                        'min_mandatory': 1, "min_total": 1}}
-
-            for attrib, value in elem.attrib.items():
-                if attrib == 'presence':
-                    dict_elem['presence'] = value
-                elif attrib == 'min_mandatory_genes_required':
-                    dict_elem['parameters']['min_mandatory'] = int(value)
-                elif attrib == 'min_genes_required':
-                    dict_elem['parameters']['min_total'] = int(value)
-                elif attrib == 'inter_gene_max_space':
-                    dict_elem['parameters']['max_separation'] = int(value)
-                elif attrib == 'max_nb_genes':
-                    dict_elem['parameters']['max_total'] = -1
-
-            for family in elem:
-                dict_elem["families"].append(translate_gene(family, hmm_dict))
-            return dict_elem
-
     data_json = {"name": model_name, 'func_units': [], 'parameters': dict(), "canonical": canonical}
     if root.attrib is not None:  # Read attributes root
-        for parameter, number in root.attrib.items():
+        for parameter, value in root.attrib.items():
             if parameter == 'inter_gene_max_space':
-                data_json['parameters']['max_separation'] = int(number)
+                data_json['parameters']['max_separation'] = int(value)
             elif parameter == 'min_mandatory_genes_required':
-                data_json['parameters']['min_mandatory'] = int(number)
+                data_json['parameters']['min_mandatory'] = int(value)
             elif parameter == 'min_genes_required':
-                data_json['parameters']['min_total'] = int(number)
+                data_json['parameters']['min_total'] = int(value)
             elif parameter == 'max_nb_genes':
                 data_json['parameters']['max_total'] = -1
+            elif parameter == 'multi_system' and (value == 1 or value is True):
+                data_json['parameters']['multi_system'] = True
+            elif parameter == "loner" and (value == 1 or value is True):
+                data_json["parameters"]["max_separation"] = -1
+            elif parameter == 'multi_model' and (value == 1 or value is True):
+                data_json['parameters']['multi_model'] = True
     data_json['parameters']['max_forbidden'] = 0
 
     fu_list = []
     fam_list = []
     for elem in root:
         if elem.tag == "gene":
-            fam_list.append(translate_gene(elem, hmm_dict))
+            fam_list.append(translate_gene(elem, data_json, hmm_dict, splitter))
         elif elem.tag == "functional_unit":
-            fu_list.append(translate_fu(elem, hmm_dict))
+            fu_list.append(translate_fu(elem, data_json, hmm_dict, splitter))
     if len(fu_list) == 0:  # only genes
-        # nb_mandatory = sum(1 for fam in fam_list if fam["presence"] == "mandatory")
-        # nb_total = nb_mandatory + sum(1 for fam in fam_list if fam["presence"] == "accessory")
         data_json["func_units"].append({'name': data_json["name"], 'presence': 'mandatory',
                                         "families": fam_list, 'parameters': data_json["parameters"]})
-        data_json["func_units"][0]["parameters"].update({"max_mandatory": -1,
-                                                         # "max_total": data_json["parameters"]["max_total"]
-                                                         # if "max_total" in data_json["parameters"] else nb_total}
-                                                         "max_total": -1})
         data_json["parameters"] = {"max_forbidden": 0, "max_separation": 1, "min_mandatory": -1, "min_total": -1,
                                    "max_mandatory": -1, "max_total": -1}
     else:
@@ -289,37 +294,6 @@ def parse_dfinder_hmm(hmms_path: Path):
             if hmm_names[0] != hmm_path.stem.split('__')[-1]:
                 hmm_dict[hmm_path.stem.split('__')[-1]] = hmm_names
     return hmm_dict
-
-
-def parse_defense_finder(model_file: Path, tmpdir: Path):
-    with open(model_file, "r") as model:
-        lines = model.readlines()
-    lines = list(filter(lambda element: not re.search("^ ?\n", element), lines))
-    newfile_path = tmpdir.joinpath(model_file.name)
-    with open(newfile_path, "w") as model_test:
-        index = 0
-        in_fu = False
-        while index < len(lines):
-            line = lines[index]
-            if re.search("^###############+", line):
-                index += 2
-            elif re.search("^#+ ", line):
-                in_fu = True
-                fu_name = line.replace("#", "").replace(" ", "").replace("\n", "")
-                presence = re.findall(r'presence="(\w+)"', lines[index + 1])[0]
-                model_test.write(f'<functional_unit name="{fu_name}" presence="{presence}" '
-                                 f'min_mandatory_genes_required="1" min_genes_required="1">\n')
-            elif re.search('</gene>', line) and in_fu:
-                model_test.write(line)
-                if re.search("^#", lines[index + 1]):
-                    model_test.write("</functional_unit>\n")
-            elif re.search('</model>', line) and in_fu:
-                model_test.write("</functional_unit>\n")
-                model_test.write(line)
-            else:
-                model_test.write(line)
-            index += 1
-    return newfile_path
 
 
 def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
@@ -350,7 +324,60 @@ def translate_defense_finder(models: Path, hmms_path: Path, tmpdir: Path, disabl
         # except Exception:
         #     raise Exception(f"Problem to parse {model.name}")
         root = read_xml(model)
-        list_data.append(translate_defense_finder_model(root, model.stem, hmm_dict, canonical_sys))
+        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_dict, canonical_sys, splitter="__"))
+    return list_data
+
+
+def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
+    canonical_sys = []
+    if re.search("-Type-", model_name):
+        basename = re.split("-Type-", model_name)
+        base_class = basename[0]
+        base_type = basename[-1]
+        for canon_file in models.glob("*.xml"):
+            name_canon = canon_file.stem
+            if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
+                canonical_sys.append(name_canon)
+    elif model_name == "CAS_Cluster" or model_name == "CBASS":
+        for canon_file in models.glob("*.xml"):
+            if canon_file.stem != model_name:
+                canonical_sys.append(canon_file.stem)
+    return canonical_sys
+
+
+def parse_macsyfinder_hmm(hmms_path: Path):
+    hmm_dict = {}
+    for hmm_path in tqdm(list(hmms_path.glob('*.hmm')), unit="HMM"):
+        hmm_names = []
+        with open(hmm_path, 'r') as hmm_file:
+            for line in hmm_file.readlines():
+                if re.search('NAME', line):
+                    hmm_names.append(re.split(' +', line.replace("\n", ""))[1])
+        if len(hmm_names) > 1:
+            hmm_dict[hmm_path.stem.split('_')[-1]] = hmm_names
+        else:
+            split_name = hmm_path.stem.split('_')
+            if len(split_name) == 2:
+                if hmm_names[0] != hmm_path.stem.split('_')[-1]:
+                    hmm_dict[hmm_path.stem.split('_')[-1]] = hmm_names
+            elif len(split_name) > 2:
+                if hmm_names[0] != "_".join(split_name[1:]):
+                    hmm_dict["_".join(split_name[1:])] = hmm_names
+    return hmm_dict
+
+
+def translate_macsyfinder(models: Path, hmms_path: Path, tmpdir: Path, disable_bar: bool = False):
+    assert tmpdir is not None and isinstance(tmpdir, Path)
+    hmm_dict = parse_macsyfinder_hmm(hmms_path)
+    list_data = []
+    for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
+        # canonical_sys = search_canonical_dfinder(model.stem, model.parent)
+        # try:
+        #     parse_defense_finder(model, tmp_path)
+        # except Exception:
+        #     raise Exception(f"Problem to parse {model.name}")
+        root = read_xml(model)
+        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_dict, [], splitter="_"))
     return list_data
 
 
@@ -363,7 +390,8 @@ def launch_translate(models: Path, source: str, output: Path, meta_data: Path = 
         logging.getLogger().info("Begin to translate defense finder models...")
         list_data = translate_defense_finder(models=models, hmms_path=hmms_path, tmpdir=tmpdir, disable_bar=disable_bar)
     elif source == "macsy-finder":
-        raise NotImplementedError
+        logging.getLogger().info("Begin to translate macsy finder models...")
+        list_data = translate_macsyfinder(models=models, hmms_path=hmms_path, tmpdir=tmpdir, disable_bar=disable_bar)
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")

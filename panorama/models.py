@@ -47,29 +47,18 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
         raise Exception(f"Unexpected Error: {error} to get parameters")
     else:
         for key, value in param_dict.items():
-            if key == "max_separation":
-                if not isinstance(value, int):
-                    raise TypeError("The max_separation value is not an integer")
-                if value < -1:
-                    raise ValueError("The max_separation value must be positive or "
-                                     "egal to -1 to indicate an undefinied distance.")
-            elif key in ["min_mandatory", "min_total", "max_mandatory", "max_total"]:
+            if key in ["min_mandatory", "min_total", "max_mandatory", "max_total", "max_separation"]:
                 if not isinstance(value, int):
                     raise TypeError(f"The {key} value is not an integer")
                 if value < -1:
                     raise ValueError(f"The {key} value is not positive. "
                                      "You can also use -1 value to skip the check on this poarameter.")
-            elif key == "max_forbidden":
+            elif key in ["duplicate", "max_forbidden"]:
                 if not isinstance(value, int):
-                    raise TypeError("The max_forbidden value is not an integer")
+                    raise TypeError(f"The {key} value is not an integer")
                 if value < 0:
-                    raise ValueError("The max_forbidden value is not positive")
-            elif key == 'duplicate':
-                if not isinstance(value, int):
-                    raise TypeError("duplicate value from family in json must be an int")
-                if value < 0:
-                    raise ValueError("Dupplication must be positive")
-            elif key == 'overlap':
+                    raise ValueError(f"The {key} value is not positive")
+            elif key in ['multi_system', "multi_model"]:
                 if not isinstance(value, bool):
                     raise TypeError("Overlap value from family in json must be a boolean")
             else:
@@ -262,51 +251,35 @@ class _BasicFeatures:
     def __str__(self):
         return f"{self.__class__} name : {self.name}"
 
-    def read_parameters(self, parameters: Dict[str, Union[str, int, bool]], mandatory: List[str] = None,
-                        default: Dict[str, Union[str, int, bool]] = None):
+    def read_parameters(self, parameters: Dict[str, Union[str, int, bool]], param_keys: List[str]):
         """Check parameters consistency
 
         :raise Exception: Model is not consistent
         """
-        if mandatory is not None:
-            for param in mandatory:
-                if param in parameters:
-                    self.__setattr__(param, parameters[param])
-                else:
-                    try:
-                        if hasattr(self, '_parent'):
-                            parent = self.__getattribute__('_parent')
-                            if hasattr(parent, param):
-                                self.__setattr__(param, parent.__getattribute__(param))
-                            else:
-                                raise AttributeError
-                        else:
-                            raise AttributeError
-                    except AttributeError:
-                        raise AttributeError(f"There is no value set for {param}")
-        if default is not None:
-            for param in default.keys():
-                if param in parameters:
-                    self.__setattr__(param, parameters[param])
-                else:
-                    if hasattr(self, '_parent'):
-                        parent = self.__getattribute__('_parent')
-                        if hasattr(parent, param):
-                            self.__setattr__(param, parent.__getattribute__(param))
-                        else:
-                            self.__setattr__(param, default[param])
-                    else:
-                        self.__setattr__(param, default[param])
+        for param in param_keys:
+            if param in parameters:
+                self.__setattr__(param, parameters[param])
+            else:
+                if hasattr(self, '_parent'):
+                    parent = self.__getattribute__('_parent')
+                    if hasattr(parent, param):
+                        self.__setattr__(param, parent.__getattribute__(param))
 
 
 class _FuFamFeatures:
 
-    def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0):
+    def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0,
+                 exchangeables: List[str] = None, multi_system: bool = False, multi_model: bool = True):
         """Constructor Method
         """
         self.presence = presence
         self.duplicate = duplicate
+        self.exchangeables = exchangeables if exchangeables is not None else []
+        self.multi_system = multi_system
+        self.multi_model = multi_model
+
         self._parent = parent
+
 
 
 class _ModFuFeatures:
@@ -330,6 +303,12 @@ class _ModFuFeatures:
     def _children(self):
         for child in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield child
+
+    def _child_names(self, presence: str):
+        if presence is None:
+            return {child.name for child in self._children}
+        else:
+            return {child.name for child in self._children if child.presence == presence}
 
     def _duplicate(self, filter_type: str = None):
         """Access to all families that are duplicated in functional unit
@@ -418,6 +397,9 @@ class Model(_BasicFeatures, _ModFuFeatures):
         """
         yield from self._children
 
+    def func_units_names(self, presence: str):
+        return self._child_names(presence)
+
     @property
     def families(self) -> Generator[Family, None, None]:
         """Access to all families in models
@@ -459,11 +441,12 @@ class Model(_BasicFeatures, _ModFuFeatures):
         check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
         self.name = data_model["name"]
-        self.read_parameters(data_model["parameters"], mandatory=param_mandatory)
+        self.read_parameters(data_model["parameters"], param_keys=param_mandatory)
         for dict_fu in data_model["func_units"]:
-            f_unit = FuncUnit.read_func_unit(dict_fu)
-            f_unit.model = self
-            self.add(f_unit)
+            func_unit = FuncUnit()
+            func_unit.model = self
+            func_unit._read(dict_fu)
+            self.add(func_unit)
         if 'canonical' in data_model and data_model["canonical"] is not None:
             self.canonical = data_model["canonical"]
 
@@ -491,11 +474,15 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
 
     def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
                  accessory: set = None, neutral: set = None, min_total: int = 1, max_separation: int = 0,
-                 forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None):
+                 forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None,
+                 exchangeables: List[str] = None, multi_system: bool = False, multi_model: bool = False
+                 ):
         """Constructor Method
         """
         super().__init__(name=name, max_separation=max_separation)
-        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model)
+        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model,
+                                             exchangeables=exchangeables, multi_system=multi_system,
+                                             multi_model=multi_model)
         super(_FuFamFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
                                              forbidden=forbidden, max_forbidden=max_forbidden)
@@ -519,6 +506,9 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         :return: A generator with all families
         """
         yield from self._children
+
+    def families_names(self, presence: str = None):
+        return self._child_names(presence)
 
     @property
     def size(self) -> int:
@@ -551,18 +541,18 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         :param data_fu: data json file of all function units
         """
         mandatory_key = ['name', 'families', 'presence']
+        fu_params = ['duplicate', 'min_total', 'min_mandatory', "max_forbidden",  'max_separation',
+                     'max_mandatory', 'max_total',  "multi_system", "multi_model"]
         check_dict(data_fu, mandatory_keys=mandatory_key)
 
         self.name = data_fu["name"]
         self.presence = data_fu["presence"]
+        self.read_parameters(data_fu["parameters"] if "parameters" in data_fu else {}, param_keys=fu_params)
         for fam_dict in data_fu["families"]:
-            family = Family.read_family(fam_dict)
+            family = Family()
             family.func_unit = self
+            family._read(fam_dict)
             self.add(family)
-        if "parameters" in data_fu:
-            param_default = {'duplicate': 0, 'min_total': -1, 'min_mandatory': -1, "max_forbidden": 0,
-                             'max_separation': -1, 'max_mandatory': -1, 'max_total': -1}
-            self.read_parameters(data_fu["parameters"], default=param_default)
 
     @staticmethod
     def read_func_unit(data_fu: dict) -> FuncUnit:
@@ -582,13 +572,14 @@ class Family(_BasicFeatures, _FuFamFeatures):
     """
 
     def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
-                 duplicate: int = 0, exchangeables: List[str] = None, overlap: bool = False):
+                 duplicate: int = 0, exchangeables: List[str] = None, multi_system: bool = False,
+                 multi_model: bool = False):
         """Constructor Method
         """
         super().__init__(name=name, max_separation=max_separation)
-        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit)
-        self.exchangeables = exchangeables if exchangeables is not None else []
-        self.overlap = overlap
+        super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit,
+                                             exchangeables=exchangeables, multi_system=multi_system,
+                                             multi_model=multi_model)
 
     @property
     def func_unit(self) -> FuncUnit:
@@ -608,15 +599,12 @@ class Family(_BasicFeatures, _FuFamFeatures):
         return self.func_unit.model
 
     def _read(self, data_fam: dict):
-        param_mandatory = ['max_separation']
-        param_default = {"overlap": False, "duplicate": 0}
+        fam_param = ['max_separation', "duplicate", "multi_system", "multi_model"]
 
-        check_dict(data_fam, mandatory_keys=['name', 'presence'],
-                   param_keys=param_mandatory + list(param_default.keys()))
+        check_dict(data_fam, mandatory_keys=['name', 'presence'])
         self.name = data_fam['name']
         self.presence = data_fam['presence']
-        if "parameters" in data_fam:
-            self.read_parameters(data_fam["parameters"], mandatory=param_mandatory, default=param_default)
+        self.read_parameters(data_fam["parameters"] if "parameters" in data_fam else {}, param_keys=fam_param)
         if 'exchangeables' in data_fam:
             self.exchangeables = data_fam["exchangeables"]
 
