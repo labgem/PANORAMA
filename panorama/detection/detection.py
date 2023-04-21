@@ -14,7 +14,7 @@ from typing import Dict, List, Set
 # installed libraries
 import networkx as nx
 from ppanggolin.region import GeneContext
-from ppanggolin.context.searchGeneContext import compute_gene_context_graph, compute_gene_context
+from ppanggolin.context.searchGeneContext import _compute_gene_context_graph, extract_gene_context
 
 # local libraries
 from panorama.utils import check_tsv_sanity
@@ -142,7 +142,7 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, gr
     return detected_systems
 
 
-def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUnit, source: str,
+def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, func_unit: FuncUnit, source: str,
                  detected_systems: list):
     """Check if the models parameters are respected
 
@@ -176,7 +176,7 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
                     nextlevel |= set(graph.neighbors(v))
         return cc
 
-    def check_cc(cc: set, fam2annot: dict, func_unit: FuncUnit) -> bool:
+    def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> bool:
         """Check parameters
 
         :param cc: set of connected component
@@ -189,6 +189,10 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
         forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
                                                           list(map(lambda x: x.name, func_unit.mandatory)),
                                                           list(map(lambda x: x.name, func_unit.accessory)))
+        for fam, annot_set in fam2annot.items():
+            for annot in annot_set:
+                if annot.max_separation == -1:
+                    cc.add(families[fam])
         for node in cc:
             annotations = fam2annot.get(node.name)
             if annotations is not None:
@@ -219,11 +223,36 @@ def verify_param(g: nx.Graph(), fam2annot: dict, model: Model, func_unit: FuncUn
     for node in g.nodes():  # pour chaque noeud du graphe
         if node not in seen:
             cc = extract_cc(node, g, seen)  # extract coonnect component
-            if check_cc(cc, fam2annot, func_unit):
+            if check_cc(cc, families, fam2annot, func_unit):
                 detected_systems.append(System(system_id=0, model=model, gene_families=cc, source=source))
             else:
                 remove_node |= cc
     g.remove_nodes_from(remove_node)
+
+
+def compute_gene_context_graph(families: dict, fam2annot: dict, max_sep_global: int, disable_bar: bool = False) -> nx.Graph:
+    """
+    Construct the graph of gene contexts between families of the pan
+
+    :param families: Gene families of interest
+    :param t: transitive value
+    :param disable_bar: Prevents progress bar printing
+
+    :return: Graph of gene contexts between interesting gene families of the pan
+    """
+
+    g = nx.Graph()
+    for gene_family in tqdm(families.values(), unit="families", disable=disable_bar):
+        for gene in gene_family.genes:
+            contig = gene.contig.genes
+            for fam in fam2annot[gene_family.name]:
+                max_sep = fam.max_separation if hasattr(fam, "max_separation") and fam.max_separation >= 0 else max_sep_global
+                pos_left, in_context_left, pos_right, in_context_right = extract_gene_context(gene, contig,
+                                                                                              families, max_sep + 1)
+                if in_context_left or in_context_right:
+                    for env_gene in contig[pos_left:pos_right + 1]:
+                        _compute_gene_context_graph(g, env_gene, contig, pos_right)
+    return g
 
 
 def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
@@ -235,15 +264,15 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
 
     :return: Systems detected
     """
-    if model.name == "AbiE":
-        print("pika")
+    # if model.name == "AbiE":
+    #     print("pika")
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, func_unit.max_separation + 1, disable_bar=True)
+        g = compute_gene_context_graph(families, fam2annot, func_unit.max_separation + 1, disable_bar=True)
         if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
-        verify_param(g, fam2annot, model, func_unit, source, detected_systems)
+        verify_param(g, families, fam2annot, model, func_unit, source, detected_systems)
         return detected_systems
 
 
@@ -272,7 +301,14 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
-    pangenome.status["systems"] = "Computed"
+    logging.getLogger().info(f"System detection done in pangenome {pangenome.name}")
+    if len(detected_systems) > 0:
+        pangenome.status["systems"] = "Computed"
+        logging.getLogger().info(f"Write systems in pangenome {pangenome.name}")
+        write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
+        logging.getLogger().info(f"Systems written in pangenome {pangenome.name}")
+    else:
+        logging.getLogger().info("No system detected")
 
 
 def launch(args):
@@ -288,10 +324,6 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
-        logging.getLogger().info(f"System detection done in pangenome {pangenome_name}")
-        logging.getLogger().info(f"Write systems in pangenome {pangenome_name}")
-        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
-        logging.getLogger().info(f"Systems written in pangenome {pangenome_name}")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

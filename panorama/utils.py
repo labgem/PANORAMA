@@ -132,7 +132,6 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                 raise ValueError(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
                                 f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
                                 f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
-
             try:
                 abs_path = path_exist(Path(line[1]))
             except FileNotFoundError:

@@ -115,10 +115,7 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
 
     if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"]:
         status_group._v_attrs.systems = True
-        if hasattr(status_group._v_attrs, "systems_sources"):
-            status_group._v_attrs.systems_sources |= pangenome.systems_sources
-        else:
-            status_group._v_attrs.systems_sources = pangenome.systems_sources
+        status_group._v_attrs.systems_sources |= pangenome.systems_sources
     else:
         status_group._v_attrs.systems = False
 

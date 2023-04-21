@@ -93,7 +93,8 @@ def parser_utils(parser):
                                           description="Arguments to translate systems models from different sources")
     translate.add_argument("--translate", required=False, type=Path, default=None,
                            help="path to models to be translated")
-    translate.add_argument("--source", required=False, type=str, choices=["padloc", "defense-finder"], nargs='?',
+    translate.add_argument("--source", required=False, type=str, choices=["padloc", "defense-finder", "macsy-finder"],
+                           nargs='?',
                            help="Available sources that we know how to translate. "
                                 "The directory will be read recursively to catch all models.")
     translate.add_argument("--meta", required=False, type=Path,
