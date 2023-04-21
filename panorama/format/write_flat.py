@@ -357,6 +357,8 @@ def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rg
         module_list = dict_system_modules.get(system_ID, None)
         if module_list is not None:
             module_list = list(map(lambda x: x.ID, module_list))
+
+
         organism_list = dict_system_organism.get(system_ID, None)
         list_to_df.append(df_collection(system_ID, system.name, organism_list, rgp_list, module_list, spot_list))
 
@@ -430,7 +432,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     need_graph = False
     need_partitions = False
     need_spots = False
-    need_regions = False
+    need_rgp = False
     need_modules = False
     need_gene_sequences = False
     need_metadata = False
@@ -458,7 +460,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_systems = True
         need_families = True
         need_annotations = True
-        need_regions = True
+        need_rgp = True
         need_modules = True
         need_spots = True
         if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "all"]:
@@ -477,9 +479,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
         need_partitions = True
         need_metadata = True
         if "rgp" in proksee or "all" in proksee:
-            need_regions = True
+            need_rgp = True
         if "spots" in proksee or "all" in proksee:
-            need_regions = True
+            need_rgp = True
             need_spots = True
         if "modules" in proksee or "all" in proksee:
             need_modules = True
@@ -487,9 +489,9 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
             need_annotations = True
         if "systems" in proksee or "all" in proksee:
             need_systems = True
-
+    print(need_rgp)
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
-                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_regions,
+                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                          need_metadata=need_metadata, need_systems=need_systems,
                          models=kwargs["models"], sources=kwargs["sources"], metatype="families",

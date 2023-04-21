@@ -120,13 +120,13 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source
     need_families = kwargs["need_families"] if "need_families" in kwargs else False
     need_partitions = kwargs["need_partitions"] if "need_partitions" in kwargs else False
     need_graph = kwargs["need_graph"] if "need_graph" in kwargs else False
-    need_regions = kwargs["need_regions"] if "need_regions" in kwargs else False
+    need_rgp = kwargs["need_rgp"] if "need_rgp" in kwargs else False
     need_spots = kwargs["need_spots"] if "need_spots" in kwargs else False
     need_modules = kwargs["need_modules"] if "need_modules" in kwargs else False
     need_metadata = kwargs["need_metadata"] if "need_metadata" in kwargs else False
 
     check_pp(pangenome, need_annotations=need_annotations, need_families=need_families, need_graph=need_graph,
-             need_partitions=need_partitions, need_rgp=need_regions, need_spots=need_spots,
+             need_partitions=need_partitions, need_rgp=need_rgp, need_spots=need_spots,
              need_gene_sequences=need_gene_sequences, need_modules=need_modules, disable_bar=disable_bar)
 
     if need_metadata:
