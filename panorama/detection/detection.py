@@ -301,7 +301,14 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
-    pangenome.status["systems"] = "Computed"
+    logging.getLogger().info(f"System detection done in pangenome {pangenome.name}")
+    if len(detected_systems) > 0:
+        pangenome.status["systems"] = "Computed"
+        logging.getLogger().info(f"Write systems in pangenome {pangenome.name}")
+        write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
+        logging.getLogger().info(f"Systems written in pangenome {pangenome.name}")
+    else:
+        logging.getLogger().info("No system detected")
 
 
 def launch(args):
@@ -317,10 +324,6 @@ def launch(args):
         pangenome.add_file(pangenome_info["path"])
         check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
         search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
-        logging.getLogger().info(f"System detection done in pangenome {pangenome_name}")
-        logging.getLogger().info(f"Write systems in pangenome {pangenome_name}")
-        write_pangenome(pangenome, pangenome_info["path"], source=args.source, disable_bar=args.disable_prog_bar)
-        logging.getLogger().info(f"Systems written in pangenome {pangenome_name}")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
