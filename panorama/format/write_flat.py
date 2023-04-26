@@ -346,6 +346,7 @@ def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rg
 
     for system_ID in list_system_ID:
         system = pangenome.get_system(system_ID)
+        organism_list = dict_system_organism.get(system_ID, None)
         rgp_list = dict_system_rgp.get(system_ID, None)
         spot_list = []
         if rgp_list is not None :
@@ -354,13 +355,28 @@ def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rg
             rgp_list = list(map(lambda x: x.name, rgp_list))
         else:
             spot_list = None
+
         module_list = dict_system_modules.get(system_ID, None)
+        module_presence = None
         if module_list is not None:
-            module_list = list(map(lambda x: x.ID, module_list))
+            module_presence = []
+            #dict_module_completion = {}
+            for module in module_list:
+                list_completion = []
+                nbr_fam_in_module = len(module.families)
+                for organism in pangenome.organisms:
+                    if organism.name in organism_list:
+                        completion = len(list(set(module.families) & set(organism.families))) / nbr_fam_in_module
+                        list_completion.append(completion)
+                #dict_module_completion[module.ID] = list_completion
+                #for completion in dict_module_completion[module.ID]:
+                for completion in list_completion:
+                    if completion > 0.65:
+                        module_presence.append(module.ID)
+                    else :
+                        module_presence.append("no_module")
 
-
-        organism_list = dict_system_organism.get(system_ID, None)
-        list_to_df.append(df_collection(system_ID, system.name, organism_list, rgp_list, module_list, spot_list))
+        list_to_df.append(df_collection(system_ID, system.name, organism_list, rgp_list, module_presence, spot_list))
 
     if rgp is True and modules is True and spots is True:
         df = pd.DataFrame(list_to_df)
@@ -402,7 +418,13 @@ def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rg
 def system_to_rgp(system: System, regions: Set[Region]):
     rgp_present = []
     for rgp in regions:
-        if system.gene_families.issubset(rgp.families):
+        #print(type(system))
+        #if "RM_type_III" in system.name :
+            #print(system)
+            #print(system.gene_families)
+            #print(rgp.families)
+        completion = len(list(system.gene_families & rgp.families)) / len(system.gene_families)
+        if completion > 0.65:
             rgp_present.append(rgp)
     return system.ID, rgp_present
 
@@ -414,6 +436,25 @@ def system_to_modules(system: System, modules: Set[Module]):
             modules_present.append(module)
     return system.ID, modules_present
 
+"""
+def module_completion_in_organism(pangenome: Pangenome, dict_system_modules: Dict[System, Module]):
+    organisms = pangenome.organisms
+    list_modules = dict_system_modules.values()
+    dict_module_completion = {}
+    for i, list_module in enumerate(list_modules):
+        for j, module in enumerate(list_module):
+            module_id = module.ID
+            list_completion = []
+            nbr_fam_in_module = len(module.families)
+            for organism in organisms:
+                intersection = list(set(module.families) & set(organism.families))
+                completion = len(intersection)/nbr_fam_in_module
+                list_completion.append(completion)
+                dict_module_completion[module_id] = list_completion
+    organisms_names = list(map(lambda x: x.name, organisms))
+    df = pd.DataFrame(dict_module_completion, columns=dict_module_completion.keys(), index=organisms_names)
+    return df
+"""
 
 def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
                      systems_asso: List[str] = None,
@@ -489,7 +530,7 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
             need_annotations = True
         if "systems" in proksee or "all" in proksee:
             need_systems = True
-    print(need_rgp)
+
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
