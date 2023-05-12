@@ -33,6 +33,7 @@ from panorama.pangenomes import Pangenome
 
 # For Quentin
 from collections import OrderedDict
+from panorama.format.figure import per_pan_heatmap, heatmap, upsetplot, hbar_ID_type
 
 
 def check_flat_parameters(args):
@@ -80,7 +81,7 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
             array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
     out_df = out_df.sort_values(by=['Pangenome', 'Gene Family'] + list(column_name[range(3, len(column_name), 2)]))
-    out_df.to_csv(f"{output}/families_annotations.tsv", sep="\t", header=True)
+    out_df.to_csv(f"{output}/{pangenome.name}/families_annotations.tsv", sep="\t", header=True)
 
 
 def write_hmm(gf: GeneFamily, output: Path):
@@ -232,7 +233,7 @@ def write_system_projection(system: System) -> pd.DataFrame:
     return projection_df
 
 
-def write_systems_projection(pangenome: Pangenome, output: Path, source: str, threads: int = 1,
+def write_systems_projection(name: str, pangenome: Pangenome, output: Path, source: str, threads: int = 1,
                              force: bool = False, disable_bar: bool = False):
     """ Write all systems in pangenomes and project on organisms
 
@@ -262,204 +263,290 @@ def write_systems_projection(pangenome: Pangenome, output: Path, source: str, th
                                   "annotation name", "gene", "start", "stop", "strand", "is_fragment"]
     systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
                                    ascending=[True, True, True, True, True], inplace=True)
-    mkdir(f"{output}/projection_{source}", force=force)
+    mkdir(f"{output}/{name}/projection_{source}_{name}", force=force)
     for organism_name in systems_projection["organism"].unique():
         org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
         org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10]]
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/projection_{source}/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/systems_{source}.tsv", sep="\t", index=False)
+        org_df.to_csv(f"{output}/{name}/projection_{source}_{name}/{organism_name}.tsv", sep="\t", index=False)
+    systems_projection.to_csv(f"{output}/{name}/systems_{source}_{name}.tsv", sep="\t", index=False)
+    systems_projection.insert(0, "pangenome name", name)
+    return systems_projection
+
+def pan_presence_percentage(name: str, systems_projection):
+    systems_projection_filter = systems_projection[['system name', 'organism']]
+    system_names = list(systems_projection_filter['system name'].unique())
+    system_names.sort(key=str.casefold)
+    pan_count = len(system_names)*[None]
+    for i, system in enumerate(system_names):
+        data_system = systems_projection_filter[(systems_projection_filter['system name'] == system)]
+        data_system_drop = data_system.drop_duplicates(subset=['system name', 'organism'])
+        pan_count[i] = data_system_drop.shape[0]
+    df = pd.DataFrame(list(zip(system_names, pan_count)), columns=["system name", "nb of presence"])
+    df.insert(0, "pangenome name", name)
+    return df
+
+def pangenome_number_system(name: str, systems_projection):
+    systems_projection_filter = systems_projection[['system number', 'system name', 'organism']]
+    system_names = list(systems_projection['system name'].unique())
+    system_names.sort(key=str.casefold)
+    count_system_id = [None]*len(system_names)
+    count_system_id_org = [None] * len(system_names)
+    for i, system in enumerate(system_names):
+        systems_projection_filter_2 = systems_projection_filter[systems_projection_filter['system name'] == system]
+        systems_projection_id = systems_projection_filter_2.drop_duplicates(subset=['system number', 'system name'],
+                                                                            keep="first", inplace=False)
+        systems_projection_id_org = systems_projection_filter_2.drop_duplicates(subset=['system number', 'system name', 'organism'],
+                                                                                keep="first", inplace=False)
+        count_system_id[i] = systems_projection_id.shape[0]
+        count_system_id_org[i] = systems_projection_id_org.shape[0]
+    df_id = pd.DataFrame(list(zip(system_names, count_system_id)), columns=["system name", "Number of IDs"])
+    df_id.insert(0, "pangenome name", name)
+    df_id_org = pd.DataFrame(list(zip(system_names, count_system_id_org)), columns=["system name", "Number of IDs per org"])
+    df_id_org.insert(0, "pangenome name", name)
+    return df_id, df_id_org
 
 
-def systems_to_features(pangenome: Pangenome, output: Path, rgp: bool = False, modules: bool = False,
-                        spots: bool = False, threads: int = 1, disable_bar: bool = False):
+def systems_to_features(systems_proj, name, pangenome: Pangenome, output: Path, source: str, rgp: bool = False,
+                        modules: bool = False, spots: bool = False, threads: int = 1, disable_bar: bool = False):
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
-            futures_rgp = []
-            futures_modules = []
+            futures = []
             for system in pangenome.systems:
-                future_rgp = executor.submit(system_to_rgp, system, pangenome.regions)
-                future_rgp.add_done_callback(lambda p: progress.update())
-                futures_rgp.append(future_rgp)
+                future = executor.submit(system_to_features, system, pangenome.regions, pangenome.modules, rgp, modules)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
                 #for canonical in system.canonical:
-                #    future_rgp = executor.submit(system_to_rgp, canonical, pangenome.regions)
-                #    future_rgp.add_done_callback(lambda p: progress.update())
-                #    futures_rgp.append(future_rgp)
+                    #future_rgp = executor.submit(system_to_rgp, canonical, pangenome.regions)
+                    #future_rgp.add_done_callback(lambda p: progress.update())
+                    #futures_rgp.append(future_rgp)
 
-                future_modules = executor.submit(system_to_modules, system, pangenome.modules)
-                future_modules.add_done_callback(lambda p: progress.update())
-                futures_modules.append(future_modules)
-                #for canonical in system.canonical:
-                #    future_modules = executor.submit(system_to_modules, canonical, pangenome.modules)
-                #    future_modules.add_done_callback(lambda p: progress.update())
-                #    futures_modules.append(future_modules)
-
+            result_list = []
             dict_system_rgp = {}
-            res_rgp_list = []
-            for future_rgp in futures_rgp:
-                res_rgp = future_rgp.result()
-                res_rgp_list.append(res_rgp)
-                if len(res_rgp[1]) > 0:
-                    dict_system_rgp[res_rgp[0]] = res_rgp[1]
-
+            dict_system_completion_rgp = {}
             dict_system_modules = {}
-            res_module_list = []
-            for future_modules in futures_modules:
-                res_module = future_modules.result()
-                res_module_list.append(res_module)
-                if len(res_module[1]) > 0:
-                    dict_system_modules[res_module[0]] = res_module[1]
+            for future in futures:
+                res = future.result()
+                result_list.append(res)
+                if len(res[1]) > 0:
+                    dict_system_rgp[res[0]] = res[1]
+                    dict_system_completion_rgp[res[0]] = res[2]
+                if len(res[3]) > 0:
+                    dict_system_modules[res[0]] = res[3]
 
-            dict_region_spot = {}
-            for spot in pangenome.spots:
-                for region in spot.regions:
-                    dict_region_spot[region.name] = spot.ID
+        dict_system_organism_with_rgp = {}
+        dict_system_organism_with_module = {}
+        for result in result_list:
+            if result[1] != [] or result[3] != []:
+                rgp_org = []
+                mod_org = []
+                for result_rgp in result[1]:
+                    rgp_org.append(result_rgp.organism.name)
+                dict_system_organism_with_rgp[result[0]] = rgp_org
 
-        dict_system_organism = {}
-        list_system_in_rgp = []
-        for res_rgp1 in res_rgp_list:
-            for res_rgp2 in res_rgp1[1]:
-                list_system_in_rgp.append(res_rgp1[0])
-                dict_system_organism.setdefault(res_rgp1[0], []).append(res_rgp2.organism.name)
+                for result_module in result[3]:
+                    mod_org.extend(x for x in list(map(lambda x: x.name, result_module.organisms)) if x not in mod_org)
+                dict_system_organism_with_module[result[0]] = mod_org
 
-        for res_module1 in res_module_list:
-            bool1 = res_module1[0] in list_system_in_rgp
-            bool2 = res_module1[1] == []
-            if bool1 is False and bool2 is False:
-                for res_module2 in res_module1[1]:
-                    list_organism_of_mod = list(map(lambda x: x.name, res_module2.organisms))
-                    dict_system_organism[res_module1[0]] = list_organism_of_mod
+        dict_region_spot = {}
+        for spot in pangenome.spots:
+            for region in spot.regions:
+                dict_region_spot[region.name] = spot.ID
 
-    write_systems_to_features(pangenome, output, dict_system_rgp, dict_system_modules, dict_region_spot,
-                              dict_system_organism, rgp, modules, spots)
+    df_features = write_systems_to_features(systems_proj, name, pangenome, output, source, dict_system_rgp, dict_system_completion_rgp,
+                              dict_system_modules, dict_region_spot, dict_system_organism_with_rgp, dict_system_organism_with_module,
+                                            rgp, modules, spots)
+    return df_features
 
-
-def write_systems_to_features(pangenome: Pangenome, output: Path, dict_system_rgp: Dict[System, Region],
-                              dict_system_modules: Dict[System, Module], dict_region_spots: Dict[Region, Spot],
-                              dict_system_organism: Dict[System, Organism],
-                              rgp: bool = False, modules: bool = False, spots: bool = False):
+def write_systems_to_features(systems_proj, name, pangenome: Pangenome, output: Path, source: str,  dict_system_rgp: Dict[System, Region],
+                              dict_system_completion_rgp: Dict[System, Completion], dict_system_modules: Dict[System, Module],
+                              dict_region_spots: Dict[Region, Spot], dict_system_organism_with_rgp: Dict[System, Organism],
+                              dict_system_organism_with_module: Dict[System, Organism], rgp: bool = False, modules: bool = False, spots: bool = False):
     list_to_df = []
     df_collection = collections.namedtuple("system_rgp_module_spot",
-                                           ['system_ID', 'system_name', 'organism', 'rgp', 'module', 'spot'])
-    list_system_ID = list(OrderedDict.fromkeys(list(dict_system_rgp) + list(dict_system_modules)))
+                                           ['system_ID', 'system_name', 'mod_organism', 'module', 'rgp_organism', 'spot', 'rgp', 'completion_rgp'])
+    systems_ID = list(OrderedDict.fromkeys(list(dict_system_rgp) + list(dict_system_modules)))
+    systems_proj_filter = systems_proj[['system number', 'organism']]
 
-    for system_ID in list_system_ID:
+    for system_ID in systems_ID:
         system = pangenome.get_system(system_ID)
-        organism_list = dict_system_organism.get(system_ID, None)
+        organism_list_of_rgp = dict_system_organism_with_rgp.get(system_ID, None)
+        organism_list_of_mod = dict_system_organism_with_module.get(system_ID, None)
+        systems_proj_filter_2 = systems_proj_filter[systems_proj_filter['system number'] == system_ID]
+        organism_all = list(systems_proj_filter_2['organism'].unique())
         rgp_list = dict_system_rgp.get(system_ID, None)
+        completion_rgp = dict_system_completion_rgp.get(system_ID, None)
+        module_list = dict_system_modules.get(system_ID, None)
+
         spot_list = []
-        if rgp_list is not None :
+        if rgp_list is not None:
             for rgp_element in rgp_list:
                 spot_list.append(dict_region_spots[rgp_element.name]) if rgp_element.name in dict_region_spots else spot_list.append("no_spot")
             rgp_list = list(map(lambda x: x.name, rgp_list))
         else:
             spot_list = None
 
-        module_list = dict_system_modules.get(system_ID, None)
         module_presence = None
+        mod_org = None
         if module_list is not None:
             module_presence = []
-            #dict_module_completion = {}
+            mod_org = []
             for module in module_list:
-                list_completion = []
-                nbr_fam_in_module = len(module.families)
-                for organism in pangenome.organisms:
-                    if organism.name in organism_list:
-                        completion = len(list(set(module.families) & set(organism.families))) / nbr_fam_in_module
-                        list_completion.append(completion)
-                #dict_module_completion[module.ID] = list_completion
-                #for completion in dict_module_completion[module.ID]:
-                for completion in list_completion:
-                    if completion > 0.65:
+                for organism in organism_all:
+                    if organism in list(map(lambda x: x.name, module.organisms)):
+                        mod_org.append(organism)
                         module_presence.append(module.ID)
-                    else :
-                        module_presence.append("no_module")
 
-        list_to_df.append(df_collection(system_ID, system.name, organism_list, rgp_list, module_presence, spot_list))
+        list_to_df.append(df_collection(system_ID, system.name, mod_org, module_presence, organism_list_of_rgp, spot_list, rgp_list, completion_rgp))
 
     if rgp is True and modules is True and spots is True:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_rgp_modules_spots").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'module', 'spot', 'rgp']
+        outpath = Path(output / name / "systems_to_rgp_modules_spots_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'mod_organism', 'module', 'rgp_organism', 'spot', 'rgp', 'completion_rgp']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
     if rgp is True and modules is True and spots is False:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_rgp_modules").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'rgp', 'module']
+        outpath = Path(output / name / "systems_to_rgp_modules_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'rgp_organism', 'rgp', 'completion_rgp', 'mod_organism', 'module']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
     if rgp is True and modules is False and spots is True:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_rgp_spots").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'spot', 'rgp']
+        outpath = Path(output / name / "systems_to_rgp_spots_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name','rgp_organism', 'spot', 'rgp', 'completion_rgp']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
     if rgp is False and modules is True and spots is True:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_modules_spots").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'module', 'spot']
+        outpath = Path(output / name / "systems_to_modules_spots_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'mod_organism', 'module', 'rgp_organism', 'spot']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
     if rgp is True and modules is False and spots is False:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_rgp").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'rgp']
+        outpath = Path(output / name / "systems_to_rgp_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'rgp_organism', 'rgp', 'completion_rgp']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
     if rgp is False and modules is True and spots is False:
         df = pd.DataFrame(list_to_df)
-        outpath = Path(output, "systems_to_modules").with_suffix(".tsv")
-        header = ['system_ID', 'system_name', 'organism', 'module']
+        outpath = Path(output / name / "systems_to_modules_{0}_{1}".format(source, name)).with_suffix(".tsv")
+        header = ['system_ID', 'system_name', 'mod_organism', 'module']
         df.to_csv(path_or_buf=outpath, sep="\t", index=False, columns = header)
 
-
-def system_to_rgp(system: System, regions: Set[Region]):
-    rgp_present = []
-    for rgp in regions:
-        #print(type(system))
-        #if "RM_type_III" in system.name :
-            #print(system)
-            #print(system.gene_families)
-            #print(rgp.families)
-        completion = len(list(system.gene_families & rgp.families)) / len(system.gene_families)
-        if completion > 0.65:
-            rgp_present.append(rgp)
-    return system.ID, rgp_present
-
-def system_to_modules(system: System, modules: Set[Module]):
-    modules_present = []
-    for module in modules:
-        if system.gene_families.issubset(module.families):
-            module.add_system(system)
-            modules_present.append(module)
-    return system.ID, modules_present
-
-"""
-def module_completion_in_organism(pangenome: Pangenome, dict_system_modules: Dict[System, Module]):
-    organisms = pangenome.organisms
-    list_modules = dict_system_modules.values()
-    dict_module_completion = {}
-    for i, list_module in enumerate(list_modules):
-        for j, module in enumerate(list_module):
-            module_id = module.ID
-            list_completion = []
-            nbr_fam_in_module = len(module.families)
-            for organism in organisms:
-                intersection = list(set(module.families) & set(organism.families))
-                completion = len(intersection)/nbr_fam_in_module
-                list_completion.append(completion)
-                dict_module_completion[module_id] = list_completion
-    organisms_names = list(map(lambda x: x.name, organisms))
-    df = pd.DataFrame(dict_module_completion, columns=dict_module_completion.keys(), index=organisms_names)
     return df
-"""
 
-def write_flat_files(pangenome, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
-                     systems_asso: List[str] = None,
-                     proksee: List[str] = None, proksee_template: Path = None, organisms_list: List[str] = None,
-                     threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
+
+def system_to_features(system: System, regions: Set[Region], modules: Set[Module], rgp, module):
+
+    fu = list(system.model.func_units)[0]
+    mandatory_family = []
+    accessory_family = []
+    for fam in system.model.families:
+        if fam.presence == 'mandatory':
+            mandatory_family.append(fam.name)
+            mandatory_family += fam.exchangeables
+        if fam.presence == 'accessory':
+            accessory_family.append(fam.name)
+            accessory_family += fam.exchangeables
+
+    rgp_present = []
+    completion_list = []
+    if rgp :
+        for rgp in regions:
+            completion = len(list(system.gene_families & rgp.families)) / len(system.gene_families)
+            if completion != 0 :
+                find_projection = write_sys_in_feature(system, rgp, mandatory_family, accessory_family, fu)
+                if find_projection is True:
+                    rgp_present.append(rgp)
+                    completion_list.append(completion)
+
+    modules_present = []
+    if module :
+        for module in modules:
+            completion = len(list(system.gene_families & module.families)) / len(system.gene_families)
+            if completion != 0 :
+                find_projection = write_sys_in_feature(system, module, mandatory_family, accessory_family, fu)
+                if find_projection is True:
+                    module.add_system(system)
+                    modules_present.append(module)
+
+    return system.ID, rgp_present, completion_list, modules_present
+
+
+def write_sys_in_feature(system, feature, mandatory_family, accessory_family, fu) -> bool:
+    """ Project system to rgp
+
+        :param system: Detected system
+        :param rgp: rgp in system
+        :param projection: projection list output
+        :param mandatory_family: list of mandatory families in system
+        :param accessory_family: list of accessory family in system
+        :param fu: functional unit
+
+        :return: True if a projection occurs in rgp
+        """
+
+    def search_diagonal(matrix: np.ndarray, min_necessary: int = None) -> List[List[int]]:
+        """Search any possible diagonals in matrix to confirm system projection
+
+        :param matrix: matrix with present family in system and pangenome
+        :param min_necessary: minimum length of diagonal to project
+
+        :return: list of diagonals found
+        """
+        r_diags = []
+        min_necessary = matrix.shape[0] if min_necessary is None else min_necessary
+        nonull_matrix = matrix[:, ~np.all(matrix == 0, axis=0)]
+        diags = [nonull_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
+                 if len(nonull_matrix.diagonal(i).tolist()) >= min_necessary]
+        for comb_cols in itertools.permutations(range(0, nonull_matrix.shape[1]), 2):
+            copy_matrix = copy(nonull_matrix)
+            copy_matrix[:, [comb_cols[1], comb_cols[0]]] = nonull_matrix[:, comb_cols]
+            diags.extend(copy_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
+                         if len(copy_matrix.diagonal(i).tolist()) >= min_necessary)
+        for diag in diags:
+            for comb in [diag[i: i + min_necessary] for i in range(0, len(diag) - min_necessary + 1)]:
+                if all(x > 0 for x in comb):
+                    r_diags.append(comb)
+        r_diags.sort()
+        return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
+
+    select_families = system.gene_families.intersection(feature.families)
+    mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}
+    accessory_index = {accessory: index for index, accessory in enumerate(accessory_family,
+                                                                          start=1 + len(mandatory_family))}
+    nb_annotation = len(mandatory_family) + len(accessory_family)
+    bool_projection = False
+    for comb_gf in itertools.permutations(select_families, fu.min_total):
+        mandatory_matrix = np.zeros((len(comb_gf), len(mandatory_family)))
+        all_matrix = np.concatenate((mandatory_matrix, np.zeros((len(comb_gf), len(accessory_family)))), axis=1)
+        coordinate_dict = {}
+        for index_gf, gf in enumerate(comb_gf):
+            for index_annot, annot in enumerate(mandatory_family + accessory_family, start=1):
+                coordinate_dict[index_gf * nb_annotation + index_annot] = (gf, annot)
+            if gf.get_source(system.source) is not None:
+                for annotation in [annot.get("protein_name") for annot in gf.get_source(system.source)]:
+                    if annotation in mandatory_family:
+                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                      mandatory_index[annotation]
+                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                mandatory_index[annotation]
+                    elif annotation in accessory_family:
+                        all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
+                                                                                accessory_index[annotation]
+        if len(search_diagonal(mandatory_matrix, fu.min_mandatory)) > 0:
+            search_diag = search_diagonal(all_matrix)
+            if len(search_diag) > 0:
+                bool_projection = True
+    return bool_projection
+
+
+def write_flat_files(pan_to_path, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
+                     systems_asso: List[str] = None, proksee: List[str] = None, proksee_template: Path = None,
+                     organisms_list: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pangenome: Pangenome with information to write
@@ -483,35 +570,116 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
     spots = False
 
     if annotation:
-        need_families = True
-        need_metadata = True
-        kwargs['sources'] = kwargs['sources'] if kwargs['sources'] is not None else pangenome.status['metasources']["families"]
+        with ThreadPoolExecutor(max_workers=threads) as executor:
+            logging.getLogger().info('Write annotation')
+            with tqdm(total=len(pan_to_path.keys()), unit='pangenome', disable=disable_bar) as progress:
+                need_families = True
+                need_metadata = True
+                for pangenome_name, pangenome_info in pan_to_path.items():
+                    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+                    pangenome.add_file(pangenome_info["path"])
+                    kwargs['sources'] = kwargs['sources'] if kwargs['sources'] is not None else pangenome.status['metasources']["families"]
+                    check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                         need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                                         need_modules=need_modules,
+                                         need_metadata=need_metadata, need_systems=need_systems,
+                                         models=kwargs["models"], sources=kwargs["sources"], metatype="families",
+                                         disable_bar=disable_bar)
+                    future = executor.submit(write_annotations_to_families, pangenome, output, sources=kwargs["sources"], disable_bar=disable_bar)
+                    future.add_done_callback(lambda p: progress.update())
+            logging.getLogger().info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
 
     if hmm:
         need_families = True
         need_annotations = True
+        for pangenome_name, pangenome_info in pan_to_path.items():
+            pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+            pangenome.add_file(pangenome_info["path"])
+            check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                                 need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                 need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                                 need_modules=need_modules,
+                                 need_metadata=need_metadata, need_systems=need_systems,
+                                 models=kwargs["models"], sources=kwargs["sources"], metatype="families",
+                                 disable_bar=disable_bar)
+            msa_path = kwargs.get('msa_path', None)
+            msa_format = kwargs.get('msa_format', 'afa')
+            threads = kwargs.get('threads', 1)
+            profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
+            write_hmm_profile(pangenome, output, threads, disable_bar)
 
-    if systems:
+
+    if systems or systems_asso:
         need_annotations = True
         need_families = True
         need_systems = True
         need_metadata = True
 
-    if systems_asso is not None:
-        need_systems = True
-        need_families = True
-        need_annotations = True
-        need_rgp = True
-        need_modules = True
-        need_spots = True
-        if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "all"]:
-            rgp = True
-        if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"]:
-            modules = True
-        if systems_asso in ["rgp-spots", "all"]:
-            spots = True
-        if systems_asso in ["modules-spots", "all"]:
-            spots = True
+        global_df = pd.DataFrame()
+        global_percentage = pd.DataFrame()
+        global_id = pd.DataFrame()
+        global_id_org = pd.DataFrame()
+
+        for pangenome_name, pangenome_info in pan_to_path.items():
+            pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+            pangenome.add_file(pangenome_info["path"])
+            if systems :
+                check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                                    need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                    need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
+                                    need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
+                                    sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
+            if systems_asso:
+                need_rgp = True
+                need_modules = True
+                need_spots = True
+                check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                                    need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                    need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
+                                    need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
+                                    sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
+            logging.getLogger().info(f"Begin write systems projection for {pangenome_name}")
+            for source in kwargs["sources"]:
+                systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
+                                                        threads=threads, force=force, disable_bar=disable_bar)
+                global_df = pd.concat([global_df, systems_proj])
+                per_pan_heatmap(pangenome_name, systems_proj, output)
+                logging.getLogger().info(f"Heatmap figure created for {pangenome_name}")
+
+                presence_ratio = pan_presence_percentage(pangenome_name, systems_proj)
+                global_percentage = pd.concat([global_percentage, presence_ratio])
+
+                dataframe_ID, dataframe_ID_org = pangenome_number_system(pangenome_name, systems_proj)
+                global_id = pd.concat([global_id, dataframe_ID])
+                global_id_org = pd.concat([global_id_org, dataframe_ID_org])
+                logging.getLogger().info(f"Projection written for {pangenome_name}")
+
+                hbar_ID_type(pangenome_name, dataframe_ID, dataframe_ID_org, output)
+
+                if systems_asso:
+                    if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "all"]:
+                        rgp = True
+                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"]:
+                        modules = True
+                    if systems_asso in ["rgp-spots", "all"]:
+                        spots = True
+                    if systems_asso in ["modules-spots", "all"]:
+                        spots = True
+                    logging.getLogger().info("Begin write systems with features projection")
+                    df_features = systems_to_features(systems_proj, name=pangenome_name, pangenome=pangenome, output=output, source=source,
+                                        rgp=rgp, modules=modules, spots=spots, threads=threads, disable_bar=disable_bar)
+                    logging.getLogger().info("Projection with features written")
+                
+                    upsetplot(pangenome_name, systems_proj, df_features, output)
+
+        heatmap(global_df, output)
+        logging.getLogger().info(f"Global heatmap figure created")
+        global_percentage.to_csv(f"{output}/systems_presence_ratio.tsv", sep="\t", index=False)
+        global_df.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
+        global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)
+        global_id_org.to_csv(f"{output}/global_systems_number_id_org.tsv", sep="\t", index=False)
+
 
     if proksee is not None:
         need_annotations = True
@@ -530,38 +698,17 @@ def write_flat_files(pangenome, output: Path, annotation: bool = False, systems:
             need_annotations = True
         if "systems" in proksee or "all" in proksee:
             need_systems = True
-
-    check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
-                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
-                         need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-                         need_metadata=need_metadata, need_systems=need_systems,
-                         models=kwargs["models"], sources=kwargs["sources"], metatype="families",
-                         disable_bar=disable_bar)
-    if annotation:
-        write_annotations_to_families(pangenome, output, sources=kwargs["sources"], disable_bar=disable_bar)
-        logging.getLogger().info(f"Annotation has been written in {output}/families_annotations.tsv")
-
-    if hmm:
-        msa_path = kwargs.get('msa_path', None)
-        msa_format = kwargs.get('msa_format', 'afa')
-        threads = kwargs.get('threads', 1)
-        profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
-        write_hmm_profile(pangenome, output, threads, disable_bar)
-
-    if systems:
-        logging.getLogger().info("Begin write systems projection")
-        for source in kwargs["sources"]:
-            write_systems_projection(pangenome=pangenome, output=output, source=source,
-                                     threads=threads, force=force, disable_bar=disable_bar)
-        logging.getLogger().info("Projection written")
-
-    if systems_asso is not None:
-        systems_to_features(pangenome=pangenome, output=output, rgp=rgp, modules=modules, spots=spots,
-                            threads=threads, disable_bar=disable_bar)
-
-    if proksee:
-        write_proksee(pangenome=pangenome, output=output, features=proksee, template=proksee_template,
-                      organisms_list=organisms_list, threads=threads, disable_bar=disable_bar)
+        for pangenome_name, pangenome_info in pan_to_path.items():
+            pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+            pangenome.add_file(pangenome_info["path"])
+            check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                                 need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                 need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
+                                 need_metadata=need_metadata, need_systems=need_systems,
+                                 models=kwargs["models"], sources=kwargs["sources"], metatype="families",
+                                 disable_bar=disable_bar)
+            write_proksee(pangenome=pangenome, output=output, features=proksee, template=proksee_template,
+                          organisms_list=organisms_list, threads=threads, disable_bar=disable_bar)
 
 
 def launch(args):
@@ -573,15 +720,12 @@ def launch(args):
     check_flat_parameters(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     mkdir(args.output, force=args.force)
-    for pangenome_name, pangenome_info in pan_to_path.items():
-        pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-        pangenome.add_file(pangenome_info["path"])
-        write_flat_files(pangenome, output=args.output, annotation=args.annotations,
-                         systems=args.systems, systems_asso=args.systems_asso,
-                         models=args.models, sources=args.sources,
-                         proksee=args.proksee, proksee_template=args.proksee_template, organisms_list=args.organisms,
-                         hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
-                         threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
+    write_flat_files(pan_to_path, output=args.output, annotation=args.annotations, systems=args.systems,
+                     systems_asso=args.systems_asso, models=args.models, sources=args.sources,
+                     proksee=args.proksee, proksee_template=args.proksee_template, organisms_list=args.organisms,
+                     hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
+                     threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
+
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
