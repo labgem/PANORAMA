@@ -54,6 +54,7 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     """
     if tsv is not None:
         metadata_df = check_metadata_format(tsv, "families")
+        # TODO check column name
     elif hmm is not None:
         metadata_df = annot_with_hmm(pangenome, hmm, meta=meta, tmpdir=tmpdir, threads=threads, mode=mode, msa=msa,
                                      disable_bar=disable_bar)
