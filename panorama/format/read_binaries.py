@@ -3,19 +3,19 @@
 
 # default libraries
 import logging
+from tqdm import tqdm
 from typing import List
 from pathlib import Path
 
 # installed libraries
 import tables
-from tqdm import tqdm
 from ppanggolin.formats import read_chunks
 from ppanggolin.formats import check_pangenome_info as check_pp
 from ppanggolin.formats import get_status as super_get_status
 
 # local libraries
-from panorama.models import Models
 from panorama.system import System
+from panorama.models import Models
 from panorama.pangenomes import Pangenome
 
 
@@ -31,37 +31,6 @@ def get_status(pangenome, pangenome_file: str):
         pangenome.status["systems"] = "inFile"
         pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
     h5f.close()
-
-
-def read_gene_families_annotations_by_source(pangenome: Pangenome, source_table, disable_bar: bool = False):
-    for row in tqdm(read_chunks(source_table), total=source_table.nrows, unit="annotation", disable=disable_bar):
-        gf = pangenome.get_gene_family(row["geneFam"].decode())
-        annotation = Annotation(source=source_table.name, name=row['name'].decode(),
-                                accession=row["accession"].decode(),
-                                secondary_names=row["secondary_names"].decode(), score=row["score"],
-                                description=row["description"].decode(), e_val=row["e_val"], bias=row["bias"])
-        gf.add_annotation(source=source_table.name, annotation=annotation)
-
-
-def read_gene_families_annotations(pangenome: Pangenome, h5f: tables.File, sources: List[str] = None,
-                                   disable_bar: bool = False):
-    """Read information about gene families in pangenome hdf5 file to add in pangenome object
-
-    :param pangenome: Pangenome object without gene families information
-    :param h5f: Pangenome HDF5 file with gene families information
-    :param disable_bar: Disable the progress bar
-    """
-    annotations_group = h5f.root.geneFamiliesAnnot
-    if sources is None:
-        sources = pangenome.status["annotations_sources"]
-
-    for source in sources:
-        annotations_table = h5f.get_node(annotations_group, source)
-        logging.getLogger().info(f"Read annotations from {source}...")
-        read_gene_families_annotations_by_source(pangenome, annotations_table, disable_bar)
-        logging.getLogger().debug(f"{source} has been read")
-    pangenome.status["annotations"] = "Loaded"
-
 
 def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, disable_bar: bool = False):
     systems = {}
@@ -81,7 +50,6 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
 def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path], sources: List[str],
                  disable_bar: bool = False):
     """Read information about systems in pangenome hdf5 file to add in pangenome object
-
     :param pangenome: Pangenome object without gene families information
     :param h5f: Pangenome HDF5 file with gene families information
     :param disable_bar: Disable the progress bar
@@ -100,6 +68,7 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
     pangenome.status["systems"] = "Loaded"
 
 
+
 def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source: str = None,
                          need_systems: bool = False, models: List[Path] = None,
                          disable_bar: bool = False, **kwargs):
@@ -113,18 +82,19 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source
     :param models:
     :param disable_bar: Allow to disable the progress bar
     """
+
     need_annotations = kwargs["need_annotations"] if "need_annotations" in kwargs else False
     need_gene_sequences = kwargs["need_gene_sequences"] if "need_gene_sequences" in kwargs else False
     need_families = kwargs["need_families"] if "need_families" in kwargs else False
     need_partitions = kwargs["need_partitions"] if "need_partitions" in kwargs else False
     need_graph = kwargs["need_graph"] if "need_graph" in kwargs else False
-    need_regions = kwargs["need_regions"] if "need_regions" in kwargs else False
+    need_rgp = kwargs["need_rgp"] if "need_rgp" in kwargs else False
     need_spots = kwargs["need_spots"] if "need_spots" in kwargs else False
     need_modules = kwargs["need_modules"] if "need_modules" in kwargs else False
     need_metadata = kwargs["need_metadata"] if "need_metadata" in kwargs else False
 
     check_pp(pangenome, need_annotations=need_annotations, need_families=need_families, need_graph=need_graph,
-             need_partitions=need_partitions, need_rgp=need_regions, need_spots=need_spots,
+             need_partitions=need_partitions, need_rgp=need_rgp, need_spots=need_spots,
              need_gene_sequences=need_gene_sequences, need_modules=need_modules, disable_bar=disable_bar)
 
     if need_metadata:

@@ -127,15 +127,26 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
     else:
         for line in tsv:
             if len(line) < 2:
-                raise Exception("Format not readable. You need at least 2 columns (name and path to pangenome)")
+                raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
             if " " in line[0]:
-                raise Exception(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
+                raise ValueError(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
                                 f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
                                 f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
-            if not Path(f"{tsv_path.parent.absolute().as_posix()}/{line[1]}").exists():
-                raise IOError(f"The given path {tsv_path.parent.absolute().as_posix()}/{line[1]} not exist")
-            pan_to_path[line[0]] = {"path": f"{tsv_path.parent.absolute().as_posix()}/{line[1]}",
-                                    "taxid": line[2] if len(line) > 2 else None}
+            try:
+                abs_path = path_exist(Path(line[1]))
+            except FileNotFoundError:
+                try:
+                    abs_path = path_exist(tsv_path.parent/Path(line[1]))
+                except FileNotFoundError as file_error:
+                    raise FileNotFoundError(f"{file_error}")
+                else:
+                    pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                                            "taxid": line[2] if len(line) > 2 else None}
+            except Exception:
+                raise Exception("Unexpected error")
+            else:
+                pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                                        "taxid": line[2] if len(line) > 2 else None}
         p_file.close()
         return pan_to_path
 

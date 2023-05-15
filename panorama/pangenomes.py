@@ -33,7 +33,7 @@ class Pangenome(Pan):
         self.name = name
         self.taxid = taxid
         self.status.update({"systems": 'No',
-                            "systems_sources": []})
+                            "systems_sources": set()})
 
     def add_file(self, pangenome_file: str):
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,

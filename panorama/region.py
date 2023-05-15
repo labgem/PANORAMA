@@ -2,6 +2,8 @@
 # coding: utf8
 
 # default libraries
+import logging
+from typing import Dict, Generator, List, Union
 
 # installed libraries
 from ppanggolin.region import Module as Mod
@@ -25,6 +27,13 @@ class Module(Mod):
         super().__init__(module_id=module_id, families=families)
         self._systemsGetter = {}
         self._sys2fam = {}
+
+    @property
+    def organisms(self):
+        organisms = set()
+        for family in self.families:
+            organisms |= family.organisms
+        return organisms
 
     @property
     def gene_families(self) -> GeneFamily:
