@@ -150,3 +150,11 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
         p_file.close()
         return pan_to_path
 
+
+loading_lock = None
+
+
+def init_lock(lock):
+    global loading_lock
+    if loading_lock is None:
+        loading_lock = lock

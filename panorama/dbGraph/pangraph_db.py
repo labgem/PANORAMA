@@ -24,7 +24,7 @@ from panorama.pangenomes import Pangenome
 
 logger = logging.getLogger(__name__)
 
-db_loading_lock: Lock = None
+loading_lock: Lock = None
 
 
 def invert_edges_query(edge_label: str):
@@ -76,7 +76,7 @@ def load_similarities_mp(tsv: Path, cpu: int = 1, batch_size: int = 1000):
 
 
 def init_db_lock(lock):
-    global db_loading_lock
+    global loading_lock
     if db_loading_lock is None:
         db_loading_lock = lock
 
@@ -108,7 +108,7 @@ def load_pangenome(pangenome_name, pangenome_info, batch_size: int = 1000):
                          need_spots=True, need_modules=True, need_annotations_fam=True, disable_bar=False)
     give_gene_tmp_id(pangenome)
     data = create_dict(pangenome)
-    loader = PangenomeLoader(pangenome_name, data, db_loading_lock, batch_size=batch_size)
+    loader = PangenomeLoader(pangenome_name, data, loading_lock, batch_size=batch_size)
     loader.load(graph)
 
 
