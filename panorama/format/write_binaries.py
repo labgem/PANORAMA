@@ -118,6 +118,7 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
         status_group._v_attrs.systems_sources |= pangenome.systems_sources
     else:
         status_group._v_attrs.systems = False
+        status_group._v_attrs.systems_sources = set()
 
 
 def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bool = False, partition: bool = False,
