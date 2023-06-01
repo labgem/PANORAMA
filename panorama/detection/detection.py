@@ -301,14 +301,14 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
-    logging.getLogger().info(f"System detection done in pangenome {pangenome.name}")
+    logging.info(f"System detection done in pangenome {pangenome.name}")
     if len(detected_systems) > 0:
         pangenome.status["systems"] = "Computed"
-        logging.getLogger().info(f"Write systems in pangenome {pangenome.name}")
+        logging.info(f"Write systems in pangenome {pangenome.name}")
         write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
-        logging.getLogger().info(f"Systems written in pangenome {pangenome.name}")
+        logging.info(f"Systems written in pangenome {pangenome.name}")
     else:
-        logging.getLogger().info("No system detected")
+        logging.info("No system detected")
 
 
 def launch(args):

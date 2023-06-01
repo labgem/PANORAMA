@@ -45,8 +45,8 @@ def set_verbosity_level(args: argparse.Namespace):
         logging.basicConfig(stream=args.log, level=level,
                             format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
-        logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
+        logging.info("Command: " + " ".join([arg for arg in sys.argv]))
+        logging.info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
 
 # File managing system
@@ -68,7 +68,7 @@ def mkdir(output: str, force: bool = False) -> Path:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.getLogger().warning(f"{output} already exist and file will be overwrite by the new generated")
+            logging.warning(f"{output} already exist and file will be overwrite by the new generated")
             return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")

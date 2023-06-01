@@ -41,7 +41,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     """
     global seq_length
     digit_gf_sequence = []
-    logging.getLogger().info("Digitalized gene families sequences")
+    logging.info("Digitalized gene families sequences")
     for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name,
@@ -54,7 +54,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
 
 def get_msa(tmpdir: Path):
     _ = tempfile.TemporaryDirectory(prefix="msa_panorama", dir=tmpdir)
-    logging.getLogger().warning("In Dev")
+    logging.warning("In Dev")
     raise NotImplementedError
 
 
@@ -71,7 +71,7 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
     builder = pyhmmer.plan7.Builder(alphabet)
     background = pyhmmer.plan7.Background(alphabet)
     if os.stat(msa_file).st_size == 0:
-        logging.getLogger().warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
+        logging.warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
                                     f"Pass to next file")
     else:
         try:
@@ -100,7 +100,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
     else:
         msa_file_list = list(msa_path.iterdir())
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.getLogger().info("Compute gene families HMM and profile")
+            logging.info("Compute gene families HMM and profile")
             with tqdm(total=len(msa_file_list), unit='file', disable=disable_bar) as progress:
                 futures = []
                 for msa_file in msa_file_list:
@@ -136,7 +136,7 @@ def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) ->
     """
     hmms = []
     hmm_list_path = list(hmm_dir)
-    logging.getLogger().info("Read HMM")
+    logging.info("Read HMM")
     for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         end = False
         hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
@@ -178,7 +178,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     """
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    logging.getLogger().info("Align gene families to HMM")
+    logging.info("Align gene families to HMM")
     bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
     bit_cutoffs = "gathering" if hmm_meta is None else None
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, bit_cutoffs=bit_cutoffs):
@@ -226,10 +226,10 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
 
     :return: dataframe with best result for each pangenome families
     """
-    logging.getLogger().info("Begin HMM searching")
+    logging.info("Begin HMM searching")
     if mode == 'profile':
         profile_gfs(pangenome, msa, tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
-        logging.getLogger().debug("Gene families HMM and profile computation... Done")
+        logging.debug("Gene families HMM and profile computation... Done")
     else:
         if mode != 'fast':
             raise ValueError(f"{mode} unrecognized mode")

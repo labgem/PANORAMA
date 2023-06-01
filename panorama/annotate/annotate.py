@@ -78,8 +78,8 @@ def launch(args):
         annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
                         meta=args.meta, mode=args.mode, msa=args.msa,
                         tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
-        logging.getLogger().info("Metadata assignation Done")
-        logging.getLogger().info(f"Write Metadata in pangenome {pangenome_name}")
+        logging.info("Metadata assignation Done")
+        logging.info(f"Write Metadata in pangenome {pangenome_name}")
         write_pangenome(pangenome, pangenome_info["path"], force=args.force, disable_bar=args.disable_prog_bar)
 
 

@@ -42,7 +42,7 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
                               source=system_table.name)
             systems[row["ID"].decode()] = curr_sys
         curr_sys.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
-    logging.getLogger().info(f"Add system from {system_table.name} to pangenome...")
+    logging.info(f"Add system from {system_table.name} to pangenome...")
     for system in tqdm(systems.values(), unit="system", disable=disable_bar):
         pangenome.add_system(system)
 
@@ -62,9 +62,9 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
         models = Models()
         models.read(models_path[index], disable_bar)
         systems_table = h5f.get_node(systems_group, source)
-        logging.getLogger().info(f"Read system from {source}...")
+        logging.info(f"Read system from {source}...")
         read_systems_by_source(pangenome, systems_table, models, disable_bar)
-        logging.getLogger().debug(f"{source} has been read and added")
+        logging.debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
 
 

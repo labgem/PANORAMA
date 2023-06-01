@@ -109,17 +109,17 @@ def launch(args: argparse.Namespace):
     :param args: All arguments provide by user
     """
     global need_info
-    logging.getLogger().debug("launch info command")
+    logging.debug("launch info command")
     outdir = mkdir(args.output, args.force)
     path_2_pang, manager_dict = check_former_info(args)
     mp_args = [(name, pan_info, manager_dict, args.disable_prog_bar) for name, pan_info in path_2_pang.items()]
     with get_context('fork').Pool(args.cpu) as p:
         for pangenome in tqdm(p.imap_unordered(run_info, mp_args), unit='pangenome',
                               total=len(path_2_pang), disable=args.disable_prog_bar):
-            logging.getLogger().debug(f"{pangenome.name} Done")
+            logging.debug(f"{pangenome.name} Done")
     export_info(manager_dict, outdir, args.cpu)
 
-    logging.getLogger().info("Done")
+    logging.info("Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

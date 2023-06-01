@@ -244,7 +244,7 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
     :param disable_bar: Allow to disable progress bar
     """
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().info(f'Write system projection for source : {source}')
+        logging.info(f'Write system projection for source : {source}')
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(source):
@@ -571,7 +571,7 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
 
     if annotation:
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.getLogger().info('Write annotation')
+            logging.info('Write annotation')
             with tqdm(total=len(pan_to_path.keys()), unit='pangenome', disable=disable_bar) as progress:
                 need_families = True
                 need_metadata = True
@@ -588,7 +588,7 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                                          disable_bar=disable_bar)
                     future = executor.submit(write_annotations_to_families, pangenome, output, sources=kwargs["sources"], disable_bar=disable_bar)
                     future.add_done_callback(lambda p: progress.update())
-            logging.getLogger().info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
+            logging.info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
 
     if hmm:
         need_families = True
@@ -639,13 +639,13 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
                                     sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
-            logging.getLogger().info(f"Begin write systems projection for {pangenome_name}")
+            logging.info(f"Begin write systems projection for {pangenome_name}")
             for source in kwargs["sources"]:
                 systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                                         threads=threads, force=force, disable_bar=disable_bar)
                 global_df = pd.concat([global_df, systems_proj])
                 per_pan_heatmap(pangenome_name, systems_proj, output)
-                logging.getLogger().info(f"Heatmap figure created for {pangenome_name}")
+                logging.info(f"Heatmap figure created for {pangenome_name}")
 
                 presence_ratio = pan_presence_percentage(pangenome_name, systems_proj)
                 global_percentage = pd.concat([global_percentage, presence_ratio])
@@ -653,7 +653,7 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                 dataframe_ID, dataframe_ID_org = pangenome_number_system(pangenome_name, systems_proj)
                 global_id = pd.concat([global_id, dataframe_ID])
                 global_id_org = pd.concat([global_id_org, dataframe_ID_org])
-                logging.getLogger().info(f"Projection written for {pangenome_name}")
+                logging.info(f"Projection written for {pangenome_name}")
 
                 hbar_ID_type(pangenome_name, dataframe_ID, dataframe_ID_org, output)
 
@@ -666,15 +666,15 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                         spots = True
                     if systems_asso in ["modules-spots", "all"]:
                         spots = True
-                    logging.getLogger().info("Begin write systems with features projection")
+                    logging.info("Begin write systems with features projection")
                     df_features = systems_to_features(systems_proj, name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                         rgp=rgp, modules=modules, spots=spots, threads=threads, disable_bar=disable_bar)
-                    logging.getLogger().info("Projection with features written")
+                    logging.info("Projection with features written")
                 
                     upsetplot(pangenome_name, systems_proj, df_features, output)
 
         heatmap(global_df, output)
-        logging.getLogger().info(f"Global heatmap figure created")
+        logging.info(f"Global heatmap figure created")
         global_percentage.to_csv(f"{output}/systems_presence_ratio.tsv", sep="\t", index=False)
         global_df.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
         global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)

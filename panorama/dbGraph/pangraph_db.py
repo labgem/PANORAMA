@@ -86,18 +86,18 @@ def load_pangenome_done(pangenome_name, executor: Executor, bar, future: Future)
         future.result()
     except CancelledError:
         # canceled by god or anyone
-        logging.getLogger().info(f"Load {pangenome_name} cancelled")
+        logging.info(f"Load {pangenome_name} cancelled")
         return
     except Exception as error:
         # if config.CANCEL_WHOLE_IMPORT_IF_A_WORKER_FAILS:
-        logging.getLogger().warning(f"Load {pangenome_name} failed. Cancel all tasks and stop workers...")
+        logging.warning(f"Load {pangenome_name} failed. Cancel all tasks and stop workers...")
         executor.shutdown(cancel_futures=True)
 
-        logging.getLogger().info(f"{pangenome_name} failed")
-        logging.getLogger().exception(f"Load {pangenome_name} raised {error}")
+        logging.info(f"{pangenome_name} failed")
+        logging.exception(f"Load {pangenome_name} raised {error}")
         raise error
     bar.update()
-    logging.getLogger().info(f"Load {pangenome_name} finished")
+    logging.info(f"Load {pangenome_name} finished")
 
 
 def load_pangenome(pangenome_name, pangenome_info, batch_size: int = 1000):
@@ -138,14 +138,14 @@ def launch(args):
     if args.clean:
         graph.delete_all()
     load_pangenome_mp(pangenomes, args.cpu, args.batch_size)
-    logging.getLogger().info("All pangenomes loaded...")
-    logging.getLogger().info("Bengin load of similarities...")
+    logging.info("All pangenomes loaded...")
+    logging.info("Bengin load of similarities...")
     load_similarities_mp(args.similarities, args.cpu, args.batch_size)
-    logging.getLogger().info("Invert edges...")
+    logging.info("Invert edges...")
     labels2invert = ["IS_IN_PANGENOME", "IS_IN_MODULE", "IS_IN_FAMILY", "IS_IN_CONTIG",
                      "IS_IN_GENOME", "IS_IN_SPOT", "IS_IN_RGP"]
     for edge_label in tqdm(labels2invert, unit='label'):
-        logging.getLogger().debug(f"Invert: {edge_label}")
+        logging.debug(f"Invert: {edge_label}")
         invert_edges(edge_label)
 
 

@@ -35,6 +35,9 @@ class Pangenome(Pan):
         self.status.update({"systems": 'No',
                             "systems_sources": set()})
 
+    def __str__(self):
+        return self.name
+
     def add_file(self, pangenome_file: str):
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,
         and anything that is computed will be saved to this file when

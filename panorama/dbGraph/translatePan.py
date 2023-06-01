@@ -158,7 +158,7 @@ def create_dict(pangenome: Pangenome):
 
 
 def write_json(pangenome: Pangenome, output: Path, compress):
-    logging.getLogger().info(f"Writing the json file for the {pangenome.name} pangenome graph")
+    logging.info(f"Writing the json file for the {pangenome.name} pangenome graph")
     outname = f"{output.absolute()}/{pangenome.name}_short2.json"
     out_dict = create_dict(pangenome)
 
@@ -178,7 +178,7 @@ def launch(args):
                          need_rgp=True, need_spots=True, need_modules=True, need_annotations_fam=True)
     give_gene_tmp_id(pangenome)
     write_json(pangenome, args.out_directory, compress=False)
-    logging.getLogger().info("Translate pangenome in json Done")
+    logging.info("Translate pangenome in json Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
