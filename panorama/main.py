@@ -34,6 +34,7 @@ def cmd_line():
     desc += "       annotation      Annotate pangenome gene families with HMM or TSV file\n"
     desc += "       detection       Detect systems in pangenome based on one annotation source\n"
     desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries\n"
+    desc += "       compare         Compare contexts and modules across multiple pangenomes\n"    
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
     desc += "       utility         Some utility command to run analyses more easily\n"
     desc += "\n"
