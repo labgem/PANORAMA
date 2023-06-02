@@ -6,7 +6,7 @@ import logging
 from typing import Dict, Generator, List, Union
 
 # installed libraries
-from ppanggolin.region import Module as Mod
+from ppanggolin.region import Module as Mod, GeneContext as GeneCont
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -60,3 +60,22 @@ class Module(Mod):
                 if system.gene_families != self._systemsGetter[system.ID].gene_families:
                     raise Exception("Two system with same ID and name but with different gene families are trying to be"
                                     " added to module. This error is unexpected. Please report on our GitHub")
+
+class GeneContext(GeneCont):
+            
+    """
+    A class used to represent a gene context
+
+    """
+
+    def __init__(self, pangenome_name:str, gc_id: int, families: set = None):
+        """
+        :param pangenome_name : name of the pangenome of the context
+        :param gc_id : identifier of the Gene context
+        :param families: Gene families included in the GeneContext
+        """
+            
+        super().__init__(gc_id=f"{pangenome_name}_{gc_id}", families=families)
+        
+        self.pangenome = pangenome_name
+        
