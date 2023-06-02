@@ -8,7 +8,7 @@ import sys
 import logging
 from pathlib import Path
 import csv
-from typing import TextIO, Dict, Union
+from typing import TextIO, Dict, Union, List
 import pkg_resources
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Lock
@@ -190,18 +190,18 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: dict) -> bool:
     :param path: The path to the pangenome file.
     :param taxid: The taxonomic ID associated with the pangenome.
     :param need_info: A dictionary containing information required to load in the Pangenome object.
-    :return: True if the pangenome is loaded successfully and the required information is present.
+    :return: The pangenome object with the loaded information.
     """
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
 
     check_pangenome_info(pangenome, disable_bar=True, **need_info)
 
-    return True
+    return pangenome
 
 
 def load_multiple_pangenomes(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]], 
-                             max_workers: int, disable_bar: bool, lock: Lock, need_info: bool):
+                             max_workers: int, disable_bar: bool, lock: Lock, need_info: bool) -> List[Pangenome]:
     """
     Load multiple pangenomes in parallel using a process pool executor.
 
@@ -215,6 +215,8 @@ def load_multiple_pangenomes(pan_name_to_path: Dict[str, Dict[str, Union[str, in
     :param disable_bar: A flag indicating whether to disable the tqdm progress bar.
     :param lock: A multiprocessing lock used for synchronization.
     :param need_info: A flag indicating what information is needed during pangenome loading.
+
+    :return pangenomes: List of loaded pangenomes with required information
     """
 
     with ProcessPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
@@ -230,5 +232,6 @@ def load_multiple_pangenomes(pan_name_to_path: Dict[str, Dict[str, Union[str, in
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             
-            for future in futures:
-                results = future.result()
+            pangenomes = [future.result() for future in futures]
+                
+    return pangenomes
