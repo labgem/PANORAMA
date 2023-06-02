@@ -68,7 +68,7 @@ def mkdir(output: str, force: bool = False) -> Path:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.getLogger().warning(f"{output} already exist and file will be overwrite by the new generated")
+            logging.getLogger().warning(f"The {output} directory already exists. The file it contains may be potentially overwritten by the newly generated results.")
             return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")
