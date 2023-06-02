@@ -10,6 +10,16 @@ from pathlib import Path
 import csv
 from typing import TextIO, Dict, Union
 import pkg_resources
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import Lock
+from tqdm import tqdm
+
+# installed libraries
+from ppanggolin.formats import check_pangenome_info
+
+# local libraries
+from panorama.pangenomes import Pangenome
+
 
 
 def check_log(name: str) -> TextIO:
@@ -155,6 +165,70 @@ loading_lock = None
 
 
 def init_lock(lock):
+    """
+    Initialize the loading lock.
+
+    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
+    If the `loading_lock` is already initialized, the function does nothing.
+
+    :param lock: The lock object to be assigned to `loading_lock`.
+    """
     global loading_lock
     if loading_lock is None:
         loading_lock = lock
+
+
+def load_pangenome(name: str, path: str, taxid: int, need_info: dict) -> bool:
+    """
+    Load a pangenome from a given path and check the required information.
+
+    This function loads a pangenome from the specified `path` and assigns it the provided `name` and `taxid`.
+    The pangenome file is added to the pangenome object. The function then checks that the required information
+    are present in the pangenome and if they are, it loads them.
+
+    :param name: The name of the pangenome.
+    :param path: The path to the pangenome file.
+    :param taxid: The taxonomic ID associated with the pangenome.
+    :param need_info: A dictionary containing information required to load in the Pangenome object.
+    :return: True if the pangenome is loaded successfully and the required information is present.
+    """
+    pangenome = Pangenome(name=name, taxid=taxid)
+    pangenome.add_file(path)
+
+    check_pangenome_info(pangenome, disable_bar=True, **need_info)
+
+    return True
+
+
+def load_multiple_pangenomes(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]], 
+                             max_workers: int, disable_bar: bool, lock: Lock, need_info: bool):
+    """
+    Load multiple pangenomes in parallel using a process pool executor.
+
+    This function loads multiple pangenomes in parallel using a process pool executor. It takes a dictionary 
+    `pan_name_to_path` containing the mapping of pangenome names to their corresponding paths and other
+    information. The pangenomes are loaded using the `load_pangenome` function. The loading progress is
+    displayed using a tqdm progress bar.
+
+    :param pan_name_to_path: A dictionary mapping pangenome names to their corresponding paths and information.
+    :param max_workers: The maximum number of worker processes to use in the process pool executor.
+    :param disable_bar: A flag indicating whether to disable the tqdm progress bar.
+    :param lock: A multiprocessing lock used for synchronization.
+    :param need_info: A flag indicating what information is needed during pangenome loading.
+    """
+
+    with ProcessPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pan_name_to_path), unit='pangenome', disable=disable_bar) as progress:
+
+            futures = []
+            
+            for pangenome_name, pangenome_path_info in pan_name_to_path.items():
+                
+                future = executor.submit(load_pangenome, pangenome_name, pangenome_path_info["path"], 
+                                         pangenome_path_info["taxid"], need_info)
+
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            
+            for future in futures:
+                results = future.result()
