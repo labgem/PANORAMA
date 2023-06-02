@@ -50,7 +50,7 @@ def set_verbosity_level(args: argparse.Namespace):
 
 
 # File managing system
-def mkdir(output: str, force: bool = False) -> Path:
+def mkdir(output: Union[Path, str], force: bool = False) -> Path:
     """Create a directory at the given path
 
     :param output: Path to output directory
@@ -62,13 +62,13 @@ def mkdir(output: str, force: bool = False) -> Path:
     :return: Path object to output directory
     """
     try:
-        os.makedirs(output)
+        os.makedirs(output.absolute().as_posix())
     except OSError:
         if not force:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.warning(f"{output} already exist and file will be overwrite by the new generated")
+            logging.warning(f"{output.as_posix()} already exist and file could be overwrite by the new generated")
             return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")
