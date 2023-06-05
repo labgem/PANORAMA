@@ -13,7 +13,6 @@ from typing import Dict, List, Set
 
 # installed libraries
 import networkx as nx
-from ppanggolin.region import GeneContext
 from ppanggolin.context.searchGeneContext import _compute_gene_context_graph, extract_gene_context
 
 # local libraries

@@ -12,6 +12,7 @@ from itertools import combinations
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager, Lock
 import subprocess
+from time import time
 
 # installed libraries
 import tables
@@ -20,9 +21,9 @@ from ppanggolin.align.alignOnPang import write_gene_fam_sequences
 import pandas as pd
 
 # local libraries
-from panorama.utils import check_tsv_sanity, init_lock, mkdir
-from panorama.format.read_binaries import check_pangenome_info
-from panorama.pangenomes import Pangenome
+from panorama.utils import init_lock, mkdir
+from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.format.read_binaries import load_multiple_pangenomes
 
 align_format = ["query", "target", "fident", "qlen", "tlen", "alnlen", "evalue", "bits"]
 align_column = ["query", "target", "identity", "qlength", "tlength", "alnlength", "e_value", "bits"]  # noqa: E501
@@ -41,7 +42,7 @@ def createdb(seq_file: Path, tmpdir: tempfile.TemporaryDirectory, other_seq: Lis
     """
     Create a MMseqs2 sequence database with the given fasta file
 
-    :param file_obj: Fasta file
+    :param seq_file: Fasta file
     :param tmpdir: temporary directory
 
     :return: DB file
@@ -56,28 +57,30 @@ def createdb(seq_file: Path, tmpdir: tempfile.TemporaryDirectory, other_seq: Lis
     return Path(seqdb.name)
 
 
-def get_gf_pangenome_db(pangenome_name: str, pangenome_info: dict,
-                        tmpdir: tempfile.TemporaryDirectory) -> Tuple[Pangenome, Path]:
-    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-    pangenome.add_file(pangenome_info["path"])
-    check_pangenome_info(pangenome, need_families=True, disable_bar=True)
-    logging.debug(f"Begin create {pangenome_name} gene families database...")
-    gf_fasta_path = Path(f"{tmpdir.name}/{pangenome_name}_gf.fna")
+def get_gf_pangenome(pangenome: Pangenome, tmpdir: tempfile.TemporaryDirectory, create_db: bool = False) -> Tuple[str, Path]:
+    logging.debug(f"Creating {pangenome.name} gene families sequence file...")
+    gf_fasta_path = Path(f"{tmpdir.name}/{pangenome.name}_gf.fna")
     with open(gf_fasta_path, "w") as gf_fasta:
         write_gene_fam_sequences(pangenome, gf_fasta)
-        pan_db = createdb(gf_fasta_path, tmpdir)
-    logging.debug(f"{pangenome_name} gene families database created")
-    return pangenome, pan_db
+        if create_db:
+            logging.debug(f"Creating {pangenome.name} gene families sequence file...")
+            pan_db = createdb(gf_fasta_path, tmpdir)
+            logging.debug(f"{pangenome.name} gene families database created")
+            return pangenome.name, pan_db
+        else:
+            logging.debug(f"{pangenome.name} gene families fasta created")
+            return pangenome.name, gf_fasta_path
 
 
-def get_gf_pangenomes_db(pangenomes_list: dict, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+
+def get_gf_pangenomes_db(pangenomes: Pangenomes, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                          task: int = 1, disable_bar: bool = False) -> Dict[Pangenome, Path]:
     logging.debug("Begin create pangenomes gene families database...")
     with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-        with tqdm(total=len(pangenomes_list), unit='pangenome', disable=disable_bar) as progress:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
-            for pangenome_name, pangenome_info in pangenomes_list.items():
-                future = executor.submit(get_gf_pangenome_db, pangenome_name, pangenome_info, tmpdir)
+            for pangenome in pangenomes:
+                future = executor.submit(get_gf_pangenome, pangenome, tmpdir, True)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             pangenomes_db = {}
@@ -102,8 +105,10 @@ def align_db(query_db: Path, target_db: Path, aln_db: Path, tmpdir: tempfile.Tem
            aln_db.absolute().as_posix(), tmpdir.name, "-a", "--min-seq-id", str(identity), "-c", str(coverage),
            "--cov-mode", str(cov_mode), "--threads", str(threads)]
     logging.debug(" ".join(cmd))
+    begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
-    logging.debug("Aligning done")
+    align_time = time() - begin_time
+    logging.debug(f"Aligning done in {round(align_time, 2)} seconds")
 
 
 def align_pangenomes_pair(pangenomes_pair: Tuple[Pangenome, Pangenome], db_pair: Tuple[Path, Path],
@@ -119,7 +124,7 @@ def align_pangenomes_pair(pangenomes_pair: Tuple[Pangenome, Pangenome], db_pair:
     return Path(aln_res.name)
 
 
-def align_pangenomes(pangenomes_db: Dict[Pangenome, Path], lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+def align_pangenomes(pangenomes_db: Dict[str, Path], lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                      identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
                      task: int = 1, threads_per_task: int = 1, disable_bar: bool = False) -> List[Path]:
     with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
@@ -147,10 +152,10 @@ def merge_aln_res(align_results: List[Path]) -> pd.DataFrame:
     return merge_res
 
 
-def inter_pangenome_align(pangenomes_list: dict, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+def inter_pangenome_align(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                           identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
                           task: int = 1, threads_per_task: int = 1, disable_bar: bool = False):
-    pangenomes_db = get_gf_pangenomes_db(pangenomes_list=pangenomes_list, lock=lock, tmpdir=tmpdir, task=task,
+    pangenomes_db = get_gf_pangenomes_db(pangenomes=pangenomes, lock=lock, tmpdir=tmpdir, task=task,
                                          disable_bar=disable_bar)
     align_results = align_pangenomes(pangenomes_db, lock, tmpdir=tmpdir,
                                      identity=identity, coverage=coverage, cov_mode=cov_mode,
@@ -162,40 +167,28 @@ def inter_pangenome_align(pangenomes_list: dict, output: Path, lock: Lock, tmpdi
     logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
 
 
-def get_gf_pangenome_sequences(pangenome_name: str, pangenome_info: dict,
-                               tmpdir: tempfile.TemporaryDirectory) -> Path:
-    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-    pangenome.add_file(pangenome_info["path"])
-    check_pangenome_info(pangenome, need_families=True, disable_bar=True)
-    logging.debug(f"Begin create {pangenome_name} gene families database...")
-    gf_seq = Path(f"{tmpdir.name}/{pangenome_name}_gf.fna")
-    with open(gf_seq, "w") as gf_fasta:
-        write_gene_fam_sequences(pangenome, gf_fasta)
-    logging.debug(f"{pangenome_name} gene families fasta created")
-    return gf_seq
-
-
-def get_gf_pangenomes_sequences(pangenomes_list: dict, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+def get_gf_pangenomes_sequences(pangenomes: Pangenomes, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                                 task: int = 1, disable_bar: bool = False) -> List[Path]:
     logging.debug("Begin create pangenomes gene families database...")
     with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-        with tqdm(total=len(pangenomes_list), unit='pangenome', disable=disable_bar) as progress:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
-            for pangenome_name, pangenome_info in pangenomes_list.items():
-                future = executor.submit(get_gf_pangenome_sequences, pangenome_name, pangenome_info, tmpdir)
+            for pangenome in pangenomes:
+                future = executor.submit(get_gf_pangenome, pangenome, tmpdir)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             pangenomes_seq = []
             for future in futures:
-                pangenomes_seq.append(future.result())
+                res = future.result()
+                pangenomes_seq.append(res[1])
     logging.debug("All pangenomes gene families database created")
     return pangenomes_seq
 
 
-def all_against_all(pangenomes_list: dict, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                     identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
                     task: int = 1, threads_per_task: int = 1, disable_bar: bool = False):
-    gf_seqs = get_gf_pangenomes_sequences(pangenomes_list=pangenomes_list, lock=lock, tmpdir=tmpdir, task=task,
+    gf_seqs = get_gf_pangenomes_sequences(pangenomes=pangenomes, lock=lock, tmpdir=tmpdir, task=task,
                                           disable_bar=disable_bar)
     merge_db = createdb(gf_seqs[0], tmpdir, gf_seqs[1:])
     aln_db = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
@@ -219,16 +212,18 @@ def launch(args):
     """
     # check_parameter(args)
     mkdir(args.output, args.force)
-    pan_to_path = check_tsv_sanity(args.pangenomes)
-    check_align(pan_to_path)
+    pangenomes = Pangenomes()
     manager = Manager()
     lock = manager.Lock()
+    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
+                                        max_workers=args.task*args.threads_per_task, disable_bar=args.disable_prog_bar)
+    pangenomes.add_list_pangenomes(pan_list)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     if args.inter_pangenomes:
-        inter_pangenome_align(pan_to_path, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
+        inter_pangenome_align(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
                               args.task, args.threads_per_task, args.disable_prog_bar)
     elif args.all_against_all:
-        all_against_all(pan_to_path, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
+        all_against_all(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
                         args.task, args.threads_per_task, args.disable_prog_bar)
     else:
         raise argparse.ArgumentError(argument=args, message="You must choose between inter_pangenome alignment or "

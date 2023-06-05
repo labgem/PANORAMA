@@ -13,7 +13,6 @@ from panorama.geneFamily import GeneFamily
 from panorama.region import Module
 
 
-
 class Pangenome(Pan):
     """
     This is a class representing pangenome based on PPanGGOLLiN class. It is used as a basic unit for all the analysis
@@ -103,22 +102,22 @@ class Pangenome(Pan):
             sources.add(system.source)
         return sources
 
-    def get_system(self, system_ID: str) -> System:
+    def get_system(self, system_id: str) -> System:
         try:
-            system = self._system_getter[system_ID]
+            system = self._system_getter[system_id]
         except KeyError:
-            uncanonical_id = system_ID.split('.')[0]
+            uncanonical_id = system_id.split('.')[0]
             find_in_canonical = False
             if len(uncanonical_id) > 0:
                 uncanonical_system = self.get_system(uncanonical_id)
                 for canonical in uncanonical_system.canonical:
-                    if canonical.ID == system_ID:
+                    if canonical.ID == system_id:
                         find_in_canonical = True
                         return canonical
                 if not find_in_canonical:
-                    raise KeyError(f"There is no system with ID = {system_ID} in pangenome")
+                    raise KeyError(f"There is no system with ID = {system_id} in pangenome")
             else:
-                raise KeyError(f"There is no system with ID = {system_ID} in pangenome")
+                raise KeyError(f"There is no system with ID = {system_id} in pangenome")
         else:
             return system
 
@@ -171,6 +170,7 @@ class Pangenome(Pan):
     def add_modules(self, modules: Iterable[Module]):
         super().add_modules({Module(module_id=module.ID, families=module.families) for module in modules})
 
+
 class Pangenomes:
     """
     This class represente a group of pangenome object.
@@ -179,7 +179,14 @@ class Pangenomes:
     def __init__(self):
         """Constructor method
         """
-        self.pangenomes_set = {}
+        self._pangenomes_getter = dict()
+
+    def __len__(self):
+        return len(self._pangenomes_getter)
+
+    def __iter__(self) -> Generator[Pangenome, None, None]:
+        for pangenome in self._pangenomes_getter.values():
+            yield pangenome
 
     def add_pangenome(self, pangenome: Pangenome):
         """ Add a pangenome object
@@ -187,4 +194,18 @@ class Pangenomes:
         :param pangenome: Pangenome object
         :return:
         """
-        self.pangenomes_set[pangenome.name] = pangenome
+        self._pangenomes_getter[pangenome.name] = pangenome
+
+    def add_list_pangenomes(self, pangenomes_list: List[Pangenome]):
+        for pangenome in pangenomes_list:
+            self.add_pangenome(pangenome)
+
+
+    def to_list(self) -> List[Pangenome]:
+        return list(self.__iter__())
+
+    def to_set(self) -> Set[Pangenome]:
+        return set(self.__iter__())
+
+    def get_pangenome(self, name: str):
+        return self._pangenomes_getter[name]

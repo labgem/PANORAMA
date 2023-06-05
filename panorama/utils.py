@@ -8,8 +8,12 @@ import sys
 import logging
 from pathlib import Path
 import csv
-from typing import TextIO, Dict, Union
+from typing import TextIO, Dict, Union, List
 import pkg_resources
+
+# installed libraries
+
+# local libraries
 
 
 def check_log(name: str) -> TextIO:
@@ -155,6 +159,14 @@ loading_lock = None
 
 
 def init_lock(lock):
+    """
+    Initialize the loading lock.
+
+    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
+    If the `loading_lock` is already initialized, the function does nothing.
+
+    :param lock: The lock object to be assigned to `loading_lock`.
+    """
     global loading_lock
     if loading_lock is None:
         loading_lock = lock

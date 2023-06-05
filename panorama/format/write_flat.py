@@ -4,15 +4,13 @@
 # default libraries
 from __future__ import annotations
 import argparse
-import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import collections
 import itertools
 import logging
 from pathlib import Path
-from tqdm import tqdm
-from typing import Collection, Dict, List, Set
+from typing import Dict, List, Set
 
 # installed libraries
 import numpy as np
