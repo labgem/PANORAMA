@@ -15,11 +15,14 @@ from tqdm import tqdm
 import pandas as pd
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome
+from ppanggolin.cluster.cluster import read_tsv as read_clustering_table
+
 
 # local libraries
 from panorama.utils import mkdir, init_lock, load_multiple_pangenomes, load_pangenome
 from panorama.pangenomes import Pangenome
 from panorama.region import GeneContext
+from panorama.geneFamily import FamilyCluster
 
 # def check_run_context_arguments(kwargs):
 #     if "sequences" not in kwargs and "family" not in kwargs:
@@ -154,8 +157,10 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
 
     return gene_contexts
 
+def compare_gene_contexts(gene_contexts):
+    pass
 
-def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, familly_clusters: bool,
+def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, family_clusters: bool,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
                        disable_bar: bool = False, force: bool = False, **kwargs):
     """
@@ -163,7 +168,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
     :param pangenome_to_path: A dictionary mapping pangenome names to their corresponding paths.
     :param contexts_results: The path to the file containing the list of context results.
-    :param familly_clusters: A boolean indicating whether to use precomputed family clusters or run the cluster family function.
+    :param family_clusters: A boolean indicating whether to use precomputed family clusters or run the cluster family function.
     :param lock: A Lock object for thread synchronization.
     :param output: The output directory path.
     :param tmpdir: The temporary directory path.
@@ -177,7 +182,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     mkdir(output, force)
 
     if contexts_results:
-        logging.info("Retrieving gene context from existing results.")
+        logging.info(f"Retrieving gene contexts from existing results: {contexts_results}")
 
         # TODO check consistency between pangenome_to_path and context results
 
@@ -209,17 +214,29 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     logging.info(f'Writting gene context summary: {summary_out_table} ')
     write_context_summary(gene_contexts, summary_out_table)
 
-    return
-
-    if familly_clusters:
+    if family_clusters:
+        logging.info(f"Retrieving family clusters from existing clustering: {family_clusters}")
+        
         # Parse the given cluster family results
-        pass
-
+        cluster2family, gene_family_to_family_cluster = read_clustering_table(family_clusters)
+        
     else:
         # run cluster familly
-        # familly_clusters_file = panorama cluster function
+        # family_clusters_file = panorama cluster function
         raise NotImplementedError
 
+
+    # add family cluster info in gene contexts 
+    for gene_context in gene_contexts:
+        for gene_family in gene_context.families:
+            family_cluster = gene_family_to_family_cluster[gene_family]
+            gene_family.add_family_cluster(family_cluster)
+
+    # Compare gene contexts based on their family clusters  
+
+    compare_gene_contexts(gene_contexts)
+    
+    
 
 def context_comparison_parser(parser):
 
@@ -229,7 +246,7 @@ def context_comparison_parser(parser):
     use_context_arg.add_argument('--context_results', type=Path, required=False,
                                  help="Tsv file with two columns: name of pangenome and path to the corresponding context results.")
 
-    use_context_arg.add_argument('--familly_clusters', type=Path, required=False,
+    use_context_arg.add_argument('--family_clusters', type=Path, required=False,
                                  help="A tab-separated file listing the cluster names, the family IDs,")
 
     # TODO: use context parser of ppanggolin to have correct args and prevent duplication

@@ -31,7 +31,7 @@ def launch(args):
         #                 "identity": args.identity, "coverage": args.coverage, "jaccard": args.jaccard,
         #                 "no_defrag": args.no_defrag}
         run_context_args = {} # Not implemented yet
-        context_comparison(pan_to_path, args.context_results, args.familly_clusters, lock, args.output, args.tmpdir, args.task, args.threads_per_task,
+        context_comparison(pan_to_path, args.context_results, args.family_clusters, lock, args.output, args.tmpdir, args.task, args.threads_per_task,
                            args.disable_prog_bar, args.force, **run_context_args)
 
 

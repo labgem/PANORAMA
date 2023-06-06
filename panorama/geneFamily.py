@@ -6,6 +6,7 @@
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
 from pyhmmer.plan7 import HMM
+
 # local libraries
 
 
@@ -23,6 +24,8 @@ class GeneFamily(Fam):
         self._hmm = None
         self.profile = None
         self.optimized_profile = None
+        self.family_cluster = None
+        
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
@@ -31,7 +34,9 @@ class GeneFamily(Fam):
     def HMM(self) -> HMM:
         """Return gf HMM"""
         return self._hmm
-
+    
+    def add_family_cluster(self, family_cluster:str):
+        self.family_cluster = family_cluster
 
     # def add_annotation(self, source: str, annotation: Annotation, max_prediction: int = None):
     #     """ Add annotation to gene family
