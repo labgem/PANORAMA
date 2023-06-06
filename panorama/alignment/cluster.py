@@ -51,8 +51,8 @@ def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
 
 
-def linclust_db(seq_db: Path, lclust_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]],
-                tmpdir: tempfile.TemporaryDirectory, threads: int = 1):
+def linclust_launcher(seq_db: Path, lclust_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]],
+                      tmpdir: tempfile.TemporaryDirectory, threads: int = 1):
     cmd = list(map(str,
                    ['mmseqs', 'cluster', seq_db.absolute().as_posix(), lclust_db.absolute().as_posix(),
                     tmpdir.name, '--threads', threads, '--comp-bias-corr', mmseqs2_opt["comp_bias_corr"],
@@ -77,19 +77,46 @@ def linclust_clustering(pangenomes: Pangenomes, mmseqs2_opt: Dict[str, Union[int
     merge_db = createdb(gf_seqs_list[0], tmpdir, gf_seqs_list[1:])
     lclust_db = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
     logging.debug("Clustering all gene families...")
-    linclust_db(merge_db, Path(lclust_db.name), mmseqs2_opt, tmpdir, threads)
+    linclust_launcher(merge_db, Path(lclust_db.name), mmseqs2_opt, tmpdir, threads)
     lclust_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
     logging.getLogger().info("Writting clustering in tsv file")
     create_tsv(db=merge_db, clust=Path(lclust_db.name), output=Path(lclust_res.name), threads=threads)
     return Path(lclust_res.name)
 
 
-def cluster_clustering(pangenomes: Pangenomes, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
-                       identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0, threads: int = 1,
-                       disable_bar: bool = False):
-    mmseqs2_opt = {"max_seqs": 400, "min_ungapped": 1, "comp_bias_corr": 1, "sensitivity": 4, "kmer": 80,
-                   "coverage": 0.8, "identity": 0.8, "cov_mode": 0, "eval": 0.001, "max_seq_len": 32768,
-                   "max_reject": 2147483647, "align_mode": 2, "clust_mode": 1, "reassign": True}
+def clusterlauncher(seq_db: Path, lclust_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]],
+                    tmpdir: tempfile.TemporaryDirectory, threads: int = 1):
+    cmd = list(map(str,
+                   ['mmseqs', 'cluster', seq_db.absolute().as_posix(), lclust_db.absolute().as_posix(),
+                    tmpdir.name, '--threads', threads, '--max-seqs', mmseqs2_opt["max_seqs"], '--min-ungapped-score',
+                    mmseqs2_opt["min_ungapped"], '--comp-bias-corr', mmseqs2_opt["comp_bias_corr"], '-s',
+                    mmseqs2_opt["sensitivity"], "--kmer-per-seq", mmseqs2_opt["kmer_per_seq"], "--min-seq-id",
+                    mmseqs2_opt["identity"], "-c", mmseqs2_opt["coverage"], "--cov-mode", mmseqs2_opt["cov_mode"],
+                    "-e", mmseqs2_opt["eval"], "--alignment-mode", mmseqs2_opt["align_mode"], "--max-seq-len",
+                    mmseqs2_opt["max_seq_len"], "--max-rejected", mmseqs2_opt["max_reject"], "--cluster-mode",
+                    mmseqs2_opt["clust_mode"]]
+                   )
+               )
+    logging.debug(" ".join(cmd))
+    begin_time = time()
+    subprocess.run(cmd, stdout=subprocess.DEVNULL)
+    lclust_time = time() - begin_time
+    logging.debug(f"Linclust done in {round(lclust_time, 2)} seconds")
+
+
+def cluster_clustering(pangenomes: Pangenomes, mmseqs2_opt: Dict[str, Union[int, float, str]],
+                       lock: Lock, tmpdir: tempfile.TemporaryDirectory, threads: int = 1, disable_bar: bool = False):
+    gf_seqs = get_gf_pangenomes(pangenomes=pangenomes, create_db=False, lock=lock, tmpdir=tmpdir, threads=threads,
+                                disable_bar=disable_bar)
+    gf_seqs_list = list(gf_seqs.values())
+    merge_db = createdb(gf_seqs_list[0], tmpdir, gf_seqs_list[1:])
+    lclust_db = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
+    logging.debug("Clustering all gene families...")
+    linclust_launcher(merge_db, Path(lclust_db.name), mmseqs2_opt, tmpdir, threads)
+    lclust_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
+    logging.getLogger().info("Writting clustering in tsv file")
+    create_tsv(db=merge_db, clust=Path(lclust_db.name), output=Path(lclust_res.name), threads=threads)
+    return Path(lclust_res.name)
 
 
 def launch(args):
@@ -114,10 +141,10 @@ def launch(args):
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     if args.linclust:
         clust_res = linclust_clustering(pangenomes=pangenomes, mmseqs2_opt=mmseqs2_opt, lock=lock, tmpdir=tmpdir,
-                            threads=args.threads, disable_bar=args.disable_prog_bar)
+                                        threads=args.threads, disable_bar=args.disable_prog_bar)
     elif args.cluster:
-        clust_res = cluster_clustering(pangenomes=args.pangenomes, lock=lock, tmpdir=tmpdir, threads=args.threads,
-                           disable_bar=args.disable_prog_bar)
+        clust_res = cluster_clustering(pangenomes=pangenomes, mmseqs2_opt=mmseqs2_opt, lock=lock, tmpdir=tmpdir,
+                                       threads=args.threads, disable_bar=args.disable_prog_bar)
     else:
         raise argparse.ArgumentError(argument=args, message="You must choose between linclut or "
                                                             "cluster for clustering")
