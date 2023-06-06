@@ -7,6 +7,8 @@ from typing import Dict
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager, Lock
+import logging
+from typing import Dict, Union, List
 
 # installed libraries
 from tqdm import tqdm
@@ -15,72 +17,165 @@ from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome
 
 # local libraries
-from panorama.utils import mkdir, init_lock, load_multiple_pangenomes
+from panorama.utils import mkdir, init_lock, load_multiple_pangenomes, load_pangenome
 from panorama.pangenomes import Pangenome
+from panorama.region import GeneContext
+
+# def check_run_context_arguments(kwargs):
+#     if "sequences" not in kwargs and "family" not in kwargs:
+#         raise Exception("At least one of --sequences or --family option must be given")
 
 
-def check_run_context_arguments(kwargs):
-    if "sequences" not in kwargs and "family" not in kwargs:
-        raise Exception("At least one of --sequences or --family option must be given")
+# def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], output: Path, tmpdir: Path,
+#                       threads_per_task: int = 1, **kwargs):
+#     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+#     pangenome.add_file(pangenome_info["path"])
+#     search_gene_context_in_pangenome(pangenome=pangenome, output=output, tmpdir=tmpdir,
+#                                      cpu=threads_per_task, disable_bar=True, **kwargs)
+#     return True
 
+# def parse_cluster_family(cluster_family_file, family_of_interest=None):
 
-def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], output: Path, tmpdir: Path,
-                      threads_per_task: int = 1, **kwargs):
-    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-    pangenome.add_file(pangenome_info["path"])
-    search_gene_context_in_pangenome(pangenome=pangenome, output=output, tmpdir=tmpdir,
-                                     cpu=threads_per_task, disable_bar=True, **kwargs)
-    return True
+#     family_to_cluster = {}
+#     with open(cluster_family_file) as fh:
+#         for line in fh:
+#             cluster_id, familly = line.rstrip().split('\t')
 
-def parse_cluster_family(cluster_family_file, family_of_interest=None):
-
-    family_to_cluster = {}
-    with open(cluster_family_file) as fh:
-        for line in fh:
-            cluster_id, familly = line.rstrip().split('\t')
-
-            family_to_cluster[familly] = cluster_id
+#             family_to_cluster[familly] = cluster_id
     
-    return family_to_cluster
+#     return family_to_cluster
 
-def parse_context_results(contexts_result_file_list):
+def parse_context_results(contexts_result_file_list: str) -> Dict[str, Path]:
+    """
+    Parse the context results file list.
+
+    :param contexts_result_file_list: The path to the file containing the list of pangenome names and context file paths.
+    :return: A dictionary mapping pangenome names to context file paths.
+    """
     
     pangenome_to_context_file = {}
     
     with open(contexts_result_file_list) as fh:
         for line in fh:
             pan_name, context_file = line.rstrip().split('\t')
-            pangenome_to_context_file[pan_name] = context_file
+            pangenome_to_context_file[pan_name] = Path(context_file)
 
     return pangenome_to_context_file
 
-def parse_context_table(context_table):
 
-    return pd.read_csv(context_table, sep='\t')
+def make_gene_context_from_context_table(pangenome: Pangenome, context_table: str) -> Set[GeneContext]:
+    """
+    Create gene contexts from a context table.
 
+    :param pangenome: The Pangenome object.
+    :param context_table: The path to the context table.
+    :return: A set of GeneContext objects.
+    """
+    context_objs = set()
+    df_context = pd.read_csv(context_table, sep='\t')
+
+    df_context_grp = df_context.groupby(['GeneContext ID']).agg({"Gene family name":set,  "Sequence ID":set})
+
+    for gene_context_id in df_context_grp.index:
     
+        gene_family_names = df_context_grp.loc[gene_context_id, "Gene family name"]
+        input_seq_ids =  df_context_grp.loc[gene_context_id, "Sequence ID"]
+        gene_families = [pangenome.get_gene_family(f_name) for f_name in gene_family_names]
+        
+        context_obj = GeneContext(pangenome, gc_id=gene_context_id, families=gene_families, sequences_ids= input_seq_ids)
+        context_objs.add(context_obj)
 
-def context_comparison(pangenome_to_path, contexts_results, familly_clusters, lock: Lock, output: Path, 
-                       tmpdir: Path, task: int = 1, threads_per_task: int = 1,
+    return context_objs
+
+def write_context_summary(gene_contexts: List[GeneContext], output_table: Path):
+    """
+    Write a summary of gene contexts to a table.
+
+    :param gene_contexts: A list of GeneContext objects representing gene contexts to summarize.
+    :param output_table: The path to the output table file where the summary will be written.
+    """
+
+    gene_context_summaries = [gc.summarize() for gc in gene_contexts]
+    summary_df = pd.DataFrame(gene_context_summaries)
+
+    summary_df.to_csv(output_table, sep='\t', index=False)
+
+
+def get_gene_contexts_from_table(context_table_path: Path, pangenome_name: str, pangenome_path: Path, taxid: str) -> List[GeneContext]:
+    """
+    Retrieve gene contexts from a table and create GeneContext objects.
+
+    :param context_table_path: The path to the context table file.
+    :param pangenome_name: The name of the pangenome.
+    :param pangenome_path: The path to the pangenome file.
+    :param taxid: The taxonomic ID associated with the pangenome.
+    """
+    
+    pangenome = load_pangenome(pangenome_name, pangenome_path, taxid, {"need_families":True,})
+
+    gene_contexts = make_gene_context_from_context_table(pangenome, context_table_path)
+    return gene_contexts
+
+
+def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]], 
+                                    pan_name_to_context_table: Dict[str, Path],
+                                    max_workers: int, disable_bar: bool) -> List[Pangenome]:
+    """
+    Retrieve gene contexts from multiple tables using multiprocessing.
+
+    :param pan_name_to_path: A dictionary mapping pangenome names to their path information.
+    :param pan_name_to_context_table: A dictionary mapping pangenome names to their corresponding context tables.
+    :param max_workers: The maximum number of workers to use for multiprocessing.
+    :param disable_bar: A boolean value indicating whether to disable the progress bar.
+    :return: A list of Pangenome objects containing the retrieved gene contexts.
+    """
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+
+        futures = []
+        
+        for pangenome_name, pangenome_path_info in pan_name_to_path.items():
+
+            context_table = pan_name_to_context_table[pangenome_name]
+            
+            future = executor.submit(get_gene_contexts_from_table, context_table, pangenome_name, pangenome_path_info["path"], 
+                                        pangenome_path_info["taxid"])
+            futures.append(future)
+        
+        gene_contexts = [gene_context for future in tqdm(futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
+                
+    return gene_contexts
+
+def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, familly_clusters: bool,
+                       lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
                        disable_bar: bool = False, force: bool = False, **kwargs):
+    """
+    Perform comparison of gene contexts and cluster families.
+
+    :param pangenome_to_path: A dictionary mapping pangenome names to their corresponding paths.
+    :param contexts_results: The path to the file containing the list of context results.
+    :param familly_clusters: A boolean indicating whether to use precomputed family clusters or run the cluster family function.
+    :param lock: A Lock object for thread synchronization.
+    :param output: The output directory path.
+    :param tmpdir: The temporary directory path.
+    :param task: The number of tasks for parallel processing (default: 1).
+    :param threads_per_task: The number of threads per task (default: 1).
+    :param disable_bar: A boolean indicating whether to disable progress bars (default: False).
+    :param force: A boolean indicating whether to force overwriting existing output files (default: False).
+    :param kwargs: Additional keyword arguments.
+    """
     
     mkdir(output, force)
-
-    need_info = {"need_families":True,}
-
-    load_multiple_pangenomes(pangenome_to_path, task, disable_bar, lock, need_info)
-
-
-
+    
     if contexts_results:
-        # Parse the given context results
-        pangenome_to_context_file =  parse_context_results(contexts_results)
+        logging.info("Retrieving gene context from existing results.")
 
-        pang_to_context_df = {pan:pd.read_csv(context, sep='\t')  for pan, context in pangenome_to_context_file.items()}
+        # TODO check consistency between pangenome_to_path and context results
 
+        pan_name_to_context_file =  parse_context_results(contexts_results)
 
+        gene_contexts = get_gene_contexts_from_tables_mp(pangenome_to_path, pan_name_to_context_file, task, disable_bar)
         
-
     else:
         # run ppanggolin context in parallel
         raise NotImplementedError
@@ -99,6 +194,13 @@ def context_comparison(pangenome_to_path, contexts_results, familly_clusters, lo
                 for future in futures:
                     results = future.result()
         
+    # write gene context summary 
+    summary_out_table = output / "gene_context_summary.tsv"
+    logging.info(f'Writting gene context summary: {summary_out_table} ')
+    write_context_summary(gene_contexts, summary_out_table)
+
+    return
+
     if familly_clusters:
         # Parse the given cluster family results 
         pass

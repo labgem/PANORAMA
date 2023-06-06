@@ -3,7 +3,7 @@
 
 # default libraries
 import logging
-from typing import Dict, Generator, List, Union
+from typing import Dict, Generator, List, Union, Set
 
 # installed libraries
 from ppanggolin.region import Module as Mod, GeneContext as GeneCont
@@ -11,6 +11,7 @@ from ppanggolin.region import Module as Mod, GeneContext as GeneCont
 # local libraries
 from panorama.geneFamily import GeneFamily
 from panorama.system import System
+# from panorama.pangenomes import Pangenome
 
 class Module(Mod):
     """
@@ -68,14 +69,27 @@ class GeneContext(GeneCont):
 
     """
 
-    def __init__(self, pangenome_name:str, gc_id: int, families: set = None):
+    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], sequences_ids: Set[str]):
         """
         :param pangenome_name : name of the pangenome of the context
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
+        :param sequences_ids: Ids of the input sequences used to create the gene context.
         """
             
-        super().__init__(gc_id=f"{pangenome_name}_{gc_id}", families=families)
+        super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
         
-        self.pangenome = pangenome_name
+        self.pangenome = pangenome.name
+        self.sequence_ids = sequences_ids
+
+    def summarize(self):
+        """
+
+        """
+        
+        return {"GeneContext ID": self.ID,
+                "pangenome": self.pangenome,
+                "Gene Family count": len(self.families),
+                "Partitions": ";".join({f.partition for f in self.families})
+                }
         
