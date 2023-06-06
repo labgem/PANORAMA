@@ -3,12 +3,13 @@
 
 # default libraries
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, Tuple
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager, Lock
 import logging
 from typing import Dict, Union, List
+from itertools import combinations
 
 # installed libraries
 from tqdm import tqdm
@@ -22,7 +23,6 @@ from ppanggolin.cluster.cluster import read_tsv as read_clustering_table
 from panorama.utils import mkdir, init_lock, load_multiple_pangenomes, load_pangenome
 from panorama.pangenomes import Pangenome
 from panorama.region import GeneContext
-from panorama.geneFamily import FamilyCluster
 
 # def check_run_context_arguments(kwargs):
 #     if "sequences" not in kwargs and "family" not in kwargs:
@@ -157,8 +157,41 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
 
     return gene_contexts
 
-def compare_gene_contexts(gene_contexts):
-    pass
+def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext]) -> Tuple[GeneContext, GeneContext, float]:
+    """
+    Compares a pair of gene contexts and calculates the Jaccard similarity between their family clusters.
+
+    :param context_pair: A tuple containing two GeneContext objects to be compared.
+    :return: A tuple containing the two GeneContext objects and the Jaccard similarity between their family clusters.
+    """
+    contextA, contextB = context_pair
+    contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
+    contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+
+    clst_family_jaccard = len(contextA_clst_family & contextB_clst_family) / len(contextA_clst_family | contextB_clst_family)
+    
+    return contextA, contextB, clst_family_jaccard
+    
+def compare_gene_contexts(gene_contexts: List[GeneContext], max_workers: int, disable_bar: bool) -> List[GeneContext]:
+    """
+    Compares gene contexts by calculating the Jaccard similarity between their family clusters.
+
+    :param gene_contexts: A list of GeneContext objects to be compared.
+    :param max_workers: The maximum number of worker processes for parallel execution.
+    :param disable_bar: A boolean flag indicating whether to disable the progress bar.
+    :return: A list of GeneContext objects.
+    """
+    
+    # TODO add tqdm bar
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+
+        context_pairs =  combinations(gene_contexts, 2)
+
+        for comparison_result in executor.map(compare_pair_of_contexts, context_pairs, chunksize=10):
+            print(comparison_result)
+
+    return gene_contexts
+
 
 def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, family_clusters: bool,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
@@ -218,7 +251,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
         logging.info(f"Retrieving family clusters from existing clustering: {family_clusters}")
         
         # Parse the given cluster family results
-        cluster2family, gene_family_to_family_cluster = read_clustering_table(family_clusters)
+        gene_family_to_family_cluster, cluster2family = read_clustering_table(family_clusters)
         
     else:
         # run cluster familly
@@ -229,12 +262,13 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     # add family cluster info in gene contexts 
     for gene_context in gene_contexts:
         for gene_family in gene_context.families:
-            family_cluster = gene_family_to_family_cluster[gene_family]
+            family_cluster, is_fragmented = gene_family_to_family_cluster[gene_family.name]
+            print(family_cluster)
             gene_family.add_family_cluster(family_cluster)
 
     # Compare gene contexts based on their family clusters  
 
-    compare_gene_contexts(gene_contexts)
+    compare_gene_contexts(gene_contexts, task, disable_bar)
     
     
 
