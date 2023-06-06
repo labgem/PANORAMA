@@ -42,7 +42,7 @@ from panorama.region import GeneContext
 #             cluster_id, familly = line.rstrip().split('\t')
 
 #             family_to_cluster[familly] = cluster_id
-    
+
 #     return family_to_cluster
 
 def parse_context_results(contexts_result_file_list: str) -> Dict[str, Path]:
@@ -52,9 +52,9 @@ def parse_context_results(contexts_result_file_list: str) -> Dict[str, Path]:
     :param contexts_result_file_list: The path to the file containing the list of pangenome names and context file paths.
     :return: A dictionary mapping pangenome names to context file paths.
     """
-    
+
     pangenome_to_context_file = {}
-    
+
     with open(contexts_result_file_list) as fh:
         for line in fh:
             pan_name, context_file = line.rstrip().split('\t')
@@ -74,18 +74,23 @@ def make_gene_context_from_context_table(pangenome: Pangenome, context_table: st
     context_objs = set()
     df_context = pd.read_csv(context_table, sep='\t')
 
-    df_context_grp = df_context.groupby(['GeneContext ID']).agg({"Gene family name":set,  "Sequence ID":set})
+    df_context_grp = df_context.groupby(['GeneContext ID']).agg(
+        {"Gene family name": set,  "Sequence ID": set})
 
     for gene_context_id in df_context_grp.index:
-    
-        gene_family_names = df_context_grp.loc[gene_context_id, "Gene family name"]
-        input_seq_ids =  df_context_grp.loc[gene_context_id, "Sequence ID"]
-        gene_families = [pangenome.get_gene_family(f_name) for f_name in gene_family_names]
-        
-        context_obj = GeneContext(pangenome, gc_id=gene_context_id, families=gene_families, sequences_ids= input_seq_ids)
+
+        gene_family_names = df_context_grp.loc[gene_context_id,
+                                               "Gene family name"]
+        input_seq_ids = df_context_grp.loc[gene_context_id, "Sequence ID"]
+        gene_families = [pangenome.get_gene_family(
+            f_name) for f_name in gene_family_names]
+
+        context_obj = GeneContext(
+            pangenome, gc_id=gene_context_id, families=gene_families, sequences_ids=input_seq_ids)
         context_objs.add(context_obj)
 
     return context_objs
+
 
 def write_context_summary(gene_contexts: List[GeneContext], output_table: Path):
     """
@@ -110,16 +115,18 @@ def get_gene_contexts_from_table(context_table_path: Path, pangenome_name: str, 
     :param pangenome_path: The path to the pangenome file.
     :param taxid: The taxonomic ID associated with the pangenome.
     """
-    
-    pangenome = load_pangenome(pangenome_name, pangenome_path, taxid, {"need_families":True,})
 
-    gene_contexts = make_gene_context_from_context_table(pangenome, context_table_path)
+    pangenome = load_pangenome(pangenome_name, pangenome_path, taxid, {
+                               "need_families": True, })
+
+    gene_contexts = make_gene_context_from_context_table(
+        pangenome, context_table_path)
     return gene_contexts
 
 
-def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]], 
-                                    pan_name_to_context_table: Dict[str, Path],
-                                    max_workers: int, disable_bar: bool) -> List[Pangenome]:
+def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]],
+                                     pan_name_to_context_table: Dict[str, Path],
+                                     max_workers: int, disable_bar: bool) -> List[Pangenome]:
     """
     Retrieve gene contexts from multiple tables using multiprocessing.
 
@@ -133,18 +140,20 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
 
         futures = []
-        
+
         for pangenome_name, pangenome_path_info in pan_name_to_path.items():
 
             context_table = pan_name_to_context_table[pangenome_name]
-            
-            future = executor.submit(get_gene_contexts_from_table, context_table, pangenome_name, pangenome_path_info["path"], 
-                                        pangenome_path_info["taxid"])
+
+            future = executor.submit(get_gene_contexts_from_table, context_table, pangenome_name, pangenome_path_info["path"],
+                                     pangenome_path_info["taxid"])
             futures.append(future)
-        
-        gene_contexts = [gene_context for future in tqdm(futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
-                
+
+        gene_contexts = [gene_context for future in tqdm(
+            futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
+
     return gene_contexts
+
 
 def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, familly_clusters: bool,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
@@ -164,22 +173,23 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     :param force: A boolean indicating whether to force overwriting existing output files (default: False).
     :param kwargs: Additional keyword arguments.
     """
-    
+
     mkdir(output, force)
-    
+
     if contexts_results:
         logging.info("Retrieving gene context from existing results.")
 
         # TODO check consistency between pangenome_to_path and context results
 
-        pan_name_to_context_file =  parse_context_results(contexts_results)
+        pan_name_to_context_file = parse_context_results(contexts_results)
 
-        gene_contexts = get_gene_contexts_from_tables_mp(pangenome_to_path, pan_name_to_context_file, task, disable_bar)
-        
+        gene_contexts = get_gene_contexts_from_tables_mp(
+            pangenome_to_path, pan_name_to_context_file, task, disable_bar)
+
     else:
         # run ppanggolin context in parallel
         raise NotImplementedError
-    
+
         check_run_context_arguments(kwargs)
 
         with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
@@ -188,13 +198,13 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
                 for pangenome_name, pangenome_info in pangenome_to_path.items():
                     mkdir(output/pangenome_name, force)
                     future = executor.submit(search_context_mp, pangenome_name, pangenome_info, output, tmpdir,
-                                            threads_per_task, **kwargs)
+                                             threads_per_task, **kwargs)
                     future.add_done_callback(lambda p: progress.update())
                     futures.append(future)
                 for future in futures:
                     results = future.result()
-        
-    # write gene context summary 
+
+    # write gene context summary
     summary_out_table = output / "gene_context_summary.tsv"
     logging.info(f'Writting gene context summary: {summary_out_table} ')
     write_context_summary(gene_contexts, summary_out_table)
@@ -202,27 +212,25 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     return
 
     if familly_clusters:
-        # Parse the given cluster family results 
+        # Parse the given cluster family results
         pass
-       
+
     else:
         # run cluster familly
         # familly_clusters_file = panorama cluster function
         raise NotImplementedError
-         
-    
-    
 
 
 def context_comparison_parser(parser):
 
-    use_context_arg = parser.add_argument_group("Use already computed contexts arguments")
+    use_context_arg = parser.add_argument_group(
+        "Use already computed contexts arguments")
 
     use_context_arg.add_argument('--context_results', type=Path, required=False,
-                        help="Tsv file with two columns: name of pangenome and path to the corresponding context results.")
-    
+                                 help="Tsv file with two columns: name of pangenome and path to the corresponding context results.")
+
     use_context_arg.add_argument('--familly_clusters', type=Path, required=False,
-                        help="A tab-separated file listing the cluster names, the family IDs,")
+                                 help="A tab-separated file listing the cluster names, the family IDs,")
 
     # TODO: use context parser of ppanggolin to have correct args and prevent duplication
 
@@ -231,29 +239,27 @@ def context_comparison_parser(parser):
     # # required = parser._action_groups[2]
     # run_context_arg.add_argument('-S', '--sequences', type=Path, required=False,
     #                       help="Fasta file with the sequences of interest")
-    
+
     # run_context_arg.add_argument('-F', '--family', type=Path, required=False,
     #                       help="List of family IDs of interest from the pan")
-    
+
     # # optional = parser._action_groups[4]
 
     # run_context_arg.add_argument('--no_defrag', required=False, action="store_true",
     #                       help="DO NOT Realign gene families to link fragments with"
     #                            "their non-fragmented gene family.")
-    
+
     # run_context_arg.add_argument('--identity', required=False, type=float, default=0.5,
     #                       help="min identity percentage threshold")
-    
+
     # run_context_arg.add_argument('--coverage', required=False, type=float, default=0.8,
     #                       help="min coverage percentage threshold")
-    
+
     # run_context_arg.add_argument("-t", "--transitive", required=False, type=int, default=4,
     #                       help="Size of the transitive closure used to build the graph. This indicates the number of "
     #                            "non related genes allowed in-between two related genes. Increasing it will improve "
     #                            "precision but lower sensitivity a little.")
-    
+
     # run_context_arg.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
     #                       help="minimum jaccard similarity used to filter edges between gene families. Increasing it "
     #                            "will improve precision but lower sensitivity a lot.")
-
-

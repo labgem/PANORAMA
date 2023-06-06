@@ -13,12 +13,14 @@ from panorama.geneFamily import GeneFamily
 from panorama.system import System
 # from panorama.pangenomes import Pangenome
 
+
 class Module(Mod):
     """
     This class represent a hotspot.
     :param module_id: identifier of the module
     :param families: Set of families which define the module
     """
+
     def __init__(self, module_id: int, families: set = None):
         """
         'core' are gene families that define the module.
@@ -62,8 +64,9 @@ class Module(Mod):
                     raise Exception("Two system with same ID and name but with different gene families are trying to be"
                                     " added to module. This error is unexpected. Please report on our GitHub")
 
+
 class GeneContext(GeneCont):
-            
+
     """
     A class used to represent a gene context
 
@@ -76,9 +79,9 @@ class GeneContext(GeneCont):
         :param families: Gene families included in the GeneContext
         :param sequences_ids: Ids of the input sequences used to create the gene context.
         """
-            
+
         super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
-        
+
         self.pangenome = pangenome.name
         self.sequence_ids = sequences_ids
 
@@ -86,10 +89,9 @@ class GeneContext(GeneCont):
         """
 
         """
-        
+
         return {"GeneContext ID": self.ID,
                 "pangenome": self.pangenome,
                 "Gene Family count": len(self.families),
                 "Partitions": ";".join({f.partition for f in self.families})
                 }
-        
