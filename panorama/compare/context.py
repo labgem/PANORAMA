@@ -10,6 +10,8 @@ from multiprocessing import Manager, Lock
 import logging
 from typing import Dict, Union, List
 from itertools import combinations
+import networkx as nx
+
 
 # installed libraries
 from tqdm import tqdm
@@ -157,22 +159,37 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
 
     return gene_contexts
 
-def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext]) -> Tuple[GeneContext, GeneContext, float]:
+def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_jaccard) -> Tuple[GeneContext, GeneContext, float]:
     """
     Compares a pair of gene contexts and calculates the Jaccard similarity between their family clusters.
 
     :param context_pair: A tuple containing two GeneContext objects to be compared.
     :return: A tuple containing the two GeneContext objects and the Jaccard similarity between their family clusters.
     """
+
     contextA, contextB = context_pair
     contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
     contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+    shared_family = len(contextA_clst_family & contextB_clst_family)
 
-    clst_family_jaccard = len(contextA_clst_family & contextB_clst_family) / len(contextA_clst_family | contextB_clst_family)
+    clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
+    if clst_family_jaccard >= min_jaccard: 
+        return contextA.ID, contextB.ID, {'jaccard':clst_family_jaccard, "shared family":shared_family}
+    else: 
+        return contextA.ID, contextB.ID, None
     
-    return contextA, contextB, clst_family_jaccard
-    
-def compare_gene_contexts(gene_contexts: List[GeneContext], max_workers: int, disable_bar: bool) -> List[GeneContext]:
+def launch_context_comparison(pack: tuple) -> tuple:
+    """ 
+    Allow to launch in multiprocessing the context comparison
+
+    :param pack: Pack of argument for context comparison
+
+    :return: edge metrics 
+    """
+    return compare_pair_of_contexts(*pack)
+
+
+def compare_gene_contexts(gene_contexts: List[GeneContext], min_jaccard, max_workers: int, disable_bar: bool) -> List[GeneContext]:
     """
     Compares gene contexts by calculating the Jaccard similarity between their family clusters.
 
@@ -181,19 +198,25 @@ def compare_gene_contexts(gene_contexts: List[GeneContext], max_workers: int, di
     :param disable_bar: A boolean flag indicating whether to disable the progress bar.
     :return: A list of GeneContext objects.
     """
-    
-    # TODO add tqdm bar
+    context_graph = nx.Graph()
+    for gc in gene_contexts:
+        context_graph.add_node(gc.ID, pangenome=gc.pangenome)
+
+    context_pairs =  combinations(gene_contexts, 2)
+    comparison_arguments = ((p, min_jaccard) for p in context_pairs)
+    pair_count = (len(gene_contexts) **2 - len(gene_contexts)) / 2
+
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for gcA, gcB, metrics in tqdm(executor.map(launch_context_comparison, comparison_arguments, chunksize=5), total=pair_count, 
+                                      disable=disable_bar, unit="context pair"):
+            if metrics:
+                context_graph.add_edge( gcA, gcB, **metrics)
 
-        context_pairs =  combinations(gene_contexts, 2)
-
-        for comparison_result in executor.map(compare_pair_of_contexts, context_pairs, chunksize=10):
-            print(comparison_result)
-
-    return gene_contexts
+    logging.info(f'Context graph: {context_graph}')
+    return context_graph
 
 
-def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, family_clusters: bool,
+def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, family_clusters: bool, min_jaccard,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
                        disable_bar: bool = False, force: bool = False, **kwargs):
     """
@@ -258,19 +281,22 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
         # family_clusters_file = panorama cluster function
         raise NotImplementedError
 
+    # TODO Check that all gene family in context have a family cluster 
 
     # add family cluster info in gene contexts 
     for gene_context in gene_contexts:
         for gene_family in gene_context.families:
             family_cluster, is_fragmented = gene_family_to_family_cluster[gene_family.name]
-            print(family_cluster)
             gene_family.add_family_cluster(family_cluster)
 
     # Compare gene contexts based on their family clusters  
 
-    compare_gene_contexts(gene_contexts, task, disable_bar)
+    context_graph = compare_gene_contexts(gene_contexts, min_jaccard, task, disable_bar)
     
-    
+    context_graph_file = output / f"context.graphml"
+
+    logging.info(f'Writting gene context graph: {context_graph_file}')
+    nx.readwrite.graphml.write_graphml(context_graph, context_graph_file)
 
 def context_comparison_parser(parser):
 
@@ -282,7 +308,10 @@ def context_comparison_parser(parser):
 
     use_context_arg.add_argument('--family_clusters', type=Path, required=False,
                                  help="A tab-separated file listing the cluster names, the family IDs,")
-
+    
+    use_context_arg.add_argument('--min_jaccard', type=restricted_float, required=False, default=0.5,
+                                 help="Minimum value for jaccard index")
+    
     # TODO: use context parser of ppanggolin to have correct args and prevent duplication
 
     # run_context_arg = parser.add_argument_group("PPanGGOLiN context arguments")
