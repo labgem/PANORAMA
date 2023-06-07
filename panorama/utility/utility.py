@@ -7,7 +7,6 @@ import logging
 from pathlib import Path
 import tempfile
 
-import panorama
 # install libraries
 
 # local libraries
