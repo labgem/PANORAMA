@@ -72,22 +72,22 @@ class GeneContext(GeneCont):
 
     """
 
-    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], sequences_ids: Set[str]):
+    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily]):
         """
         :param pangenome_name : name of the pangenome of the context
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
-        :param sequences_ids: Ids of the input sequences used to create the gene context.
         """
 
         super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
 
         self.pangenome = pangenome.name
-        self.sequence_ids = sequences_ids
 
-    def summarize(self):
+    def summarize(self) -> dict:
         """
+        Summarize gene context information in a dict
 
+        :return: dict with gene context info. 
         """
 
         return {"GeneContext ID": self.ID,

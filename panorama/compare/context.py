@@ -8,7 +8,7 @@ from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager, Lock
 import logging
-from typing import Dict, Union, List
+from typing import Dict, Union, List, Set
 from itertools import combinations
 import networkx as nx
 
@@ -86,14 +86,38 @@ def make_gene_context_from_context_table(pangenome: Pangenome, context_table: st
 
         gene_family_names = df_context_grp.loc[gene_context_id,
                                                "Gene family name"]
-        input_seq_ids = df_context_grp.loc[gene_context_id, "Sequence ID"]
+        
         gene_families = [pangenome.get_gene_family(
             f_name) for f_name in gene_family_names]
 
         context_obj = GeneContext(
-            pangenome, gc_id=gene_context_id, families=gene_families, sequences_ids=input_seq_ids)
+            pangenome, gc_id=gene_context_id, families=gene_families)
         context_objs.add(context_obj)
 
+    return context_objs
+
+
+def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) -> Set[GeneContext]:
+    """
+    Create gene contexts from a context graph.
+
+    :param pangenome: The Pangenome object.
+    :param context_graph: The path to the context graph.
+    :return: A set of GeneContext objects.
+    """
+    context_objs = set()
+    
+    if graph_file.suffix == ".graphml":
+        context_graph  = nx.read_graphml(graph_file)
+    elif graph_file.suffix == ".gexf":
+        context_graph  = nx.read_gexf(graph_file)
+
+    for i, families_in_context in enumerate(nx.connected_components(context_graph)):
+        gene_families = [pangenome.get_gene_family(f_name) for f_name in families_in_context]
+
+        context_obj = GeneContext(pangenome, gc_id=i, families=gene_families)
+        context_objs.add(context_obj)
+        
     return context_objs
 
 
@@ -111,11 +135,11 @@ def write_context_summary(gene_contexts: List[GeneContext], output_table: Path):
     summary_df.to_csv(output_table, sep='\t', index=False)
 
 
-def get_gene_contexts_from_table(context_table_path: Path, pangenome_name: str, pangenome_path: Path, taxid: str) -> List[GeneContext]:
+def load_pangenome_and_get_contexts_from_result(context_result_path: Path, pangenome_name: str, pangenome_path: Path, taxid: str) -> List[GeneContext]:
     """
     Retrieve gene contexts from a table and create GeneContext objects.
 
-    :param context_table_path: The path to the context table file.
+    :param context_result_path: The path to the context table file or graph.
     :param pangenome_name: The name of the pangenome.
     :param pangenome_path: The path to the pangenome file.
     :param taxid: The taxonomic ID associated with the pangenome.
@@ -124,19 +148,25 @@ def get_gene_contexts_from_table(context_table_path: Path, pangenome_name: str, 
     pangenome = load_pangenome(pangenome_name, pangenome_path, taxid, {
                                "need_families": True, })
 
-    gene_contexts = make_gene_context_from_context_table(
-        pangenome, context_table_path)
+    if context_result_path.suffix == ".tsv":
+        gene_contexts = make_gene_context_from_context_table(pangenome, context_result_path)
+    elif context_result_path.suffix in [".graphml", ".gexf"]:
+        gene_contexts = make_gene_context_from_context_graph(pangenome, context_result_path)
+    else:
+        # TODO File extension should be checked when parsing file list. 
+        raise ValueError('The gene context result has not the correct extension. {}'
+                         'Panorama expects "tsv" for context tables and "graphml" or "gexf" for graph contexts.')
     return gene_contexts
 
 
-def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]],
-                                     pan_name_to_context_table: Dict[str, Path],
+def get_gene_contexts_from_results_mp(pan_name_to_path: Dict[str, Dict[str, Union[str, int]]],
+                                     pan_name_to_context_result: Dict[str, Path],
                                      max_workers: int, disable_bar: bool) -> List[Pangenome]:
     """
-    Retrieve gene contexts from multiple tables using multiprocessing.
+    Retrieve gene contexts from multiple result files using multiprocessing.
 
     :param pan_name_to_path: A dictionary mapping pangenome names to their path information.
-    :param pan_name_to_context_table: A dictionary mapping pangenome names to their corresponding context tables.
+    :param pan_name_to_context_result: A dictionary mapping pangenome names to their corresponding context tables or graphs.
     :param max_workers: The maximum number of workers to use for multiprocessing.
     :param disable_bar: A boolean value indicating whether to disable the progress bar.
     :return: A list of Pangenome objects containing the retrieved gene contexts.
@@ -148,9 +178,9 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
 
         for pangenome_name, pangenome_path_info in pan_name_to_path.items():
 
-            context_table = pan_name_to_context_table[pangenome_name]
+            context_result = pan_name_to_context_result[pangenome_name]
 
-            future = executor.submit(get_gene_contexts_from_table, context_table, pangenome_name, pangenome_path_info["path"],
+            future = executor.submit(load_pangenome_and_get_contexts_from_result, context_result, pangenome_name, pangenome_path_info["path"],
                                      pangenome_path_info["taxid"])
             futures.append(future)
 
@@ -158,6 +188,7 @@ def get_gene_contexts_from_tables_mp(pan_name_to_path: Dict[str, Dict[str, Union
             futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
 
     return gene_contexts
+
 
 def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_jaccard) -> Tuple[GeneContext, GeneContext, float]:
     """
@@ -215,8 +246,34 @@ def compare_gene_contexts(gene_contexts: List[GeneContext], min_jaccard, max_wor
     logging.info(f'Context graph: {context_graph}')
     return context_graph
 
+def compare_gene_on_syntheny(gene_contexts: List[GeneContext], min_score, max_workers: int, disable_bar: bool) -> List[GeneContext]:
+    """
+    Compares gene contexts by calculating the Jaccard similarity between their family clusters.
 
-def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: str, family_clusters: bool, min_jaccard,
+    :param gene_contexts: A list of GeneContext objects to be compared.
+    :param max_workers: The maximum number of worker processes for parallel execution.
+    :param disable_bar: A boolean flag indicating whether to disable the progress bar.
+    :return: A list of GeneContext objects.
+    """
+    context_graph = nx.Graph()
+    for gc in gene_contexts:
+        context_graph.add_node(gc.ID, pangenome=gc.pangenome)
+
+    context_pairs =  combinations(gene_contexts, 2)
+    comparison_arguments = ((p, min_score) for p in context_pairs)
+    pair_count = (len(gene_contexts) **2 - len(gene_contexts)) / 2
+
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
+        for gcA, gcB, metrics in tqdm(executor.map(launch_context_comparison, comparison_arguments, chunksize=5), total=pair_count, 
+                                      disable=disable_bar, unit="context pair"):
+            if metrics:
+                context_graph.add_edge( gcA, gcB, **metrics)
+
+    logging.info(f'Context graph: {context_graph}')
+    return context_graph
+
+
+def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: Path, family_clusters: bool, min_jaccard,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
                        disable_bar: bool = False, force: bool = False, **kwargs):
     """
@@ -244,8 +301,9 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
         pan_name_to_context_file = parse_context_results(contexts_results)
 
-        gene_contexts = get_gene_contexts_from_tables_mp(
+        gene_contexts = get_gene_contexts_from_results_mp(
             pangenome_to_path, pan_name_to_context_file, task, disable_bar)
+        
 
     else:
         # run ppanggolin context in parallel
@@ -304,8 +362,8 @@ def context_comparison_parser(parser):
         "Use already computed contexts arguments")
 
     use_context_arg.add_argument('--context_results', type=Path, required=False,
-                                 help="Tsv file with two columns: name of pangenome and path to the corresponding context results.")
-
+                                 help="Tsv file with two columns: name of pangenome and path to the corresponding context results."
+                                 "Results can be a table (tsv) or a graph (graphml or gexf)")
     use_context_arg.add_argument('--family_clusters', type=Path, required=False,
                                  help="A tab-separated file listing the cluster names, the family IDs,")
     
