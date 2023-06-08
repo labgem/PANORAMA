@@ -108,14 +108,29 @@ def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) 
     context_objs = set()
     
     if graph_file.suffix == ".graphml":
-        context_graph  = nx.read_graphml(graph_file)
+        contexts_graph  = nx.read_graphml(graph_file)
     elif graph_file.suffix == ".gexf":
-        context_graph  = nx.read_gexf(graph_file)
+        contexts_graph  = nx.read_gexf(graph_file)
 
-    for i, families_in_context in enumerate(nx.connected_components(context_graph)):
+    # connected commponents in the graph is a context
+    # lets build a context object containing the set of gene families 
+    # and graph of the context 
+    for i, families_in_context in enumerate(nx.connected_components(contexts_graph)):
         gene_families = [pangenome.get_gene_family(f_name) for f_name in families_in_context]
 
-        context_obj = GeneContext(pangenome, gc_id=i, families=gene_families)
+        context_graph = nx.subgraph_view(contexts_graph, filter_node=lambda n: n in families_in_context)
+
+        
+        # node are family id in the current graph. 
+        # We may want family object instead to be similar to 
+        # what ppanggolin context launch inside panorama would produce
+
+        # gene_family_to_obj = {f_name: pangenome.get_gene_family(f_name) for f_name in families_in_context}
+        # G = nx.Graph()
+        # G.add_edges_from(((gene_family_to_obj[f1_name], gene_family_to_obj[f2_name]) for f1_name,f2_name in context_graph.edges()))
+
+
+        context_obj = GeneContext(pangenome, gc_id=i, families=gene_families, graph=context_graph)
         context_objs.add(context_obj)
         
     return context_objs
@@ -246,7 +261,7 @@ def compare_gene_contexts(gene_contexts: List[GeneContext], min_jaccard, max_wor
     logging.info(f'Context graph: {context_graph}')
     return context_graph
 
-def compare_gene_on_syntheny(gene_contexts: List[GeneContext], min_score, max_workers: int, disable_bar: bool) -> List[GeneContext]:
+def compare_gene_contexts_on_synteny(gene_contexts: List[GeneContext], min_score, max_workers: int, disable_bar: bool) -> List[GeneContext]:
     """
     Compares gene contexts by calculating the Jaccard similarity between their family clusters.
 
@@ -350,9 +365,10 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     # Compare gene contexts based on their family clusters  
 
     context_graph = compare_gene_contexts(gene_contexts, min_jaccard, task, disable_bar)
+
+    context_synteny_graph = compare_gene_contexts_on_synteny(gene_contexts, min_jaccard, task, disable_bar)
     
     context_graph_file = output / f"context.graphml"
-
     logging.info(f'Writting gene context graph: {context_graph_file}')
     nx.readwrite.graphml.write_graphml(context_graph, context_graph_file)
 

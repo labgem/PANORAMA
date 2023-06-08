@@ -7,6 +7,7 @@ from typing import Dict, Generator, List, Union, Set
 
 # installed libraries
 from ppanggolin.region import Module as Mod, GeneContext as GeneCont
+from networkx import Graph
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -72,11 +73,12 @@ class GeneContext(GeneCont):
 
     """
 
-    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily]):
+    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], graph: Graph = None):
         """
         :param pangenome_name : name of the pangenome of the context
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
+        :param graph: Graph of the context.
         """
 
         super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
