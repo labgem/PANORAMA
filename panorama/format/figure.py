@@ -6,6 +6,8 @@ from bokeh.models import (BasicTicker, ColorBar, LinearColorMapper, CategoricalC
 from bokeh.palettes import Magma256, magma
 import pandas as pd
 from bokeh.io import output_file
+from bokeh.io.export import get_screenshot_as_png
+
 from bokeh.plotting import figure, save
 from bokeh.layouts import gridplot
 from bokeh.palettes import turbo
@@ -44,7 +46,7 @@ def figure_partition_heatmap(pan_name: str, data, list_system, list_organism, ou
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
     p = figure(title="Partition of defense systems for {0}".format(pan_name), x_range=list_system, y_range=list_organism,
-               x_axis_location="above", sizing_mode='scale_both', tools=Tools, toolbar_location='below',
+               x_axis_location="above", width=700, height=900, tools=Tools, toolbar_location='below',
                tooltips=[('Partition', '@partition'), ('Organism', '@organism'), ('Defense system', '@{system name}')])
 
     p.title.align = "center"
@@ -79,7 +81,7 @@ def figure_count_heatmap(pan_name: str, list_system, list_organism, matrix_genom
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
     p = figure(title="Defense systems for {0}".format(pan_name),
                 x_range=list_system, y_range=list_organism,
-                x_axis_location="above", sizing_mode='scale_both',
+                x_axis_location="above", width=500, height=600,
                 tools=Tools, toolbar_location='below',
                 tooltips=[('Count', '@number'), ('Organism', '@level_0'), ('Defense system', '@level_1')])
 
@@ -141,9 +143,10 @@ def figure_histogram(pan_names, df_pan_count, system_names, output):
     dict_pan_names = {'systems_names' : system_names}
     dict_pan_names.update(dict_graph_pans)
     col_pan_names = ColumnDataSource(data=dict_pan_names)
+    Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
     p = figure(title="Defense systems Count", background_fill_color="#FAFAFA", x_range=system_names,
-               sizing_mode='scale_both', x_axis_location="below", tools="hover", toolbar_location=None,
+               width=1500, height=800, x_axis_location="below", tools=Tools, toolbar_location=None,
                tooltips=[('Pangenome', '$name'),('Defense system', '@systems_names'), ('Count', '@$name')])
 
     p.vbar_stack(pan_names, x='systems_names', width=0.5, color=magma(len(pan_names)),
@@ -179,7 +182,7 @@ def figure_heatmap(pan_names, df_pan_count, df_pan_ratio, system_names, output):
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
     p = figure(title="Defense systems in pangenomes", x_range=system_names, y_range=pan_names,
-               x_axis_location="above", sizing_mode='scale_both', tools=Tools, toolbar_location='below',
+               x_axis_location="above", width=2000, height=400, tools=Tools, toolbar_location='below',
                tooltips=[('pangenome', '@level_0'), ('Defense system', '@level_1'), ('Ratio', '@ratio{0.00}'), ('Count', f"{df_pan_count}")])
 
     p.title.align = "center"
@@ -272,10 +275,10 @@ def upsetplot(pan_name, pan_df, features_df, output):
     width =len(system_name_pan) * 40
     height = len(organism_name_pan) * 40
 
-    p_features = figure(width=width, height=height, x_range=system_name_pan, tooltips=tooltips,
+    p_features = figure(width=1000, height=1200, x_range=system_name_pan, tooltips=tooltips,
                                             x_axis_location="above")
     p_features.square(x=x_axis_systems_present, y=y_axis_organisms_id_present, fill_color="white",
-                                          line_color="black", legend_label="Alone", size=15, name="")
+                                          line_color="black", legend_label="Alone", size=20, name="")
 
     if "no_spot" in spot_set:
         x_axis_systems_spot = dict_spot_system["no_spot"]
@@ -290,14 +293,14 @@ def upsetplot(pan_name, pan_df, features_df, output):
         x_axis_systems_spot = dict_spot_system[spot]
         y_axis_organisms_id_spot = dict_spot_organism_id[spot]
         p_features.square(x=x_axis_systems_spot, y=y_axis_organisms_id_spot, line_color="black",
-                                                fill_color=color_spots[i], size=15,
+                                                fill_color=color_spots[i], size=20,
                                                 legend_label="Spot " + str(spot), name=str(spot))
 
     if "no_module" in module_set:
         x_axis_systems_module = dict_module_system["no_module"]
         y_axis_organisms_id_module = dict_module_organism_id["no_module"]
         p_features.asterisk(x=x_axis_systems_module, y=y_axis_organisms_id_module, line_color="black",
-                                                fill_color="white", size=10, legend_label="no_module")
+                                                fill_color="white", size=17, legend_label="no_module")
         module_set.remove("no_module")
 
     module_list = sorted(list(module_set), key=float)
@@ -306,7 +309,7 @@ def upsetplot(pan_name, pan_df, features_df, output):
         x_axis_systems_module = dict_module_system[module]
         y_axis_organisms_id_module = dict_module_organism_id[module]
         p_features.circle(x=x_axis_systems_module, y=y_axis_organisms_id_module, line_color="black",
-                                              fill_color=color_modules[i], size=10,
+                                              fill_color=color_modules[i], size=17,
                                               legend_label="Module " + str(module), name=str(module))
 
     # Presence Absence of spot and module
@@ -332,7 +335,7 @@ def upsetplot(pan_name, pan_df, features_df, output):
 
     tooltips_org = [('Organism', '@y'), ('Count', '@left')]
 
-    p_org = figure(x_range=[max(organisms_count) + 1, 0], y_range=organism_name_pan, width=width, height=height,
+    p_org = figure(x_range=[max(organisms_count) + 1, 0], y_range=organism_name_pan, width=600, height=1200,
                    tooltips=tooltips_org)
     p_org.hbar(y=organism_name_pan, left=organisms_count, right=0, height=0.8, fill_color="#458B74",
                line_color="black")
@@ -345,7 +348,7 @@ def upsetplot(pan_name, pan_df, features_df, output):
 
 
     tooltips_sys = [('System name', '@x'), ('Count', '@top')]
-    p_sys = figure(title="{0}".format(pan_name), x_range=system_name_pan, width=width, height=height, tooltips=tooltips_sys)
+    p_sys = figure(title="{0}".format(pan_name), x_range=system_name_pan, width=1000, height=350, tooltips=tooltips_sys)
     p_sys.vbar(x=system_name_pan, top=systems_count, width=0.8, fill_color="#B22222", line_color="black")
 
     p_sys.title.align = "center"
@@ -357,7 +360,6 @@ def upsetplot(pan_name, pan_df, features_df, output):
     p_sys.y_range.start = 0
     p_sys.xaxis.visible = False
     p_sys.axis.major_label_text_font_size = "14px"
-
 
     output_file(Path.cwd() / output / pan_name / f"upsetplot_{pan_name}.html")
 
