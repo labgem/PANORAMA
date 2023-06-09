@@ -144,12 +144,12 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                 except FileNotFoundError as file_error:
                     raise FileNotFoundError(f"{file_error}")
                 else:
-                    pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                    pan_to_path[line[0]] = {"path": abs_path,
                                             "taxid": line[2] if len(line) > 2 else None}
             except Exception:
                 raise Exception("Unexpected error")
             else:
-                pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                pan_to_path[line[0]] = {"path": abs_path,
                                         "taxid": line[2] if len(line) > 2 else None}
         p_file.close()
         return pan_to_path
