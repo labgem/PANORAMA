@@ -118,7 +118,7 @@ def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) 
     for i, families_in_context in enumerate(nx.connected_components(contexts_graph)):
         gene_families = [pangenome.get_gene_family(f_name) for f_name in families_in_context]
 
-        context_graph = nx.subgraph_view(contexts_graph, filter_node=lambda n: n in families_in_context)
+        context_graph = nx.subgraph_view(contexts_graph, filter_node=lambda n: n in families_in_context).copy()
 
         
         # node are family id in the current graph. 
@@ -205,11 +205,12 @@ def get_gene_contexts_from_results_mp(pan_name_to_path: Dict[str, Dict[str, Unio
     return gene_contexts
 
 
-def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_jaccard) -> Tuple[GeneContext, GeneContext, float]:
+def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_jaccard:float) -> Tuple[GeneContext, GeneContext, float]:
     """
     Compares a pair of gene contexts and calculates the Jaccard similarity between their family clusters.
 
     :param context_pair: A tuple containing two GeneContext objects to be compared.
+    :param min_jaccard: min jaccard cutoff to report a pair of contexts.
     :return: A tuple containing the two GeneContext objects and the Jaccard similarity between their family clusters.
     """
 
@@ -220,10 +221,51 @@ def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_
 
     clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
     if clst_family_jaccard >= min_jaccard: 
-        return contextA.ID, contextB.ID, {'jaccard':clst_family_jaccard, "shared family":shared_family}
+        return contextA.ID, contextB.ID, {'jaccard':clst_family_jaccard, 
+                                          "shared family":shared_family,
+                                          "jaccard_edge":True}
     else: 
         return contextA.ID, contextB.ID, None
+
+def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext], gene_fam_2_cluster_fam: Dict[str,str]):
+
+    contextA, contextB = context_pair
+
+    cf_edgesB = {tuple(sorted([gene_fam_2_cluster_fam[n],gene_fam_2_cluster_fam[v]])) for n,v in contextB.graph.edges()}
+
+    cf_edgesA =  {tuple(sorted([gene_fam_2_cluster_fam[n],gene_fam_2_cluster_fam[v]])) for n,v in contextA.graph.edges()}
     
+    contextA_clst_family = {gene_fam_2_cluster_fam[gf.name] for gf in contextA.families}
+    contextB_clst_family = {gene_fam_2_cluster_fam[gf.name] for gf in contextB.families}
+
+    shared_edges = len(cf_edgesA & cf_edgesB) # len(contextA_clst_family & contextB_clst_family)
+
+    edges_clst_family_jaccard = shared_edges / len(cf_edgesB | cf_edgesA)
+
+    G = nx.Graph(cf_edgesA & cf_edgesB)
+
+    connected_component_sizes = [str(len(cc)) for cc in nx.connected_components(G)]
+    
+    contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
+    contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+    shared_family = len(contextA_clst_family & contextB_clst_family)
+    clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
+
+    jaccard_clst_faml_synteny  =  len(G)/len(contextA_clst_family | contextB_clst_family)
+
+    if clst_family_jaccard >= 0.5: 
+        return contextA.ID, contextB.ID, {'edges_jaccard':edges_clst_family_jaccard,
+                                          'family_compo_jaccard':clst_family_jaccard,
+                                          'family_syntheny_jaccard':jaccard_clst_faml_synteny,
+                                          "shared edges":shared_edges,
+                                           "shared family":shared_family,
+                                          "cc_count":len(connected_component_sizes),
+                                          "cc_sizes":':'.join(connected_component_sizes),
+                                          "synteny_edge":True if jaccard_clst_faml_synteny >= 0.5 else False  }
+    else: 
+        return contextA.ID, contextB.ID, None
+
+
 def launch_context_comparison(pack: tuple) -> tuple:
     """ 
     Allow to launch in multiprocessing the context comparison
@@ -234,12 +276,24 @@ def launch_context_comparison(pack: tuple) -> tuple:
     """
     return compare_pair_of_contexts(*pack)
 
+def launch_context_synteny_comparison(pack: tuple) -> tuple:
+    """ 
+    Allow to launch in multiprocessing the context comparison
 
-def compare_gene_contexts(gene_contexts: List[GeneContext], min_jaccard, max_workers: int, disable_bar: bool) -> List[GeneContext]:
+    :param pack: Pack of argument for context comparison
+
+    :return: edge metrics 
+    """
+    return compare_pair_of_context_graphs(*pack)
+
+
+
+def compare_gene_contexts_on_cluster_families(gene_contexts: List[GeneContext], min_jaccard, max_workers: int, disable_bar: bool) -> List[GeneContext]:
     """
     Compares gene contexts by calculating the Jaccard similarity between their family clusters.
 
     :param gene_contexts: A list of GeneContext objects to be compared.
+    :param min_jaccard: jaccard cutoff to report a pair of contexts.
     :param max_workers: The maximum number of worker processes for parallel execution.
     :param disable_bar: A boolean flag indicating whether to disable the progress bar.
     :return: A list of GeneContext objects.
@@ -261,11 +315,12 @@ def compare_gene_contexts(gene_contexts: List[GeneContext], min_jaccard, max_wor
     logging.info(f'Context graph: {context_graph}')
     return context_graph
 
-def compare_gene_contexts_on_synteny(gene_contexts: List[GeneContext], min_score, max_workers: int, disable_bar: bool) -> List[GeneContext]:
+def compare_gene_contexts_on_synteny(gene_contexts: List[GeneContext], gene_fam_2_cluster_fam: Dict[str, str], max_workers: int, disable_bar: bool) -> List[GeneContext]:
     """
-    Compares gene contexts by calculating the Jaccard similarity between their family clusters.
+    Compares gene contexts by looking at their context graphs.
 
     :param gene_contexts: A list of GeneContext objects to be compared.
+    :param gene_fam_2_cluster_fam: dict mapping gene family name to cluster family name
     :param max_workers: The maximum number of worker processes for parallel execution.
     :param disable_bar: A boolean flag indicating whether to disable the progress bar.
     :return: A list of GeneContext objects.
@@ -275,11 +330,11 @@ def compare_gene_contexts_on_synteny(gene_contexts: List[GeneContext], min_score
         context_graph.add_node(gc.ID, pangenome=gc.pangenome)
 
     context_pairs =  combinations(gene_contexts, 2)
-    comparison_arguments = ((p, min_score) for p in context_pairs)
+    comparison_arguments = ((p, gene_fam_2_cluster_fam) for p in context_pairs)
     pair_count = (len(gene_contexts) **2 - len(gene_contexts)) / 2
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for gcA, gcB, metrics in tqdm(executor.map(launch_context_comparison, comparison_arguments, chunksize=5), total=pair_count, 
+        for gcA, gcB, metrics in tqdm(executor.map(launch_context_synteny_comparison, comparison_arguments, chunksize=5), total=pair_count, 
                                       disable=disable_bar, unit="context pair"):
             if metrics:
                 context_graph.add_edge( gcA, gcB, **metrics)
@@ -348,6 +403,8 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
         
         # Parse the given cluster family results
         gene_family_to_family_cluster, cluster2family = read_clustering_table(family_clusters)
+        # remove fragmentation info
+        gene_family_to_family_cluster = {gf:fc for gf, (fc, is_fragmented) in gene_family_to_family_cluster.items()} 
         
     else:
         # run cluster familly
@@ -359,18 +416,28 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     # add family cluster info in gene contexts 
     for gene_context in gene_contexts:
         for gene_family in gene_context.families:
-            family_cluster, is_fragmented = gene_family_to_family_cluster[gene_family.name]
+            family_cluster = gene_family_to_family_cluster[gene_family.name]
             gene_family.add_family_cluster(family_cluster)
 
     # Compare gene contexts based on their family clusters  
 
-    context_graph = compare_gene_contexts(gene_contexts, min_jaccard, task, disable_bar)
+    context_graph_clstr_families = compare_gene_contexts_on_cluster_families(gene_contexts, min_jaccard, task, disable_bar)
 
-    context_synteny_graph = compare_gene_contexts_on_synteny(gene_contexts, min_jaccard, task, disable_bar)
+
+    # Compare gene contexts based on their synteny information  
+    context_synteny_graph = compare_gene_contexts_on_synteny(gene_contexts, gene_family_to_family_cluster, task, disable_bar)
     
+    context_graph_merged = nx.compose(context_graph_clstr_families, context_synteny_graph)
+    
+
+    # add node attributes
+
+    nx.set_node_attributes(context_graph_merged, {gc.ID:gc.summarize() for gc in gene_contexts})
+
+
     context_graph_file = output / f"context.graphml"
     logging.info(f'Writting gene context graph: {context_graph_file}')
-    nx.readwrite.graphml.write_graphml(context_graph, context_graph_file)
+    nx.readwrite.graphml.write_graphml(context_graph_merged, context_graph_file)
 
 def context_comparison_parser(parser):
 

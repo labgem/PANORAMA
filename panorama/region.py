@@ -84,6 +84,7 @@ class GeneContext(GeneCont):
         super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
 
         self.pangenome = pangenome.name
+        self.graph = graph
 
     def summarize(self) -> dict:
         """
