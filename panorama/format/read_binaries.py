@@ -4,7 +4,7 @@
 # default libraries
 import logging
 from tqdm import tqdm
-from typing import Dict, List
+from typing import Any, Callable, Dict, List
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Lock
@@ -125,7 +125,9 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source
 
 
 
-def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool]):
+def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
+                   check_function: Callable[[Pangenome, Any], None] = None,
+                   disable_bar: bool = False, **kwargs) -> Pangenome:
     """
     Load a pangenome from a given path and check the required information.
 
@@ -143,13 +145,19 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool])
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
 
-    check_pangenome_info(pangenome, disable_bar=True, **need_info)
-
+    if check_function is not None:
+        try:
+            check_function(pangenome, **kwargs)
+        except Exception as error:
+            logging.error(f"Pangenome {pangenome.name} reading return the below error")
+            raise error
+    check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
     return pangenome
 
 
 def load_multiple_pangenomes(pangenome_list: Path, need_info: Dict[str, bool], lock: Lock,
-                             max_workers: int = 1, disable_bar: bool = False) -> List[Pangenome]:
+                             max_workers: int = 1, check_function: Callable[[Pangenome, Any], None] = None,
+                             disable_bar: bool = False, **kwargs) -> List[Pangenome]:
     """
     Load multiple pangenomes in parallel using a process pool executor.
 
@@ -173,11 +181,12 @@ def load_multiple_pangenomes(pangenome_list: Path, need_info: Dict[str, bool], l
 
             for pangenome_name, pangenome_path_info in pan_to_path.items():
                 future = executor.submit(load_pangenome, pangenome_name, pangenome_path_info["path"],
-                                         pangenome_path_info["taxid"], need_info)
+                                         pangenome_path_info["taxid"], need_info, check_function,
+                                         disable_bar, **kwargs)
 
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             pangenomes = []
             for future in futures:
                 pangenomes.append(future.result())
-        return pangenomes
+    return pangenomes

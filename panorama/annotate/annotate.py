@@ -5,27 +5,30 @@
 from __future__ import annotations
 import argparse
 import logging
+from typing import Dict
 from pathlib import Path
-import tempfile
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from multiprocessing import Manager, Lock, Process, Pool
 
 # installed libraries
-from ppanggolin.meta.meta import check_metadata_format, assign_metadata
+from tqdm import tqdm
+import pandas as pd
+from ppanggolin.meta.meta import check_metadata_format, assign_metadata, write_pangenome
 
 # local libraries
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import check_pangenome_info
-from panorama.utils import check_tsv_sanity
-from panorama.annotate.hmm_search import annot_with_hmm
-from panorama.pangenomes import Pangenome
+from panorama.utils import init_lock
+from panorama.format.read_binaries import load_multiple_pangenomes
+from panorama.annotate.hmm_search import read_metadata, read_hmm, annot_with_hmm
+from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
-    """ Check and load pangenome information before adding annotation
+def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False):
+    """ Check pangenome information before adding annotation
 
     :param pangenome: Pangenome object
     :param source: source of the annotation
     :param force: erase if an annotation for the provide source already exist
-    :param disable_bar: Disable bar
     """
     if pangenome.status["metadata"]["families"] == "inFile" and source in pangenome.status["metasources"]["families"]:
         if force:
@@ -33,12 +36,33 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
         else:
             raise Exception(f"A metadata corresponding to the source : '{source}' already exist in pangenome."
                             f"Add the option --force to erase")
-    check_pangenome_info(pangenome, need_annotations=True, need_families=True, disable_bar=disable_bar)
 
 
-def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = None, mode: str = 'fast', msa: Path = None,
-                    source: str = None, tmpdir: Path = Path(tempfile.gettempdir()),
-                    threads: int = 1, disable_bar: bool = False):
+def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame, source: str,
+                                   force: bool = False, disable_bar: bool = False):
+    assign_metadata(metadata, pangenome, source, "families", omit=True, disable_bar=disable_bar)
+    write_pangenome(pangenome, pangenome.file, force=force, disable_bar=disable_bar)
+
+
+def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata: Dict[str, pd.DataFrame],
+                                    source: str, threads: int = 1, lock: Lock = None,
+                                    force: bool = False, disable_bar: bool = False):
+    lock = Lock()
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
+            _ = []
+            for pangenome_name, metadata in pangenomes2metadata.items():
+                pangenome = pangenomes.get_pangenome(pangenome_name)
+                logging.debug(f"Write annotation for pangenome {pangenome.name}")
+                future = executor.submit(write_annotations_to_pangenome, pangenome, metadata, source, force,
+                                         disable_bar)
+                future.add_done_callback(lambda p: progress.update())
+                _.append(future)
+
+
+def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, meta: Path = None,
+                              threads: int = 1, task: int = 1, lock: Lock = None,
+                              disable_bar: bool = False) -> Dict[str, pd.DataFrame]:
     """ Main function to add annotation to pangenome from tsv file
 
     :param pangenome: Pangenome object to ppanggolin
@@ -52,15 +76,40 @@ def annot_pangenome(pangenome: Pangenome, hmm: Path, tsv: Path, meta: Path = Non
     :param threads: Number of available threads
     :param disable_bar: Disable bar
     """
+    logging.info("Begin HMM searching")
+    if meta is not None:
+        metadata = read_metadata(meta)
+    else:
+        metadata = None
+    # Get list of HMM with Plan7 data model
+    hmms = read_hmm(hmm_dir=hmm.iterdir(), disable_bar=disable_bar)
+
+    with Pool(processes=task) as pool:
+        jobs = []
+        for pangenome in pangenomes:
+            logging.debug(f"Align gene families to HMM for {pangenome.name} with {threads // task} threads...")
+            jobs.append(pool.apply_async(func=annot_with_hmm,
+                                         args=(pangenome, hmms, metadata, threads // task, disable_bar)))
+        results = {}
+        for job in tqdm(jobs, unit='pangenome', disable=disable_bar):
+            res = job.get()
+            results[res[1]] = res[0]
+    return results
+
+
+def annot_pangenomes(pangenomes: Pangenomes, hmm: Path, tsv: Path, meta: Path = None, source: str = None,
+                     lock: Lock = None, threads: int = 1, task: int = 1,
+                     force: bool = False, disable_bar: bool = False):
+    assert not all(x is not None for x in [tsv, hmm]), "TSV and HMM given to assign metadata. Should be only one !"
+
     if tsv is not None:
-        metadata_df = check_metadata_format(tsv, "families")
-        # TODO check column name
+        pangenomes2metadata = check_metadata_format(tsv, "families")
     elif hmm is not None:
-        metadata_df = annot_with_hmm(pangenome, hmm, meta=meta, tmpdir=tmpdir, threads=threads, mode=mode, msa=msa,
-                                     disable_bar=disable_bar)
+        pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, meta=meta, threads=threads,
+                                                        task=task, disable_bar=disable_bar)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
-    assign_metadata(metadata_df, pangenome, source, "families", omit=True, disable_bar=disable_bar)
+    write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, threads, lock, force, disable_bar)
 
 
 def launch(args):
@@ -69,18 +118,15 @@ def launch(args):
 
     :param args: Argument given
     """
-    # check_parameter(args)
-    pan_to_path = check_tsv_sanity(args.pangenomes)
-    for pangenome_name, pangenome_info in pan_to_path.items():
-        pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-        pangenome.add_file(pangenome_info["path"])
-        check_pangenome_annotation(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
-        annot_pangenome(pangenome=pangenome, hmm=args.hmm, tsv=args.tsv, source=args.source,
-                        meta=args.meta, mode=args.mode, msa=args.msa,
-                        tmpdir=args.tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
-        logging.info("Metadata assignation Done")
-        logging.info(f"Write Metadata in pangenome {pangenome_name}")
-        write_pangenome(pangenome, pangenome_info["path"], force=args.force, disable_bar=args.disable_prog_bar)
+    pangenomes = Pangenomes()
+    manager = Manager()
+    lock = manager.Lock()
+    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True},
+                                        lock=lock, max_workers=args.threads, check_function=check_pangenome_annotation,
+                                        source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+    pangenomes.add_list_pangenomes(pan_list)
+    annot_pangenomes(pangenomes=pangenomes, hmm=args.hmm, tsv=args.tsv, source=args.source, meta=args.meta,
+                     lock=lock, task=args.task, threads=args.threads, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -109,9 +155,9 @@ def parser_annot(parser):
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source. Default use name of annnotation file or directory.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--tsv', type=Path, nargs='?',
+    exclusive_mode.add_argument('--tsv', type=Path, nargs='?', default=None,
                                 help='Gene families annotation in TSV file. See our github for more detail about format')
-    exclusive_mode.add_argument('--hmm', type=Path, nargs='?',
+    exclusive_mode.add_argument('--hmm', type=Path, nargs='?', default=None,
                                 help="File with all HMM or a directory with one HMM by file")
     hmm_param = parser.add_argument_group(title="HMM arguments",
                                           description="All of the following arguments are required,"
@@ -125,19 +171,22 @@ def parser_annot(parser):
                                 "this profile will be aligned")
     hmm_param.add_argument("--msa", required=False, type=Path, default=None,
                            help=argparse.SUPPRESS)
-                           # help="To create a HMM profile for families, you can give a msa of each gene in families."
-                           #      "This msa could be get from ppanggolin (See ppanggolin msa). "
-                           #      "If no msa provide Panorama will launch one.")
+    # help="To create a HMM profile for families, you can give a msa of each gene in families."
+    #      "This msa could be gotten from ppanggolin (See ppanggolin msa). "
+    #      "If no msa provide Panorama will launch one.")
     hmm_param.add_argument("--msa-format", required=False, type=str, default="afa",
                            choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
                                     "clustal", "clustallike", "phylip", "phylips"],
                            help=argparse.SUPPRESS)
-                           # help="Format of the input MSA.")
+    # help="Format of the input MSA.")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
-                          help="directory for storing temporary files")
+    # optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+    #                       help="directory for storing temporary files")
+    optional.add_argument("--task", required=False, nargs='?', type=int, default=1,
+                          help="Number of simultaneous task.")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
-                          help="Number of available threads")
+                          help="Number of available threads. If task is more than one,"
+                               " threads will be divides by task.")
 
 
 if __name__ == "__main__":
