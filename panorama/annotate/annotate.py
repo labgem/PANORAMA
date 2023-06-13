@@ -38,6 +38,29 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
                             f"Add the option --force to erase")
 
 
+def read_families_metadata(pangenome: Pangenome, metadata: Path):
+    metadata_df = check_metadata_format(metadata, "families")
+    return metadata_df, pangenome.name
+
+def read_families_metadata_mp(pangenomes: Pangenomes, tsv: Path, threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+    path_to_metadata = pd.read_csv(tsv, delimiter="\t", names=["Pangenome", "path"])
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
+            futures = []
+            for pangenome in pangenomes:
+                metadata_file = path_to_metadata.loc[path_to_metadata["Pangenome"] == pangenome.name]["path"].squeeze()
+                print(metadata_file)
+                logging.debug(f"read metadata for pangenome {pangenome.name}")
+                future = executor.submit(read_families_metadata, pangenome, metadata_file)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            results = {}
+            for future in futures:
+                res = future.result()
+                results[res[1]] = res[0]
+    return results
+
+
 def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame, source: str,
                                    force: bool = False, disable_bar: bool = False):
     assign_metadata(metadata, pangenome, source, "families", omit=True, disable_bar=disable_bar)
@@ -47,7 +70,6 @@ def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame,
 def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata: Dict[str, pd.DataFrame],
                                     source: str, threads: int = 1, lock: Lock = None,
                                     force: bool = False, disable_bar: bool = False):
-    lock = Lock()
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             _ = []
@@ -103,7 +125,7 @@ def annot_pangenomes(pangenomes: Pangenomes, hmm: Path, tsv: Path, meta: Path = 
     assert not all(x is not None for x in [tsv, hmm]), "TSV and HMM given to assign metadata. Should be only one !"
 
     if tsv is not None:
-        pangenomes2metadata = check_metadata_format(tsv, "families")
+        pangenomes2metadata = read_families_metadata_mp(pangenomes, tsv, threads, lock, disable_bar)
     elif hmm is not None:
         pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, meta=meta, threads=threads,
                                                         task=task, disable_bar=disable_bar)
@@ -156,7 +178,8 @@ def parser_annot(parser):
                           help='Name of the annotation source. Default use name of annnotation file or directory.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
     exclusive_mode.add_argument('--tsv', type=Path, nargs='?', default=None,
-                                help='Gene families annotation in TSV file. See our github for more detail about format')
+                                help='List of Gene families annotation in TSV format. One TSV per pangenome.'
+                                     'See our github for more detail about format')
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?', default=None,
                                 help="File with all HMM or a directory with one HMM by file")
     hmm_param = parser.add_argument_group(title="HMM arguments",
