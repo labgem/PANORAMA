@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import csv
 from typing import TextIO, Dict, Union, List
+from multiprocessing import Manager, Lock
 import pkg_resources
 
 # installed libraries
@@ -155,10 +156,7 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
         return pan_to_path
 
 
-loading_lock = None
-
-
-def init_lock(lock):
+def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
@@ -167,6 +165,6 @@ def init_lock(lock):
 
     :param lock: The lock object to be assigned to `loading_lock`.
     """
-    global loading_lock
-    if loading_lock is None:
-        loading_lock = lock
+    if lock is None:
+        manager = Manager()
+        return manager.Lock()
