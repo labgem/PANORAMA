@@ -210,12 +210,11 @@ def launch(args):
     """
     # check_parameter(args)
     mkdir(args.output, args.force)
-    pangenomes = Pangenomes()
+
     manager = Manager()
     lock = manager.Lock()
-    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                        max_workers=args.task*args.threads_per_task, disable_bar=args.disable_prog_bar)
-    pangenomes.add_list_pangenomes(pan_list)
+    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
+                                          max_workers=args.task*args.threads_per_task, disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     if args.inter_pangenomes:
         inter_pangenome_align(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,

@@ -164,12 +164,10 @@ def launch(args):
                    "identity": args.identity, "cov_mode": args.cov_mode, "eval": args.eval,
                    "max_seq_len": args.max_seq_len, "max_reject": args.max_reject, "align_mode": args.align_mode,
                    "clust_mode": args.clust_mode, "reassign": args.reassign}
-    pangenomes = Pangenomes()
     manager = Manager()
     lock = manager.Lock()
-    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                        max_workers=args.threads, disable_bar=args.disable_prog_bar)
-    pangenomes.add_list_pangenomes(pan_list)
+    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
+                                          max_workers=args.threads, disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     clust_res = cluster_gene_families(pangenomes=pangenomes, method=args.method, mmseqs2_opt=mmseqs2_opt, lock=lock,
                                       tmpdir=tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
