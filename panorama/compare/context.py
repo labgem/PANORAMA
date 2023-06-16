@@ -12,6 +12,9 @@ from typing import Dict, Union, List, Set
 from itertools import combinations
 import networkx as nx
 
+from itertools import product
+from collections import defaultdict
+
 
 # installed libraries
 from tqdm import tqdm
@@ -109,6 +112,7 @@ def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) 
     
     if graph_file.suffix == ".graphml":
         contexts_graph  = nx.read_graphml(graph_file)
+
     elif graph_file.suffix == ".gexf":
         contexts_graph  = nx.read_gexf(graph_file)
 
@@ -258,13 +262,188 @@ def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext]
                                           'family_compo_jaccard':clst_family_jaccard,
                                           'family_syntheny_jaccard':jaccard_clst_faml_synteny,
                                           "shared edges":shared_edges,
-                                           "shared family":shared_family,
+                                          "shared family":shared_family,
                                           "cc_count":len(connected_component_sizes),
                                           "cc_sizes":':'.join(connected_component_sizes),
                                           "synteny_edge":True if jaccard_clst_faml_synteny >= 0.5 else False  }
     else: 
         return contextA.ID, contextB.ID, None
 
+
+def get_multigraph_edges_for_one_graph(g, g_node_2_meta_nodes):
+    g_multigraph_edges = []
+    for n1, n2 in g.edges():
+        if n1 in g_node_2_meta_nodes and n2 in g_node_2_meta_nodes:
+            n1_meta_nodes = g_node_2_meta_nodes[n1]
+            n2_meta_nodes = g_node_2_meta_nodes[n2]
+
+            g_multigraph_edges += list(product(n1_meta_nodes, n2_meta_nodes))
+        
+
+    return g_multigraph_edges
+
+
+
+def create_metanodes(gfA_to_cf: dict, gfB_to_cf: dict) -> Tuple[List[Tuple[str, dict]], dict, dict]:
+    """
+    Create metanodes for a multigraph based on gene family mappings.
+
+    :param gfA_to_cf: A dictionary mapping gene families in graph A to their cluster families.
+    :param gfB_to_cf: A dictionary mapping gene families in graph B to their cluster families.
+    :return: A tuple containing the metanodes, graph A node to metanodes mapping, and graph B node to metanodes mapping.
+
+    Metanodes are created for gene families that have a common cluster family between the two graphs.
+
+    When a cluster family is associated with more than one gene family in a graph, multiple metanodes are created,
+    and each metanode is differentiated by adding "´" to its name.
+    """
+
+    clusters = set(gfB_to_cf.values()) | set(gfA_to_cf.values())
+
+    meta_nodes = []
+
+    gA_node_2_meta_nodes = defaultdict(list)
+    gB_node_2_meta_nodes = defaultdict(list)
+
+    for cluster in clusters:
+        clstr_gA_nodes = [n for n in gfA_to_cf if gfA_to_cf[n] == cluster]
+        clstr_gB_nodes = [n for n in gfB_to_cf if gfB_to_cf[n] == cluster]
+
+        for i, (n_gA, n_gB) in enumerate(product(clstr_gA_nodes, clstr_gB_nodes)):
+            full_name_meta_node = f"{cluster}: ({n_gB}, {n_gA})"
+
+            meta_node = f"{cluster}" if i == 0 else f"{cluster}{'´'*i}"
+
+            meta_node_attr =  {"cluster":cluster, "node_gA":n_gA, "node_gB":n_gB, 'full_name':full_name_meta_node}
+            meta_nodes.append((meta_node, meta_node_attr))
+            gA_node_2_meta_nodes[n_gA].append(meta_node)
+            gB_node_2_meta_nodes[n_gB].append(meta_node)
+            
+    return meta_nodes, gA_node_2_meta_nodes, gB_node_2_meta_nodes
+            
+def get_multigraph_edges(g, g_node_2_meta_nodes):
+    """
+    Translate edges of the graph in metanode of the multigraph. 
+
+
+
+    """
+    g_multigraph_edges = []
+    for n1, n2 in g.edges():
+        if n1 in g_node_2_meta_nodes and n2 in g_node_2_meta_nodes:
+            n1_meta_nodes = g_node_2_meta_nodes[n1]
+            n2_meta_nodes = g_node_2_meta_nodes[n2]
+
+            g_multigraph_edges += list(product(n1_meta_nodes, n2_meta_nodes))
+    
+    return g_multigraph_edges
+
+
+def get_conserved_genomics_contexts(gcA_graph, gcB_graph, gene_fam_2_cluster_fam):
+
+
+    gfA_to_cf = {gf:cf for gf, cf in gene_fam_2_cluster_fam.items() if gf in gcA_graph}
+    gfB_to_cf = {gf:cf for gf, cf in gene_fam_2_cluster_fam.items() if gf in gcB_graph}
+
+    meta_nodes, gA_node_2_meta_nodes, gB_node_2_meta_nodes = create_metanodes(gfA_to_cf, gfB_to_cf)
+
+    gA_multigraph_edges = get_multigraph_edges_for_one_graph(gcA_graph, gA_node_2_meta_nodes)
+    gB_multigraph_edges = get_multigraph_edges_for_one_graph(gcB_graph, gB_node_2_meta_nodes)
+
+    parititions = CCC(meta_nodes, gA_multigraph_edges, gB_multigraph_edges) 
+
+    print(parititions)
+
+def get_cc(nodes, edges): 
+    G = nx.Graph()
+    G.add_nodes_from(nodes)
+
+    G.add_edges_from(edges)
+    cc_list = list(nx.connected_components(G))
+    for cc in cc_list:
+        print(cc)
+    return cc_list
+
+
+def CCC(meta_nodes, g1_edges, g2_edges):
+    
+    print("g1 cc")
+    g1_cc = get_cc(meta_nodes, g1_edges)
+    print("g2 cc")
+    g2_cc = get_cc(meta_nodes, g2_edges)
+    print()
+    # compute the intersection of all connected components
+    cc_interesections = [cc1 & cc2 for cc1, cc2 in product(g1_cc, g2_cc)]
+    
+    print('intersection')
+    [print(i, inter) for i, inter in enumerate(cc_interesections)]
+    
+    
+    if len(cc_interesections) == 1:
+        print('only one intersection.. return it')
+        #input()
+        return cc_interesections
+    
+    parititions = []
+    for i, cc_inter in enumerate(cc_interesections):
+        print("-----")
+        print('Intersection:', i)
+        print("Node in intersection")
+        print(' -','\n - '.join(cc_inter))
+        print()
+        g1_edges_inter = [(n,v) for n,v in g1_edges if n in cc_inter and v in cc_inter]
+        print("g1 edges in inter", g1_edges_inter)
+        
+        g2_edges_inter = [(n,v) for n,v in g2_edges if n in cc_inter and v in cc_inter]
+        print("g2 edges in inter", g2_edges_inter)
+                
+        #input()
+
+        parititions += CCC(cc_inter, g1_edges_inter, g2_edges_inter)
+
+    return parititions
+
+
+def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext], gene_fam_2_cluster_fam: Dict[str,str]):
+
+    contextA, contextB = context_pair
+
+    conserved_genomics_contexts = get_conserved_genomics_contexts(contextA.graph, contextB.graph, gene_fam_2_cluster_fam)
+
+
+    cf_edgesB = {tuple(sorted([gene_fam_2_cluster_fam[n],gene_fam_2_cluster_fam[v]])) for n,v in contextB.graph.edges()}
+
+    cf_edgesA =  {tuple(sorted([gene_fam_2_cluster_fam[n],gene_fam_2_cluster_fam[v]])) for n,v in contextA.graph.edges()}
+    
+    contextA_clst_family = {gene_fam_2_cluster_fam[gf.name] for gf in contextA.families}
+    contextB_clst_family = {gene_fam_2_cluster_fam[gf.name] for gf in contextB.families}
+
+    shared_edges = len(cf_edgesA & cf_edgesB) # len(contextA_clst_family & contextB_clst_family)
+
+    edges_clst_family_jaccard = shared_edges / len(cf_edgesB | cf_edgesA)
+
+    G = nx.Graph(cf_edgesA & cf_edgesB)
+
+    connected_component_sizes = [str(len(cc)) for cc in nx.connected_components(G)]
+    
+    contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
+    contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+    shared_family = len(contextA_clst_family & contextB_clst_family)
+    clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
+
+    jaccard_clst_faml_synteny  =  len(G)/len(contextA_clst_family | contextB_clst_family)
+
+    if clst_family_jaccard >= 0.5:
+        return contextA.ID, contextB.ID, {'edges_jaccard':edges_clst_family_jaccard,
+                                          'family_compo_jaccard':clst_family_jaccard,
+                                          'family_syntheny_jaccard':jaccard_clst_faml_synteny,
+                                          "shared edges":shared_edges,
+                                          "shared family":shared_family,
+                                          "cc_count":len(connected_component_sizes),
+                                          "cc_sizes":':'.join(connected_component_sizes),
+                                          "synteny_edge":True if jaccard_clst_faml_synteny >= 0.5 else False  }
+    else:
+        return contextA.ID, contextB.ID, None
 
 def launch_context_comparison(pack: tuple) -> tuple:
     """ 
@@ -411,7 +590,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
         # family_clusters_file = panorama cluster function
         raise NotImplementedError
 
-    # TODO Check that all gene family in context have a family cluster 
+    # TODO Check that all gene families in context have a family cluster 
 
     # add family cluster info in gene contexts 
     for gene_context in gene_contexts:
