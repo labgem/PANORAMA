@@ -109,17 +109,17 @@ def launch(args: argparse.Namespace):
     :param args: All arguments provide by user
     """
     global need_info
-    logging.getLogger().debug("launch info command")
+    logging.debug("launch info command")
     outdir = mkdir(args.output, args.force)
     path_2_pang, manager_dict = check_former_info(args)
     mp_args = [(name, pan_info, manager_dict, args.disable_prog_bar) for name, pan_info in path_2_pang.items()]
     with get_context('fork').Pool(args.cpu) as p:
         for pangenome in tqdm(p.imap_unordered(run_info, mp_args), unit='pangenome',
                               total=len(path_2_pang), disable=args.disable_prog_bar):
-            logging.getLogger().debug(f"{pangenome.name} Done")
+            logging.debug(f"{pangenome.name} Done")
     export_info(manager_dict, outdir, args.cpu)
 
-    logging.getLogger().info("Done")
+    logging.info("Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -145,7 +145,7 @@ def parser_info(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help="A list of pangenome .h5 files")
-    required.add_argument('-o', '--output', required=True, type=str, nargs='?')
+    required.add_argument('-o', '--output', required=True, type=Path, nargs='?')
     onereq = parser.add_argument_group(title="Input file", description="One of the following argument is required :")
     onereq.add_argument("--content", required=False, action="store_true",
                         help="Create a detailed information TSV file about pangenomes content")

@@ -4,15 +4,13 @@
 # default libraries
 from __future__ import annotations
 import argparse
-import pathlib
 from concurrent.futures import ThreadPoolExecutor
 from copy import copy
 import collections
 import itertools
 import logging
 from pathlib import Path
-from tqdm import tqdm
-from typing import Collection, Dict, List, Set
+from typing import Dict, List, Set
 
 # installed libraries
 import numpy as np
@@ -35,11 +33,25 @@ from panorama.pangenomes import Pangenome
 from collections import OrderedDict
 from panorama.format.figure import per_pan_heatmap, heatmap, upsetplot, hbar_ID_type
 
+need_annotations = False
+need_families = False
+need_graph = False
+need_partitions = False
+need_spots = False
+need_rgp = False
+need_modules = False
+need_gene_sequences = False
+need_metadata = False
+need_systems = False
+rgp = False
+modules = False
+spots = False
+
 
 def check_flat_parameters(args):
     if args.hmm and (args.msa is None or args.msa_format is None):
         raise Exception("To write HMM you need to give msa files and format")
-    if args.systems or args.systems_asso is not None or "systems" in args.proksee:
+    if args.systems or args.systems_asso is not None or (args.proksee is not None and "systems" in args.proksee):
         if args.models is None or args.sources is None:
             raise Exception("To read system and write flat related, "
                             "it's necessary to give models and source.")
@@ -57,7 +69,7 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
     """
     nb_source = len(sources)
     source_list = list(sources)
-    column_name = np.array(f"Pangenome,Gene Family,{','.join([f'Annotation {source},Accession {source},Secondary names {source}' for source in source_list])}".split(','))
+    column_name = np.array(f"Pangenome,families,{','.join([f'Annotation_{source},Accession_{source},Secondary_names_{source}' for source in source_list])}".split(','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
         annot_array = np.empty((gf.max_metadata_by_source()[1], 2 + nb_source * 3), dtype=object)
@@ -80,9 +92,25 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
                 index_source += 3
             array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
-    out_df = out_df.sort_values(by=['Pangenome', 'Gene Family'] + list(column_name[range(3, len(column_name), 2)]))
-    out_df.to_csv(f"{output}/{pangenome.name}/families_annotations.tsv", sep="\t", header=True)
+    out_df = out_df.sort_values(by=['Pangenome', 'families'] + list(column_name[range(3, len(column_name), 2)]))
+    logging.info(",".join(out_df.columns[1:]))
+    out_df.to_csv(f"{output}/{pangenome.name}/families_annotations.tsv", sep="\t",
+                  columns=out_df.columns[1:], header=True, index=False)
 
+
+def write_annotation_to_families_mp(pangenome_name: str, pangenome_info: dict, output: Path, sources: set = None,
+                                    disable_bar: bool = False):
+    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
+    pangenome.add_file(pangenome_info["path"])
+    print(sources)
+    sources = sources if sources is not None else pangenome.status['metasources']["families"]
+
+    check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
+                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                         need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                         need_modules=need_modules, need_metadata=need_metadata, sources=sources,
+                         metatype="families", disable_bar=disable_bar)
+    write_annotations_to_families(pangenome, output, sources=sources, disable_bar=disable_bar)
 
 def write_hmm(gf: GeneFamily, output: Path):
     """ Write an HMM profile for a gene family
@@ -244,7 +272,7 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
     :param disable_bar: Allow to disable progress bar
     """
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.getLogger().info(f'Write system projection for source : {source}')
+        logging.info(f'Write system projection for source : {source}')
         with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(source):
@@ -546,7 +574,8 @@ def write_sys_in_feature(system, feature, mandatory_family, accessory_family, fu
 
 def write_flat_files(pan_to_path, output: Path, annotation: bool = False, systems: bool = False, hmm: bool = False,
                      systems_asso: List[str] = None, proksee: List[str] = None, proksee_template: Path = None,
-                     organisms_list: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
+                     organisms_list: List[str] = None, threads: int = 1, force: bool = False,
+                     disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pangenome: Pangenome with information to write
@@ -555,40 +584,36 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
     :param hmm: Launch hmm write function
     :param disable_bar: disable progress bar
     """
-    need_annotations = False
-    need_families = False
-    need_graph = False
-    need_partitions = False
-    need_spots = False
-    need_rgp = False
-    need_modules = False
-    need_gene_sequences = False
-    need_metadata = False
-    need_systems = False
-    rgp = False
-    modules = False
-    spots = False
+    global need_annotations
+    global need_families
+    global need_graph
+    global need_partitions
+    global need_spots
+    global need_rgp
+    global need_modules
+    global need_gene_sequences
+    global need_metadata
+    global need_systems
+    global rgp
+    global modules
+    global spots
 
     if annotation:
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.getLogger().info('Write annotation')
+            logging.info('Write annotation')
             with tqdm(total=len(pan_to_path.keys()), unit='pangenome', disable=disable_bar) as progress:
                 need_families = True
                 need_metadata = True
+                futures = []
                 for pangenome_name, pangenome_info in pan_to_path.items():
-                    pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-                    pangenome.add_file(pangenome_info["path"])
-                    kwargs['sources'] = kwargs['sources'] if kwargs['sources'] is not None else pangenome.status['metasources']["families"]
-                    check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
-                                         need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
-                                         need_spots=need_spots, need_gene_sequences=need_gene_sequences,
-                                         need_modules=need_modules,
-                                         need_metadata=need_metadata, need_systems=need_systems,
-                                         models=kwargs["models"], sources=kwargs["sources"], metatype="families",
-                                         disable_bar=disable_bar)
-                    future = executor.submit(write_annotations_to_families, pangenome, output, sources=kwargs["sources"], disable_bar=disable_bar)
+                    future = executor.submit(write_annotation_to_families_mp, pangenome_name,
+                                             pangenome_info, output, kwargs["sources"], disable_bar)
                     future.add_done_callback(lambda p: progress.update())
-            logging.getLogger().info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
+                    futures.append(future)
+                for future in futures:
+                    future.result()
+
+            logging.info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
 
     if hmm:
         need_families = True
@@ -639,13 +664,13 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
                                     sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
-            logging.getLogger().info(f"Begin write systems projection for {pangenome_name}")
+            logging.info(f"Begin write systems projection for {pangenome_name}")
             for source in kwargs["sources"]:
                 systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                                         threads=threads, force=force, disable_bar=disable_bar)
                 global_df = pd.concat([global_df, systems_proj])
                 per_pan_heatmap(pangenome_name, systems_proj, output)
-                logging.getLogger().info(f"Heatmap figure created for {pangenome_name}")
+                logging.info(f"Heatmap figure created for {pangenome_name}")
 
                 presence_ratio = pan_presence_percentage(pangenome_name, systems_proj)
                 global_percentage = pd.concat([global_percentage, presence_ratio])
@@ -653,7 +678,7 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                 dataframe_ID, dataframe_ID_org = pangenome_number_system(pangenome_name, systems_proj)
                 global_id = pd.concat([global_id, dataframe_ID])
                 global_id_org = pd.concat([global_id_org, dataframe_ID_org])
-                logging.getLogger().info(f"Projection written for {pangenome_name}")
+                logging.info(f"Projection written for {pangenome_name}")
 
                 hbar_ID_type(pangenome_name, dataframe_ID, dataframe_ID_org, output)
 
@@ -666,15 +691,15 @@ def write_flat_files(pan_to_path, output: Path, annotation: bool = False, system
                         spots = True
                     if systems_asso in ["modules-spots", "all"]:
                         spots = True
-                    logging.getLogger().info("Begin write systems with features projection")
+                    logging.info("Begin write systems with features projection")
                     df_features = systems_to_features(systems_proj, name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                         rgp=rgp, modules=modules, spots=spots, threads=threads, disable_bar=disable_bar)
-                    logging.getLogger().info("Projection with features written")
+                    logging.info("Projection with features written")
                 
                     upsetplot(pangenome_name, systems_proj, df_features, output)
 
         heatmap(global_df, output)
-        logging.getLogger().info(f"Global heatmap figure created")
+        logging.info(f"Global heatmap figure created")
         global_percentage.to_csv(f"{output}/systems_presence_ratio.tsv", sep="\t", index=False)
         global_df.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
         global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)

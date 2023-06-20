@@ -7,8 +7,8 @@
 from ppanggolin.geneFamily import GeneFamily as Fam
 from pyhmmer.plan7 import HMM
 
-# local libraries
 
+# local libraries
 
 
 class GeneFamily(Fam):
@@ -89,4 +89,3 @@ class GeneFamily(Fam):
     #                 del source_annot[max_prediction:]
     #     else:
     #         self._annotationGetter[source] = [annotation]
-

@@ -25,7 +25,8 @@ from ppanggolin.cluster.cluster import read_tsv as read_clustering_table
 
 
 # local libraries
-from panorama.utils import mkdir, init_lock, load_multiple_pangenomes, load_pangenome
+from panorama.utils import mkdir, init_lock
+from panorama.format.read_binaries import load_pangenome
 from panorama.pangenomes import Pangenome
 from panorama.region import GeneContext
 
@@ -394,7 +395,7 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
     # This graph is used for visualization and verification.
     if return_multigraph:
         multigraph = nx.MultiGraph()
-        multigraph.add_nodes_from(meta_nodes)
+        multigraph.add_nodes_from([(mn, attr) for mn, attr in meta_nodes_2_attributes.items()])
 
         multigraph.add_edges_from(gA_multigraph_edges, origin="graphA")
         multigraph.add_edges_from(gB_multigraph_edges, origin="graphB")

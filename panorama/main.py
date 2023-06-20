@@ -17,6 +17,7 @@ import panorama.utility
 import panorama.info
 import panorama.annotate
 import panorama.detection
+import panorama.alignment
 import panorama.compare
 import panorama.dbGraph
 import panorama.format.write_flat
@@ -33,6 +34,9 @@ def cmd_line():
     desc += "       info            Provide and compare information through pangenomes\n"
     desc += "       annotation      Annotate pangenome gene families with HMM or TSV file\n"
     desc += "       detection       Detect systems in pangenome based on one annotation source\n"
+    desc += "       compare         Pangenome comparaison methods\n"
+    desc += "       align           Align gene families from multiple pangenomes\n"
+    desc += "       cluster         Cluster gene families from multiple pangenomes\n"
     desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries\n"
     desc += "       compare         Compare contexts and modules across multiple pangenomes\n"    
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
@@ -50,6 +54,8 @@ def cmd_line():
     subs = [panorama.info.subparser(subparsers),
             panorama.annotate.subparser(subparsers),
             panorama.detection.subparser(subparsers),
+            panorama.alignment.align.subparser(subparsers),
+            panorama.alignment.cluster.subparser(subparsers),
             panorama.compare.subparser(subparsers),
             panorama.dbGraph.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
@@ -70,7 +76,7 @@ def cmd_line():
                             help="Force writing in output directory and in pangenome output file.")
         sub._action_groups.append(common)
         if (len(sys.argv) == 2 and sub.prog.split()[1] == sys.argv[1]) or \
-                (sub.prog.split()[1] == "compare" and len(sys.argv) == 3):
+                (sys.argv[1] == "compare" and len(sys.argv) == 3):
             sub.print_help()
             exit(1)
 
@@ -89,6 +95,10 @@ def main():
         panorama.annotate.launch(args)
     elif args.subcommand == "detection":
         panorama.detection.launch(args)
+    elif args.subcommand == "align":
+        panorama.alignment.align.launch(args)
+    elif args.subcommand == "cluster":
+        panorama.alignment.cluster.launch(args)
     elif args.subcommand == "compare":
         panorama.compare.launch(args)
     elif args.subcommand == "graph-db":

@@ -10,16 +10,16 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from typing import Dict, List, Set
+from multiprocessing import Manager, Lock
 
 # installed libraries
 import networkx as nx
-from ppanggolin.region import GeneContext
 # from ppanggolin.context.searchGeneContext import _compute_gene_context_graph, extract_gene_context
 
 # local libraries
-from panorama.utils import check_tsv_sanity
+from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import check_pangenome_info
+from panorama.format.read_binaries import check_pangenome_info, load_multiple_pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.models import Models, Model, FuncUnit
 from panorama.system import System
@@ -48,8 +48,6 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
     elif pangenome.status["metadata"]["families"] not in ["Computed", "Loaded"]:
         raise Exception(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
                         "Please see the command annotation before to detect systems")
-    check_pangenome_info(pangenome, need_annotations=True, need_families=True, need_metadata=True,
-                         metatype="families", source=source, disable_bar=disable_bar)
 
 
 def read_models(models_path: Path, disable_bar: bool = False) -> Models:
@@ -301,14 +299,30 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
                 detected_systems += result
     for system in detected_systems:  # TODO pass in mp step
         pangenome.add_system(system)
-    logging.getLogger().info(f"System detection done in pangenome {pangenome.name}")
+    logging.info(f"System detection done in pangenome {pangenome.name}")
     if len(detected_systems) > 0:
         pangenome.status["systems"] = "Computed"
-        logging.getLogger().info(f"Write systems in pangenome {pangenome.name}")
+        logging.info(f"Write systems in pangenome {pangenome.name}")
         write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
-        logging.getLogger().info(f"Systems written in pangenome {pangenome.name}")
+        logging.info(f"Systems written in pangenome {pangenome.name}")
     else:
-        logging.getLogger().info("No system detected")
+        logging.info("No system detected")
+
+
+def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, threads: int = 1,
+                                 task: int = 1, lock: Lock = None, disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
+            futures = []
+
+            for pangenome in pangenomes:
+                logging.debug(f"Align gene families to HMM for {pangenome.name} with {threads // task} threads...")
+                future = executor.submit(search_systems, models, pangenome, source, threads // task, disable_bar)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+            for future in futures:
+                future.result()
 
 
 def launch(args):
@@ -317,13 +331,16 @@ def launch(args):
 
     :param args: Argument given
     """
-    pan_to_path = check_tsv_sanity(args.pangenomes)
     models = read_models(args.models)
-    for pangenome_name, pangenome_info in pan_to_path.items():
-        pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-        pangenome.add_file(pangenome_info["path"])
-        check_pangenome_detection(pangenome, source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
-        search_systems(models, pangenome, args.source, args.threads, args.disable_prog_bar)
+    manager = Manager()
+    lock = manager.Lock()
+    need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
+                 "metatype": "families", "source": args.source}
+    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, lock=lock, max_workers=args.threads,
+                                          need_info=need_info, check_function=check_pangenome_detection,
+                                          source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+    search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source, threads=args.threads,
+                                 task=args.task, lock=lock, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -356,6 +373,8 @@ def parser_detection(parser):
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
+    optional.add_argument("--task", required=False, nargs='?', type=int, default=1,
+                          help="Number of simultaneous task.")
 
 
 if __name__ == "__main__":

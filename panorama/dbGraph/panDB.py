@@ -34,11 +34,11 @@ class PangenomeLoader:
         assert self.lock is not None, "Lock not Initialized"
         try:
             with self.lock:
-                logging.getLogger().debug("parse")
+                logging.debug("parse")
                 self.loader.parse(self.data)
-                logging.getLogger().debug("index")
+                logging.debug("index")
                 self.loader.create_indexes(graph)
-                logging.getLogger().debug("merge")
+                logging.debug("merge")
                 self.loader.merge(graph)
         except Exception as error:
             raise Exception(f"Load to Neo4j failed because : {error}")
