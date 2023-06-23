@@ -20,7 +20,7 @@ from collections import defaultdict
 from tqdm import tqdm
 import pandas as pd
 from ppanggolin.utils import restricted_float
-from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome
+from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome, parser_context
 from ppanggolin.cluster.cluster import read_tsv as read_clustering_table
 
 
@@ -30,29 +30,66 @@ from panorama.format.read_binaries import load_pangenome
 from panorama.pangenomes import Pangenome
 from panorama.region import GeneContext
 
-# def check_run_context_arguments(kwargs):
-#     if "sequences" not in kwargs and "family" not in kwargs:
-#         raise Exception("At least one of --sequences or --family option must be given")
+def check_run_context_arguments(ppanggolin_context_args):
+    if ppanggolin_context_args["sequences"] is None and ppanggolin_context_args["families"] is None:
+        raise Exception("When searching for context with ppanggolin, at least one of --sequences or --family option must be given")
 
 
-# def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], output: Path, tmpdir: Path,
-#                       threads_per_task: int = 1, **kwargs):
-#     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
-#     pangenome.add_file(pangenome_info["path"])
-#     search_gene_context_in_pangenome(pangenome=pangenome, output=output, tmpdir=tmpdir,
-#                                      cpu=threads_per_task, disable_bar=True, **kwargs)
-#     return True
+def launch_ppanggolin_context(pangenome_to_path:dict, ppanggolin_context_args:dict,  output, tmpdir, max_workers:int, threads_per_task:int, disable_bar):
+    
+    # gene_contexts = []
 
-# def parse_cluster_family(cluster_family_file, family_of_interest=None):
+    # with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
+    #     with tqdm(total=len(pangenome_to_path), unit='pangenome', disable=disable_bar) as progress:
+    #         futures = []
+    #         for pangenome_name, pangenome_info in pangenome_to_path.items():
+    #             future = executor.submit(search_context_mp, pangenome_name, pangenome_info, ppanggolin_context_args, output=output, tmpdir=tmpdir,
+    #                                     threads_per_task=threads_per_task)
+    #             future.add_done_callback(lambda p: progress.update())
+    #             futures.append(future)
 
-#     family_to_cluster = {}
-#     with open(cluster_family_file) as fh:
-#         for line in fh:
-#             cluster_id, familly = line.rstrip().split('\t')
+    #         for future in futures:
+    #             gene_contexts += future.result()
 
-#             family_to_cluster[familly] = cluster_id
+                
+    with ProcessPoolExecutor(max_workers=max_workers) as executor: # , initializer=init_lock, initargs=(lock,)) as executor:
 
-#     return family_to_cluster
+        futures = []
+
+        for pangenome_name, pangenome_info in pangenome_to_path.items():
+
+
+            future = executor.submit(search_context_mp, pangenome_name, pangenome_info, ppanggolin_context_args, output=output, tmpdir=tmpdir,
+                                        threads_per_task=threads_per_task)
+            futures.append(future)
+
+        gene_contexts = [gene_context for future in tqdm(
+            futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
+        # future_results = [future.result() for future in tqdm(futures, unit="pangenome", disable=disable_bar)]
+
+    return gene_contexts
+    # gene_contexts = [ GeneContext(pangenome, gc_id, families, families_of_interest) for gc in gene_contexts]
+    # return gene_contexts
+
+# import pickle
+def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], ppanggolin_context_args:dict, output: Path, tmpdir: Path,
+                      threads_per_task: int = 1, ):
+
+    # output has been already created using the force flag.
+    output_for_current_pan = output/pangenome_name
+    mkdir(output_for_current_pan, force=True)
+
+    pangenome = load_pangenome(pangenome_name, pangenome_info["path"], pangenome_info["taxid"],  {
+                            "need_families": True,  'need_annotations':True,}, disable_bar=True)
+
+    gene_context_graph = search_gene_context_in_pangenome(pangenome=pangenome, output=str(output_for_current_pan), tmpdir=tmpdir,
+                                     cpu=threads_per_task, disable_bar=True, **ppanggolin_context_args)
+
+    gene_contexts = make_gene_context_from_context_graph(pangenome, gene_context_graph)
+
+
+    return gene_contexts
+
 
 def parse_context_results(contexts_result_file_list: str) -> Dict[str, Path]:
     """
@@ -100,31 +137,37 @@ def make_gene_context_from_context_table(pangenome: Pangenome, context_table: st
 
     return context_objs
 
+def clean_context_objects(contexts):
+    """
+    Remove some of the object contain in context to make it pickable. 
+    """
+    
+    families = {gf for gc in contexts for gf in gc.families}
+    for gf in families:
+        gf.genes = set()
+        gf._genePerOrg = dict()
+    
+    
 
-def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) -> Set[GeneContext]:
+def make_gene_context_from_context_graph(pangenome: Pangenome, contexts_graph: nx.Graph) -> Set[GeneContext]:
     """
     Create gene contexts from a context graph.
 
     :param pangenome: The Pangenome object.
-    :param context_graph: The path to the context graph.
+    :param context_graph: The context graph
     :return: A set of GeneContext objects.
     """
     context_objs = set()
-    
-    if graph_file.suffix == ".graphml":
-        contexts_graph  = nx.read_graphml(graph_file)
-
-    elif graph_file.suffix == ".gexf":
-        contexts_graph  = nx.read_gexf(graph_file)
+    families_of_interest = {pangenome.get_gene_family(f_name) for f_name, d in contexts_graph.nodes(data=True) if d["families_of_interest"]}
 
     # connected commponents in the graph is a context
     # lets build a context object containing the set of gene families 
     # and graph of the context 
     for i, families_in_context in enumerate(nx.connected_components(contexts_graph)):
+
         gene_families = [pangenome.get_gene_family(f_name) for f_name in families_in_context]
 
         context_graph = nx.subgraph_view(contexts_graph, filter_node=lambda n: n in families_in_context).copy()
-
         
         # node are family id in the current graph. 
         # We may want family object instead to be similar to 
@@ -134,9 +177,13 @@ def make_gene_context_from_context_graph(pangenome: Pangenome, graph_file: str) 
         # G = nx.Graph()
         # G.add_edges_from(((gene_family_to_obj[f1_name], gene_family_to_obj[f2_name]) for f1_name,f2_name in context_graph.edges()))
 
-
-        context_obj = GeneContext(pangenome, gc_id=i, families=gene_families, graph=context_graph)
+        context_obj = GeneContext(pangenome, gc_id=i, families=gene_families, families_of_interest=families_of_interest)
+        
+        context_obj.add_context_graph(context_graph)
+        
         context_objs.add(context_obj)
+
+    clean_context_objects(context_objs)
         
     return context_objs
 
@@ -166,12 +213,19 @@ def load_pangenome_and_get_contexts_from_result(context_result_path: Path, pange
     """
 
     pangenome = load_pangenome(pangenome_name, pangenome_path, taxid, {
-                               "need_families": True, })
+                               "need_families": True,})
 
-    if context_result_path.suffix == ".tsv":
-        gene_contexts = make_gene_context_from_context_table(pangenome, context_result_path)
-    elif context_result_path.suffix in [".graphml", ".gexf"]:
-        gene_contexts = make_gene_context_from_context_graph(pangenome, context_result_path)
+    # if context_result_path.suffix == ".tsv":
+    #     gene_contexts = make_gene_context_from_context_table(pangenome, context_result_path)
+    if context_result_path.suffix in [".graphml", ".gexf"]:
+        
+        if context_result_path.suffix == ".graphml":
+            contexts_graph  = nx.read_graphml(context_result_path)
+        
+        elif context_result_path.suffix == ".gexf":
+            contexts_graph  = nx.read_gexf(context_result_path)
+
+        gene_contexts = make_gene_context_from_context_graph(pangenome, contexts_graph)
     else:
         # TODO File extension should be checked when parsing file list. 
         raise ValueError('The gene context result has not the correct extension. {}'
@@ -285,15 +339,17 @@ def get_multigraph_edges(g: nx.Graph, g_node_2_meta_nodes: dict) -> List[Tuple[s
     :param g_node_2_meta_nodes: A dictionary mapping graph nodes to their corresponding metanodes.
     :return: A list of edges in the multigraph.
     """
-    g_multigraph_edges = []
-    for n1, n2 in g.edges():
+    g_multigraph_edges_2_attr = {}
+    for n1, n2, d in g.edges(data=True):
         if n1 in g_node_2_meta_nodes and n2 in g_node_2_meta_nodes:
             n1_meta_nodes = g_node_2_meta_nodes[n1]
             n2_meta_nodes = g_node_2_meta_nodes[n2]
 
-            g_multigraph_edges += list(product(n1_meta_nodes, n2_meta_nodes))
+            g_multigraph_edges = list(product(n1_meta_nodes, n2_meta_nodes))
+
+            g_multigraph_edges_2_attr.update({(n,v):d for n,v in g_multigraph_edges})
     
-    return g_multigraph_edges
+    return g_multigraph_edges_2_attr
 
 
 
@@ -375,10 +431,10 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
 
     meta_nodes_2_attributes, gA_node_2_meta_nodes, gB_node_2_meta_nodes = create_metanodes(gfA_to_cf, gfB_to_cf)
 
-    gA_multigraph_edges = get_multigraph_edges(gcA_graph, gA_node_2_meta_nodes)
-    gB_multigraph_edges = get_multigraph_edges(gcB_graph, gB_node_2_meta_nodes)
+    gA_multigraph_edges_2_attr = get_multigraph_edges(gcA_graph, gA_node_2_meta_nodes)
+    gB_multigraph_edges_2_attr = get_multigraph_edges(gcB_graph, gB_node_2_meta_nodes)
 
-    partitions = compute_CCC(meta_nodes_2_attributes.keys(), gA_multigraph_edges, gB_multigraph_edges)
+    partitions = compute_CCC(meta_nodes_2_attributes.keys(), gA_multigraph_edges_2_attr.keys(), gB_multigraph_edges_2_attr.keys())
 
     cgc_nodes = []
 
@@ -390,6 +446,7 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
             
             for meta_node in meta_nodes:
                 meta_nodes_2_attributes[meta_node]["GCG"] = f"CGC_{i}"
+            
     
     # Construct the multigraph if requested. 
     # This graph is used for visualization and verification.
@@ -397,8 +454,21 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
         multigraph = nx.MultiGraph()
         multigraph.add_nodes_from([(mn, attr) for mn, attr in meta_nodes_2_attributes.items()])
 
-        multigraph.add_edges_from(gA_multigraph_edges, origin="graphA")
-        multigraph.add_edges_from(gB_multigraph_edges, origin="graphB")
+        multigraph.add_edges_from(gA_multigraph_edges_2_attr, origin="graphA")
+        gA_multigraph_edges_2_attr = {(n,v, 0):d for (n,v),d in gA_multigraph_edges_2_attr.items() } # key edge with 0
+        nx.set_edge_attributes(multigraph, gA_multigraph_edges_2_attr)
+        
+
+        multigraph.add_edges_from(gB_multigraph_edges_2_attr, origin="graphB")
+        gB_multigraph_edges_2_attr = {(n,v, 1):d for (n,v),d in gB_multigraph_edges_2_attr.items() } # key edge with 1
+        nx.set_edge_attributes(multigraph, gB_multigraph_edges_2_attr)
+
+
+        # multigraph.add_edges_from(gA_multigraph_edges_2_attr, origin="graphA")
+        # multigraph.add_edges_from(gB_multigraph_edges_2_attr, origin="graphB")
+
+        # map_transitivity_into_multigraph_edges(multigraph, gcA_graph, gA_node_2_meta_nodes)
+
 
 
     return cgc_nodes, multigraph
@@ -515,9 +585,9 @@ def compare_gene_contexts_graph_mp(gene_contexts: List[GeneContext],
     return context_graph, multigraphs
 
 
-def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: Path, family_clusters: bool, min_jaccard,
+def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: Path, family_clusters: bool, synteny_score:float,
                        lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
-                       disable_bar: bool = False, force: bool = False, **kwargs):
+                       disable_bar: bool = False, force: bool = False, ppanggolin_context_args:dict = None):
     """
     Perform comparison of gene contexts and cluster families.
 
@@ -531,7 +601,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     :param threads_per_task: The number of threads per task (default: 1).
     :param disable_bar: A boolean indicating whether to disable progress bars (default: False).
     :param force: A boolean indicating whether to force overwriting existing output files (default: False).
-    :param kwargs: Additional keyword arguments.
+    :param ppanggolin_context_args: Additional keyword arguments to search context using ppanggolin.
     """
 
     mkdir(output, force)
@@ -549,21 +619,16 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
     else:
         # run ppanggolin context in parallel
-        raise NotImplementedError
+        # with Manager() as manager:
+        #     lock = manager.Lock()
 
-        check_run_context_arguments(kwargs)
+        #     manager_dict = manager.dict()
 
-        with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-            with tqdm(total=len(pangenome_to_path), unit='pangenome', disable=disable_bar) as progress:
-                futures = []
-                for pangenome_name, pangenome_info in pangenome_to_path.items():
-                    mkdir(output/pangenome_name, force)
-                    future = executor.submit(search_context_mp, pangenome_name, pangenome_info, output, tmpdir,
-                                             threads_per_task, **kwargs)
-                    future.add_done_callback(lambda p: progress.update())
-                    futures.append(future)
-                for future in futures:
-                    results = future.result()
+
+        check_run_context_arguments(ppanggolin_context_args)
+
+        gene_contexts = launch_ppanggolin_context(pangenome_to_path, ppanggolin_context_args, output=output, tmpdir=tmpdir,
+                                                max_workers=task, threads_per_task=threads_per_task, disable_bar=disable_bar)
 
     # write gene context summary
     summary_out_table = output / "gene_context_summary.tsv"
@@ -593,24 +658,22 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
     # Compare gene contexts based on their family clusters  
 
-    context_graph_clstr_families = compare_gene_contexts_on_cluster_families(gene_contexts, min_jaccard, task, disable_bar)
+    # context_graph_clstr_families = compare_gene_contexts_on_cluster_families(gene_contexts, min_jaccard, task, disable_bar)
 
 
     # Compare gene contexts based on their synteny information  
     context_synteny_graph, context_pair_2_multigraphs = compare_gene_contexts_graph_mp(gene_contexts, gene_family_to_family_cluster, task, disable_bar, 
                                                                         return_multigraph=True)
     
-    context_graph_merged = nx.compose(context_graph_clstr_families, context_synteny_graph)
+    # context_graph_merged = nx.compose(context_graph_clstr_families, context_synteny_graph)
 
 
     # add node attributes
-
-    nx.set_node_attributes(context_graph_merged, {gc.ID:gc.summarize() for gc in gene_contexts})
-
+    nx.set_node_attributes(context_synteny_graph, {gc.ID:gc.summarize() for gc in gene_contexts})
 
     context_graph_file = output / f"context.graphml"
     logging.info(f'Writting gene context graph: {context_graph_file}')
-    nx.readwrite.graphml.write_graphml(context_graph_merged, context_graph_file)
+    nx.readwrite.graphml.write_graphml(context_synteny_graph, context_graph_file)
 
     # Writting multigraphs
     for (contextA, contextB), multigraph in context_pair_2_multigraphs.items():
@@ -622,46 +685,58 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
 def context_comparison_parser(parser):
 
-    use_context_arg = parser.add_argument_group(
-        "Use already computed contexts arguments")
 
-    use_context_arg.add_argument('--context_results', type=Path, required=False,
-                                 help="Tsv file with two columns: name of pangenome and path to the corresponding context results."
-                                 "Results can be a table (tsv) or a graph (graphml or gexf)")
-    use_context_arg.add_argument('--family_clusters', type=Path, required=False,
+    ## PPANGGOLIN CONTEXT ARGUMENTS
+    compare_context_args = parser.add_argument_group(title="Optional contexts comparison arguments:", )
+
+    compare_context_args.add_argument('--synteny_score', type=int, required=False,
+                                 help="minimum synteny score used to filter edges between genomic contexts.")
+
+    fam_cluster_args = parser.add_argument_group(title="Gene families clustering arguments:", description="Used to create clusters of gene families.")
+
+    fam_cluster_args.add_argument('--family_clusters', type=Path, required=False,
                                  help="A tab-separated file listing the cluster names, the family IDs,")
     
-    use_context_arg.add_argument('--min_jaccard', type=restricted_float, required=False, default=0.5,
-                                 help="Minimum value for jaccard index")
+    # use_context_arg.add_argument('--min_jaccard', type=restricted_float, required=False, default=0.5,
+    #                              help="Minimum value for jaccard index")
+
+    ## PPANGGOLIN CONTEXT ARGUMENTS
+    onereq = parser.add_argument_group(title="PPanGGoLiN context: Input file arguments", 
+                                       description="One of the following argument is required :")
     
-    # TODO: use context parser of ppanggolin to have correct args and prevent duplication
+    onereq.add_argument('--context_results', type=Path, required=False,
+                                 help="Already computed contexts: Tsv file with two columns: name of pangenome and path to the corresponding context results."
+                                 "Results can be a table (tsv) or a graph (graphml or gexf)")
+    
+    onereq.add_argument('-S', '--sequences', required=False, type=str,
+                        help="Fasta file with the sequences of interest")
+    
+    onereq.add_argument('-F', '--family', required=False, type=str,
+                        help="List of family IDs of interest from the pan")
+    
 
-    # run_context_arg = parser.add_argument_group("PPanGGOLiN context arguments")
+    optional = parser.add_argument_group(title="PPanGGoLiN context: optional arguments")
 
-    # # required = parser._action_groups[2]
-    # run_context_arg.add_argument('-S', '--sequences', type=Path, required=False,
-    #                       help="Fasta file with the sequences of interest")
-
-    # run_context_arg.add_argument('-F', '--family', type=Path, required=False,
-    #                       help="List of family IDs of interest from the pan")
-
-    # # optional = parser._action_groups[4]
-
-    # run_context_arg.add_argument('--no_defrag', required=False, action="store_true",
-    #                       help="DO NOT Realign gene families to link fragments with"
-    #                            "their non-fragmented gene family.")
-
-    # run_context_arg.add_argument('--identity', required=False, type=float, default=0.5,
-    #                       help="min identity percentage threshold")
-
-    # run_context_arg.add_argument('--coverage', required=False, type=float, default=0.8,
-    #                       help="min coverage percentage threshold")
-
-    # run_context_arg.add_argument("-t", "--transitive", required=False, type=int, default=4,
-    #                       help="Size of the transitive closure used to build the graph. This indicates the number of "
-    #                            "non related genes allowed in-between two related genes. Increasing it will improve "
-    #                            "precision but lower sensitivity a little.")
-
-    # run_context_arg.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
-    #                       help="minimum jaccard similarity used to filter edges between gene families. Increasing it "
-    #                            "will improve precision but lower sensitivity a lot.")
+    optional.add_argument('--no_defrag', required=False, action="store_true",
+                          help="DO NOT Realign gene families to link fragments with"
+                               "their non-fragmented gene family.")
+    
+    optional.add_argument('--identity', required=False, type=float, default=0.5,
+                          help="min identity percentage threshold")
+    
+    optional.add_argument('--coverage', required=False, type=float, default=0.8,
+                          help="min coverage percentage threshold")
+    
+    optional.add_argument("-t", "--transitive", required=False, type=int, default=4,
+                          help="Size of the transitive closure used to build the graph. This indicates the number of "
+                               "non related genes allowed in-between two related genes. Increasing it will improve "
+                               "precision but lower sensitivity a little.")
+    
+    optional.add_argument("-w", "--window_size", required=False, type=int, default=5,
+                        help="Number of neighboring genes that are considered on each side of "
+                        "a gene of interest when searching for conserved genomic contexts.")
+    
+    optional.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
+                          help="minimum jaccard similarity used to filter edges between gene families. Increasing it "
+                               "will improve precision but lower sensitivity a lot.")
+    

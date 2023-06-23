@@ -73,18 +73,16 @@ class GeneContext(GeneCont):
 
     """
 
-    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], graph: Graph = None):
+    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], families_of_interest: Set[GeneFamily]):
         """
         :param pangenome_name : name of the pangenome of the context
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
-        :param graph: Graph of the context.
         """
 
-        super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families)
+        super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families, families_of_interest=families_of_interest)
 
         self.pangenome = pangenome.name
-        self.graph = graph
 
     def summarize(self) -> dict:
         """
@@ -96,5 +94,5 @@ class GeneContext(GeneCont):
         return {"GeneContext ID": self.ID,
                 "pangenome": self.pangenome,
                 "Gene Family count": len(self.families),
-                "Partitions": ";".join({f.partition for f in self.families})
+                "Partitions": ";".join({f.named_partition for f in self.families})
                 }

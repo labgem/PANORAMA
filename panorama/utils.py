@@ -168,3 +168,15 @@ def init_lock(lock: Lock = None):
     if lock is None:
         manager = Manager()
         return manager.Lock()
+
+def pop_specific_action_grp(sub:argparse.ArgumentParser, title:str) -> argparse._SubParsersAction:  
+    existing_titles = []
+
+    for action_group in sub._action_groups:
+        existing_titles.append(action_group.title)
+
+        if action_group.title == title:
+            sub._action_groups.remove(action_group)
+            return action_group
+
+    raise KeyError(f"{title} is not found in the provided subparser. Subparser contains {existing_titles}")

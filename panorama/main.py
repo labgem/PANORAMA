@@ -12,7 +12,7 @@ import argparse
 import pkg_resources
 
 # local modules
-from panorama.utils import check_log, set_verbosity_level
+from panorama.utils import check_log, set_verbosity_level, pop_specific_action_grp
 import panorama.utility
 import panorama.info
 import panorama.annotate
@@ -56,13 +56,15 @@ def cmd_line():
             panorama.detection.subparser(subparsers),
             panorama.alignment.align.subparser(subparsers),
             panorama.alignment.cluster.subparser(subparsers),
-            panorama.compare.subparser(subparsers),
+            *panorama.compare.subparser(subparsers),
             panorama.dbGraph.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.utility.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
-        common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
+        # common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
+        common = pop_specific_action_grp(sub, "Optional arguments") # get the 'optional arguments' action group
+
         common.title = "Common arguments"
         # common.add_argument("--tmpdir", required=False, presence=str, default=tempfile.gettempdir(),
         #                     help="directory for storing temporary files")
@@ -75,8 +77,14 @@ def cmd_line():
         common.add_argument('--force', action="store_true",
                             help="Force writing in output directory and in pangenome output file.")
         sub._action_groups.append(common)
-        if (len(sys.argv) == 2 and sub.prog.split()[1] == sys.argv[1]) or \
-                (sys.argv[1] == "compare" and len(sys.argv) == 3):
+        
+
+        # launch help when no argument is given except the command 
+        # sub.prog content examples that trigger print_help:
+        # panorama compare
+        # panorama info
+        # panorama compare context
+        if sub.prog.split()[1:] == sys.argv[1:]:
             sub.print_help()
             exit(1)
 
@@ -88,6 +96,8 @@ def main():
     args = cmd_line()
 
     set_verbosity_level(args)
+
+    print(args.subcommand)
 
     if args.subcommand == "info":
         panorama.info.launch(args)

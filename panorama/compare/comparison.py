@@ -23,17 +23,24 @@ def launch(args):
     :param args: Argument given
     """
     # check_parameter(args)
+
     pan_to_path = check_tsv_sanity(args.pangenomes)
     manager = Manager()
     lock = manager.Lock()
-    if args.context:
-        # run_context_args = {"sequences": args.sequences, "families": args.family, "transitive": args.transitive,
-        #                 "identity": args.identity, "coverage": args.coverage, "jaccard": args.jaccard,
-        #                 "no_defrag": args.no_defrag}
-        run_context_args = {} # Not implemented yet
-        context_comparison(pan_to_path, args.context_results, args.family_clusters, args.min_jaccard, lock, args.output, args.tmpdir, args.task, args.threads_per_task,
-                           args.disable_prog_bar, args.force, **run_context_args)
+    if args.compare_subcommand == "context":
 
+        run_context_args = {"sequences": args.sequences, "families": args.family, "transitive": args.transitive,
+                        "identity": args.identity, "coverage": args.coverage, "jaccard_threshold": args.jaccard, "window_size":args.window_size,
+                        "no_defrag": args.no_defrag}
+        
+        
+        context_comparison(pan_to_path, args.context_results, args.family_clusters, ppanggolin_context_args=run_context_args,
+                           synteny_score=args.synteny_score, lock=lock, output=args.output, 
+                           tmpdir=args.tmpdir, task=args.task, threads_per_task=args.threads_per_task,
+                           disable_bar=args.disable_prog_bar, force=args.force)
+        
+    elif args.compare_subcommand == "module":
+        raise NotImplementedError(f"Module comparison is not yet implemented.")
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
@@ -43,23 +50,23 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("compare", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser_compare = sub_parser.add_parser("compare", formatter_class=argparse.ArgumentDefaultsHelpFormatter, 
+                                           description='Comparison of modules and gene contexts among pangenomes')
+    
+    optional = parser_compare.add_argument_group(title="Optional arguments") # important for compatibility with other subparser.
 
-    parser_comparison(parser)
+    compare_subparser = parser_compare.add_subparsers(help='Comparison of contexts or modules', dest="compare_subcommand" )
+    
+    context_parser = compare_subparser.add_parser("context")
 
+    parser_comparison(context_parser)
+    context_comparison_parser(context_parser)
+    
+    module_parser = compare_subparser.add_parser("module")
+    parser_comparison(module_parser)
+    #module_comparison_parser(module_parser)
 
-    if '--context' in sys.argv:
-        # remove 'Pangenome comparison set object' groups
-        parser._action_groups = [action_grp for action_grp in parser._action_groups if action_grp.title != 'Pangenome comparison set object']
-
-        context_comparison_parser(parser)
-        
-    if "--modules" in sys.argv:
-        # remove 'Pangenome comparison set object' groups
-        parser._action_groups = [action_grp for action_grp in parser._action_groups if action_grp.title != 'Pangenome comparison set object']
-
-        raise NotImplementedError("Functionnality still in progress")
-    return parser
+    return parser_compare, module_parser, context_parser
 
 
 def parser_comparison(parser):
@@ -72,20 +79,12 @@ def parser_comparison(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
+    
     required.add_argument('-o', '--output', required=True, type=Path,
                           help="Output directory where the file(s) will be written")
     
-    comparison = parser.add_argument_group(title="Pangenome comparison set object",
-                                           description="Choose on which pangenome object you want to compare pangenomes")
-    
-    comparison.add_argument("--context", action='store_true',
-                            help="Launch context comparison")
-    
-    comparison.add_argument("--modules", action='store_true',
-                            help="Launch modules comparison")
-    
-
     optional = parser.add_argument_group(title="Optional arguments")
+    
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--task", required=False, nargs='?', type=int, default=1,
@@ -97,7 +96,7 @@ def parser_comparison(parser):
 if __name__ == "__main__":
     from panorama.utils import check_log, set_verbosity_level
 
-    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
+    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolbox",
                                           formatter_class=argparse.RawTextHelpFormatter)
     parser_comparison(main_parser)
     if '--context' in sys.argv:
