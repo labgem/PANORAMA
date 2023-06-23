@@ -77,11 +77,12 @@ def export_content(content_dict: dict, output: Path):
     :param content_dict: Content information
     :param output: Path to output directory
     """
-    df = pd.DataFrame.from_dict(content_dict, orient='index').reset_index().rename(columns={'index': "Pangenomes"})
-    df.T.to_csv(path_or_buf=f"{output.absolute().as_posix()}/content_info.tsv")
+    df = pd.DataFrame.from_dict(content_dict, orient='index').T
+    df.to_csv(path_or_buf=output/"content_info.tsv")
+    df = df.reset_index().rename(columns={"index": "Information"})
     source = ColumnDataSource(df)
     columns = [TableColumn(field=col, title=col) for col in df.columns]
     dt = DataTable(source=source, columns=columns, index_position=None,
-                   autosize_mode='fit_columns', sizing_mode='stretch_both')
-    save(dt, filename=f"{output.absolute().as_posix()}/content_info.html", title="Pangenome content Information",
+                   sizing_mode='stretch_both')
+    save(dt, filename=output/"content_info.html", title="Pangenome content Information",
          resources="cdn")
