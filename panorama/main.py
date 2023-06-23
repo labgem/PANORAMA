@@ -9,7 +9,7 @@ if sys.version_info < (3, 8):  # minimum is python3.8
                          ".".join(map(str, sys.version_info)))
 
 import argparse
-import pkg_resources
+from importlib.metadata import distribution
 
 # local modules
 from panorama.utils import check_log, set_verbosity_level
@@ -19,7 +19,6 @@ import panorama.annotate
 import panorama.detection
 import panorama.alignment
 import panorama.compare
-import panorama.dbGraph
 import panorama.format.write_flat
 
 
@@ -37,7 +36,6 @@ def cmd_line():
     desc += "       compare         Pangenome comparaison methods\n"
     desc += "       align           Align gene families from multiple pangenomes\n"
     desc += "       cluster         Cluster gene families from multiple pangenomes\n"
-    desc += "       graph-db        Load pangenomes in Neo4J graph database and allow to perform some queries\n"
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
     desc += "       utility         Some utility command to run analyses more easily\n"
     desc += "\n"
@@ -46,7 +44,7 @@ def cmd_line():
         description="Comparative Pangenomic analyses toolsbox",
         formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s ' + pkg_resources.get_distribution("panorama").version)
+                        version='%(prog)s ' + distribution("panorama").version)
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
@@ -56,7 +54,6 @@ def cmd_line():
             panorama.alignment.align.subparser(subparsers),
             panorama.alignment.cluster.subparser(subparsers),
             panorama.compare.subparser(subparsers),
-            panorama.dbGraph.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.utility.subparser(subparsers)]
 
@@ -100,8 +97,6 @@ def main():
         panorama.alignment.cluster.launch(args)
     elif args.subcommand == "compare":
         panorama.compare.launch(args)
-    elif args.subcommand == "graph-db":
-        panorama.dbGraph.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
     elif args.subcommand == "utility":

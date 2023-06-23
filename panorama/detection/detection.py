@@ -19,19 +19,19 @@ from ppanggolin.context.searchGeneContext import _compute_gene_context_graph, ex
 # local libraries
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import check_pangenome_info, load_multiple_pangenomes
+from panorama.format.read_binaries import load_multiple_pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.models import Models, Model, FuncUnit
 from panorama.system import System
-from panorama.pangenomes import Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False, disable_bar: bool = False):
+def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False):
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
     :param source: Source used to detect system
-    :param disable_bar: Disable progress bar
+    :param force: Force to erase pangenome systems from source
 
     :raise KeyError: Provided source is not in the pangenome
     """
@@ -145,6 +145,7 @@ def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, f
     """Check if the models parameters are respected
 
     :param g: Connected component graph
+    :param families: families find in context
     :param fam2annot: dictionary of families interesting
     :param model: Defined model
     :param func_unit: Functional unit
@@ -178,6 +179,7 @@ def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, f
         """Check parameters
 
         :param cc: set of connected component
+        :param families: families find in context
         :param fam2annot: link between gene family and annotation
         :param func_unit:functional unit
 
@@ -233,7 +235,8 @@ def compute_gene_context_graph(families: dict, fam2annot: dict, max_sep_global: 
     Construct the graph of gene contexts between families of the pan
 
     :param families: Gene families of interest
-    :param t: transitive value
+    :param fam2annot: link between gene family and annotation
+    :param max_sep_global: transitive value
     :param disable_bar: Prevents progress bar printing
 
     :return: Graph of gene contexts between interesting gene families of the pan
@@ -262,8 +265,6 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
 
     :return: Systems detected
     """
-    # if model.name == "AbiE":
-    #     print("pika")
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
@@ -297,7 +298,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
             for future in futures:
                 result = future.result()
                 detected_systems += result
-    for system in detected_systems:  # TODO pass in mp step
+    for system in detected_systems:
         pangenome.add_system(system)
     logging.info(f"System detection done in pangenome {pangenome.name}")
     if len(detected_systems) > 0:
@@ -311,6 +312,17 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
 
 def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, threads: int = 1,
                                  task: int = 1, lock: Lock = None, disable_bar: bool = False):
+    """Search systems in pangenomes by multithreading on pangenomes
+
+    :param models: Models to search in pangenomes
+    :param pangenomes: Getter object with Pangenome
+    :param source: name of the annotation source
+    :param threads: number of available threads
+    :param disable_bar: Disable progress bar
+    :param task: number of parallel workers
+    :param threads: Number of available threads
+    :param lock: Global lock for multiprocessing execution
+    """
     with ThreadPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
