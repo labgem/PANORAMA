@@ -30,7 +30,8 @@ classifiers=["Development Status :: Open alpha",
 dynamic = ["version"]
 
 [project.optional-dependencies]
-doc = ["sphinx>=5.0.0"]
+doc = ["sphinx~=4.2.0",
+       "myst-parser"]
 #
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
