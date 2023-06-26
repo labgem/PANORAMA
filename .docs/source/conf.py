@@ -11,7 +11,7 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 from pathlib import Path
-#import os
+# import os
 # import sys
 # sys.path.insert(0, os.path.abspath('.'))
 
@@ -32,6 +32,7 @@ release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
+    "myst_parser"
 ]
 
 # Add any paths that contain templates here, relative to this directory.
