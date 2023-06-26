@@ -31,7 +31,7 @@ def launch(args):
 
         run_context_args = {"sequences": args.sequences, "families": args.family, "transitive": args.transitive,
                         "identity": args.identity, "coverage": args.coverage, "jaccard_threshold": args.jaccard, "window_size":args.window_size,
-                        "no_defrag": args.no_defrag}
+                        "no_defrag": args.no_defrag, 'graph_format':args.graph_format}
         
         
         context_comparison(pan_to_path, args.context_results, args.family_clusters, ppanggolin_context_args=run_context_args,

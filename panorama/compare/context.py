@@ -36,42 +36,38 @@ def check_run_context_arguments(ppanggolin_context_args):
 
 
 def launch_ppanggolin_context(pangenome_to_path:dict, ppanggolin_context_args:dict,  output, tmpdir, max_workers:int, threads_per_task:int, disable_bar):
-    
-    # gene_contexts = []
 
-    # with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-    #     with tqdm(total=len(pangenome_to_path), unit='pangenome', disable=disable_bar) as progress:
-    #         futures = []
-    #         for pangenome_name, pangenome_info in pangenome_to_path.items():
-    #             future = executor.submit(search_context_mp, pangenome_name, pangenome_info, ppanggolin_context_args, output=output, tmpdir=tmpdir,
-    #                                     threads_per_task=threads_per_task)
-    #             future.add_done_callback(lambda p: progress.update())
-    #             futures.append(future)
 
-    #         for future in futures:
-    #             gene_contexts += future.result()
+    pangenome_name_to_graph_outfile = {}
 
-                
-    with ProcessPoolExecutor(max_workers=max_workers) as executor: # , initializer=init_lock, initargs=(lock,)) as executor:
+    with ProcessPoolExecutor(max_workers=max_workers) as executor:
 
-        futures = []
+        futures = {}
 
         for pangenome_name, pangenome_info in pangenome_to_path.items():
 
 
             future = executor.submit(search_context_mp, pangenome_name, pangenome_info, ppanggolin_context_args, output=output, tmpdir=tmpdir,
                                         threads_per_task=threads_per_task)
-            futures.append(future)
+            futures[pangenome_name] = future
 
-        gene_contexts = [gene_context for future in tqdm(
-            futures, unit="pangenome", disable=disable_bar) for gene_context in future.result()]
-        # future_results = [future.result() for future in tqdm(futures, unit="pangenome", disable=disable_bar)]
+        all_gene_contexts = set()
+        for pangenome_name, future in tqdm(futures.items(), unit="pangenome", disable=disable_bar):
+            gene_contexts, graph_outfile = future.result()
+            all_gene_contexts |= gene_contexts
+            pangenome_name_to_graph_outfile[pangenome_name] = graph_outfile
 
-    return gene_contexts
-    # gene_contexts = [ GeneContext(pangenome, gc_id, families, families_of_interest) for gc in gene_contexts]
-    # return gene_contexts
+    # Write tsv listing graph file to be able to rerun compare context without reruning ppanggolin  
+    graph_list_file = output / "context_graph_files.tsv"
+    logging.info(f'Writting list of context graph files in {graph_list_file}')
 
-# import pickle
+    with open(graph_list_file, "w") as fl:
+        file_content = ''.join((f"{pangenome_name}\t{graph_outfile}\n" for pangenome_name, graph_outfile  in pangenome_name_to_graph_outfile.items()))
+        fl.write(file_content)
+
+    return all_gene_contexts
+
+
 def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], ppanggolin_context_args:dict, output: Path, tmpdir: Path,
                       threads_per_task: int = 1, ):
 
@@ -82,13 +78,13 @@ def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], ppang
     pangenome = load_pangenome(pangenome_name, pangenome_info["path"], pangenome_info["taxid"],  {
                             "need_families": True,  'need_annotations':True,}, disable_bar=True)
 
-    gene_context_graph = search_gene_context_in_pangenome(pangenome=pangenome, output=str(output_for_current_pan), tmpdir=tmpdir,
+    gene_context_graph, graph_outfile = search_gene_context_in_pangenome(pangenome=pangenome, output=str(output_for_current_pan), tmpdir=tmpdir,
                                      cpu=threads_per_task, disable_bar=True, **ppanggolin_context_args)
 
     gene_contexts = make_gene_context_from_context_graph(pangenome, gene_context_graph)
 
 
-    return gene_contexts
+    return gene_contexts, graph_outfile
 
 
 def parse_context_results(contexts_result_file_list: str) -> Dict[str, Path]:
@@ -228,8 +224,8 @@ def load_pangenome_and_get_contexts_from_result(context_result_path: Path, pange
         gene_contexts = make_gene_context_from_context_graph(pangenome, contexts_graph)
     else:
         # TODO File extension should be checked when parsing file list. 
-        raise ValueError('The gene context result has not the correct extension. {}'
-                         'Panorama expects "tsv" for context tables and "graphml" or "gexf" for graph contexts.')
+        raise ValueError(f'The gene context result has not the correct extension. {context_result_path}'
+                         'Panorama expects "graphml" or "gexf".')
     return gene_contexts
 
 
@@ -347,7 +343,7 @@ def get_multigraph_edges(g: nx.Graph, g_node_2_meta_nodes: dict) -> List[Tuple[s
 
             g_multigraph_edges = list(product(n1_meta_nodes, n2_meta_nodes))
 
-            g_multigraph_edges_2_attr.update({(n,v):d for n,v in g_multigraph_edges})
+            g_multigraph_edges_2_attr.update({(n,v):d.copy() for n,v in g_multigraph_edges})
     
     return g_multigraph_edges_2_attr
 
@@ -411,7 +407,7 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
     :param gcA_graph: The gene context graph A.
     :param gcB_graph: The gene context graph B.
     :param gene_fam_2_cluster_fam: Dictionary mapping gene families to cluster families.
-    :param min_cgc_size: Minimum size of a conserved genomic context to report it.
+    :param min_cgc_size: Minimum size of a conserved genomic context to report.
     :param return_multigraph: Flag indicating whether to return the multigraph representation.
 
     :return: Tuple containing a list of tuples representing the conserved genomics contexts and
@@ -446,32 +442,45 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
             
             for meta_node in meta_nodes:
                 meta_nodes_2_attributes[meta_node]["GCG"] = f"CGC_{i}"
-            
     
     # Construct the multigraph if requested. 
     # This graph is used for visualization and verification.
     if return_multigraph:
+        pass_graph_attribute_to_multigraph(meta_nodes_2_attributes, gcA_graph, node_mapper="node_gA")
+        pass_graph_attribute_to_multigraph(meta_nodes_2_attributes, gcB_graph, node_mapper="node_gB")
+
         multigraph = nx.MultiGraph()
         multigraph.add_nodes_from([(mn, attr) for mn, attr in meta_nodes_2_attributes.items()])
 
-        multigraph.add_edges_from(gA_multigraph_edges_2_attr, origin="graphA")
-        gA_multigraph_edges_2_attr = {(n,v, 0):d for (n,v),d in gA_multigraph_edges_2_attr.items() } # key edge with 0
-        nx.set_edge_attributes(multigraph, gA_multigraph_edges_2_attr)
+        for (n,v), attributes in gB_multigraph_edges_2_attr.items():
+            multigraph.add_edge(n,v, origin="graphB", **attributes)
+            
+        for (n,v), attributes in gA_multigraph_edges_2_attr.items():
+            multigraph.add_edge(n,v, origin="graphA", **attributes)
+
+        nx.set_node_attributes(gcA_graph, gfA_to_cf, name="cluster")
+        nx.set_node_attributes(gcB_graph, gfB_to_cf, name="cluster")
+
+        graphs = [multigraph, gcA_graph, gcB_graph]
+
+
+
+    return cgc_nodes, graphs
+
+def pass_graph_attribute_to_multigraph(meta_nodes_2_attributes, gcA_graph, node_mapper):
+
+    graph_node_2_attributes = {}
+    for n, attribute in gcA_graph.nodes(data=True):
+        data = {f"{node_mapper}_{k}":v for k,v in attribute.items()}
+        graph_node_2_attributes[n] = data
+
         
-
-        multigraph.add_edges_from(gB_multigraph_edges_2_attr, origin="graphB")
-        gB_multigraph_edges_2_attr = {(n,v, 1):d for (n,v),d in gB_multigraph_edges_2_attr.items() } # key edge with 1
-        nx.set_edge_attributes(multigraph, gB_multigraph_edges_2_attr)
-
-
-        # multigraph.add_edges_from(gA_multigraph_edges_2_attr, origin="graphA")
-        # multigraph.add_edges_from(gB_multigraph_edges_2_attr, origin="graphB")
-
-        # map_transitivity_into_multigraph_edges(multigraph, gcA_graph, gA_node_2_meta_nodes)
+    for meta_node, attributes in meta_nodes_2_attributes.items():
+        graph_node = attributes[node_mapper]
+        
+        attributes.update(graph_node_2_attributes[graph_node])
 
 
-
-    return cgc_nodes, multigraph
 
 
 def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext], 
@@ -480,7 +489,7 @@ def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext]
 
     contextA, contextB = context_pair
     # Get conserved genomic context from the two context graph 
-    conserved_genomics_contexts, multigraph = get_conserved_genomics_contexts(contextA.graph, contextB.graph, gene_fam_2_cluster_fam, return_multigraph=return_multigraph)
+    conserved_genomics_contexts, graphs = get_conserved_genomics_contexts(contextA.graph, contextB.graph, gene_fam_2_cluster_fam, return_multigraph=return_multigraph)
 
     cgc_sizes = [max((len(nodesA_in_cgc), len(nodesB_in_cgc))) for nodesA_in_cgc, nodesB_in_cgc in conserved_genomics_contexts]
 
@@ -497,9 +506,9 @@ def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext]
         return contextA.ID, contextB.ID, {'family_compo_jaccard':clst_family_jaccard,
                                           "shared family":shared_family,
                                           "cgc_count":len(conserved_genomics_contexts),
-                                          "cgc_sizes":':'.join([str(size) for size in sorted(cgc_sizes)]),}, multigraph
+                                          "cgc_sizes":':'.join([str(size) for size in sorted(cgc_sizes)]),}, graphs
     else:
-        return contextA.ID, contextB.ID, None, multigraph
+        return contextA.ID, contextB.ID, None, graphs
 
 def launch_context_comparison(pack: tuple) -> tuple:
     """ 
@@ -573,13 +582,13 @@ def compare_gene_contexts_graph_mp(gene_contexts: List[GeneContext],
     pair_count = (len(gene_contexts) **2 - len(gene_contexts)) / 2
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for gcA, gcB, metrics, multigraph in tqdm(executor.map(launch_compare_pair_of_context_graphs, comparison_arguments, chunksize=5), total=pair_count, 
+        for gcA, gcB, metrics, graphs in tqdm(executor.map(launch_compare_pair_of_context_graphs, comparison_arguments, chunksize=5), total=pair_count, 
                                       disable=disable_bar, unit="context pair"):
             if metrics:
                 context_graph.add_edge( gcA, gcB, **metrics)
 
-                if multigraph:
-                    multigraphs[(gcA, gcB)] = multigraph
+                if graphs:
+                    multigraphs[(gcA, gcB)] = graphs
 
     logging.info(f'Context graph: {context_graph}')
     return context_graph, multigraphs
@@ -630,6 +639,7 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
         gene_contexts = launch_ppanggolin_context(pangenome_to_path, ppanggolin_context_args, output=output, tmpdir=tmpdir,
                                                 max_workers=task, threads_per_task=threads_per_task, disable_bar=disable_bar)
 
+
     # write gene context summary
     summary_out_table = output / "gene_context_summary.tsv"
     logging.info(f'Writting gene context summary: {summary_out_table} ')
@@ -676,11 +686,18 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     nx.readwrite.graphml.write_graphml(context_synteny_graph, context_graph_file)
 
     # Writting multigraphs
-    for (contextA, contextB), multigraph in context_pair_2_multigraphs.items():
-        logging.debug(f"{(contextA, contextB)}, {multigraph}")
-        multigraph_file = output / f"multigraph_{contextA}_vs_{contextB}.graphml"
+    for (contextA, contextB), graphs in context_pair_2_multigraphs.items():
+        logging.debug(f"{(contextA, contextB)}, {graphs}")
 
-        nx.readwrite.graphml.write_graphml(multigraph, multigraph_file)
+        multigraph_outdir = output / f"{contextA}_vs_{contextB}"
+
+        mkdir(multigraph_outdir, True)
+
+        multigraph, graphA, graphB = graphs 
+
+        nx.readwrite.graphml.write_graphml(multigraph, multigraph_outdir / "multigraph.graphml")
+        nx.readwrite.graphml.write_graphml(graphA, multigraph_outdir / "graph_A.graphml")
+        nx.readwrite.graphml.write_graphml(graphB, multigraph_outdir / "graph_B.graphml")
 
 
 def context_comparison_parser(parser):
@@ -740,3 +757,4 @@ def context_comparison_parser(parser):
                           help="minimum jaccard similarity used to filter edges between gene families. Increasing it "
                                "will improve precision but lower sensitivity a lot.")
     
+    optional.add_argument('--graph_format', help="Format of the context graph. Can be gexf or graphml.", default='graphml')
