@@ -22,6 +22,12 @@ import panorama.compare
 import panorama.format.write_flat
 
 
+version = distribution("panorama").version
+epilog = f"""
+By Jérôme Arnoux <jarnoux@genoscope.cns.fr> 
+PANORAMA ({version}) is an opensource bioinformatic tools under CeCILL FREE SOFTWARE LICENSE AGREEMENT
+LABGeM
+"""
 def cmd_line():
     # need to manually write the description so that it's displayed into groups of subcommands ....
     desc = "\n"
@@ -42,9 +48,10 @@ def cmd_line():
 
     parser = argparse.ArgumentParser(
         description="Comparative Pangenomic analyses toolsbox",
-        formatter_class=argparse.RawTextHelpFormatter)
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog=epilog)
     parser.add_argument('-v', '--version', action='version',
-                        version='%(prog)s ' + distribution("panorama").version)
+                        version='%(prog)s ' + version)
     subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
@@ -71,8 +78,12 @@ def cmd_line():
         common.add_argument('--force', action="store_true",
                             help="Force writing in output directory and in pangenome output file.")
         sub._action_groups.append(common)
-        if (len(sys.argv) == 2 and sub.prog.split()[1] == sys.argv[1]) or \
-                (sys.argv[1] == "compare" and len(sys.argv) == 3):
+        # launch help when no argument is given except the command
+        # sub.prog content examples that trigger print_help:
+        # panorama compare
+        # panorama info
+        # panorama compare context
+        if sub.prog.split()[1:] == sys.argv[1:]:
             sub.print_help()
             exit(1)
 
