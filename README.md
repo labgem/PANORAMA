@@ -21,8 +21,9 @@ conda install --file requirements.txt
 pip install .
 ```
 
-```{note}
-You can find more information on the installation in [install section](#install-section)
-```
+[//]: # (You can find more information on the installation in mettre le lien vers ReadTheDocs)
+
+# PANORAMA overview
+
 
 
