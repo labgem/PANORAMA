@@ -35,7 +35,7 @@ user/report
 developper/devRules
 developper/git
 developper/unitTest
-developper/workflow
+developper/workflows
 developper/buildDoc
 
 ```

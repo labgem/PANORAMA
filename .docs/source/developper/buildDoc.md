@@ -34,13 +34,14 @@ you type for docs hosted on Read the Docs". It's only work on ReadTheDocs web si
 
 ### Modify existing documentation
 In this part we will speak about how to change already existing file. To adding file for command, package, ... 
-See [Adding section](adding-to-existing-documentation)
+See [Adding section](#heading-adding)
 
 To modify the existing user or developper documentation, you simply need to go to the file that you want to change and modify it.
 
 The API documentation is automatically update when you modify the code. 
 It's working also when you add function in the package, but not if you add new package, for this look at the next section.  
 
+(heading-adding)=
 ### Adding to existing documentation
 #### Adding command documentation
 Documentation to a new command should be in the user documentation. 
@@ -53,7 +54,7 @@ All new guidelines that seems interesting are welcomed.
 If you think that the guidelines could not be add to an existing file you can create a new one.   
 Use an explicit name for you file and add it to the *toctree DevelopperGuide* 
 
-#### API documentation
+#### Update API documentation
 The API documentation is build automatically. 
 To update the API documentation and keep the automatic update when a new package, module, submodules is added follow the
 next lines:
@@ -62,7 +63,7 @@ sphinx-apidoc -o api $PANORAMA/panorama -f
 ```
 ```{attention}
 *sphinx-apidoc* will generate ReStructeredText files. You need to convert them in markdown. For this follow the guides 
-[here](restructeredtext-to-markdown)
+[here](#rst2md)
 ```
 
 ### Creating a new documentation from scratch
@@ -178,6 +179,7 @@ html_theme = 'sphinx_rtd_theme'
 html_static_path = ['_static']
 
 ```
+(rst2md)=
 #### ReStructeredText to markdown
 reStructuredText (rst) is the default plaintext markup language used by both Docutils and Sphinx. 
 More complete but a little bit older than Markdown, which is easier to use too, we are going to change 
