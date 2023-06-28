@@ -25,12 +25,18 @@ user/draw
 user/utility
 user/align
 user/cluster
+user/report
 ```
 
+```{toctree}
+:caption: 'Developper Guide:'
+:maxdepth: 2
 
-
+developper/buildDoc
+```
 # Indices and tables
-- {ref}`panorama package`
+
+[//]: # (- {ref}`panorama package`)
 - {ref}`genindex`
 - {ref}`modindex`
 - {ref}`search`

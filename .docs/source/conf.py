@@ -11,10 +11,6 @@
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
 from pathlib import Path
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
 
 # -- Project information -----------------------------------------------------
 
@@ -23,7 +19,7 @@ copyright = '2023, Jérôme Arnoux'
 author = 'Jérôme Arnoux'
 
 # The full version, including alpha/beta/rc tags
-release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()
+release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()  # Get release number in the VERSION file
 
 
 # -- General configuration ---------------------------------------------------
@@ -33,7 +29,7 @@ release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()
 # ones.
 extensions = [
     "myst_parser",
-    "sphinxcontrib.jquery",
+    # "sphinxcontrib.jquery",
     "sphinx.ext.duration",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autodoc",
