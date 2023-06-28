@@ -32,7 +32,12 @@ user/report
 :caption: 'Developper Guide:'
 :maxdepth: 2
 
+developper/devRules
+developper/git
+developper/unitTest
+developper/workflow
 developper/buildDoc
+
 ```
 # Indices and tables
 
