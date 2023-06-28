@@ -1,6 +1,5 @@
 # panorama package
 
-## Subpackages
 
 ```{toctree}
 :maxdepth: 4

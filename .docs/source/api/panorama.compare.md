@@ -1,7 +1,5 @@
 # panorama.compare package
 
-## Submodules
-
 ## panorama.compare.comparison module
 
 ```{eval-rst}
@@ -20,7 +18,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Compare module contents
 
 ```{eval-rst}
 .. automodule:: panorama.compare

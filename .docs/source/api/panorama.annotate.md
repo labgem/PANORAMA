@@ -1,7 +1,5 @@
 # panorama.annotate package
 
-## Submodules
-
 ## panorama.annotate.annotate module
 
 ```{eval-rst}
@@ -20,7 +18,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Annotate module contents
 
 ```{eval-rst}
 .. automodule:: panorama.annotate

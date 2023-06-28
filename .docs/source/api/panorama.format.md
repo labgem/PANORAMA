@@ -1,7 +1,5 @@
 # panorama.format package
 
-## Submodules
-
 ## panorama.format.figure module
 
 ```{eval-rst}
@@ -47,7 +45,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Format module contents
 
 ```{eval-rst}
 .. automodule:: panorama.format

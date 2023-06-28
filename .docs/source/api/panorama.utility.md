@@ -1,6 +1,5 @@
 # panorama.utility package
 
-## Submodules
 
 ## panorama.utility.translate module
 
@@ -20,7 +19,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Utility module contents
 
 ```{eval-rst}
 .. automodule:: panorama.utility

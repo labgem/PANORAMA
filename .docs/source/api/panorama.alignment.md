@@ -1,7 +1,5 @@
 # panorama.alignment package
 
-## Submodules
-
 ## panorama.alignment.align module
 
 ```{eval-rst}
@@ -29,7 +27,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Alignement module contents
 
 ```{eval-rst}
 .. automodule:: panorama.alignment

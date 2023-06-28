@@ -1,6 +1,5 @@
 # panorama.info package
 
-## Submodules
 
 ## panorama.info.content module
 
@@ -29,7 +28,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Info module contents
 
 ```{eval-rst}
 .. automodule:: panorama.info

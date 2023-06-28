@@ -33,9 +33,11 @@ release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()
 # ones.
 extensions = [
     "myst_parser",
+    "sphinxcontrib.jquery",
     "sphinx.ext.duration",
     "sphinx.ext.autosectionlabel",
-    "sphinx.ext.autodoc"
+    "sphinx.ext.autodoc",
+    'sphinx_search.extension',
 ]
 
 # Add any paths that contain templates here, relative to this directory.

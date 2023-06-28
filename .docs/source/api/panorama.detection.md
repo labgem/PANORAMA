@@ -1,7 +1,5 @@
 # panorama.detection package
 
-## Submodules
-
 ## panorama.detection.detection module
 
 ```{eval-rst}
@@ -11,7 +9,7 @@
    :show-inheritance:
 ```
 
-## Module contents
+## Detection module contents
 
 ```{eval-rst}
 .. automodule:: panorama.detection
