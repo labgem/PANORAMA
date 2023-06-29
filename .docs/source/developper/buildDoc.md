@@ -197,7 +197,7 @@ rst2myst convert source/index.rst
 rm source/index.rst
 ```
 #### README in index.md
-It's possible to add the [README](../../../README.md) file in the index to don't have to rewrite it in the doc. 
+It's possible to add the **README** file in the index to don't have to rewrite it in the doc. 
 Simply add the following line in `index.md`
 ```markdown
     ```{include} ../../README.md

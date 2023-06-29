@@ -40,6 +40,13 @@ developper/workflows
 developper/buildDoc
 
 ```
+
+```{toctree}
+:caption: 'PANORAMA Package:'
+:maxdepth: 1
+
+api/panorama
+```
 # Indices and tables
 
 [//]: # (- {ref}`panorama package`)

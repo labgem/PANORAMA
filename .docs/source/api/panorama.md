@@ -1,6 +1,3 @@
-# panorama package
-
-
 ```{toctree}
 :maxdepth: 4
 
@@ -12,8 +9,6 @@ panorama.format
 panorama.info
 panorama.utility
 ```
-
-## Submodules
 
 ## panorama.geneFamily module
 
@@ -73,15 +68,6 @@ panorama.utility
 
 ```{eval-rst}
 .. automodule:: panorama.utils
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama
    :members:
    :undoc-members:
    :show-inheritance:
