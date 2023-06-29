@@ -3,12 +3,13 @@
 % You can adapt this file completely to your liking, but it should at least
 % contain the root `toctree` directive.
 
-```{include} ../../README.md
-:relative-images:
-```
 ```{warning}
 This tools is under heavy development. Feel free to send back any suggestion or issue on our github: 
 [https://github.com/jpjarnoux/PANORAMA](https://github.com/labgem/PANORAMA)
+```
+
+```{include} ../../README.md
+:relative-images:
 ```
 
 ```{toctree}
