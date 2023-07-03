@@ -343,7 +343,7 @@ def get_multigraph_edges(g: nx.Graph, g_node_2_meta_nodes: dict) -> List[Tuple[s
 
             g_multigraph_edges = list(product(n1_meta_nodes, n2_meta_nodes))
 
-            g_multigraph_edges_2_attr.update({(n,v):d.copy() for n,v in g_multigraph_edges})
+            g_multigraph_edges_2_attr.update({(n,v):dict(d) for n,v in g_multigraph_edges})
     
     return g_multigraph_edges_2_attr
 
@@ -397,6 +397,34 @@ def compute_CCC(meta_nodes: List[str], g1_edges: List[Tuple[str, str]],
 
     return partitions
 
+
+def get_shortest_path_edges_cc_strategy(g, weight= "mean_transitivity"):
+    """
+    TODO : This is an aproximation of the shortest path algo. 
+
+    A more robust implementation is required. 
+    https://www.baeldung.com/cs/shortest-path-visiting-all-nodes
+
+    """
+    G = g.copy()
+
+    intial_number_cc = nx.number_connected_components(G)
+
+    sum_edges = 0
+    for u,v,d in sorted(G.edges(data=True), key=lambda n_v_d: n_v_d[2][weight],  reverse=True):
+
+        G.remove_edge(u, v)
+
+        cc_count = nx.number_connected_components(G)
+
+        if cc_count != intial_number_cc:
+            G.add_edge(u,v,**d)
+            sum_edges += d[weight]
+            
+
+    return G.edges, sum_edges
+    
+
 def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
                                     gene_fam_2_cluster_fam: Dict[str, str],
                                     min_cgc_size:int =2,
@@ -415,33 +443,84 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
              Each tuple in the list contains two sets: the gene nodes from graph A and the gene nodes from graph B.
     """
 
+    # TODO clean this copy 
+    # this uselful when investigate intermediate graph to not have noise from other context comparison in the context graph attributes... 
+    gcA_graph = gcA_graph.copy()
+    gcB_graph = gcB_graph.copy()
 
     multigraph = None
 
     gfA_to_cf = {gf:cf for gf, cf in gene_fam_2_cluster_fam.items() if gf in gcA_graph}
     gfB_to_cf = {gf:cf for gf, cf in gene_fam_2_cluster_fam.items() if gf in gcB_graph}
 
+    # add cluster family in A and B graphs. Only useful when return_multigraph is True
+    nx.set_node_attributes(gcA_graph, gfA_to_cf, name="cluster")
+    nx.set_node_attributes(gcB_graph, gfB_to_cf, name="cluster")
+
     if len(set(gfA_to_cf.values()) & set(gfB_to_cf.values())) < min_cgc_size:
         # in case the two graph share not enough cluster to reach minimum context size
         return [], None
 
+
     meta_nodes_2_attributes, gA_node_2_meta_nodes, gB_node_2_meta_nodes = create_metanodes(gfA_to_cf, gfB_to_cf)
+
+    # add metanode family in A and B graphs. Only useful when return_multigraph is True
+    nx.set_node_attributes(gcA_graph, {n:len(mn)>0 for n, mn in gA_node_2_meta_nodes.items() }, name="is_metanode")
+    nx.set_node_attributes(gcB_graph, {n:len(mn)>0 for n, mn in gB_node_2_meta_nodes.items() }, name="is_metanode")
 
     gA_multigraph_edges_2_attr = get_multigraph_edges(gcA_graph, gA_node_2_meta_nodes)
     gB_multigraph_edges_2_attr = get_multigraph_edges(gcB_graph, gB_node_2_meta_nodes)
 
-    partitions = compute_CCC(meta_nodes_2_attributes.keys(), gA_multigraph_edges_2_attr.keys(), gB_multigraph_edges_2_attr.keys())
+    conserved_genomic_contexts = compute_CCC(meta_nodes_2_attributes.keys(), gA_multigraph_edges_2_attr.keys(), gB_multigraph_edges_2_attr.keys())
+    
+    cgc_infos = []
+    cgc_graphs =  []
 
-    cgc_nodes = []
+    # filter cgc that does not match required size
+    conserved_genomic_contexts_filtered = (cgc_nodes for cgc_nodes in conserved_genomic_contexts if len(cgc_nodes) >= min_cgc_size)
 
-    for i, meta_nodes in enumerate(partitions):
-        if len(meta_nodes) >= min_cgc_size:
-            gB_nodes = {meta_nodes_2_attributes[meta_node]['node_gB']  for meta_node in meta_nodes}
-            gA_nodes = {meta_nodes_2_attributes[meta_node]['node_gA']  for meta_node in meta_nodes}
-            cgc_nodes.append((gA_nodes, gB_nodes))
-            
-            for meta_node in meta_nodes:
-                meta_nodes_2_attributes[meta_node]["GCG"] = f"CGC_{i}"
+    for i, meta_nodes in enumerate(conserved_genomic_contexts_filtered):
+        
+        gB_nodes = {meta_nodes_2_attributes[meta_node]['node_gB']  for meta_node in meta_nodes}
+        gA_nodes = {meta_nodes_2_attributes[meta_node]['node_gA']  for meta_node in meta_nodes}
+        
+        # filter graph A and graph B to include only nodes included in the current conserved_genomic_context 
+        graphA_cgc = nx.subgraph_view(gcA_graph, filter_node=lambda x: x in gA_nodes)
+        graphB_cgc = nx.subgraph_view(gcB_graph, filter_node=lambda x: x in gB_nodes)
+
+        shortest_path_edges_A, sum_transitivity_edges_A = get_shortest_path_edges_cc_strategy(graphA_cgc, weight= "mean_transitivity")
+        shortest_path_edges_B, sum_transitivity_edges_B = get_shortest_path_edges_cc_strategy(graphB_cgc, weight= "mean_transitivity")
+        
+        
+        shortest_path_attributes_A = {(n,v):(n,v) in shortest_path_edges_A for n,v in graphA_cgc.edges()}
+        shortest_path_attributes_B = {(n,v):(n,v) in shortest_path_edges_B for n,v in graphB_cgc.edges()}
+        
+        nx.set_edge_attributes(gcA_graph, shortest_path_attributes_A, name="in shortest path")
+        nx.set_edge_attributes(gcB_graph, shortest_path_attributes_B, name="in shortest path")
+        
+        nx.set_edge_attributes(graphA_cgc, shortest_path_attributes_A, name="in shortest path")
+        nx.set_edge_attributes(graphB_cgc, shortest_path_attributes_B, name="in shortest path")
+
+        
+        cgc_graphs.append(nx.union(graphA_cgc, graphB_cgc))
+
+        cgc_score =  (len(gA_nodes)/(1 + sum_transitivity_edges_A) + len(gB_nodes)/(1 + sum_transitivity_edges_B) ) / 2
+        cgc_mean_size_in_both_graph = (len(gA_nodes) +  len(gB_nodes) )/2
+
+
+        for meta_node in meta_nodes:
+            meta_nodes_2_attributes[meta_node]["CGC"] = f"CGC_{i}"
+            meta_nodes_2_attributes[meta_node]["CGC_score"] = cgc_score
+            meta_nodes_2_attributes[meta_node]["cgc_mean_size_in_both_graph"] = cgc_mean_size_in_both_graph
+
+        cgc_info = {"cgc_id" : i,
+                    'graphA_nodes': gA_nodes,
+                    "graphB_nodes": gB_nodes,
+                    "score": cgc_score,
+                    "mean_size":(len(gA_nodes) + len(gB_nodes))/2
+                    }
+        
+        cgc_infos.append(cgc_info)
     
     # Construct the multigraph if requested. 
     # This graph is used for visualization and verification.
@@ -453,19 +532,18 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
         multigraph.add_nodes_from([(mn, attr) for mn, attr in meta_nodes_2_attributes.items()])
 
         for (n,v), attributes in gB_multigraph_edges_2_attr.items():
-            multigraph.add_edge(n,v, origin="graphB", **attributes)
+            edge_att = {k:v for k, v in attributes.items() if 'transitivity' in k}
+            multigraph.add_edge(n,v, origin="graphB", **edge_att)
             
         for (n,v), attributes in gA_multigraph_edges_2_attr.items():
-            multigraph.add_edge(n,v, origin="graphA", **attributes)
+            edge_att = {k:v for k, v in attributes.items() if 'transitivity' in k}
+            multigraph.add_edge(n,v, origin="graphA", **edge_att)
 
-        nx.set_node_attributes(gcA_graph, gfA_to_cf, name="cluster")
-        nx.set_node_attributes(gcB_graph, gfB_to_cf, name="cluster")
+        rename_cgc_graph = [f'{i}-' for i in range(len(cgc_graphs))]
+        all_gc_graph = nx.union_all([gcA_graph, gcB_graph] + cgc_graphs, ['',''] + rename_cgc_graph)
+        multigraph_and_cgc_graphs = nx.union(nx.MultiGraph(all_gc_graph), multigraph, rename=['', 'multi'])
 
-        graphs = [multigraph, gcA_graph, gcB_graph]
-
-
-
-    return cgc_nodes, graphs
+    return cgc_infos, multigraph_and_cgc_graphs
 
 def pass_graph_attribute_to_multigraph(meta_nodes_2_attributes, gcA_graph, node_mapper):
 
@@ -485,15 +563,20 @@ def pass_graph_attribute_to_multigraph(meta_nodes_2_attributes, gcA_graph, node_
 
 def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext], 
                                    gene_fam_2_cluster_fam: Dict[str,str], 
-                                   return_multigraph:bool):
+                                   return_multigraph:bool, outdir):
 
-    contextA, contextB = context_pair
+
+
+
+    contextA, contextB = sorted(context_pair)
     # Get conserved genomic context from the two context graph 
-    conserved_genomics_contexts, graphs = get_conserved_genomics_contexts(contextA.graph, contextB.graph, gene_fam_2_cluster_fam, return_multigraph=return_multigraph)
+    cgc_infos, multigraph = get_conserved_genomics_contexts(contextA.graph, contextB.graph, gene_fam_2_cluster_fam, return_multigraph=return_multigraph)
 
-    cgc_sizes = [max((len(nodesA_in_cgc), len(nodesB_in_cgc))) for nodesA_in_cgc, nodesB_in_cgc in conserved_genomics_contexts]
-
-    # TODO: Score the CGCs
+    if len(cgc_infos) > 1:
+        print(f"MORE THAN ONE CONSERVED GENOMIC CONTEXTS FROM TWO CONTEXTS GRAPHS: {contextA.ID}_vs_{contextB.ID}" )
+        
+    cgc_sizes = [info['mean_size'] for info in cgc_infos]
+    cgc_scores = [info['score'] for info in cgc_infos]
 
     # Compute simple metrics 
     contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
@@ -502,13 +585,32 @@ def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext]
     clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
 
 
-    if clst_family_jaccard >= 0.5:
-        return contextA.ID, contextB.ID, {'family_compo_jaccard':clst_family_jaccard,
-                                          "shared family":shared_family,
-                                          "cgc_count":len(conserved_genomics_contexts),
-                                          "cgc_sizes":':'.join([str(size) for size in sorted(cgc_sizes)]),}, graphs
+    # Writting multigraph
+    if return_multigraph and len(cgc_infos) > 0:
+        logging.debug(f"Writting multigraph{(contextA, contextB)}, {multigraph}")
+
+        multigraph_outdir = outdir / 'context_pair_graph_comparison' #/ f"{contextA.ID}_vs_{contextB.ID}"
+
+
+        mkdir(multigraph_outdir, True)
+
+        # multigraph, graphA, graphB = graphs
+        nx.readwrite.graphml.write_graphml(multigraph, multigraph_outdir / f"{contextA.ID}_vs_{contextB.ID}.graphml")
+        # nx.readwrite.graphml.write_graphml(graphA, multigraph_outdir / "graph_A.graphml")
+        # nx.readwrite.graphml.write_graphml(graphB, multigraph_outdir / "graph_B.graphml")
+
+
+    # return comparison if cgc are found.. 
+    if len(cgc_infos) > 0:
+        return contextA.ID, contextB.ID, {'family_compo_jaccard': clst_family_jaccard,
+                                          "shared family": shared_family,
+                                          "max_cgc_score": round(max(cgc_scores),2),
+                                          "cgc_scores": '|'.join([str(round(score,2)) for score in cgc_scores]),
+                                          "cgc_count": len(cgc_infos),
+                                          "cgc_sizes": ':'.join([str(size) for size in cgc_sizes]),}
     else:
-        return contextA.ID, contextB.ID, None, graphs
+        return contextA.ID, contextB.ID, None
+
 
 def launch_context_comparison(pack: tuple) -> tuple:
     """ 
@@ -562,7 +664,7 @@ def compare_gene_contexts_on_cluster_families(gene_contexts: List[GeneContext], 
 def compare_gene_contexts_graph_mp(gene_contexts: List[GeneContext], 
                                    gene_fam_2_cluster_fam: Dict[str, str], 
                                    max_workers: int, disable_bar: bool,
-                                   return_multigraph: bool) -> List[GeneContext]:
+                                   return_multigraph: bool, outdir) -> List[GeneContext]:
     """
     Compares gene contexts by looking at their context graphs.
 
@@ -573,25 +675,21 @@ def compare_gene_contexts_graph_mp(gene_contexts: List[GeneContext],
     :return: A list of GeneContext objects.
     """
     context_graph = nx.Graph()
-    multigraphs = {}
     for gc in gene_contexts:
         context_graph.add_node(gc.ID, pangenome=gc.pangenome)
 
     context_pairs =  combinations(gene_contexts, 2)
-    comparison_arguments = ((p, gene_fam_2_cluster_fam, return_multigraph) for p in context_pairs)
+    comparison_arguments = ((p, gene_fam_2_cluster_fam, return_multigraph, outdir) for p in context_pairs)
     pair_count = (len(gene_contexts) **2 - len(gene_contexts)) / 2
 
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        for gcA, gcB, metrics, graphs in tqdm(executor.map(launch_compare_pair_of_context_graphs, comparison_arguments, chunksize=5), total=pair_count, 
+        for gcA, gcB, metrics in tqdm(executor.map(launch_compare_pair_of_context_graphs, comparison_arguments, chunksize=5), total=pair_count, 
                                       disable=disable_bar, unit="context pair"):
             if metrics:
                 context_graph.add_edge( gcA, gcB, **metrics)
 
-                if graphs:
-                    multigraphs[(gcA, gcB)] = graphs
-
     logging.info(f'Context graph: {context_graph}')
-    return context_graph, multigraphs
+    return context_graph
 
 
 def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: Path, family_clusters: bool, synteny_score:float,
@@ -672,8 +770,8 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
 
     # Compare gene contexts based on their synteny information  
-    context_synteny_graph, context_pair_2_multigraphs = compare_gene_contexts_graph_mp(gene_contexts, gene_family_to_family_cluster, task, disable_bar, 
-                                                                        return_multigraph=True)
+    context_synteny_graph = compare_gene_contexts_graph_mp(gene_contexts, gene_family_to_family_cluster, task, disable_bar, 
+                                                                        return_multigraph=True, outdir=output)
     
     # context_graph_merged = nx.compose(context_graph_clstr_families, context_synteny_graph)
 
@@ -684,20 +782,6 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     context_graph_file = output / f"context.graphml"
     logging.info(f'Writting gene context graph: {context_graph_file}')
     nx.readwrite.graphml.write_graphml(context_synteny_graph, context_graph_file)
-
-    # Writting multigraphs
-    for (contextA, contextB), graphs in context_pair_2_multigraphs.items():
-        logging.debug(f"{(contextA, contextB)}, {graphs}")
-
-        multigraph_outdir = output / f"{contextA}_vs_{contextB}"
-
-        mkdir(multigraph_outdir, True)
-
-        multigraph, graphA, graphB = graphs 
-
-        nx.readwrite.graphml.write_graphml(multigraph, multigraph_outdir / "multigraph.graphml")
-        nx.readwrite.graphml.write_graphml(graphA, multigraph_outdir / "graph_A.graphml")
-        nx.readwrite.graphml.write_graphml(graphB, multigraph_outdir / "graph_B.graphml")
 
 
 def context_comparison_parser(parser):

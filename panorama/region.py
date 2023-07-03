@@ -96,3 +96,10 @@ class GeneContext(GeneCont):
                 "Gene Family count": len(self.families),
                 "Partitions": ";".join({f.named_partition for f in self.families})
                 }
+    
+    def __gt__(self, other):
+        return self.ID > other.ID
+
+    
+    def __lt__(self, other):
+        return self.ID < other.ID
