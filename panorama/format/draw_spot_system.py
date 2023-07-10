@@ -56,7 +56,11 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
     system = pangenome.systems
     for sys in system:
         for fam in sys.gene_families:
-            fam2sys[fam] = f"{sys.name}"
+            existing_sys = fam2sys.get(fam)
+            if existing_sys:
+                fam2sys[fam] = f"{existing_sys} / {sys.name}"
+            else:
+                fam2sys[fam] = f"{sys.name}"
 
     output_2 = output / name / "spot_figure"
     mkdir(output_2, force=True)
