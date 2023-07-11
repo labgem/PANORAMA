@@ -297,7 +297,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                     logging.info(f"Finish drawing upsetplot for {pangenome_name}")
 
                     if draw_spot:
-                        draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot, dict_spot_org=dict_spot_org)
+                        draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot,
+                                   dict_spot_org=dict_spot_org, systems_projection=systems_proj)
 
                     if conserved_spot:
                         logging.info("Begin write conserved spot")

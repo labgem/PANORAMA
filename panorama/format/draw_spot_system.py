@@ -29,7 +29,7 @@ from ppanggolin.RGP.spot import comp_border
 from panorama.pangenomes import Pangenome
 from panorama.utils import mkdir
 
-def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame, dict_spot_org: Dict):
+def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame, dict_spot_org: Dict, systems_projection: DataFrame):
     """ Draw spot containing systems
 
     :param name: Name of the pangenome
@@ -37,6 +37,8 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
     :param output: Path to output directory
     :param df_spot: Systems in each spot of the pangenome
     :param dict_spot_org: Dictionary with spot as key and organisms having the spot as values
+    :param systems_projection: Dataframe with systems detected
+
     """
 
     spot_list = df_spot['Spot'].tolist()
@@ -52,15 +54,24 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
         for fam in mod.families:
             fam2mod[fam] = f"module_{mod.ID}"
 
-    fam2sys = {}
+# Dict with family related to a system (complete or incomplete)
+    fam2sys_related = {}
     system = pangenome.systems
     for sys in system:
         for fam in sys.gene_families:
-            existing_sys = fam2sys.get(fam)
+            existing_sys = fam2sys_related.get(fam)
             if existing_sys:
-                fam2sys[fam] = f"{existing_sys} / {sys.name}"
+                fam2sys_related[fam] = f"{existing_sys} / {sys.name}"
             else:
-                fam2sys[fam] = f"{sys.name}"
+                fam2sys_related[fam] = f"{sys.name}"
+
+# Dict with family link to a complete system
+    complete_fam = systems_projection['gene family'].tolist()
+    fam2sys_complete = {}
+    for fam in complete_fam:
+        for key, value in fam2sys_related.items():
+            if fam in str(key):
+                fam2sys_complete[key] = value
 
     output_2 = output / name / "spot_figure"
     mkdir(output_2, force=True)
@@ -118,15 +129,18 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
                             uniq_gene_lists.append(genelist)
                             ordered_counts.append(curr_genelist_count)
 
-        draw_curr_spot(uniq_gene_lists, ordered_counts, fam2mod, fam2sys, famcolors, fname, df_rep_identical)
+        draw_curr_spot(uniq_gene_lists, ordered_counts, fam2mod, fam2sys_related, fam2sys_complete, famcolors,
+                       fname, df_rep_identical, systems_projection)
 
 
-def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam_to_sys: dict, fam_col: dict, file_name: str, df_rep_identical: DataFrame):
+def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam_to_sys_related: dict, fam_to_sys_complete: dict,
+                   fam_col: dict, file_name: str, df_rep_identical: DataFrame, systems_projection: DataFrame):
     """
     :param gene_lists:
     :param ordered_counts:
     :param fam_to_mod: Dictionnary which link families and modules
-    :param fam_to_mod: Dictionnary which link families and systems
+    :param fam_to_sys_related: Dictionnary which link families related to systems
+    :param fam_to_sys_complete: Dictionnary which link families and complet systems
     :param fam_col: Dictionnary with for each family the corresponding color
     :param file_name: Path and name of the file
     :return:
@@ -150,7 +164,7 @@ def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam
     fig.add_tools(genome_recs_hover)
 
     # gene rectanges
-    gene_source, gene_tooltips = mk_source_data(gene_lists, fam_col, fam_to_mod, fam_to_sys)
+    gene_source, gene_tooltips = mk_source_data(gene_lists, fam_col, fam_to_mod, fam_to_sys_related, fam_to_sys_complete, systems_projection)
     recs = fig.rect(x='x', y='y', line_color='line_color', fill_color='fill_color', width='width', height=2,
                     line_width=5, source=gene_source)
     recs_hover = HoverTool(renderers=[recs], tooltips=gene_tooltips, mode="mouse", point_policy="follow_mouse")
@@ -167,19 +181,21 @@ def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam
     save(column(fig, row(labels_tools, gene_tools), row(genome_tools)))
 
 
-def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys: dict) -> (ColumnDataSource, list):
+def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_related: dict, fam_to_sys_complete: dict,
+                   systems_projection: DataFrame) -> (ColumnDataSource, list):
     """
 
     :param genelists:
     :param fam_col: Dictionary with for each family the corresponding color
     :param fam_to_mod: Dictionary with the correspondance modules families
-    :param fam_to_sys: Dictionary with the correspondance systems families
+    :param fam_to_sys_related: Dictionary with the correspondance systems families (all families related to the system)
+    :param fam_to_sys_complete: Dictionary with the correspondance systems families (all families related to a complet system)
     :return:
     """
     partition_colors = {"shell": "#00D860", "persistent": "#F7A507", "cloud": "#79DEFF"}
 
     df = {'name': [], 'ordered': [], 'strand': [], "start": [], "stop": [], "length": [], 'module': [],
-          'module_color': [], 'system': [], 'system_color': [], 'x': [], 'y': [], 'width': [], 'family_color': [],
+          'module_color': [], 'system_related': [], 'system_related_color': [], 'complete_system': [], 'complete_system_color': [], 'x': [], 'y': [], 'width': [], 'family_color': [],
           'partition_color': [], 'partition': [], "family": [], "product": [], "x_label": [], "y_label": [],
           "label": [], "gene_type": [], 'gene_ID': [], "gene_local_ID": []}
 
@@ -212,7 +228,9 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys:
                 df["family_color"].append("#A109A7")
                 df["partition_color"].append("#A109A7")
                 df["module"].append("none")
-                df["system"].append("")
+                df["system_related"].append("")
+                df["complete_system"].append("")
+
             else:
                 df["name"].append(gene.name)
                 df["family"].append(gene.family.name)
@@ -220,8 +238,11 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys:
                 df["family_color"].append(fam_col[gene.family])
                 df["partition_color"].append(partition_colors[gene.family.named_partition])
                 df["module"].append(fam_to_mod.get(gene.family, "none"))
-                df["system"].append(fam_to_sys.get(gene.family, ""))
-
+                df["system_related"].append(fam_to_sys_related.get(gene.family, ""))
+                if gene.start in systems_projection['start'].values:
+                    df["complete_system"].append(fam_to_sys_complete.get(gene.family, ""))
+                else:
+                    df["complete_system"].append("")
             df["x"].append((abs(gene.start - start) + abs(gene.stop - start)) / 2)
             df["width"].append(gene.stop - gene.start)
             df["x_label"].append(str(int(df["x"][-1]) - int(int(df["width"][-1]) / 2)))
@@ -248,11 +269,16 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys:
     df["module_color"] = mod_colors
 
     # define colors for systems
-    sys2col = make_colors_for_iterable(set(df["system"]))
-    sys_colors = []
-    for sys in df["system"]:
-        sys_colors.append(sys2col[sys])
-    df["system_color"] = sys_colors
+    sys2col = make_colors_for_iterable(set(df["system_related"]))
+    sys_related_colors = []
+    for sys in df["system_related"]:
+        sys_related_colors.append(sys2col[sys])
+    df["system_related_color"] = sys_related_colors
+
+    complete_sys_colors = []
+    for sys in df["complete_system"]:
+        complete_sys_colors.append(sys2col[sys])
+    df["complete_system_color"] = complete_sys_colors
 
     # defining things that we will see when hovering over the graphical elements
     tooltips = [
@@ -263,7 +289,7 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys:
         ("product", "@product"),
         ("family", "@family"),
         ("module", "@module"),
-        ("system", "@system"),
+        ("system_related", "@system_related"),
         ("partition", "@partition"),
         ("local identifier", "@gene_local_ID"),
         ("gene ID", "@gene_ID"),
@@ -298,14 +324,16 @@ def add_gene_tools(recs: GlyphRenderer, source_data: ColumnDataSource) -> Column
             }}else if(this.active == 2){{
                 source.data['{color_element}'] = source.data['module_color'];
             }}else if(this.active == 3){{
-                source.data['{color_element}'] = source.data['system_color'];
+                source.data['{color_element}'] = source.data['system_related_color'];
+            }}else if(this.active == 4){{
+                source.data['{color_element}'] = source.data['complete_system_color'];
             }}
             recs.{color_element} = source.data['{color_element}'];
             source.change.emit();
         """
 
-    radio_line_color = RadioGroup(labels=["partition", "family", "module", "system"], active=0)
-    radio_fill_color = RadioGroup(labels=["partition", "family", "module", "system"], active=1)
+    radio_line_color = RadioGroup(labels=["partition", "family", "module", "system_related", "complete_system"], active=0)
+    radio_fill_color = RadioGroup(labels=["partition", "family", "module", "system_related", "complete_system"], active=1)
 
     radio_line_color.js_on_click(CustomJS(args=dict(recs=recs, source=source_data),
                                           code=color_str("line_color")))
@@ -341,8 +369,8 @@ def add_gene_labels(fig, source_data: ColumnDataSource) -> (Column, LabelSet):
     slider_font = Slider(start=0, end=64, value=16, step=1, title="Gene label font size in px")
     slider_angle = Slider(start=0, end=pi / 2, value=0, step=0.01, title="Gene label angle in radian")
 
-    radio_label_type = RadioGroup(labels=["system", "name", "product", "family", "local identifier", "gene ID", "none"],
-                                  active=1)
+    radio_label_type = RadioGroup(labels=["system related", "complete system", "name", "product", "family", "local identifier", "gene ID", "none"],
+                                  active=2)
 
     slider_angle.js_link('value', labels, 'angle')
 
@@ -354,22 +382,24 @@ def add_gene_labels(fig, source_data: ColumnDataSource) -> (Column, LabelSet):
 
     radio_label_type.js_on_click(CustomJS(args=dict(other=labels, source=source_data),
                                           code="""
-                if(this.active == 6){
+                if(this.active == 7){
                     source.data['label'] = [];
-                    for(var i=0;i<source.data['system'].length;i++){
+                    for(var i=0;i<source.data['system_related'].length;i++){
                         source.data['label'].push('');
                     }
                 }else if(this.active == 0){
-                    source.data['label'] = source.data['system'];
+                    source.data['label'] = source.data['system_related'];
                 }else if(this.active == 1){
-                    source.data['label'] = source.data['name'];
+                    source.data['label'] = source.data['complete_system'];
                 }else if(this.active == 2){
-                    source.data['label'] = source.data['product'];
+                    source.data['label'] = source.data['name'];
                 }else if(this.active == 3){
-                    source.data['label'] = source.data['family'];
+                    source.data['label'] = source.data['product'];
                 }else if(this.active == 4){
-                    source.data['label'] = source.data['gene_local_ID'];
+                    source.data['label'] = source.data['family'];
                 }else if(this.active == 5){
+                    source.data['label'] = source.data['gene_local_ID'];
+                }else if(this.active == 6){
                     source.data['label'] = source.data['gene_ID'];
                 }
                 else{
