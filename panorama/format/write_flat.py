@@ -153,7 +153,7 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, threads: int = 1,
 
 def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangenomes: Pangenomes, output: Path,
                      annotation: bool = False, hmm: bool = False, systems: bool = False, systems_asso: List[str] = None,
-                     conserved_spot: int = 4, draw_spot: bool = False, proksee: List[str] = None, proksee_template: Path = None,
+                     conserved_spot: int = None, draw_spot: bool = False, proksee: List[str] = None, proksee_template: Path = None,
                      organisms_list: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
     """Launcher to write flat file from pangenomes
 
@@ -242,7 +242,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
         for pangenome_name, pangenome_info in pan_to_path.items():
             pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
             pangenome.add_file(pangenome_info["path"])
-            if systems :
+            if systems and not (systems_asso or conserved_spot or draw_spot):
                 check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                                     need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
@@ -277,20 +277,29 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 logging.info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
 
                 if systems_asso or conserved_spot or draw_spot:
-                    if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "all"] or conserved_spot:
+                    if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
                         bool_rgp = True
-                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot:
+                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
                         bool_modules = True
-                    if systems_asso in ["rgp-spots", "modules-spots", "all"] or conserved_spot:
+                    if systems_asso in ["rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
                         bool_spots = True
-                    logging.info("Begin write systems with features projection")
-                    df_sys2feat = systems_to_features(name=pangenome_name, pangenome=pangenome, systems_projection=systems_proj, output=output, source=source,
-                                        bool_rgp=bool_rgp, bool_modules=bool_modules, bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
 
-                    df_spot, dict_spot_org = spot2sys(name=pangenome_name, pangenome=pangenome, system_to_feature=df_sys2feat, output=output)
-                    df_spot_global = pd.concat([df_spot_global, df_spot])
-                    df_module = mod2sys(name=pangenome_name, system_to_feature=df_sys2feat, output=output)
-                    df_module_global = pd.concat([df_module_global, df_module])
+                    logging.info("Begin write systems with features projection")
+                    df_sys2feat = systems_to_features(name=pangenome_name, pangenome=pangenome, systems_projection=systems_proj,
+                                                      output=output, source=source, bool_rgp=bool_rgp, bool_modules=bool_modules,
+                                                      bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
+
+                    df_borders = write_borders_spot(name=pangenome_name, pangenome=pangenome)
+                    df_borders_global = pd.concat([df_borders_global, df_borders])
+
+                    if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+                        df_spot, dict_spot_org = spot2sys(name=pangenome_name, pangenome=pangenome, system_to_feature=df_sys2feat,
+                                                          df_borders=df_borders, output=output)
+                        df_spot_global = pd.concat([df_spot_global, df_spot])
+
+                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
+                        df_module = mod2sys(name=pangenome_name, system_to_feature=df_sys2feat, output=output)
+                        df_module_global = pd.concat([df_module_global, df_module])
 
                     logging.info("Projection with features written")
                     upsetplot(name=pangenome_name, systems_projection=systems_proj, system_to_feature=df_sys2feat, output=output)
@@ -300,12 +309,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                         draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot,
                                    dict_spot_org=dict_spot_org, systems_projection=systems_proj)
 
-                    if conserved_spot:
-                        logging.info("Begin write conserved spot")
-                        df_borders = write_borders_spot(name=pangenome_name, pangenome=pangenome)
-                        df_borders_global = pd.concat([df_borders_global, df_borders])
-
         if conserved_spot:
+            logging.info("Begin write conserved spot")
             manager = Manager()
             lock = manager.Lock()
             pans = load_multiple_pangenomes(pangenome_list=pangenomes, need_info={"need_families": True},
@@ -321,15 +326,11 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
         global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)
         global_total.to_csv(f"{output}/global_systems_number_total.tsv", sep="\t", index=False)
 
-        df_spot_global.to_csv(f"{output}/global_spot_to_system.tsv", sep="\t", index=False)
-        df_module_global.to_csv(f"{output}/global_module_to_system.tsv", sep="\t", index=False)
+        if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+            df_spot_global.to_csv(f"{output}/global_spot_to_system.tsv", sep="\t", index=False)
 
-
-
-
-
-
-
+        if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
+            df_module_global.to_csv(f"{output}/global_module_to_system.tsv", sep="\t", index=False)
 
     if proksee is not None:
         need_annotations = True
@@ -411,10 +412,11 @@ def parser_write(parser):
     optional.add_argument("--systems_asso", required=False, type=str, default=None,
                           choices=["all", "rgp-modules", "rgp-spots", "modules-spots", "modules", "rgp"],
                           help="Write association between systems and others pangenomes elements")
-    optional.add_argument("--conserved_spot", required=False, type=int, default=4,
-                          help="Write all conserved spot in pangenomes having common families as borders (default 4)")
+    optional.add_argument("--conserved_spot", required=False, type=int, default=None,
+                          help="Write all conserved spot in pangenomes having common families as borders (need a value between"
+                               "1 and the total number of families defining a spot in PPanGGOLiN (6 by default)")
     optional.add_argument("--draw_spot", required=False, action="store_true",
-                          help="Draw spots with systems")
+                          help="Draw spots containing at least one system")
     optional.add_argument('--models', required=False, type=Path, default=None, nargs="+",
                           help="Path to model directory")
     optional.add_argument("--sources", required=False, type=str, nargs="+", default=None,

@@ -359,6 +359,7 @@ def write_systems_to_features(name: str, pangenome: Pangenome, systems_projectio
 
         list_to_df.append(df_collection(system_ID, system.name, mod_org, module_presence, organism_list_of_rgp, spot_list, rgp_list))
 
+    #df = pd.DataFrame()
     if bool_rgp is True and bool_modules is True and bool_spots is True:
         df = pd.DataFrame(list_to_df)
         outpath = Path(output / name / "systems_to_rgp_modules_spots_{0}_{1}".format(source, name)).with_suffix(".tsv")
@@ -512,17 +513,18 @@ def write_sys_in_feature(system: System, feature: Region or Module, mandatory_fa
     return bool_projection
 
 
-def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, output: Path) -> Tuple[DataFrame, Dict]:
+def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_borders: DataFrame, output: Path) -> Tuple[DataFrame, Dict]:
     """Write systems associated to spots of pangenome and extract spot content
 
     :param name: pangenome name
     :param pangenome: pangenome object
     :param system_to_feature: Dataframe with modules, spots and RGPs associated to each system ID of pangenome
+    :param df_borders: Dataframe with borders of each spot
     :param output: Path to output directory
 
     :return: Dataframe with systems in each spots
     """
-
+    #print(df_borders.to_string())
     system_to_feature = system_to_feature.drop(columns=['mod_organism', 'module', 'rgp'])
     system_to_feature = system_to_feature.where(pd.notnull(system_to_feature), '[]')
     spot_set = set()
@@ -534,6 +536,7 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, outp
     dict_spot_ID_system = {}
     dict_spot_system = {}
     dict_spot_org = {}
+    dict_spot_border = {}
     for spot in spot_list:
         system_to_feature_2 = system_to_feature[system_to_feature['spot'].apply(lambda x: spot in x)]
         for index1, row in system_to_feature_2.iterrows():
@@ -546,7 +549,10 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, outp
                     dict_spot_ID_system.setdefault(spot, []).append(system_ID)
                     dict_spot_system.setdefault(spot, []).append(system)
                     dict_spot_org.setdefault(spot, []).append(organism[index2])
-    df_spot = pd.DataFrame({'Spot': list(dict_spot_system.keys()), 'system_name': list(dict_spot_system.values()), 'organism': list(dict_spot_org.values())})
+                    dict_spot_border[spot] = df_borders.loc[df_borders['Spot'] == spot, 'borders'].values[0]
+    #print(dict_spot_border)
+    df_spot = pd.DataFrame({'Spot': list(dict_spot_system.keys()), 'system_name': list(dict_spot_system.values()),
+                            'organism': list(dict_spot_org.values()), 'borders': list(dict_spot_border.values())})
 
     number_sys_list = []
     number_org_list = []
@@ -584,9 +590,9 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, outp
 
     df_spot = extract_spot_content(pangenome=pangenome, df_spot=df_spot)
 
-    df_spot.to_csv(output / name / f"spot_to_system_{name}.tsv", sep='\t', header=["Spot", "system_name", "organism",
-                                                                                   "nb_system", "nb_organism",
-                                                                                   "Average_number_genes", "spot_content" ])
+    df_spot.to_csv(output / name / f"spot_to_system_{name}.tsv", sep='\t',
+                   header=["Spot", "system_name", "organism", "nb_system", "nb_organism",
+                           "mean_nb_genes", "max_nb_genes", "min_nb_genes", "borders"])
 
     df_spot.insert(0, 'pangenome_name', name)
     return df_spot, dict_spot_org
@@ -601,37 +607,26 @@ def extract_spot_content(pangenome: Pangenome, df_spot: DataFrame) -> DataFrame:
     :return: Dataframe with spot content
     """
     spot_list = df_spot["Spot"].tolist()
-    list_size_spot = []
-    list_spot_content = []
+    mean_spot = []
+    max_spot = []
+    min_spot = []
     for s in pangenome.spots:
+
         list_size_region = []
-        list_rgp_content = []
         if s.ID in spot_list:
             for region in s.regions:
                 list_size_region.append(len(list(region.genes))) # append number of genes of each rgp
-                genes_region = region.genes
-                for gene in genes_region:
-                    list_rgp_content.append(gene.product)
-            list_size_spot.append(sum(list_size_region)/len(list_size_region)) # append average number of genes
-            list_spot_content.append(Counter(list_rgp_content))
+            mean_spot.append(sum(list_size_region)/len(list_size_region)) # append mean of the number of genes
+            mean_spot_round = [round(elem, 2) for elem in mean_spot]
+            max_spot.append(max(list_size_region))
+            min_spot.append(min(list_size_region))
 
-    df_spot['Average_number_genes'] = list_size_spot
-    df_spot['spot_content'] = list_spot_content
-
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].apply(repr)
-    df_spot["spot_content"] = df_spot["spot_content"].apply(repr)
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].str.replace("Counter", "")
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].str.replace(r"\(|\)", "", regex=True)
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].str.replace(r"{|}", "", regex=True)
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].str.replace('"', "")
-    df_spot["Average_number_genes"] = df_spot["Average_number_genes"].str.replace("'", "")
-    df_spot["spot_content"] = df_spot["spot_content"].str.replace("Counter", "")
-    df_spot["spot_content"] = df_spot["spot_content"].str.replace(r"\(|\)", "", regex=True)
-    df_spot["spot_content"] = df_spot["spot_content"].str.replace(r"{|}", "", regex=True)
-    df_spot["spot_content"] = df_spot["spot_content"].str.replace("'", "")
-    df_spot["spot_content"] = df_spot["spot_content"].str.replace('"', '')
+    df_spot['mean_nb_genes'] = mean_spot_round
+    df_spot['max_nb_genes'] = max_spot
+    df_spot['min_nb_genes'] = min_spot
 
     return df_spot
+
 
 def mod2sys(name: str, system_to_feature: DataFrame, output: Path) -> DataFrame:
     """Write systems associated to modules of pangenome
@@ -697,7 +692,9 @@ def mod2sys(name: str, system_to_feature: DataFrame, output: Path) -> DataFrame:
     df_module["organism"] = df_module["organism"].str.replace('"', '')
     df_module["organism"] = df_module["organism"].str.replace("'", "")
 
-    df_module.to_csv(output / name / f"module_to_system_{name}.tsv", sep='\t', header=["Module", "system_name", "organism", "nb_system", "nb_organism"])
+    df_module.to_csv(output / name / f"module_to_system_{name}.tsv", sep='\t',
+                     header=["Module", "system_name", "organism", "nb_system", "nb_organism"])
+
     df_module.insert(0, 'pangenome_name', name)
 
     return df_module

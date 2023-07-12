@@ -39,13 +39,14 @@ def write_borders_spot(name: str, pangenome : Pangenome) -> DataFrame:
     return df_borders
 
 
-def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_align: DataFrame, output: Path, threshold: int):
+def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_align: DataFrame, output: Path, threshold: int = 4):
     """ Detect identical spots between pangenomes
 
          :param df_borders_global: Spot borders for all pangenomes
          :param df_spot_global: Systems in each spot for all pangenomes
          :param df_align: Alignment results of families from pangenomes
          :param output: Path to output directory
+         :param threshold: Number of families conserved between pangenomes
          """
 
     names = df_borders_global['pangenome_name'].unique().tolist()
@@ -99,26 +100,32 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
                 conserved_spot[indicator] = fused_score_df_f['Spot'].to_list()
             conserved_spot_global = pd.concat([conserved_spot_global, conserved_spot], ignore_index=True)
 
-    conserved_spot_regroup = filter_regroup_spot(names=names, conserved_spot_global=conserved_spot_global, df_spot_global=df_spot_global, output=output) #keep spot associated with a system and regroup similar spots
-    asso_conserved_spot_system(conserved_spot_regroup=conserved_spot_regroup, df_spot_global=df_spot_global, output=output)
+    df_spot_filter = filter_spot(names=names, conserved_spot_global=conserved_spot_global, df_spot_global=df_spot_global)
+    df_link_system = regroup_spot(names=names, df=df_spot_filter)
+    df_link_system.to_csv(output/f"conserved_spot_link_systems.tsv", sep='\t', index=False)
+
+    df_all = regroup_spot(names=names, df=conserved_spot_global)
+    df_all.to_csv(output/"all_conserved_spot.tsv", sep='\t', index=False)
+
+    asso_conserved_spot_system(conserved_spot_regroup=df_link_system, df_spot_global=df_spot_global,
+                               df_borders_global=df_borders_global, output=output)
 
 
-def filter_regroup_spot(names: List[str], conserved_spot_global: DataFrame, df_spot_global: DataFrame, output: Path) -> DataFrame:
-    """ Remove spots not associated with a system and regroup similar spots together
+def filter_spot(names: List[str], conserved_spot_global: DataFrame, df_spot_global: DataFrame) -> DataFrame:
+    """ Remove spots not associated with a system
 
          :param names: Names of all pangenomes
-         :param conserved_spot_global: Similar spots in pangenomes not regrouped
+         :param conserved_spot_global: Similar spots in pangenomes not filtered
          :param df_spot_global: Systems in each spots for all pangenomes
-         :param output: Path to output directory
 
-         :return: Dataframe with similar spots in pangenomes regrouped
+         :return: Dataframe with spots linked to a system
          """
 
     dict_pan_spot = {}
     for index, name in enumerate(names):
         df_spot = df_spot_global[df_spot_global['pangenome_name'] == name]
         spot = df_spot["Spot"].tolist()
-        dict_pan_spot[name] = spot
+        dict_pan_spot[name] = spot #dict with spots associated with system in each pangenome
 
     df_spot_involved = pd.DataFrame(columns=names)
     for i, row in conserved_spot_global.iterrows():
@@ -132,15 +139,26 @@ def filter_regroup_spot(names: List[str], conserved_spot_global: DataFrame, df_s
                         boolean_system = True
                         df_spot_involved = df_spot_involved.append(row, ignore_index=True)
 
-    df_spot_involved = df_spot_involved.applymap(lambda x: x if isinstance(x, list) else []) # empty list for NaN values
+    return df_spot_involved
 
-#First loop to reunite conserved spots
-    df_spot_involved2 = pd.DataFrame(columns=names)
-    for i, row in df_spot_involved.iterrows():
+def regroup_spot(names: List[str], df: DataFrame) -> DataFrame:
+    """ Regroup similar spots together
+
+         :param names: Names of all pangenomes
+         :param df: Dataframe with either all conserved spots or spots link to systems
+
+         :return: Dataframe with similar spots in pangenomes regrouped
+         """
+
+    df = df.applymap(lambda x: x if isinstance(x, list) else [])  # empty list for NaN values
+
+    # First loop to reunite conserved spots
+    df2 = pd.DataFrame(columns=names)
+    for i, row in df.iterrows():
         row_list = row.tolist()
         dict_1 = {key: [] for key in names}
         for name1, element in zip(names, row_list):
-            filter_spot_inv = df_spot_involved[df_spot_involved[name1].apply(lambda x: any(item in x for item in element))]
+            filter_spot_inv = df[df[name1].apply(lambda x: any(item in x for item in element))]
             for name2 in names:
                 liste = filter_spot_inv[name2].tolist()
                 flat_list = [item for sublist in liste for item in sublist]
@@ -148,15 +166,15 @@ def filter_regroup_spot(names: List[str], conserved_spot_global: DataFrame, df_s
                 flat_list = sorted(flat_list, key=int)
                 dict_1[name2] += flat_list
             dict_1 = {key: list(set(values)) for key, values in dict_1.items()}
-        df_spot_involved2 = df_spot_involved2.append(dict_1, ignore_index=True)
+        df2 = df2.append(dict_1, ignore_index=True)
 
-#Second loop to reunite conserved spots
-    df_spot_involved3 = pd.DataFrame(columns=names)
-    for i, row in df_spot_involved2.iterrows():
+    # Second loop to reunite conserved spots
+    df3 = pd.DataFrame(columns=names)
+    for i, row in df2.iterrows():
         row_list = row.tolist()
         dict_2 = {key: [] for key in names}
         for name1, element in zip(names, row_list):
-            filter_spot_inv = df_spot_involved2[df_spot_involved2[name1].apply(lambda x: any(item in x for item in element))]
+            filter_spot_inv = df2[df2[name1].apply(lambda x: any(item in x for item in element))]
             for name2 in names:
                 liste = filter_spot_inv[name2].tolist()
                 flat_list = [item for sublist in liste for item in sublist]
@@ -164,20 +182,21 @@ def filter_regroup_spot(names: List[str], conserved_spot_global: DataFrame, df_s
                 flat_list = sorted(flat_list, key=int)
                 dict_2[name2] += flat_list
             dict_2 = {key: list(set(values)) for key, values in dict_2.items()}
-        df_spot_involved3 = df_spot_involved3.append(dict_2, ignore_index=True)
+        df3 = df3.append(dict_2, ignore_index=True)
 
-    df_str = df_spot_involved3.astype(str)
+    df_str = df3.astype(str)
     df_str = df_str.drop_duplicates()
-    df_str.to_csv(output/f"conserved_spot.tsv", sep='\t', index=False)
 
     return df_str
 
 
-def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global: DataFrame, output: Path):
+def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global: DataFrame,
+                               df_borders_global: DataFrame, output: Path):
     """ Write conserved spot and systems associated for each conserved spots detected
 
          :param conserved_spot_regroup: Similar spots in pangenomes regrouped
          :param df_spot_global: Systems in each spots for all pangenomes
+         :param df_borders_global: Spot borders for all pangenomes
          :param output: Path to output directory
          """
 
@@ -199,23 +218,28 @@ def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global
 
     list_ID = []
     list_pan = []
+    list_spot = []
     list_sys = []
     list_org = []
 
-    sum_spot = pd.DataFrame(columns=["ID", "Number_species", "Number_systems", "Number_organisms"])
+    sum_spot = pd.DataFrame(columns=["ID", "Number_species", "Number_spots", "Number_systems", "Number_organisms"])
     for i, row1 in conserved_spot_regroup.iterrows():
         save_spot = pd.DataFrame()
         for col, row2 in row1.items():
             row2 = ast.literal_eval(row2)
             if row2:
                 filter_global_spot = df_spot_global[df_spot_global['pangenome_name'] == col]
+                df_borders_global_filter = df_borders_global[df_borders_global['pangenome_name'] == col]
                 for row3 in row2:
+                    df_borders_global_filter2 = df_borders_global_filter[df_borders_global_filter['Spot'] == int(row3)]
                     filter_global_spot["Spot"] = filter_global_spot["Spot"].astype(str)
                     filter_global_spot_2 = filter_global_spot[filter_global_spot['Spot'] == row3]
-                    check_spot_present = ~filter_global_spot_2['Spot'].str.contains(row3).any()
+                    check_spot_present = ~filter_global_spot_2['Spot'].str.contains(row3).any() #check if spot is not present in spot list
                     if check_spot_present:
                         new_row = {'pangenome_name': col, 'Spot': row3, 'system_name': '-', 'organism': '-',
-                                   'nb_system': 0, 'nb_organism': 0}
+                                   'borders': df_borders_global_filter2['borders'].values[0],
+                                   'nb_system': 0, 'nb_organism': 0, 'mean_nb_genes': '-', 'max_nb_genes': '-',
+                                   'min_nb_genes': '-'}
                         save_spot = save_spot.append(new_row, ignore_index=True)
                     save_spot = pd.concat([save_spot, filter_global_spot_2], ignore_index=True)
 
@@ -225,6 +249,8 @@ def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global
         list_ID.append(f"conserved_spot_{i}")
         nb_pan = save_global_spot['pangenome_name'].nunique()
         list_pan.append(nb_pan)
+        nb_spot = save_global_spot.shape[0]
+        list_spot.append(nb_spot)
         system_sum = save_global_spot['nb_system'].sum()
         list_sys.append(system_sum)
         org_sum = save_global_spot['nb_organism'].sum()
@@ -232,9 +258,8 @@ def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global
 
     sum_spot['ID'] = list_ID
     sum_spot['Number_species'] = list_pan
+    sum_spot['Number_spots'] = list_spot
     sum_spot['Number_systems'] = list_sys
     sum_spot['Number_organisms'] = list_org
 
-    sum_spot.to_csv(f"{output}/summary_spot.tsv", sep='\t', index=False)
-
-
+    sum_spot.to_csv(f"{output}/summary_conserved_spot.tsv", sep='\t', index=False)

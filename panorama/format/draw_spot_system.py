@@ -28,6 +28,7 @@ from ppanggolin.utils import jaccard_similarities
 from ppanggolin.RGP.spot import comp_border
 from panorama.pangenomes import Pangenome
 from panorama.utils import mkdir
+from ppanggolin.region import Spot
 
 def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame, dict_spot_org: Dict, systems_projection: DataFrame):
     """ Draw spot containing systems
@@ -61,9 +62,9 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
         for fam in sys.gene_families:
             existing_sys = fam2sys_related.get(fam)
             if existing_sys:
-                fam2sys_related[fam] = f"{existing_sys} / {sys.name}"
+                fam2sys_related[fam].append(sys.name)
             else:
-                fam2sys_related[fam] = f"{sys.name}"
+                fam2sys_related[fam] = [sys.name]
 
 # Dict with family link to a complete system
     complete_fam = systems_projection['gene family'].tolist()
@@ -80,15 +81,15 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
         df_rep_identical = pd.DataFrame(columns=['representative_rgp','representative_rgp_organism','identical_rgp','identical_rgp_organism'])
         fname = output / name / "spot_figure" / f"spot_{spot.ID}"
         # write rgps representatives and the rgps they are identical to
-        out_struc = open(output / name / "spot_figure" / f"spot_{spot.ID}_identical_rgps.tsv", 'w')
-        out_struc.write('representative_rgp\trepresentative_rgp_organism\tidentical_rgp\tidentical_rgp_organism\n')
+        #out_struc = open(output / name / "spot_figure" / f"spot_{spot.ID}_identical_rgps.tsv", 'w')
+        #out_struc.write('representative_rgp\trepresentative_rgp_organism\tidentical_rgp\tidentical_rgp_organism\n')
         for keyRGP, otherRGPs in spot.get_uniq_to_rgp().items():
             for rgp in otherRGPs:
                 new_row = pd.DataFrame([{'representative_rgp':keyRGP.name, 'representative_rgp_organism':keyRGP.organism.name,
                                          'identical_rgp':rgp.name, 'identical_rgp_organism':rgp.organism.name}])
                 df_rep_identical = pd.concat([df_rep_identical, new_row], ignore_index=True)
-                out_struc.write(f"{keyRGP.name}\t{keyRGP.organism.name}\t{rgp.name}\t{rgp.organism.name}\n")
-        out_struc.close()
+                #out_struc.write(f"{keyRGP.name}\t{keyRGP.organism.name}\t{rgp.name}\t{rgp.organism.name}\n")
+        #out_struc.close()
 
         fams = set()
         gene_lists = []
@@ -130,11 +131,12 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
                             ordered_counts.append(curr_genelist_count)
 
         draw_curr_spot(uniq_gene_lists, ordered_counts, fam2mod, fam2sys_related, fam2sys_complete, famcolors,
-                       fname, df_rep_identical, systems_projection)
+                       fname, df_rep_identical, systems_projection, name, output, spot)
 
 
 def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam_to_sys_related: dict, fam_to_sys_complete: dict,
-                   fam_col: dict, file_name: str, df_rep_identical: DataFrame, systems_projection: DataFrame):
+                   fam_col: dict, file_name: str, df_rep_identical: DataFrame, systems_projection: DataFrame,
+                   name: str, output: Path, spot: Spot):
     """
     :param gene_lists:
     :param ordered_counts:
@@ -157,7 +159,7 @@ def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam
     fig.toolbar.active_scroll = wheel_zoom
 
     # genome rectangles
-    genome_source, genome_tooltip = mk_genomes(gene_lists, ordered_counts, df_rep_identical)
+    genome_source, genome_tooltip = mk_genomes(gene_lists, ordered_counts, df_rep_identical, name, output, spot)
     genome_recs = fig.rect(x='x', y='y', fill_color="dimgray", width="width", height=0.5, source=genome_source)
     genome_recs_hover = HoverTool(renderers=[genome_recs], tooltips=genome_tooltip, mode="mouse",
                                   point_policy="follow_mouse")
@@ -199,6 +201,11 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_
           'partition_color': [], 'partition': [], "family": [], "product": [], "x_label": [], "y_label": [],
           "label": [], "gene_type": [], 'gene_ID': [], "gene_local_ID": []}
 
+    #values in dict from list to str
+    fam_to_sys_related_str = {}
+    for key in fam_to_sys_related:
+        fam_to_sys_related_str[key] = " / ".join(fam_to_sys_related[key])
+
     for index, GeneList in enumerate(genelists):
         genelist = GeneList[0]
 
@@ -238,11 +245,19 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_
                 df["family_color"].append(fam_col[gene.family])
                 df["partition_color"].append(partition_colors[gene.family.named_partition])
                 df["module"].append(fam_to_mod.get(gene.family, "none"))
-                df["system_related"].append(fam_to_sys_related.get(gene.family, ""))
-                if gene.start in systems_projection['start'].values:
-                    df["complete_system"].append(fam_to_sys_complete.get(gene.family, ""))
+                df["system_related"].append(fam_to_sys_related_str.get(gene.family, ""))
+
+                systemsfromfam = fam_to_sys_complete.get(gene.family, [])
+                list_complete_sys = systems_projection["system name"][systems_projection["start"] == gene.start].tolist()
+                common_systems = list(set(systemsfromfam) & set(list_complete_sys))
+                sort_common_systems = sorted(common_systems)
+
+                if not common_systems:
+                    str_common_systems = ""
                 else:
-                    df["complete_system"].append("")
+                    str_common_systems = " / ".join(sort_common_systems)
+                df["complete_system"].append(str_common_systems)
+
             df["x"].append((abs(gene.start - start) + abs(gene.stop - start)) / 2)
             df["width"].append(gene.stop - gene.start)
             df["x_label"].append(str(int(df["x"][-1]) - int(int(df["width"][-1]) / 2)))
@@ -269,15 +284,15 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_
     df["module_color"] = mod_colors
 
     # define colors for systems
-    sys2col = make_colors_for_iterable(set(df["system_related"]))
+    sys_2col = make_colors_for_iterable(set(df["system_related"] + df["complete_system"]))
     sys_related_colors = []
     for sys in df["system_related"]:
-        sys_related_colors.append(sys2col[sys])
+        sys_related_colors.append(sys_2col[sys])
     df["system_related_color"] = sys_related_colors
 
     complete_sys_colors = []
     for sys in df["complete_system"]:
-        complete_sys_colors.append(sys2col[sys])
+        complete_sys_colors.append(sys_2col[sys])
     df["complete_system_color"] = complete_sys_colors
 
     # defining things that we will see when hovering over the graphical elements
@@ -290,6 +305,7 @@ def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_
         ("family", "@family"),
         ("module", "@module"),
         ("system_related", "@system_related"),
+        ("complete_system", "@complete_system"),
         ("partition", "@partition"),
         ("local identifier", "@gene_local_ID"),
         ("gene ID", "@gene_ID"),
@@ -479,7 +495,8 @@ def add_genome_tools(fig, gene_recs: GlyphRenderer, genome_recs: GlyphRenderer, 
     return column(genome_header, slider_spacing, slider_font, slider_offset)
 
 
-def mk_genomes(gene_lists: list, ordered_counts: list, df_rep_identical: DataFrame) -> (ColumnDataSource, list):
+def mk_genomes(gene_lists: list, ordered_counts: list, df_rep_identical: DataFrame, name: str, output: Path,
+               spot: Spot) -> (ColumnDataSource, list):
     """
 
     :param gene_lists:
@@ -488,6 +505,7 @@ def mk_genomes(gene_lists: list, ordered_counts: list, df_rep_identical: DataFra
     """
     df = {"name": [], "width": [], "occurrences": [], 'x': [], 'y': [], "x_label": []}
 
+    org_in_spot = []
     for index, GeneList in enumerate(gene_lists):
         genelist = GeneList[0]
         df["occurrences"].append(ordered_counts[index])
@@ -504,10 +522,15 @@ def mk_genomes(gene_lists: list, ordered_counts: list, df_rep_identical: DataFra
         # Replace representative organism name by number of organisms
         df_rep_identical_f = df_rep_identical[(df_rep_identical['representative_rgp_organism'] == genelist[0].organism.name)]
         number_identical_org = df_rep_identical_f.shape[0]
+        org_in_spot.append(genelist[0].organism.name)
         if number_identical_org == 1:
-            df["name"].append(f"{number_identical_org} organism")
+            df["name"].append(f"(Representative_rgp_organism: {genelist[0].organism.name})           {number_identical_org} organism")
         else:
-            df["name"].append(f"{number_identical_org} organisms")
+            df["name"].append(f"(Representative_rgp_organism: {genelist[0].organism.name})           {number_identical_org} organisms")
+
+    # Save representative of org with spot and systems
+    df_rep_identical2 = df_rep_identical[df_rep_identical['representative_rgp_organism'].isin(org_in_spot)]
+    df_rep_identical2.to_csv(f"{output}/{name}/spot_figure/spot_{spot.ID}_identical_rgps.tsv", sep="\t", index=False)
 
     tooltip = [
         ("name", "@name"),
