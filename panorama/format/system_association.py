@@ -341,7 +341,7 @@ def write_systems_to_features(name: str, pangenome: Pangenome, systems_projectio
         spot_list = []
         if rgp_list is not None:
             for rgp_element in rgp_list:
-                spot_list.append(dict_region_spots[rgp_element.name]) if rgp_element.name in dict_region_spots else spot_list.append("no_spot")
+                spot_list.append(dict_region_spots[rgp_element.name]) if rgp_element.name in dict_region_spots else spot_list.append("")
             rgp_list = list(map(lambda x: x.name, rgp_list))
         else:
             spot_list = None
@@ -359,7 +359,6 @@ def write_systems_to_features(name: str, pangenome: Pangenome, systems_projectio
 
         list_to_df.append(df_collection(system_ID, system.name, mod_org, module_presence, organism_list_of_rgp, spot_list, rgp_list))
 
-    #df = pd.DataFrame()
     if bool_rgp is True and bool_modules is True and bool_spots is True:
         df = pd.DataFrame(list_to_df)
         outpath = Path(output / name / "systems_to_rgp_modules_spots_{0}_{1}".format(source, name)).with_suffix(".tsv")
@@ -530,7 +529,7 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_b
     spot_set = set()
     for index, value in system_to_feature['spot'].iteritems():
         spot_set = set(value) | spot_set
-    spot_set.remove('no_spot')
+    spot_set.remove("")
     spot_list = sorted(list(spot_set))
 
     dict_spot_ID_system = {}

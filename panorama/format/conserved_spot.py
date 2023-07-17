@@ -65,6 +65,9 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
         definition_spot = df_borders.set_index('Spot')['borders'].to_dict() # create dict with spot as key and border as value
         for key, value in definition_spot.items():
             borders = value.split(',')
+            border_count_q = Counter(borders) # count number of duplicates and triplicates families in borders (Query)
+            dupli_borders_q = [item for item, count in border_count_q.items() if count == 2]
+            tripli_borders_q = [item for item, count in border_count_q.items() if count == 3]
             score_df = df_borders_global.drop(['number_org', 'borders'], axis=1) # create dataframe to assign a score if similar families are found
             score_df['score'] = 0
             for fam in borders:
@@ -75,20 +78,27 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
                     string_spot = row['Spot']
                     string_borders = row['borders']
                     string_borders = string_borders.split(',')
+                    border_count_t = Counter(string_borders) # count number of duplicates and triplicates families in borders (Target)
+                    dupli_borders_t = [item for item, count in border_count_t.items() if count == 2]
+                    tripli_borders_t = [item for item, count in border_count_t.items() if count == 3]
 
-                    common = [x for x in string_borders if x in similar] # list with borders being in similar families list
-                    if len(common) > 1:
-                        counter = Counter(common)
-                        count = list(counter.values())
-                        for c in count:
-                            if c == 2 : # if borders have two identical family, score = 2
-                                score_df.loc[(score_df['pangenome_name'] == string_name) & (score_df['Spot'] == string_spot), 'score'] += 1
-                            if c == 3: # if borders have three identical family, score = 3
-                                score_df.loc[(score_df['pangenome_name'] == string_name) & (score_df['Spot'] == string_spot), 'score'] += 2
-                    score_df.loc[(score_df['pangenome_name'] == string_name) & (score_df['Spot'] == string_spot), 'score'] += 1
+                    point = 1 #add 1 to score by default
+
+                    # if a duplicate in query and no duplicate in target
+                    if fam in dupli_borders_q and all(elem not in dupli_borders_t for elem in similar) :
+                        point = 0.5		# add 1 point rather than 2 (0.5 by duplicate value)
+
+                    # if a triplicate in query and no duplicate or triplicate in target
+                    if fam in tripli_borders_q and all(elem not in dupli_borders_t for elem in similar) and all(elem not in tripli_borders_t for elem in similar):
+                        point = 0.34		# add 1.02 point rather than 3 (0.34 by duplicate value)
+
+                    # if a triplicate in query and a duplicate in target
+                    if fam in tripli_borders_q and any(elem in dupli_borders_t for elem in similar):
+                        point = 0.67		# add 2.01 point rather than three (0.67 by duplicate value)
+
+                    score_df.loc[(score_df['pangenome_name'] == string_name) & (score_df['Spot'] == string_spot), 'score'] += point
 
             good_score_df = score_df[score_df['score'] > threshold-1] # Keep spots passing threshold requirement (Default : 4)
-
             good_score_df['Spot'] = good_score_df['Spot'].astype(str)
             good_score_df['score'] = good_score_df['score'].astype(str)
             fused_score_df = good_score_df.groupby('pangenome_name')['Spot'].apply(lambda x: list(map(str, x))).reset_index() # join spot_id column values of each pangenome as one list
