@@ -16,13 +16,13 @@ from collections import Counter
 from panorama.pangenomes import Pangenome
 
 
-def write_borders_spot(name: str, pangenome : Pangenome) -> DataFrame:
-    """ Extract borders of pangenome spots
+def write_borders_spot(name: str, pangenome : Pangenome) -> Tuple[DataFrame, DataFrame]:
+    """ Extract borders of pangenome spots and number of organism having the spot
 
          :param name: Name of the pangenome
          :param pangenome: pangenome object
 
-         :return: Dataframe with spots borders
+         :return: Dataframe with spots borders and dataframe with number of organism per spot
          """
 
     df_borders = pd.DataFrame(columns=['pangenome_name', 'Spot', 'number_org', 'borders'])
@@ -32,17 +32,22 @@ def write_borders_spot(name: str, pangenome : Pangenome) -> DataFrame:
             famstring = ",".join([fam.name for fam in border[0]]) + "," + ",".join([fam.name for fam in border[1]])
             new_row = {'pangenome_name': name, 'Spot': spot.ID, 'number_org': c, 'borders': famstring}
             df_borders.loc[len(df_borders)] = new_row
+    number_org_per_spot = df_borders.groupby('Spot', as_index=False)['number_org'].sum() # get number of org per spot
+    number_org_per_spot = number_org_per_spot.reset_index(drop=True)
+    number_org_per_spot.insert(0, 'pangenome_name', name)
     idx = df_borders.groupby('Spot')['number_org'].idxmax() # keep spot and border with highest number of genomes having the border
     df_borders = df_borders.loc[idx]
     df_borders = df_borders.reset_index(drop=True)
 
-    return df_borders
+    return df_borders, number_org_per_spot
 
 
-def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_align: DataFrame, output: Path, threshold: int = 4):
+def identical_spot(df_borders_global: DataFrame, number_org_per_spot_global: DataFrame, df_spot_global: DataFrame,
+                   df_align: DataFrame, output: Path, threshold: int = 4):
     """ Detect identical spots between pangenomes
 
          :param df_borders_global: Spot borders for all pangenomes
+         :param number_org_per_spot_global: Number of organisms per spot for all pangenomes
          :param df_spot_global: Systems in each spot for all pangenomes
          :param df_align: Alignment results of families from pangenomes
          :param output: Path to output directory
@@ -59,6 +64,7 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
         else:
             dict_similar_fam[key] = [value]
 
+    list_dup_trip_fam = []
     conserved_spot_global = pd.DataFrame(columns=names)
     for index, name in enumerate(names):
         df_borders = df_borders_global[df_borders_global['pangenome_name'] == name]
@@ -68,6 +74,9 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
             border_count_q = Counter(borders) # count number of duplicates and triplicates families in borders (Query)
             dupli_borders_q = [item for item, count in border_count_q.items() if count == 2]
             tripli_borders_q = [item for item, count in border_count_q.items() if count == 3]
+            if dupli_borders_q != [] or tripli_borders_q != []:
+                # list with all duplicatas and triplicatas fams
+                list_dup_trip_fam.append(f"pangenome:{name} spot:{key} dupli:{dupli_borders_q} tripli:{tripli_borders_q} borders:{borders}")
             score_df = df_borders_global.drop(['number_org', 'borders'], axis=1) # create dataframe to assign a score if similar families are found
             score_df['score'] = 0
             for fam in borders:
@@ -110,6 +119,9 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
                 conserved_spot[indicator] = fused_score_df_f['Spot'].to_list()
             conserved_spot_global = pd.concat([conserved_spot_global, conserved_spot], ignore_index=True)
 
+    df_dupli_tripli = pd.DataFrame(list_dup_trip_fam, columns=['duplicatas_or_triplicatas'])
+    df_dupli_tripli.to_csv(output / f"duplicatas_or_triplicatas_fams_in_borders.tsv", sep='\t', index=False)
+
     df_spot_filter = filter_spot(names=names, conserved_spot_global=conserved_spot_global, df_spot_global=df_spot_global)
     df_link_system = regroup_spot(names=names, df=df_spot_filter)
     df_link_system.to_csv(output/f"conserved_spot_link_systems.tsv", sep='\t', index=False)
@@ -118,7 +130,7 @@ def identical_spot(df_borders_global: DataFrame, df_spot_global: DataFrame, df_a
     df_all.to_csv(output/"all_conserved_spot.tsv", sep='\t', index=False)
 
     asso_conserved_spot_system(conserved_spot_regroup=df_link_system, df_spot_global=df_spot_global,
-                               df_borders_global=df_borders_global, output=output)
+                               number_org_per_spot_global=number_org_per_spot_global, df_borders_global=df_borders_global, output=output)
 
 
 def filter_spot(names: List[str], conserved_spot_global: DataFrame, df_spot_global: DataFrame) -> DataFrame:
@@ -201,12 +213,13 @@ def regroup_spot(names: List[str], df: DataFrame) -> DataFrame:
 
 
 def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global: DataFrame,
-                               df_borders_global: DataFrame, output: Path):
+                               df_borders_global: DataFrame, number_org_per_spot_global: DataFrame, output: Path):
     """ Write conserved spot and systems associated for each conserved spots detected
 
          :param conserved_spot_regroup: Similar spots in pangenomes regrouped
          :param df_spot_global: Systems in each spots for all pangenomes
          :param df_borders_global: Spot borders for all pangenomes
+         :param number_org_per_spot_global: Number of organisms per spot for all pangenomes
          :param output: Path to output directory
          """
 
@@ -240,16 +253,20 @@ def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global
             if row2:
                 filter_global_spot = df_spot_global[df_spot_global['pangenome_name'] == col]
                 df_borders_global_filter = df_borders_global[df_borders_global['pangenome_name'] == col]
+                number_org_per_spot_global_f = number_org_per_spot_global[number_org_per_spot_global['pangenome_name'] == col]
                 for row3 in row2:
                     df_borders_global_filter2 = df_borders_global_filter[df_borders_global_filter['Spot'] == int(row3)]
+                    number_org_per_spot_global_f2 = number_org_per_spot_global_f[number_org_per_spot_global_f['Spot'] == int(row3)]
+                    nb_total_org = number_org_per_spot_global_f2['number_org'].values[0]
                     filter_global_spot["Spot"] = filter_global_spot["Spot"].astype(str)
                     filter_global_spot_2 = filter_global_spot[filter_global_spot['Spot'] == row3]
+                    filter_global_spot_2.insert(7, 'nb_total_organism', nb_total_org)
                     check_spot_present = ~filter_global_spot_2['Spot'].str.contains(row3).any() #check if spot is not present in spot list
                     if check_spot_present:
                         new_row = {'pangenome_name': col, 'Spot': row3, 'system_name': '-', 'organism': '-',
                                    'borders': df_borders_global_filter2['borders'].values[0],
-                                   'nb_system': 0, 'nb_organism': 0, 'mean_nb_genes': '-', 'max_nb_genes': '-',
-                                   'min_nb_genes': '-'}
+                                   'nb_system': 0, 'nb_organism': 0, 'nb_total_organism': nb_total_org, 'mean_nb_genes': '-',
+                                   'max_nb_genes': '-', 'min_nb_genes': '-'}
                         save_spot = save_spot.append(new_row, ignore_index=True)
                     save_spot = pd.concat([save_spot, filter_global_spot_2], ignore_index=True)
 

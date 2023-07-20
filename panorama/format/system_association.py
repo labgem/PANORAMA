@@ -523,7 +523,7 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_b
 
     :return: Dataframe with systems in each spots
     """
-    #print(df_borders.to_string())
+
     system_to_feature = system_to_feature.drop(columns=['mod_organism', 'module', 'rgp'])
     system_to_feature = system_to_feature.where(pd.notnull(system_to_feature), '[]')
     spot_set = set()
@@ -549,7 +549,6 @@ def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_b
                     dict_spot_system.setdefault(spot, []).append(system)
                     dict_spot_org.setdefault(spot, []).append(organism[index2])
                     dict_spot_border[spot] = df_borders.loc[df_borders['Spot'] == spot, 'borders'].values[0]
-    #print(dict_spot_border)
     df_spot = pd.DataFrame({'Spot': list(dict_spot_system.keys()), 'system_name': list(dict_spot_system.values()),
                             'organism': list(dict_spot_org.values()), 'borders': list(dict_spot_border.values())})
 

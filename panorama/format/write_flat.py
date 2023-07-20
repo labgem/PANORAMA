@@ -238,6 +238,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
         df_spot_global = pd.DataFrame()
         df_module_global = pd.DataFrame()
         df_borders_global = pd.DataFrame()
+        number_org_per_spot_global = pd.DataFrame()
 
         for pangenome_name, pangenome_info in pan_to_path.items():
             pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
@@ -289,8 +290,9 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                                                       output=output, source=source, bool_rgp=bool_rgp, bool_modules=bool_modules,
                                                       bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
 
-                    df_borders = write_borders_spot(name=pangenome_name, pangenome=pangenome)
+                    df_borders, number_org_per_spot = write_borders_spot(name=pangenome_name, pangenome=pangenome)
                     df_borders_global = pd.concat([df_borders_global, df_borders])
+                    number_org_per_spot_global = pd.concat([number_org_per_spot_global, number_org_per_spot])
 
                     if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
                         df_spot, dict_spot_org = spot2sys(name=pangenome_name, pangenome=pangenome, system_to_feature=df_sys2feat,
@@ -317,7 +319,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                                             lock=lock, max_workers=1, disable_bar=False)
             tmpdir = tempfile.TemporaryDirectory(dir=output)
             df_align = all_against_all(pangenomes=pans, output=output, lock=lock, tmpdir=tmpdir)
-            identical_spot(df_borders_global=df_borders_global, df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
+            identical_spot(df_borders_global=df_borders_global, number_org_per_spot_global=number_org_per_spot_global,
+                           df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
 
         heatmap(global_systems_proj=global_systems_proj, output=output)
         logging.info(f"Global heatmap figure created")

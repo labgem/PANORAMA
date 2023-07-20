@@ -16,7 +16,7 @@ from bokeh.models import FactorRange, CustomJS, Button
 
 
 def per_pan_heatmap(name: str, system_projection: DataFrame, output: Path):
-    """ Draw heatmap figure for the pangenome
+    """ Call functions to draw heatmap figures for the pangenome
 
     :param name: Name of the pangenome
     :param system_projection: Systems in the pangenome
@@ -61,7 +61,7 @@ def figure_partition_heatmap(name: str, data: DataFrame, list_system: List, list
     mapper = CategoricalColorMapper(palette=colors, factors=partitions)
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
-    # Set size for plot
+    # Modify size of the figure depending on the number of organism and system
     len_sys = len(list_system)
     len_org = len(list_organism)
     width = len_sys * 40
@@ -81,7 +81,7 @@ def figure_partition_heatmap(name: str, data: DataFrame, list_system: List, list
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 1
     p.yaxis.axis_label = 'Genomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -133,13 +133,13 @@ def figure_count_heatmap(name: str, data: np.ndarray, list_system: List, list_or
     elif 200 < len_org:
         height = len_org * 34
 
-    p = figure(title="Defense systems for {0}".format(name), x_range=list_system, y_range=list_organism,
+    p = figure(title="Systems for {0}".format(name), x_range=list_system, y_range=list_organism,
                 x_axis_location="above", height=height, width=width, tools=Tools, toolbar_location='below',
                 tooltips=[('Count', '@number'), ('Organism', '@level_0'), ('System', '@level_1')])
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 1
     p.yaxis.axis_label = 'Genomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -210,16 +210,16 @@ def figure_histogram(names: List[str], df_pan_count: DataFrame, systems_type: Li
     dict_pan_names.update(dict_graph_pans)
     col_pan_names = ColumnDataSource(data=dict_pan_names)
 
-    p = figure(title="Defense systems Count", background_fill_color="#FAFAFA", x_range=systems_type,
+    p = figure(title="Systems count", background_fill_color="#FAFAFA", x_range=systems_type,
                sizing_mode='scale_both', x_axis_location="below", tools="hover", toolbar_location=None,
-               tooltips=[('Pangenome', '$name'),('Defense system', '@systems_names'), ('Count', '@$name')])
+               tooltips=[('Pangenome', '$name'),('system', '@systems_names'), ('Count', '@$name')])
 
     p.vbar_stack(names, x='systems_names', width=0.5, color=turbo(len(names)),
                  source=col_pan_names, legend_label=names, line_color='black')
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems'
+    p.xaxis.axis_label = 'Systems'
     p.xaxis.major_label_orientation = 0.7
     p.x_range.range_padding = 0.1
     p.yaxis.axis_label = 'Count'
@@ -261,13 +261,13 @@ def figure_heatmap(names: List[str], df_pan_ratio: DataFrame, output: Path):
     height = len_pangenomes * 100
     width = len_systems * 50
 
-    p = figure(title="Defense systems in pangenomes", x_range=systems_list, y_range=names,
+    p = figure(title="Systems in pangenomes", x_range=systems_list, y_range=names,
                x_axis_location="above", height=height, width=width, tools=Tools, toolbar_location='below',
-               tooltips=[('pangenome', '@level_0'), ('Defense system', '@level_1'), ('Ratio', '@ratio{0.00}')])
+               tooltips=[('pangenome', '@level_0'), ('System', '@level_1'), ('Ratio', '@ratio{0.00}')])
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 0.7
     p.yaxis.axis_label = 'Pangenomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -357,7 +357,6 @@ def upsetplot(name: str, systems_projection: DataFrame, system_to_feature: DataF
                         dict_module_organism_id[module].append(organism_id_mod)
 
     tooltips = [('System name', '@x'), ('Features', '$name')]
-
 
     # Set size for plot to show the whole legend
     len_sys = len(system_type_list)
@@ -495,15 +494,13 @@ def count(systems_projection: DataFrame, system_type_list: List, organism_name_l
     systems_count = [None] * len(system_type_list)
     for i, system in enumerate(system_type_list):
         data_pangenome_filter = systems_projection[systems_projection['system name'] == system]
-        data_pangenome_filter_drop = data_pangenome_filter.drop_duplicates(
-            subset=['system number', 'system name', 'organism'])
+        data_pangenome_filter_drop = data_pangenome_filter.drop_duplicates(subset=['system number', 'system name', 'organism'])
         systems_count[i] = data_pangenome_filter_drop.shape[0]
 
     organisms_count = [None] * len(organism_name_list)
     for j, organism in enumerate(organism_name_list):
         data_pangenome_filter_2 = systems_projection[systems_projection['organism'] == organism]
-        data_pangenome_filter_drop_2 = data_pangenome_filter_2.drop_duplicates(
-            subset=['system number', 'system name', 'organism'])
+        data_pangenome_filter_drop_2 = data_pangenome_filter_2.drop_duplicates(subset=['system number', 'system name', 'organism'])
         organisms_count[j] = data_pangenome_filter_drop_2.shape[0]
     return systems_count, organisms_count
 
@@ -541,7 +538,7 @@ def hbar_ID_total(name: str, dataframe_id: DataFrame, dataframe_total: DataFrame
     if width < 500:
         width = 500
 
-    p = figure(y_range=FactorRange(*x), title="Systems count per ID or Total for {0}".format(name),
+    p = figure(y_range=FactorRange(*x), title="Systems count for {0}".format(name),
                height=height, width=width)
 
     p.hbar(y='x', right='counts', source=source, height=0.8, fill_color="#458B74", line_color="black")

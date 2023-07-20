@@ -57,8 +57,8 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
 
 # Dict with family related to a system (complete or incomplete)
     fam2sys_related = {}
-    system = pangenome.systems
-    for sys in system:
+    # fam2annot_related = {}
+    for sys in pangenome.systems:
         for fam in sys.gene_families:
             existing_sys = fam2sys_related.get(fam)
             if existing_sys:
@@ -66,13 +66,27 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
             else:
                 fam2sys_related[fam] = [sys.name]
 
+            # TODO: A family can have several annotation (even for same component) of system which is not understandable in the figure
+            # annot_sys_fam_1 = fam.get_source(sys.source)
+            # if annot_sys_fam_1 is not None:
+            #     annot_sys_fam_2 = [annot.get("protein_name") for annot in annot_sys_fam_1]
+            #     fam2annot_related[fam] = annot_sys_fam_2 # dict with fams and component/annot in system associated
+            # else:
+            #     fam2annot_related[fam] = ["None"]
+
 # Dict with family link to a complete system
     complete_fam = systems_projection['gene family'].tolist()
     fam2sys_complete = {}
+    # fam2annot_complete = {}
     for fam in complete_fam:
         for key, value in fam2sys_related.items():
             if fam in str(key):
                 fam2sys_complete[key] = value
+
+        # TODO: A family can have several annotation (even for same component) of system which is not understandable in the figure
+        # for key, value in fam2annot_related.items():
+        #     if fam in str(key):
+        #         fam2annot_complete[key] = value
 
     output_2 = output / name / "spot_figure"
     mkdir(output_2, force=True)
@@ -81,15 +95,11 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
         df_rep_identical = pd.DataFrame(columns=['representative_rgp','representative_rgp_organism','identical_rgp','identical_rgp_organism'])
         fname = output / name / "spot_figure" / f"spot_{spot.ID}"
         # write rgps representatives and the rgps they are identical to
-        #out_struc = open(output / name / "spot_figure" / f"spot_{spot.ID}_identical_rgps.tsv", 'w')
-        #out_struc.write('representative_rgp\trepresentative_rgp_organism\tidentical_rgp\tidentical_rgp_organism\n')
         for keyRGP, otherRGPs in spot.get_uniq_to_rgp().items():
             for rgp in otherRGPs:
                 new_row = pd.DataFrame([{'representative_rgp':keyRGP.name, 'representative_rgp_organism':keyRGP.organism.name,
                                          'identical_rgp':rgp.name, 'identical_rgp_organism':rgp.organism.name}])
                 df_rep_identical = pd.concat([df_rep_identical, new_row], ignore_index=True)
-                #out_struc.write(f"{keyRGP.name}\t{keyRGP.organism.name}\t{rgp.name}\t{rgp.organism.name}\n")
-        #out_struc.close()
 
         fams = set()
         gene_lists = []
@@ -130,19 +140,19 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
                             uniq_gene_lists.append(genelist)
                             ordered_counts.append(curr_genelist_count)
 
-        draw_curr_spot(uniq_gene_lists, ordered_counts, fam2mod, fam2sys_related, fam2sys_complete, famcolors,
-                       fname, df_rep_identical, systems_projection, name, output, spot)
+        draw_curr_spot(uniq_gene_lists, ordered_counts, fam2mod, fam2sys_related, fam2sys_complete,
+                       famcolors, fname, df_rep_identical, systems_projection, name, output, spot)
 
 
-def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam_to_sys_related: dict, fam_to_sys_complete: dict,
-                   fam_col: dict, file_name: str, df_rep_identical: DataFrame, systems_projection: DataFrame,
-                   name: str, output: Path, spot: Spot):
+def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam_to_sys_related: dict,
+                   fam_to_sys_complete: dict, fam_col: dict, file_name: str, df_rep_identical: DataFrame,
+                   systems_projection: DataFrame, name: str, output: Path, spot: Spot):
     """
     :param gene_lists:
     :param ordered_counts:
     :param fam_to_mod: Dictionnary which link families and modules
     :param fam_to_sys_related: Dictionnary which link families related to systems
-    :param fam_to_sys_complete: Dictionnary which link families and complet systems
+    :param fam_to_sys_complete: Dictionnary which link families and complete systems
     :param fam_col: Dictionnary with for each family the corresponding color
     :param file_name: Path and name of the file
     :return:
@@ -166,7 +176,8 @@ def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam
     fig.add_tools(genome_recs_hover)
 
     # gene rectanges
-    gene_source, gene_tooltips = mk_source_data(gene_lists, fam_col, fam_to_mod, fam_to_sys_related, fam_to_sys_complete, systems_projection)
+    gene_source, gene_tooltips = mk_source_data(gene_lists, fam_col, fam_to_mod, fam_to_sys_related, fam_to_sys_complete,
+                                                systems_projection)
     recs = fig.rect(x='x', y='y', line_color='line_color', fill_color='fill_color', width='width', height=2,
                     line_width=5, source=gene_source)
     recs_hover = HoverTool(renderers=[recs], tooltips=gene_tooltips, mode="mouse", point_policy="follow_mouse")
@@ -183,28 +194,33 @@ def draw_curr_spot(gene_lists: list, ordered_counts: list, fam_to_mod: dict, fam
     save(column(fig, row(labels_tools, gene_tools), row(genome_tools)))
 
 
-def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_related: dict, fam_to_sys_complete: dict,
-                   systems_projection: DataFrame) -> (ColumnDataSource, list):
+def mk_source_data(genelists: list, fam_col: dict, fam_to_mod: dict, fam_to_sys_related: dict,
+                   fam_to_sys_complete: dict, systems_projection: DataFrame) -> (ColumnDataSource, list):
     """
 
     :param genelists:
     :param fam_col: Dictionary with for each family the corresponding color
     :param fam_to_mod: Dictionary with the correspondance modules families
     :param fam_to_sys_related: Dictionary with the correspondance systems families (all families related to the system)
-    :param fam_to_sys_complete: Dictionary with the correspondance systems families (all families related to a complet system)
+    :param fam_to_sys_complete: Dictionary with the correspondance systems families (all families related to a complete system)
     :return:
     """
     partition_colors = {"shell": "#00D860", "persistent": "#F7A507", "cloud": "#79DEFF"}
 
     df = {'name': [], 'ordered': [], 'strand': [], "start": [], "stop": [], "length": [], 'module': [],
-          'module_color': [], 'system_related': [], 'system_related_color': [], 'complete_system': [], 'complete_system_color': [], 'x': [], 'y': [], 'width': [], 'family_color': [],
-          'partition_color': [], 'partition': [], "family": [], "product": [], "x_label": [], "y_label": [],
-          "label": [], "gene_type": [], 'gene_ID': [], "gene_local_ID": []}
+          'module_color': [], 'system_related': [], 'system_related_color': [], 'complete_system': [],
+          'complete_system_color': [], 'x': [], 'y': [], 'width': [], 'family_color': [], 'partition_color': [],
+          'partition': [], "family": [], "product": [], "x_label": [], "y_label": [], "label": [], "gene_type": [],
+          'gene_ID': [], "gene_local_ID": []}
 
     #values in dict from list to str
     fam_to_sys_related_str = {}
     for key in fam_to_sys_related:
         fam_to_sys_related_str[key] = " / ".join(fam_to_sys_related[key])
+
+    # fam_to_annot_related_str = {}
+    # for key in fam_to_annot_related:
+    #     fam_to_annot_related_str[key] = " / ".join(fam_to_annot_related[key])
 
     for index, GeneList in enumerate(genelists):
         genelist = GeneList[0]
