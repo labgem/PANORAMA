@@ -55,7 +55,7 @@ def set_verbosity_level(args: argparse.Namespace):
 
 
 # File managing system
-def mkdir(output: Union[Path, str], force: bool = False) -> Path:
+def mkdir(output: Path, force: bool = False) -> Path:
     """Create a directory at the given path
 
     :param output: Path to output directory
@@ -67,7 +67,7 @@ def mkdir(output: Union[Path, str], force: bool = False) -> Path:
     :return: Path object to output directory
     """
     try:
-        os.makedirs(output.absolute().as_posix())
+        output.mkdir(parents=True, exist_ok=False)
     except OSError:
         if not force:
             raise FileExistsError(f"{output} already exists."
