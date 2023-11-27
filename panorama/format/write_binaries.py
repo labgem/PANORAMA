@@ -147,7 +147,7 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
         assert source is not None
         systems_group = h5f.root.systems
         if source in systems_group:
-            logging.getLogger().info(f"Erasing the formerly computed systems from source {source}")
+            logging.info(f"Erasing the formerly computed systems from source {source}")
             h5f.remove_node("/systems", source)
             status_group._v_attrs.systems_sources.remove(source)
             pangenome.status["systems_sources"].remove(f"{source}")
@@ -174,7 +174,7 @@ def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
 
     if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
         assert source is not None
-        logging.getLogger().info("Writing detected systems...")
+        logging.info("Writing detected systems...")
         write_systems(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
         pangenome.status["systems"] = "Loaded"
 

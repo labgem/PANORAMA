@@ -6,8 +6,9 @@
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
 from pyhmmer.plan7 import HMM
-# local libraries
 
+
+# local libraries
 
 
 class GeneFamily(Fam):
@@ -31,7 +32,6 @@ class GeneFamily(Fam):
     def HMM(self) -> HMM:
         """Return gf HMM"""
         return self._hmm
-
 
     # def add_annotation(self, source: str, annotation: Annotation, max_prediction: int = None):
     #     """ Add annotation to gene family
@@ -84,4 +84,3 @@ class GeneFamily(Fam):
     #                 del source_annot[max_prediction:]
     #     else:
     #         self._annotationGetter[source] = [annotation]
-

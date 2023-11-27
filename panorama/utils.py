@@ -8,8 +8,13 @@ import sys
 import logging
 from pathlib import Path
 import csv
-from typing import TextIO, Dict, Union
+from typing import TextIO, Dict, Union, List
+from multiprocessing import Manager, Lock
 import pkg_resources
+
+# installed libraries
+
+# local libraries
 
 
 def check_log(name: str) -> TextIO:
@@ -45,12 +50,12 @@ def set_verbosity_level(args: argparse.Namespace):
         logging.basicConfig(stream=args.log, level=level,
                             format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
                             datefmt='%Y-%m-%d %H:%M:%S')
-        logging.getLogger().info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger().info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
+        logging.info("Command: " + " ".join([arg for arg in sys.argv]))
+        logging.info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
 
 # File managing system
-def mkdir(output: str, force: bool = False) -> Path:
+def mkdir(output: Path, force: bool = False) -> Path:
     """Create a directory at the given path
 
     :param output: Path to output directory
@@ -62,13 +67,13 @@ def mkdir(output: str, force: bool = False) -> Path:
     :return: Path object to output directory
     """
     try:
-        os.makedirs(output)
+        output.mkdir(parents=True, exist_ok=False)
     except OSError:
         if not force:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.getLogger().warning(f"{output} already exist and file will be overwrite by the new generated")
+            logging.warning(f"{output.as_posix()} already exist and file could be overwrite by the new generated")
             return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")
@@ -140,13 +145,26 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                 except FileNotFoundError as file_error:
                     raise FileNotFoundError(f"{file_error}")
                 else:
-                    pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                    pan_to_path[line[0]] = {"path": abs_path,
                                             "taxid": line[2] if len(line) > 2 else None}
             except Exception:
                 raise Exception("Unexpected error")
             else:
-                pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                pan_to_path[line[0]] = {"path": abs_path,
                                         "taxid": line[2] if len(line) > 2 else None}
         p_file.close()
         return pan_to_path
 
+
+def init_lock(lock: Lock = None):
+    """
+    Initialize the loading lock.
+
+    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
+    If the `loading_lock` is already initialized, the function does nothing.
+
+    :param lock: The lock object to be assigned to `loading_lock`.
+    """
+    if lock is None:
+        manager = Manager()
+        return manager.Lock()

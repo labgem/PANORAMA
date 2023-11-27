@@ -7,7 +7,6 @@ import logging
 from pathlib import Path
 import tempfile
 
-import panorama
 # install libraries
 
 # local libraries
@@ -45,7 +44,7 @@ def check_models(models_path: Path, disable_bar: bool = False) -> Models:
     :raise Exception: Manage unexpected error
     """
     try:
-        logging.getLogger().info("Check models translation...")
+        logging.info("Check models translation...")
         models = Models()
         models.read(models_path, disable_bar)
     except Exception:

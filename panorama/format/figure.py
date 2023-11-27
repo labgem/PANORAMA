@@ -2,20 +2,28 @@
 # coding:utf-8
 
 import numpy as np
+from typing import List, Tuple
 from bokeh.models import (BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter, ColumnDataSource)
-from bokeh.palettes import Magma256, magma
+from bokeh.palettes import Magma256
 import pandas as pd
 from bokeh.io import output_file
-from bokeh.io.export import get_screenshot_as_png
-
+from bokeh.io import output_file, export_png
 from bokeh.plotting import figure, save
 from bokeh.layouts import gridplot
 from bokeh.palettes import turbo
 from pathlib import Path
-from bokeh.models import Title, FactorRange
+from bokeh.models import FactorRange, CustomJS, Button
 
-def per_pan_heatmap(pan_name: str, system_proj, output: str):
-    data_systems = system_proj[['system number', 'system name', 'organism', 'partition']]
+
+def per_pan_heatmap(name: str, system_projection: DataFrame, output: Path):
+    """ Call functions to draw heatmap figures for the pangenome
+
+    :param name: Name of the pangenome
+    :param system_projection: Systems in the pangenome
+    :param output: Path to output directory
+    """
+
+    data_systems = system_projection[['system number', 'system name', 'organism', 'partition']]
     system_names = list(data_systems['system name'].unique())  # We have a list with system names without duplicates
     system_names.sort(key=str.casefold)
     organism_names = list(data_systems['organism'].unique())  # We have a list with organism names without duplicates
@@ -29,13 +37,21 @@ def per_pan_heatmap(pan_name: str, system_proj, output: str):
         for j, system in enumerate(system_names):
             matrix_genomes_systems[i][j] = sum(x == system for x in dict_defense_genome.values())  # Sum of system number for each system
 
-    figure_partition_heatmap(pan_name, data_systems, system_names, organism_names, output)
-    figure_count_heatmap(pan_name, system_names, organism_names, matrix_genomes_systems, output)
+    figure_partition_heatmap(name=name, data=data_systems, list_system=system_names, list_organism=organism_names, output=output)
+    figure_count_heatmap(name=name, data=matrix_genomes_systems, list_system=system_names, list_organism=organism_names, output=output)
 
 
-def figure_partition_heatmap(pan_name: str, data, list_system, list_organism, output: str):
+def figure_partition_heatmap(name: str, data: DataFrame, list_system: List, list_organism: List, output: Path):
+    """ Draw partition heatmap figure for the pangenome
 
-    output_file(Path.cwd() / output / pan_name / "{0}_partition.html".format(pan_name))
+    :param name: Name of the pangenome
+    :param data: Data used to produce the heatmap
+    :param list_system: List of systems in the pangenome
+    :param list_organism: List of organisms in the pangenome
+    :param output: Path to output directory
+    """
+
+    output_file(Path.cwd() / output / name / "{0}_partition.html".format(name))
     data_partition = data.pivot_table(index='organism', columns='system name', values='partition',
                                               fill_value='Not_found', aggfunc=lambda x: ','.join(set(x)))
     df_stack_partition = pd.DataFrame(data_partition.stack(), columns=['partition']).reset_index()
@@ -45,13 +61,27 @@ def figure_partition_heatmap(pan_name: str, data, list_system, list_organism, ou
     mapper = CategoricalColorMapper(palette=colors, factors=partitions)
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
-    p = figure(title="Partition of defense systems for {0}".format(pan_name), x_range=list_system, y_range=list_organism,
-               x_axis_location="above", width=700, height=900, tools=Tools, toolbar_location='below',
-               tooltips=[('Partition', '@partition'), ('Organism', '@organism'), ('Defense system', '@{system name}')])
+    # Modify size of the figure depending on the number of organism and system
+    len_sys = len(list_system)
+    len_org = len(list_organism)
+    width = len_sys * 40
+
+    if len_org < 30:
+        height = len_org * 28
+    elif 30 <= len_org <= 100:
+        height = len_org * 30
+    elif 100 < len_org <= 200:
+        height = len_org * 32
+    elif 200 < len_org:
+        height = len_org * 34
+
+    p = figure(title="Partition of systems for {0}".format(name), x_range=list_system, y_range=list_organism,
+               x_axis_location="above", height=height, width=width, tools=Tools, toolbar_location='below',
+               tooltips=[('Partition', '@partition'), ('Organism', '@organism'), ('System', '@{system name}')])
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 1
     p.yaxis.axis_label = 'Genomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -70,24 +100,46 @@ def figure_partition_heatmap(pan_name: str, data, list_system, list_organism, ou
     p.add_layout(color_bar, 'right')
     save(p)
 
-def figure_count_heatmap(pan_name: str, list_system, list_organism, matrix_genomes_systems, output: str):
 
-    output_file(Path.cwd() / output / pan_name /"{0}_count.html".format(pan_name))
-    df_gcount = pd.DataFrame(matrix_genomes_systems, index=list_organism, columns=list_system)
+def figure_count_heatmap(name: str, data: np.ndarray, list_system: List, list_organism: List, output: Path):
+    """ Draw count heatmap figure for the pangenome
+
+    :param name: Name of the pangenome
+    :param data: Data used to produce the heatmap
+    :param list_system: List of systems in the pangenome
+    :param list_organism: List of organisms in the pangenome
+    :param output: Path to output directory
+    """
+
+    output_file(Path.cwd() / output / name /"{0}_count.html".format(name))
+    df_gcount = pd.DataFrame(data, index=list_organism, columns=list_system)
     df_stack_gcount = pd.DataFrame(df_gcount.stack(), columns=['number']).reset_index()
 
     mapper = LinearColorMapper(palette=list(reversed(Magma256)), low=1, low_color='#FFFFFF',
                                high=df_stack_gcount.number.max())
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
-    p = figure(title="Defense systems for {0}".format(pan_name),
-                x_range=list_system, y_range=list_organism,
-                x_axis_location="above", width=500, height=600,
-                tools=Tools, toolbar_location='below',
-                tooltips=[('Count', '@number'), ('Organism', '@level_0'), ('Defense system', '@level_1')])
+
+    # Set size for plot
+    len_sys = len(list_system)
+    len_org = len(list_organism)
+    width = len_sys * 40
+
+    if len_org < 30:
+        height = len_org * 28
+    elif 30 <= len_org <= 100:
+        height = len_org * 30
+    elif 100 < len_org <= 200:
+        height = len_org * 32
+    elif 200 < len_org:
+        height = len_org * 34
+
+    p = figure(title="Systems for {0}".format(name), x_range=list_system, y_range=list_organism,
+                x_axis_location="above", height=height, width=width, tools=Tools, toolbar_location='below',
+                tooltips=[('Count', '@number'), ('Organism', '@level_0'), ('System', '@level_1')])
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 1
     p.yaxis.axis_label = 'Genomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -100,25 +152,32 @@ def figure_count_heatmap(pan_name: str, list_system, list_organism, matrix_genom
            fill_color={'field': 'number', 'transform': mapper}, line_color=None)
 
     color_bar = ColorBar(color_mapper=mapper, major_label_text_font_size="14px",
-                         ticker=BasicTicker(desired_num_ticks=int(matrix_genomes_systems.max())),
+                         ticker=BasicTicker(desired_num_ticks=int(data.max())),
                          formatter=PrintfTickFormatter(format="%s"), label_standoff=6, border_line_color=None)
     p.add_layout(color_bar, 'right')
     save(p)
 
-def heatmap(global_df, output):
-    pan_names = list(global_df['pangenome name'].unique())
-    pan_names.sort(key=str.casefold)
-    system_names = list(global_df['system name'].unique())
-    system_names.sort(key=str.casefold)
+
+def heatmap(global_systems_proj: DataFrame, output: Path):
+    """ Transform data for heatmap and histogram figures used for all pangenomes
+
+    :param global_systems_proj: Systems detected in all pangenomes
+    :param output: Path to output directory
+    """
+
+    names = list(global_systems_proj['pangenome name'].unique())
+    names.sort(key=str.casefold)
+    systems_type = list(global_systems_proj['system name'].unique())
+    systems_type.sort(key=str.casefold)
 
     save_sum_pans_systems = []
     save_sum_pans_ratio = []
-    for i, pan in enumerate(pan_names):
+    for i, name in enumerate(names):
         sum_pans_systems = {}
         sum_pans_ratio = {}
-        pan_df = global_df[global_df['pangenome name'] == pan]
+        pan_df = global_systems_proj[global_systems_proj['pangenome name'] == name]
         number_org_tot = len(list(pan_df['organism'].unique()))
-        for system in system_names:
+        for system in systems_type:
             system_df = pan_df[pan_df['system name'] == system]
             number_org = len(list(system_df['organism'].unique()))
             sum_pans_systems[system] = number_org
@@ -127,34 +186,41 @@ def heatmap(global_df, output):
         save_sum_pans_systems.append(sum_pans_systems)
         save_sum_pans_ratio.append(sum_pans_ratio)
 
-    system_names = sorted(list(system_names), key=str.casefold)
-    df_pan_count = pd.DataFrame(save_sum_pans_systems, columns=system_names, index=pan_names).fillna(0)
-    df_pan_ratio = pd.DataFrame(save_sum_pans_ratio, columns=system_names, index=pan_names).fillna(0)
+    systems_type = sorted(list(systems_type), key=str.casefold)
+    df_pan_count = pd.DataFrame(save_sum_pans_systems, columns=systems_type, index=names).fillna(0)
+    df_pan_ratio = pd.DataFrame(save_sum_pans_ratio, columns=systems_type, index=names).fillna(0)
 
-    figure_histogram(pan_names, df_pan_count, system_names, output)
-    figure_heatmap(pan_names, df_pan_count, df_pan_ratio, system_names, output)
+    figure_histogram(names=names, df_pan_count=df_pan_count, systems_type=systems_type, output=output)
+    figure_heatmap(names=names, df_pan_ratio=df_pan_ratio, output=output)
 
 
-def figure_histogram(pan_names, df_pan_count, system_names, output):
+def figure_histogram(names: List[str], df_pan_count: DataFrame, systems_type: List[str], output: Path):
+    """ Draw histogram figure for all pangenomes
+
+    :param names: Names of all pangenomes
+    :param df_pan_count: Count of all types of systems in all pangenomes
+    :param systems_type: Systems type in all pangenomes
+    :param output: Path to output directory
+    """
 
     output_file(Path.cwd() / output / "bar_stacked_pangenomes.html")
 
-    dict_graph_pans = [(key, value) for i, (key, value) in enumerate(zip(pan_names, df_pan_count.values.tolist()))]
-    dict_pan_names = {'systems_names' : system_names}
+    dict_graph_pans = [(key, value) for i, (key, value) in enumerate(zip(names, df_pan_count.values.tolist()))]
+    dict_pan_names = {'systems_names' : systems_type}
     dict_pan_names.update(dict_graph_pans)
     col_pan_names = ColumnDataSource(data=dict_pan_names)
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
-    p = figure(title="Defense systems Count", background_fill_color="#FAFAFA", x_range=system_names,
-               width=1500, height=800, x_axis_location="below", tools=Tools, toolbar_location=None,
-               tooltips=[('Pangenome', '$name'),('Defense system', '@systems_names'), ('Count', '@$name')])
+    p = figure(title="Systems count", background_fill_color="#FAFAFA", x_range=systems_type,
+               sizing_mode='scale_both', x_axis_location="below", tools="hover", toolbar_location=None,
+               tooltips=[('Pangenome', '$name'),('system', '@systems_names'), ('Count', '@$name')])
 
-    p.vbar_stack(pan_names, x='systems_names', width=0.5, color=magma(len(pan_names)),
-                 source=col_pan_names, legend_label=pan_names, line_color='black')
+    p.vbar_stack(names, x='systems_names', width=0.5, color=turbo(len(names)),
+                 source=col_pan_names, legend_label=names, line_color='black')
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems'
+    p.xaxis.axis_label = 'Systems'
     p.xaxis.major_label_orientation = 0.7
     p.x_range.range_padding = 0.1
     p.yaxis.axis_label = 'Count'
@@ -173,21 +239,36 @@ def figure_histogram(pan_names, df_pan_count, system_names, output):
 
     save(p)
 
-def figure_heatmap(pan_names, df_pan_count, df_pan_ratio, system_names, output):
+
+def figure_heatmap(names: List[str], df_pan_ratio: DataFrame, output: Path):
+    """ Draw heatmap figure for all pangenomes
+
+    :param names: Names of all pangenomes
+    :param df_pan_ratio: Ratio (count types of systems/count organisms) in all pangenomes
+    :param output: Path to output directory
+    """
+
+    df_pan_ratio_f = df_pan_ratio.loc[:, (df_pan_ratio >= 0.1).any()] # remove systems present in less that 10% of each pangenome
+    systems_list = sorted(df_pan_ratio_f.columns.tolist())
 
     output_file(Path.cwd() / output / "pangenomes_count.html")
-    df_stack_pan_ratio = pd.DataFrame(df_pan_ratio.stack(), columns=['ratio']).reset_index()
+    df_stack_pan_ratio = pd.DataFrame(df_pan_ratio_f.stack(), columns=['ratio']).reset_index()
     mapper = LinearColorMapper(palette=(list(reversed(Magma256))), low=0.000001, low_color='#FFFFFF', high=df_stack_pan_ratio.ratio.max())
 
     Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
-    p = figure(title="Defense systems in pangenomes", x_range=system_names, y_range=pan_names,
-               x_axis_location="above", width=2000, height=400, tools=Tools, toolbar_location='below',
-               tooltips=[('pangenome', '@level_0'), ('Defense system', '@level_1'), ('Ratio', '@ratio{0.00}'), ('Count', f"{df_pan_count}")])
+    len_pangenomes = len(names)
+    len_systems = len(systems_list)
+    height = len_pangenomes * 100
+    width = len_systems * 50
+
+    p = figure(title="Systems in pangenomes", x_range=systems_list, y_range=names,
+               x_axis_location="above", height=height, width=width, tools=Tools, toolbar_location='below',
+               tooltips=[('pangenome', '@level_0'), ('System', '@level_1'), ('Ratio', '@ratio{0.00}')])
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = 'Defense systems name'
+    p.xaxis.axis_label = 'Systems name'
     p.xaxis.major_label_orientation = 0.7
     p.yaxis.axis_label = 'Pangenomes name'
     p.axis.axis_label_text_font_size = "16pt"
@@ -205,21 +286,27 @@ def figure_heatmap(pan_names, df_pan_count, df_pan_ratio, system_names, output):
     p.add_layout(color_bar, 'right')
     save(p)
 
-def upsetplot(pan_name, pan_df, features_df, output):
-    pan_df = pan_df[['system number', 'system name', 'organism']]
-    system_name_pan = list(pan_df['system name'].unique())
-    system_name_pan.sort(key=str.lower)
-    organism_name_pan = list(pan_df['organism'].unique())
-    organism_name_pan.sort(key=lambda x: ('assembled' in x or 'MAGS' in x, x), reverse=True)
-    organism_id_pan = [i + 1 for i in range(len(organism_name_pan))]
-    dict_organism_id_pan = {name: ID+1 for ID, name in enumerate(organism_name_pan)}
-    features_df = features_df[['system_name', 'mod_organism', 'module', 'rgp_organism', 'spot', 'rgp']]
-    #system_name_features = list(features_df['system_name'].unique())
 
-    systems_count, organisms_count = count(pan_df, system_name_pan, organism_name_pan)
+def upsetplot(name: str, systems_projection: DataFrame, system_to_feature: DataFrame, output: Path):
+    """ Draw upsetplot figure (presence/absence of systems in spots or modules predicted by PPanGGOLiN)
 
-    #systems_count_features_list = [None] * (len(system_name_features) + 1)
-    #count_system = 0
+    :param name: Name of the pangenome
+    :param systems_projection: Dataframe with systems detected in the pangenome
+    :param system_to_feature: Dataframe with modules, spots and RGPs associated to each system ID of pangenome
+    :param output: Path to output directory
+    """
+
+    systems_projection = systems_projection[['system number', 'system name', 'organism']]
+    system_type_list = list(systems_projection['system name'].unique())
+    system_type_list.sort(key=str.lower)
+    organism_name_list = list(systems_projection['organism'].unique())
+    organism_name_list.sort(key=lambda x: ('assembled' in x or 'MAGS' in x, x), reverse=True)
+    organism_id_pan = [i + 1 for i in range(len(organism_name_list))]
+    dict_organism_id_pan = {name: ID+1 for ID, name in enumerate(organism_name_list)}
+    system_to_feature = system_to_feature[['system_name', 'mod_organism', 'module', 'rgp_organism', 'spot', 'rgp']]
+
+    systems_count, organisms_count = count(systems_projection=systems_projection, system_type_list=system_type_list,
+                                           organism_name_list=organism_name_list)
 
     spot_set = set()
     dict_spot_system = {}
@@ -232,19 +319,18 @@ def upsetplot(pan_name, pan_df, features_df, output):
     x_axis_systems_present = []
     y_axis_organisms_id_present = []
 
-
-    for system in system_name_pan:
-        pan_df_filter = pan_df[pan_df['system name'] == system]
+    for system in system_type_list:
+        systems_projection_filter = systems_projection[systems_projection['system name'] == system]
         organism_id = 1
         for organism in dict_organism_id_pan.keys():
-            checking_presence = (pan_df_filter['organism'].eq(organism)).to_string()
+            checking_presence = (systems_projection_filter['organism'].eq(organism)).to_string()
             if 'True' in checking_presence:
                 x_axis_systems_present.append(system)
                 y_axis_organisms_id_present.append(organism_id)
             organism_id += 1
 
-        if features_df['system_name'].str.contains(system).any():
-            data_features_filter = features_df[features_df['system_name'] == system]
+        if system_to_feature['system_name'].str.contains(system).any():
+            data_features_filter = system_to_feature[system_to_feature['system_name'] == system]
             for org_index, row in data_features_filter.iterrows():
                 rgp_organisms = row.rgp_organism
                 mod_organisms = row.mod_organism
@@ -252,6 +338,7 @@ def upsetplot(pan_name, pan_df, features_df, output):
                 modules = row.module
                 if spots is not None:
                     spot_set |= set(spots)
+                    spot_set.discard("")
                 if modules is not None:
                     module_set |= set(modules)
                 if spots is not None:
@@ -272,20 +359,40 @@ def upsetplot(pan_name, pan_df, features_df, output):
 
     tooltips = [('System name', '@x'), ('Features', '$name')]
 
-    width =len(system_name_pan) * 40
-    height = len(organism_name_pan) * 40
+    # Set size for plot to show the whole legend
+    len_sys = len(system_type_list)
+    len_figure = len(spot_set) + len(module_set) + len(organism_name_list)
+    width_center = len_sys * 40
 
-    p_features = figure(width=1000, height=1200, x_range=system_name_pan, tooltips=tooltips,
+    if len_figure < 30:
+        height_center = len_figure * 25
+        height_top = 400
+        width_left = 350
+        size_spot = 20
+        size_module = 17
+    elif 30 <= len_figure <= 100:
+        height_center = len_figure * 28
+        height_top = 450
+        width_left = 400
+        size_spot = 21
+        size_module = 18
+    elif 100 < len_figure <= 200:
+        height_center = len_figure * 30
+        height_top = 475
+        width_left = 425
+        size_spot = 23
+        size_module = 20
+    elif 200 < len_figure:
+        height_center = len_figure * 32
+        height_top = 500
+        width_left = 450
+        size_spot = 25
+        size_module = 21
+
+    p_features = figure(width=width_center, height=height_center, x_range=system_type_list, tooltips=tooltips,
                                             x_axis_location="above")
     p_features.square(x=x_axis_systems_present, y=y_axis_organisms_id_present, fill_color="white",
-                                          line_color="black", legend_label="Alone", size=20, name="")
-
-    if "no_spot" in spot_set:
-        x_axis_systems_spot = dict_spot_system["no_spot"]
-        y_axis_organisms_id_spot = dict_spot_organism_id["no_spot"]
-        p_features.asterisk(x=x_axis_systems_spot, y=y_axis_organisms_id_spot, line_color="black",
-                                                fill_color="white", size=20, legend_label="no_spot", name="no_spot")
-        spot_set.remove("no_spot")
+                                          line_color="black", legend_label="Alone", size=size_spot, name="")
 
     spot_list = sorted(list(spot_set), key=float)
     color_spots = turbo(len(spot_list))
@@ -293,15 +400,8 @@ def upsetplot(pan_name, pan_df, features_df, output):
         x_axis_systems_spot = dict_spot_system[spot]
         y_axis_organisms_id_spot = dict_spot_organism_id[spot]
         p_features.square(x=x_axis_systems_spot, y=y_axis_organisms_id_spot, line_color="black",
-                                                fill_color=color_spots[i], size=20,
+                                                fill_color=color_spots[i], size=size_spot,
                                                 legend_label="Spot " + str(spot), name=str(spot))
-
-    if "no_module" in module_set:
-        x_axis_systems_module = dict_module_system["no_module"]
-        y_axis_organisms_id_module = dict_module_organism_id["no_module"]
-        p_features.asterisk(x=x_axis_systems_module, y=y_axis_organisms_id_module, line_color="black",
-                                                fill_color="white", size=17, legend_label="no_module")
-        module_set.remove("no_module")
 
     module_list = sorted(list(module_set), key=float)
     color_modules = turbo(len(module_list))
@@ -309,7 +409,7 @@ def upsetplot(pan_name, pan_df, features_df, output):
         x_axis_systems_module = dict_module_system[module]
         y_axis_organisms_id_module = dict_module_organism_id[module]
         p_features.circle(x=x_axis_systems_module, y=y_axis_organisms_id_module, line_color="black",
-                                              fill_color=color_modules[i], size=17,
+                                              fill_color=color_modules[i], size=size_module,
                                               legend_label="Module " + str(module), name=str(module))
 
     # Presence Absence of spot and module
@@ -323,21 +423,38 @@ def upsetplot(pan_name, pan_df, features_df, output):
     p_features.y_range.start = 0.5
     p_features.y_range.end = len(organism_id_pan) + 0.5
     p_features.xaxis.major_label_orientation = 0.8
-    p_features.add_layout(p_features.legend[0], 'right')
-    p_features.legend.click_policy = "hide"
     p_features.outline_line_width = 1
     p_features.outline_line_color = "black"
     p_features.axis.major_label_text_font_size = "14px"
     p_features.yaxis.major_label_text_align = 'center'
     p_features.min_border_bottom = 100
+    p_features.add_layout(p_features.legend[0], 'right')
+    p_features.legend.click_policy = "hide"
+
+# Button to show/hide all spots and modules
+    button = Button(label='Hide all', button_type="success", width=100, height=30, margin=(100, 10, 10, -115))
+    cb = CustomJS(args=dict(fig=p_features, btn=button)
+                  , code='''
+                  if (btn.label=='Hide all'){
+                      for (var i=0; i<fig.renderers.length; i++){
+                              fig.renderers[i].visible=false}
+                      btn.label = 'Show all';
+                      btn.button_type = "primary"
+                      }
+                  else {for (var i=0; i<fig.renderers.length; i++){
+                          fig.renderers[i].visible=true}
+                  btn.label = 'Hide all';
+                  btn.button_type = "success"
+                  }
+                  ''')
+    button.js_on_click(cb)
 
     # Histogram of organism
-
     tooltips_org = [('Organism', '@y'), ('Count', '@left')]
 
-    p_org = figure(x_range=[max(organisms_count) + 1, 0], y_range=organism_name_pan, width=600, height=1200,
+    p_org = figure(x_range=[max(organisms_count) + 1, 0], y_range=organism_name_list, width=width_left, height=height_center,
                    tooltips=tooltips_org)
-    p_org.hbar(y=organism_name_pan, left=organisms_count, right=0, height=0.8, fill_color="#458B74",
+    p_org.hbar(y=organism_name_list, left=organisms_count, right=0, height=0.8, fill_color="#458B74",
                line_color="black")
     p_org.yaxis.visible = False
     p_org.outline_line_width = 1
@@ -346,10 +463,9 @@ def upsetplot(pan_name, pan_df, features_df, output):
     p_org.xgrid.grid_line_color = "black"
     p_org.min_border_bottom = 100
 
-
     tooltips_sys = [('System name', '@x'), ('Count', '@top')]
-    p_sys = figure(title="{0}".format(pan_name), x_range=system_name_pan, width=1000, height=350, tooltips=tooltips_sys)
-    p_sys.vbar(x=system_name_pan, top=systems_count, width=0.8, fill_color="#B22222", line_color="black")
+    p_sys = figure(title="{0}".format(name), x_range=system_type_list, width=width_center, height=height_top, tooltips=tooltips_sys)
+    p_sys.vbar(x=system_type_list, top=systems_count, width=0.8, fill_color="#B22222", line_color="black")
 
     p_sys.title.align = "center"
     p_sys.title.text_font_size = "20pt"
@@ -361,49 +477,72 @@ def upsetplot(pan_name, pan_df, features_df, output):
     p_sys.xaxis.visible = False
     p_sys.axis.major_label_text_font_size = "14px"
 
-    output_file(Path.cwd() / output / pan_name / f"upsetplot_{pan_name}.html")
+    output_file(Path.cwd() / output / name / f"upsetplot_{name}.html")
 
-    grid = gridplot([[None, p_sys], [p_org, p_features]])
+    grid = gridplot([[None, p_sys, None], [p_org, p_features, button]])
     save(grid)
+    export_png(grid, filename= output / name / f"upsetplot_{name}.png")
 
-def count(pan_df, system_name_pan, organism_name_pan):
 
-    systems_count = [None] * len(system_name_pan)
-    for i, system in enumerate(system_name_pan):
-        data_pangenome_filter = pan_df[pan_df['system name'] == system]
-        data_pangenome_filter_drop = data_pangenome_filter.drop_duplicates(
-            subset=['system number', 'system name', 'organism'])
+def count(systems_projection: DataFrame, system_type_list: List, organism_name_list: List) -> Tuple[List, List]:
+    """ Count number of system per type or per organism
+
+    :param systems_projection: Dataframe with systems detected in the pangenome
+    :param system_type_list: All type of systems detected in the pangenome
+    :param organism_name_list: All organisms name in the pangenome
+    """
+
+    systems_count = [None] * len(system_type_list)
+    for i, system in enumerate(system_type_list):
+        data_pangenome_filter = systems_projection[systems_projection['system name'] == system]
+        data_pangenome_filter_drop = data_pangenome_filter.drop_duplicates(subset=['system number', 'system name', 'organism'])
         systems_count[i] = data_pangenome_filter_drop.shape[0]
 
-    organisms_count = [None] * len(organism_name_pan)
-    for j, organism in enumerate(organism_name_pan):
-        data_pangenome_filter_2 = pan_df[pan_df['organism'] == organism]
-        data_pangenome_filter_drop_2 = data_pangenome_filter_2.drop_duplicates(
-            subset=['system number', 'system name', 'organism'])
+    organisms_count = [None] * len(organism_name_list)
+    for j, organism in enumerate(organism_name_list):
+        data_pangenome_filter_2 = systems_projection[systems_projection['organism'] == organism]
+        data_pangenome_filter_drop_2 = data_pangenome_filter_2.drop_duplicates(subset=['system number', 'system name', 'organism'])
         organisms_count[j] = data_pangenome_filter_drop_2.shape[0]
     return systems_count, organisms_count
 
-def hbar_ID_type(pangenome_name, dataframe_ID, dataframe_ID_org, output):
-    data_systems = dataframe_ID[['system name', 'Number of IDs']]
+
+def hbar_ID_total(name: str, dataframe_id: DataFrame, dataframe_total: DataFrame, output: Path):
+    """ Draw histogram figure with number of ID per type and total number of system per type
+
+    :param name: Name of the pangenome
+    :param dataframe_id: ID data used to produce the histogram
+    :param dataframe_total: Total count data used to produce the histogram
+    :param output: Path to output directory
+    """
+    data_systems = dataframe_id[['system name', 'Number of IDs']]
     system_names = list(data_systems['system name'])
     system_names.sort(key=str.casefold)
     number_ID = list(data_systems['Number of IDs'])
 
-    data_systems_org = dataframe_ID_org[['system name', 'Number of IDs per org']]
-    number_ID_org = list(data_systems_org['Number of IDs per org'])
+    data_systems_org = dataframe_total[['system name', 'Total number of systems']]
+    number_total = list(data_systems_org['Total number of systems'])
 
-    category = ['ID', 'Type']
-    data_graph = {'ID' : number_ID, 'Type' : number_ID_org}
+    category = ['ID', 'Total']
+    data_graph = {'ID' : number_ID, 'Total' : number_total}
     x = [ (system, cat) for system in system_names for cat in category ]
-    count = sum(zip(data_graph['ID'], data_graph['Type']), ())
+    count = sum(zip(data_graph['ID'], data_graph['Total']), ())
     source = ColumnDataSource(data=dict(x=x, counts=count))
 
-    output_file(Path.cwd() / output / pangenome_name / "hbar_ID_Type_{0}.html".format(pangenome_name))
-    p = figure(y_range=FactorRange(*x), title="Systems count per ID or Type for {0}".format(pangenome_name),
-               sizing_mode='scale_both')
+    output_file(Path.cwd() / output / name / "hbar_ID_Total_{0}.html".format(name))
 
-    p.hbar(y='x', right='counts', source=source, height=0.8,
-                   fill_color="#458B74", line_color="black")
+    # Set size for plot
+    len_sys = len(system_names)
+    max_value = max(number_total)
+    width = max_value * 5
+    height = len_sys * 35
+
+    if width < 500:
+        width = 500
+
+    p = figure(y_range=FactorRange(*x), title="Systems count for {0}".format(name),
+               height=height, width=width)
+
+    p.hbar(y='x', right='counts', source=source, height=0.8, fill_color="#458B74", line_color="black")
 
     p.title.align = "center"
     p.title.text_font_size = "20pt"

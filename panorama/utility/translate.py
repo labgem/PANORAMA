@@ -197,7 +197,7 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_dict: Dict[str, Lis
                         if exchangeable_name in hmm_dict:
                             exchangeable_set |= set(hmm_dict[exchangeable_name])
             else:
-                logging.getLogger().warning("Unexpected relation")
+                logging.warning("Unexpected relation")
         if len(exchangeable_set) > 0:
             dict_elem["exchangeables"] = list(exchangeable_set.difference({name}))
         return dict_elem
@@ -384,17 +384,17 @@ def translate_macsyfinder(models: Path, hmms_path: Path, tmpdir: Path, disable_b
 def launch_translate(models: Path, source: str, output: Path, meta_data: Path = None, hmms_path: Path = None,
                      tmpdir: Path = None, disable_bar: bool = False):
     if source == "padloc":
-        logging.getLogger().info("Begin to translate padloc models...")
+        logging.info("Begin to translate padloc models...")
         list_data = translate_padloc(models=models, meta=meta_data, output=output, disable_bar=disable_bar)
     elif source == "defense-finder":
-        logging.getLogger().info("Begin to translate defense finder models...")
+        logging.info("Begin to translate defense finder models...")
         list_data = translate_defense_finder(models=models, hmms_path=hmms_path, tmpdir=tmpdir, disable_bar=disable_bar)
     elif source == "macsy-finder":
-        logging.getLogger().info("Begin to translate macsy finder models...")
+        logging.info("Begin to translate macsy finder models...")
         list_data = translate_macsyfinder(models=models, hmms_path=hmms_path, tmpdir=tmpdir, disable_bar=disable_bar)
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")
-    logging.getLogger().info("Write models for PANORAMA...")
+    logging.info("Write models for PANORAMA...")
     for data in tqdm(list_data, unit="model", disable=disable_bar):
         write(output, data)
