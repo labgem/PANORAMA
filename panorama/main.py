@@ -92,6 +92,12 @@ def cmd_line():
 
 
 def main():
+    """
+    The main function is the entry point for the panorama command line tool.
+    It parses arguments and calls subcommands as appropriate.
+    
+    :return: The exit status
+    """
     args = cmd_line()
 
     set_verbosity_level(args)
