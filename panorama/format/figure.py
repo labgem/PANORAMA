@@ -6,7 +6,7 @@ from typing import List, Tuple
 from bokeh.models import (BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter, ColumnDataSource)
 from bokeh.palettes import Magma256
 import pandas as pd
-from pandas import DataFrame
+from bokeh.io import output_file
 from bokeh.io import output_file, export_png
 from bokeh.plotting import figure, save
 from bokeh.layouts import gridplot
@@ -209,6 +209,7 @@ def figure_histogram(names: List[str], df_pan_count: DataFrame, systems_type: Li
     dict_pan_names = {'systems_names' : systems_type}
     dict_pan_names.update(dict_graph_pans)
     col_pan_names = ColumnDataSource(data=dict_pan_names)
+    Tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
 
     p = figure(title="Systems count", background_fill_color="#FAFAFA", x_range=systems_type,
                sizing_mode='scale_both', x_axis_location="below", tools="hover", toolbar_location=None,
