@@ -4,9 +4,9 @@
 # default libraries
 import logging
 from tqdm import tqdm
-from typing import Dict, List
+from typing import Any, Callable, Dict, List
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
 
 # installed libraries
@@ -18,7 +18,7 @@ from ppanggolin.formats import get_status as super_get_status
 # local libraries
 from panorama.system import System
 from panorama.models import Models
-from panorama.pangenomes import Pangenome
+from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.utils import check_tsv_sanity, init_lock
 
 
@@ -35,7 +35,15 @@ def get_status(pangenome, pangenome_file: str):
         pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
     h5f.close()
 
+
 def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, disable_bar: bool = False):
+    """read sytem for one source
+
+    :param pangenome: pangenome containing systems
+    :param system_table: Table of systems corresponding to one source
+    :param models: Models associated with systems
+    :param disable_bar: Allow to disable progress bar
+    """
     systems = {}
     for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="line", disable=disable_bar):
         curr_sys = systems.get(row["ID"].decode())
@@ -53,8 +61,11 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
 def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path], sources: List[str],
                  disable_bar: bool = False):
     """Read information about systems in pangenome hdf5 file to add in pangenome object
+
     :param pangenome: Pangenome object without gene families information
     :param h5f: Pangenome HDF5 file with gene families information
+    :param models_path: list of path to models for each source
+    :param sources: list of different source
     :param disable_bar: Disable the progress bar
     """
     systems_group = h5f.root.systems
@@ -69,7 +80,6 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
         read_systems_by_source(pangenome, systems_table, models, disable_bar)
         logging.debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
-
 
 
 def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source: str = None,
@@ -124,8 +134,9 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None, source
     h5f.close()
 
 
-
-def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool]):
+def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
+                   check_function: Callable[[Pangenome, Any], None] = None,
+                   disable_bar: bool = False, **kwargs) -> Pangenome:
     """
     Load a pangenome from a given path and check the required information.
 
@@ -137,19 +148,27 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool])
     :param path: The path to the pangenome file.
     :param taxid: The taxonomic ID associated with the pangenome.
     :param need_info: A dictionary containing information required to load in the Pangenome object.
-
+    :param check_function:
+    :param disable_bar:
     :return: The pangenome object with the loaded information.
     """
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
 
-    check_pangenome_info(pangenome, disable_bar=True, **need_info)
-
+    if check_function is not None:
+        try:
+            check_function(pangenome, **kwargs)
+        except Exception as error:
+            logging.error(f"Pangenome {pangenome.name} reading return the below error")
+            raise error
+    check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
     return pangenome
 
 
-def load_multiple_pangenomes(pangenome_list: Path, need_info: Dict[str, bool], lock: Lock,
-                             max_workers: int = 1, disable_bar: bool = False) -> List[Pangenome]:
+def load_multiple_pangenomes(pangenome_list: Path, need_info: Dict[str, bool],
+                             check_function: Callable[[Pangenome, Any], None] = None,
+                             max_workers: int = 1, lock: Lock = None,
+                             disable_bar: bool = False, **kwargs) -> Pangenomes:
     """
     Load multiple pangenomes in parallel using a process pool executor.
 
@@ -159,25 +178,28 @@ def load_multiple_pangenomes(pangenome_list: Path, need_info: Dict[str, bool], l
     displayed using a tqdm progress bar.
 
     :param pangenome_list: Path to the pangenomes list files.
-    :param max_workers: The maximum number of worker processes to use in the process pool executor.
-    :param disable_bar: A flag indicating whether to disable the tqdm progress bar.
-    :param lock: A multiprocessing lock used for synchronization.
     :param need_info: A flag indicating what information is needed during pangenome loading.
+    :param check_function: Function which check the pangenome before to load information
+    :param max_workers: The maximum number of worker processes to use in the process pool executor.
+    :param lock: A multiprocessing lock used for synchronization.
 
+    :param disable_bar: A flag indicating whether to disable the tqdm progress bar.
     :return pangenomes: List of loaded pangenomes with required information
     """
+    pangenomes = Pangenomes()
     pan_to_path = check_tsv_sanity(pangenome_list)
-    with ProcessPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
+    with ThreadPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pan_to_path), unit='pangenome', disable=disable_bar) as progress:
             futures = []
 
             for pangenome_name, pangenome_path_info in pan_to_path.items():
                 future = executor.submit(load_pangenome, pangenome_name, pangenome_path_info["path"],
-                                         pangenome_path_info["taxid"], need_info)
-
+                                         pangenome_path_info["taxid"], need_info, check_function,
+                                         disable_bar, **kwargs)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
-            pangenomes = []
+
             for future in futures:
-                pangenomes.append(future.result())
-        return pangenomes
+                with lock:
+                    pangenomes.add_pangenome(future.result())
+    return pangenomes

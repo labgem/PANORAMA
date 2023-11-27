@@ -17,6 +17,7 @@ from time import time
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
+from pandas import DataFrame
 
 # local libraries
 from panorama.utils import init_lock, mkdir
@@ -171,10 +172,10 @@ def inter_pangenome_align(pangenomes: Pangenomes, output: Path, lock: Lock, tmpd
 
 def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
                     identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                    task: int = 1, threads_per_task: int = 1, disable_bar: bool = False):
+                    task: int = 1, threads_per_task: int = 1, disable_bar: bool = False) -> DataFrame:
     """Main function to align all gene families from all pangenomes with inside alignment
 
-    :param pangenomes: Pangenomes obejct containing all the pangenome to align
+    :param pangenomes: Pangenomes object containing all the pangenome to align
     :param output: Path to the output directory with the alignment results
     :param lock: Global lock for multiprocessing execution
     :param tmpdir: Temporary directory for MMSeqs2
@@ -184,6 +185,8 @@ def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: te
     :param task: number of parallel workers
     :param threads_per_task: Number of available threads for each worker
     :param disable_bar: Disable progressive bar
+
+    :return: Dataframe with alignment results
     """
     gf_seqs = get_gf_pangenomes(pangenomes=pangenomes, create_db=False, lock=lock, tmpdir=tmpdir,
                                 threads=task * threads_per_task, disable_bar=disable_bar)
@@ -201,6 +204,7 @@ def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: te
     align_df.to_csv(outfile, sep="\t", header=True, index=False)
     logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
 
+    return align_df
 
 def launch(args):
     """
@@ -210,12 +214,11 @@ def launch(args):
     """
     # check_parameter(args)
     mkdir(args.output, args.force)
-    pangenomes = Pangenomes()
+
     manager = Manager()
     lock = manager.Lock()
-    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                        max_workers=args.task*args.threads_per_task, disable_bar=args.disable_prog_bar)
-    pangenomes.add_list_pangenomes(pan_list)
+    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
+                                          max_workers=args.task*args.threads_per_task, disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     if args.inter_pangenomes:
         inter_pangenome_align(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,

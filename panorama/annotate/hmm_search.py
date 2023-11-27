@@ -71,8 +71,7 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
     builder = pyhmmer.plan7.Builder(alphabet)
     background = pyhmmer.plan7.Background(alphabet)
     if os.stat(msa_file).st_size == 0:
-        logging.warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable."
-                                    f"Pass to next file")
+        logging.warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
     else:
         try:
             with pyhmmer.easel.MSAFile(msa_file.absolute().as_posix(), format=msa_format,
@@ -92,6 +91,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
     :param pangenome: Pangenome contaning gene families to profile
     :param msa_path: path to file containing msa
     :param msa_format: format used to write msa
+    :param tmpdir: Temporary directory for profiling
     :param threads: Number of available threads
     :param disable_bar: Disable progress bar
     """
@@ -120,6 +120,7 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
 
     :return: metadata dataframe and dictionnary associate hmm name with protein and secondary name
     """
+    logging.debug("Reading HMM metadata...")
     metadata_df = pd.read_csv(metadata, delimiter="\t", names=meta_col_names,
                               dtype=meta_dtype, header=0).set_index('accession')
     metadata_df['description'] = metadata_df["description"].fillna('unknown')
@@ -136,7 +137,7 @@ def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) ->
     """
     hmms = []
     hmm_list_path = list(hmm_dir)
-    logging.info("Read HMM")
+    logging.info("Reading HMM...")
     for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         end = False
         hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
@@ -210,8 +211,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     return res
 
 
-def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
-                   mode: str = 'fast', msa: Path = None, tmpdir: Path = Path(tempfile.gettempdir()),
+def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], hmm_metadata: pd.DataFrame = None,
                    threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
     """ Launch hmm search against pangenome gene families and HMM
 
@@ -226,22 +226,11 @@ def annot_with_hmm(pangenome: Pangenome, hmm_path: Path, meta: Path = None,
 
     :return: dataframe with best result for each pangenome families
     """
-    logging.info("Begin HMM searching")
-    if mode == 'profile':
-        profile_gfs(pangenome, msa, tmpdir=tmpdir, threads=threads, disable_bar=disable_bar)
-        logging.debug("Gene families HMM and profile computation... Done")
-    else:
-        if mode != 'fast':
-            raise ValueError(f"{mode} unrecognized mode")
     gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
-    if meta is not None:
-        metadata = read_metadata(meta)
-    else:
-        metadata = None
-    # Get list of HMM with Plan7 data model
-    hmms = read_hmm(hmm_dir=hmm_path.iterdir(), disable_bar=disable_bar)
-    res = annot_with_hmmsearch(hmms, gf_sequences, metadata, threads, disable_bar)
+    logging.debug("Begin HMMsearch")
+    res = annot_with_hmmsearch(hmms, gf_sequences, hmm_metadata, threads, disable_bar)
     metadata_df = pd.DataFrame(res)
     metadata_df.replace(to_replace='-', value=pd.NA, inplace=True)
     metadata_df.replace(to_replace='', value=pd.NA, inplace=True)
-    return metadata_df
+    logging.info("HMM search done.")
+    return metadata_df, pangenome.name

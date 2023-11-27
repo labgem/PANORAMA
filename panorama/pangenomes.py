@@ -38,6 +38,7 @@ class Pangenome(Pan):
         return self.name
 
     def add_file(self, pangenome_file: str):
+        # TODO change for Path
         """Links an HDF5 file to the pan. If needed elements will be loaded from this file,
         and anything that is computed will be saved to this file when
         :func:`ppanggolin.formats.writeBinaries.writePangenome` is called.

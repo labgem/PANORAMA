@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 import csv
 from typing import TextIO, Dict, Union, List
+from multiprocessing import Manager, Lock
 import pkg_resources
 
 # installed libraries
@@ -54,7 +55,7 @@ def set_verbosity_level(args: argparse.Namespace):
 
 
 # File managing system
-def mkdir(output: Union[Path, str], force: bool = False) -> Path:
+def mkdir(output: Path, force: bool = False) -> Path:
     """Create a directory at the given path
 
     :param output: Path to output directory
@@ -66,7 +67,7 @@ def mkdir(output: Union[Path, str], force: bool = False) -> Path:
     :return: Path object to output directory
     """
     try:
-        os.makedirs(output.absolute().as_posix())
+        output.mkdir(parents=True, exist_ok=False)
     except OSError:
         if not force:
             raise FileExistsError(f"{output} already exists."
@@ -144,21 +145,18 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                 except FileNotFoundError as file_error:
                     raise FileNotFoundError(f"{file_error}")
                 else:
-                    pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                    pan_to_path[line[0]] = {"path": abs_path,
                                             "taxid": line[2] if len(line) > 2 else None}
             except Exception:
                 raise Exception("Unexpected error")
             else:
-                pan_to_path[line[0]] = {"path": f"{abs_path.as_posix()}",
+                pan_to_path[line[0]] = {"path": abs_path,
                                         "taxid": line[2] if len(line) > 2 else None}
         p_file.close()
         return pan_to_path
 
 
-loading_lock = None
-
-
-def init_lock(lock):
+def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
@@ -167,6 +165,6 @@ def init_lock(lock):
 
     :param lock: The lock object to be assigned to `loading_lock`.
     """
-    global loading_lock
-    if loading_lock is None:
-        loading_lock = lock
+    if lock is None:
+        manager = Manager()
+        return manager.Lock()

@@ -49,9 +49,12 @@ def export_modules(modules_dict: dict, output: Path):
     :param modules_dict: Content information
     :param output: Path to output directory
     """
-    df = pd.DataFrame.from_dict(modules_dict, orient='index').reset_index().rename(columns={'index': "Pangenomes"})
+    df = pd.DataFrame.from_dict(modules_dict, orient='index').T
+    df.to_csv(path_or_buf=output/"modules_info.tsv")
+    df = df.reset_index().rename(columns={"index": "Information"})
     source = ColumnDataSource(df)
     columns = [TableColumn(field=col, title=col) for col in df.columns]
     dt = DataTable(source=source, columns=columns, index_position=None,
-                   autosize_mode='fit_columns', sizing_mode='stretch_both')
-    save(dt, filename=f"{output.absolute().as_posix()}/modules_info.html", title="Modules Information", resources="cdn")
+                   sizing_mode='stretch_both')
+    save(dt, filename=output/"modules_info.html", title="Pangenome modules Information",
+         resources="cdn")

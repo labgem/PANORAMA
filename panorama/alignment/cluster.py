@@ -30,6 +30,7 @@ def write_clustering(clust_res: Path, outfile: Path):
     :param clust_res: Path to the clustering results
     :param outfile: Path to the final output file
     """
+
     logging.debug("Begin writing clustering...")
     clust_df = pd.read_csv(clust_res, sep="\t", names=clust_col_names[1:])
     clust_id = {index: ref_fam for index, ref_fam in enumerate(clust_df[clust_col_names[1]].unique().tolist())}
@@ -41,14 +42,14 @@ def write_clustering(clust_res: Path, outfile: Path):
 
 
 def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):
-    """
-    Create a TSV from clustering result thanks to MMSeqs2
+    """Create a TSV from clustering result thanks to MMSeqs2
 
     :param db: database of the sequences
     :param clust: clustering results
     :param output: output directory
     :param threads: number of cpu available
     """
+
     cmd = ["mmseqs", "createtsv", db.absolute().as_posix(), db.absolute().as_posix(), clust.absolute().as_posix(),
            output.absolute().as_posix(), "--threads", str(threads), "--full-header"]
     logging.getLogger().debug(" ".join(cmd))
@@ -67,6 +68,7 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
 
     :return: Path to resulting database
     """
+
     if lclust_db is None:
         lclust_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
     logging.debug("Clustering all gene families with linclust process...")
@@ -99,6 +101,7 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
 
     :return: Path to resulting database
     """
+
     if cluster_db is None:
         cluster_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
     logging.debug("Clustering all gene families with cluster process...")
@@ -122,19 +125,21 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
 
 
 def cluster_gene_families(pangenomes: Pangenomes, method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
-                          lock: Lock, tmpdir: tempfile.TemporaryDirectory, threads: int = 1, disable_bar: bool = False):
+                          lock: Lock, tmpdir: tempfile.TemporaryDirectory, threads: int = 1,
+                          disable_bar: bool = False) -> Path:
     """Cluster pangenomes gene families with MMSeqs2
 
     :param pangenomes: Pangenomes obejct containing all the pangenome to cluster
     :param method: Choosen method to cluster pangenomes gene families
     :param mmseqs2_opt: Dictionnary with all the option provide by MMSeqs2
     :param lock: Global lock for multiprocessing execution
-    :param tmpdir:Temporary directory for MMSeqs2
+    :param tmpdir: Temporary directory for MMSeqs2
     :param threads: Number of available threads
     :param disable_bar: Disable progressive bar
 
     :return: Clustering results from MMSeqs2
     """
+
     gf_seqs = get_gf_pangenomes(pangenomes=pangenomes, create_db=False, lock=lock, tmpdir=tmpdir, threads=threads,
                                 disable_bar=disable_bar)
     merge_db = createdb(list(gf_seqs.values()), tmpdir)
@@ -157,6 +162,7 @@ def launch(args):
 
     :param args: Argument given
     """
+
     # check_parameter(args)
     mkdir(args.output, args.force)
     mmseqs2_opt = {"max_seqs": args.max_seqs, "min_ungapped": args.min_ungapped, "comp_bias_corr": args.comp_bias_corr,
@@ -164,12 +170,10 @@ def launch(args):
                    "identity": args.identity, "cov_mode": args.cov_mode, "eval": args.eval,
                    "max_seq_len": args.max_seq_len, "max_reject": args.max_reject, "align_mode": args.align_mode,
                    "clust_mode": args.clust_mode, "reassign": args.reassign}
-    pangenomes = Pangenomes()
     manager = Manager()
     lock = manager.Lock()
-    pan_list = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                        max_workers=args.threads, disable_bar=args.disable_prog_bar)
-    pangenomes.add_list_pangenomes(pan_list)
+    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
+                                          max_workers=args.threads, disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     clust_res = cluster_gene_families(pangenomes=pangenomes, method=args.method, mmseqs2_opt=mmseqs2_opt, lock=lock,
                                       tmpdir=tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
@@ -180,24 +184,24 @@ def launch(args):
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
-    """
-    Subparser to launch PANORAMA in Command line
+    """Subparser to launch PANORAMA in Command line
 
     :param sub_parser : sub_parser for align command
 
-    :return : parser arguments for align command
+    :return: parser arguments for align command
     """
+
     parser = sub_parser.add_parser("cluster", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_clust(parser)
     return parser
 
 
 def parser_clust(parser):
-    """
-    Parser for specific argument of annot command
+    """Parser for specific argument of annot command
 
     :param parser: parser for annot argument
     """
+
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',

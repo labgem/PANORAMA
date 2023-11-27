@@ -69,7 +69,7 @@ def get_gf_pangenomes(pangenomes: Pangenomes, create_db: bool, lock: Lock, tmpdi
     :param pangenomes: Pangenomes with gene families
     :param create_db: boolean to create or not database of gene families
     :param lock: Global lock for multiprocessing execution
-    :param tmpdir:Temporary directory for MMSeqs2
+    :param tmpdir: Temporary directory for MMSeqs2
     :param threads: Number of available threads
     :param disable_bar: Disable progressive bar
 
