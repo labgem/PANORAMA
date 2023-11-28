@@ -5,27 +5,30 @@
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Tuple, Union
 from multiprocessing import Manager, Lock
 from concurrent.futures import ThreadPoolExecutor
 
 # installed libraries
 from tqdm import tqdm
+import pandas as pd
+import tables
+from bokeh.plotting import save
+from bokeh.models import ColumnDataSource, DataTable, TableColumn
 
 # local libraries
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.utils import init_lock, mkdir
 from panorama.format.read_binaries import load_multiple_pangenomes
-from panorama.info.module import get_module_info, export_modules
-from panorama.info.content import get_content_info, export_content
 
 
-def check_former_info(args: argparse.Namespace, manager: Manager = None) -> (Dict[str, Path], Dict[str, dict]):
+def check_former_info(args: argparse.Namespace, manager: Manager = None) -> Tuple[Dict[str, bool], Dict[str, dict]]:
     """ Check pangenomes path and needed information
 
     :param args: Argument from command line
+    :param manager: Manager instance to use to create dictionaries
 
-    :return:
+    :return: One dictionary to load pangenome info and one to store pangenome content
     """
     manager = Manager() if manager is None else manager
     need_info = manager.dict()
@@ -40,31 +43,119 @@ def check_former_info(args: argparse.Namespace, manager: Manager = None) -> (Dic
         need_info['need_content'] = True
         info_dict["content"] = manager.dict()
 
-    return info_dict, need_info
+    return need_info, info_dict
 
 
-def get_info_pangenome(pangenome: Pangenome, info_dict: dict, manager: Manager = None):
+def get_content_info(pangenome: Pangenome) -> Dict[str, Union[int, str]]:
+    """ Get content information from pangenome file
+
+    :param pangenome: Pangenome to get content information
+
+    :return: Content information
+    """
+    h5f = tables.open_file(pangenome.file, "r")
+    if "/info" in h5f:
+        info_group = h5f.root.info
+        req_info_list = ['numberOfGenes', 'numberOfOrganisms', 'numberOfClusters', 'numberOfEdges', 'numberOfCloud',
+                         'numberOfPersistent', 'persistentStats', 'numberOfShell', 'shellStats', 'cloudStats',
+                         'numberOfPartitions', 'numberOfSubpartitions']
+        if all(info in info_group._v_attrs._f_list() for info in req_info_list):
+            content_dic = {'Number of Genes': info_group._v_attrs['numberOfGenes'],
+                           'Number of Genomes': info_group._v_attrs['numberOfOrganisms'],
+                           'Number of Families': info_group._v_attrs['numberOfClusters'],
+                           'Number of Edges': info_group._v_attrs['numberOfEdges'],
+                           'Number of Persistent': info_group._v_attrs['numberOfPersistent'],
+                           'Minimum of Persistent': info_group._v_attrs['persistentStats']['min'],
+                           'Maximum of Persistent': info_group._v_attrs['persistentStats']['min'],
+                           'Mean of Persistent': info_group._v_attrs['persistentStats']['mean'],
+                           'Sd of Persistent': info_group._v_attrs['persistentStats']['sd'],
+                           'Number of Shell': info_group._v_attrs['numberOfShell'],
+                           'Minimum of Shell': info_group._v_attrs['shellStats']['min'],
+                           'Maximum of Shell': info_group._v_attrs['shellStats']['min'],
+                           'Mean of Shell': info_group._v_attrs['shellStats']['mean'],
+                           'Sd of Shell': info_group._v_attrs['shellStats']['sd'],
+                           'Number of Cloud': info_group._v_attrs['numberOfCloud'],
+                           'Minimum of Cloud': info_group._v_attrs['cloudStats']['min'],
+                           'Maximum of Cloud': info_group._v_attrs['cloudStats']['min'],
+                           'Mean of Cloud': info_group._v_attrs['cloudStats']['mean'],
+                           'Sd of Cloud': info_group._v_attrs['cloudStats']['sd']
+                           }
+        else:
+            miss_list = []
+            for info in req_info_list:
+                if info not in info_group._v_attrs._f_list():
+                    miss_list.append(info)
+            raise Exception(f"No information about {','.join(miss_list)} find in {pangenome.file}"
+                            f"Please use ppanggolin module -p {pangenome.file} to compute module and "
+                            f"ppanggolin metrics --info_modules {pangenome.file} to compute information about module")
+        if 'genome_fluidity' in info_group._v_attrs._f_list():
+            for part, value in info_group._v_attrs['genomes_fluidity'].items():
+                content_dic[f'Genome Fluidity {part}'] = value
+        if 'family_fluidity' in info_group._v_attrs._f_list():
+            for part, value in info_group._v_attrs['genomes_fluidity'].items():
+                content_dic[f'Family Fluidity {part}'] = value
+        if 'numberOfRGP' in info_group._v_attrs._f_list():
+            content_dic["Number of RGPs"] = info_group._v_attrs['numberOfRGP']
+        if 'numberOfSpots' in info_group._v_attrs._f_list():
+            content_dic["Number of Spots"] = info_group._v_attrs['numberOfSpots']
+        if 'numberOfModules' in info_group._v_attrs._f_list():
+            content_dic["Number of Modules"] = info_group._v_attrs['numberOfModules']
+            content_dic["Families in Modules"] = info_group._v_attrs['numberOfFamiliesInModules']
+        h5f.close()
+        return content_dic
+    else:
+        raise Exception(f"No information find in {pangenome.file}")
+
+
+def get_module_info(pangenome: Pangenome) -> Dict[str, int]:
+    """ Get module information from pangenome file
+
+    :param pangenome: Pangenome with module computed
+
+    :return: Dictionary with module information
+    """
+    h5f = tables.open_file(pangenome.file, "r")
+    if "/info" in h5f:
+        info_group = h5f.root.info
+        module_info_list = ['numberOfModules', 'numberOfFamiliesInModules', 'PersistentSpecInModules',
+                            'ShellSpecInModules', 'CloudSpecInModules', 'StatOfFamiliesInModules']
+        if all(info in info_group._v_attrs._f_list() for info in module_info_list):
+            module_dic = {'Number of Module': info_group._v_attrs['numberOfModules'],
+                          'Number of families in modules': info_group._v_attrs['numberOfFamiliesInModules'],
+                          "Percent of persistent families": info_group._v_attrs['PersistentSpecInModules']['percent'],
+                          "Percent of shell families": info_group._v_attrs['ShellSpecInModules']['percent'],
+                          "Percent of cloud families": info_group._v_attrs['CloudSpecInModules']['percent'],
+                          "Minimum Families per Modules": info_group._v_attrs['StatOfFamiliesInModules']['min'],
+                          "Maximum Families per Modules": info_group._v_attrs['StatOfFamiliesInModules']['max'],
+                          "Sd Families per Modules": info_group._v_attrs['StatOfFamiliesInModules']['sd'],
+                          "Mean Families per Modules": info_group._v_attrs['StatOfFamiliesInModules']['mean'],
+                          }
+            h5f.close()
+            return module_dic
+        else:
+            raise Exception(f"No information about modules find in {pangenome.file} "
+                            f"Please use ppanggolin module -p {pangenome.file} to compute module and "
+                            f"ppanggolin metrics --info_modules {pangenome.file} to compute information about module")
+    else:
+        raise Exception(f"No information find in {pangenome.file}")
+
+
+def get_info_pangenome(pangenome: Pangenome, info_dict: Dict[str, dict]):
     """ Compute in multiprocessing the genome fluidity of multiple pangenome
 
     :param pangenome: Pangenome
-
+    :param info_dict: Dictionary that will contain information
 
     :return: The computed pangenome
     """
-    manager = Manager() if manager is None else manager
     if "content" in info_dict:
         info_dict["content"][pangenome.name] = get_content_info(pangenome)
     if "modules" in info_dict:
         info_dict["modules"][pangenome.name] = get_module_info(pangenome)
 
 
-def get_info(pangenomes: Pangenomes, info_dict: dict, threads: int = 1, lock: Lock = None, disable_bar: bool = False) -> Pangenome:
-    """Allow to get information with multiprocessing
-
-    :param args: pan_name: str, pan_file: Path, manager_dict: dict, disable_bar: bool = False
-
-    :return: The computed pangenome
-    """
+def get_info(pangenomes: Pangenomes, info_dict: Dict[str, dict], threads: int = 1,
+             lock: Lock = None, disable_bar: bool = False) -> None:
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
@@ -81,16 +172,26 @@ def get_info(pangenomes: Pangenomes, info_dict: dict, threads: int = 1, lock: Lo
 def export_info(info_dict: dict, output: Path):
     """ Export information to HTML file
 
-    :param manager_dict: Dictionary with information readable in multiprocessing
+    :param info_dict: Dictionary with information readable
     :param output: Path to output directory
-    :param cpu: Number of available CPU
     """
+    def export_dict_to_tsv_and_html(info: dict, out_type: str):
+        df = pd.DataFrame.from_dict(info, orient='index').T
+        df.to_csv(path_or_buf=output / f'{out_type}_info.tsv', sep='\t')
+        df = df.reset_index().rename(columns={"index": "Information"})
+        source = ColumnDataSource(df)
+        columns = [TableColumn(field=col, title=col) for col in df.columns]
+        dt = DataTable(source=source, columns=columns, index_position=None,
+                       sizing_mode='stretch_both')
+        save(dt, filename=output / f'{out_type}_info.html', title=f"Pangenome {out_type} Information",
+             resources="cdn")
+
     if "content" in info_dict:
         logging.debug("Write content info...")
-        export_content(info_dict["content"], output)
+        export_dict_to_tsv_and_html(info_dict["content"], "content")
     if "modules" in info_dict:
         logging.debug("Write modules info...")
-        export_modules(info_dict["modules"], output)
+        export_dict_to_tsv_and_html(info_dict["modules"], "module")
 
 
 def launch(args: argparse.Namespace):
@@ -103,7 +204,7 @@ def launch(args: argparse.Namespace):
     manager = Manager()
     lock = manager.Lock()
     outdir = mkdir(args.output, args.force)
-    info_dict, need_info = check_former_info(args, manager)
+    need_info, info_dict = check_former_info(args, manager)
     pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info=need_info, lock=lock,
                                           max_workers=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
     get_info(pangenomes=pangenomes, info_dict=info_dict, threads=args.threads,
@@ -147,23 +248,3 @@ def parser_info(parser):
                                                      " with a default value")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
-
-
-if __name__ == "__main__":
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(
-        description="Comparative Pangenomic analyses toolsbox",
-        formatter_class=argparse.RawTextHelpFormatter)
-
-    parser_info(main_parser)
-    common = main_parser.add_argument_group(title="Common argument")
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    set_verbosity_level(main_parser.parse_args())
-    launch(main_parser.parse_args())

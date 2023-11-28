@@ -3,14 +3,14 @@
 
 # default libraries
 import argparse
-import os
 import sys
 import logging
 from pathlib import Path
 import csv
-from typing import TextIO, Dict, Union, List
+from typing import TextIO, Dict, Union
 from multiprocessing import Manager, Lock
-import pkg_resources
+from importlib.metadata import distribution
+
 
 # installed libraries
 
@@ -32,7 +32,25 @@ def check_log(name: str) -> TextIO:
         return open(name, "w")
 
 
-def set_verbosity_level(args: argparse.Namespace):
+def add_common_arguments(subparser: argparse.ArgumentParser) -> None:
+    """
+    Add common argument to the input subparser.
+
+    :param subparser: A subparser object from any subcommand.
+    """
+    common = subparser._action_groups.pop(1)  # get the 'optional arguments' action group.
+    common.title = "Common arguments"
+    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
+                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
+    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
+    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
+                        help="disables the progress bars")
+    common.add_argument('--force', action="store_true",
+                        help="Force writing in output directory and in pangenome output file.")
+    subparser._action_groups.append(common)
+
+
+def set_verbosity_level(args: argparse.Namespace) -> None:
     """Set the verbosity level
 
     :param args: argument pass by command line
@@ -46,12 +64,20 @@ def set_verbosity_level(args: argparse.Namespace):
 
         if args.log != sys.stdout and not args.disable_prog_bar:  # if output is not to stdout we remove progress bars.
             args.disable_prog_bar = True
-
-        logging.basicConfig(stream=args.log, level=level,
-                            format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        logging.info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
+        str_format = "%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s"
+        datefmt = '%Y-%m-%d %H:%M:%S'
+        if args.log in [sys.stdout, sys.stderr]:
+            # use stream
+            logging.basicConfig(stream=args.log, level=level,
+                                format=str_format,
+                                datefmt=datefmt)
+        else:
+            # log is written in a files. basic condif uses filename
+            logging.basicConfig(filename=args.log, level=level,
+                                format=str_format,
+                                datefmt=datefmt)
+        logging.getLogger("PANORAMA").info("Command: " + " ".join([arg for arg in sys.argv]))
+        logging.getLogger("PANORAMA").info(f"PPanGGOLiN version: {distribution('ppanggolin').version}")
 
 
 # File managing system
@@ -89,7 +115,7 @@ def path_exist(path: Path) -> Path:
     except FileNotFoundError:
         raise FileNotFoundError(f"{path.resolve()} not exist")
     except Exception:
-        raise Exception(f"An unexpected error happened. Please report to our github.")
+        raise Exception("An unexpected error happened. Please report to our github.")
     else:
         return abs_path
 
@@ -135,13 +161,13 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
                 raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
             if " " in line[0]:
                 raise ValueError(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
-                                f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
-                                f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
+                                 f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
+                                 f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
             try:
                 abs_path = path_exist(Path(line[1]))
             except FileNotFoundError:
                 try:
-                    abs_path = path_exist(tsv_path.parent/Path(line[1]))
+                    abs_path = path_exist(tsv_path.parent / Path(line[1]))
                 except FileNotFoundError as file_error:
                     raise FileNotFoundError(f"{file_error}")
                 else:
@@ -160,7 +186,8 @@ def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
-    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
+    This function initializes the `loading_lock` variable as a global variable,
+    assigning it the value of the `lock` parameter.
     If the `loading_lock` is already initialized, the function does nothing.
 
     :param lock: The lock object to be assigned to `loading_lock`.
