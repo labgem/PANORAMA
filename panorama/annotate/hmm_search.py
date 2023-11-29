@@ -15,6 +15,7 @@ from concurrent.futures import ThreadPoolExecutor
 # installed libraries
 import pyhmmer
 import pandas as pd
+from numpy import nan
 
 # local libraries
 from panorama.pangenomes import Pangenome
@@ -42,7 +43,8 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     global seq_length
     digit_gf_sequence = []
     logging.info("Digitalized gene families sequences")
-    for family in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
+    for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families,
+                       unit="gene families", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name,
                                          sequence=family.sequence if family.HMM is None
@@ -212,25 +214,23 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], hmm_metadata: pd.DataFrame = None,
-                   threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
-    """ Launch hmm search against pangenome gene families and HMM
+                   threads: int = 1, disable_bar: bool = False) -> Tuple[pd.DataFrame, str]:
+    """Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
-    :param pangenome: Pangenome with gene families
-    :param hmm_path: Path to one file with multiple HMM or a directory with one HMM by file
-    :param meta: Path to metadata associate with HMM
-    :param mode: alignment method used
-    :param msa: Path to msa results
-    :param tmpdir: Path to temporary directory
-    :param threads: Number of available threads
-    :param disable_bar: allow to disable progress bar
-
-    :return: dataframe with best result for each pangenome families
+    :param pangenome:  Pangenome with gene families
+    :param hmms: Specify the hmm profiles to be used for annotation
+    :param hmm_metadata: Store the metadata of the hmms
+    :param threads: Specify the number of threads to use for the hmm search
+    :param disable_bar: bool: Disable the progress bar
+    :return: A dataframe with the best result for each pangenome families
+    :doc-author: Trelent
     """
+
     gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
     logging.debug("Begin HMMsearch")
     res = annot_with_hmmsearch(hmms, gf_sequences, hmm_metadata, threads, disable_bar)
-    metadata_df = pd.DataFrame(res)
-    metadata_df.replace(to_replace='-', value=pd.NA, inplace=True)
-    metadata_df.replace(to_replace='', value=pd.NA, inplace=True)
+    metadata_df = pd.DataFrame(res).fillna(nan)
+    metadata_df.replace(to_replace='-', value=nan, inplace=True)
+    metadata_df.replace(to_replace='', value=nan, inplace=True)
     logging.info("HMM search done.")
     return metadata_df, pangenome.name

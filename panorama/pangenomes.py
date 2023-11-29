@@ -50,8 +50,12 @@ class Pangenome(Pan):
         get_status(self, pangenome_file)
         self.file = pangenome_file
 
+    def _cast_gene_families(self):
+        for name, family in self._fam_getter.items():
+            self._fam_getter[name] = GeneFamily(family=family)
+
     @property
-    def gene_families(self) -> List[GeneFamily]:
+    def gene_families(self) -> Generator[GeneFamily, None, None]:
         """returns all the gene families in the pangenome
 
         :return: list of gene families
@@ -67,7 +71,7 @@ class Pangenome(Pan):
 
         new_fam = GeneFamily(family_id=self.max_fam_id, name=name)
         self.max_fam_id += 1
-        self._famGetter[new_fam.name] = new_fam
+        self._fam_getter[new_fam.name] = new_fam
         return new_fam
 
     def get_gene_family(self, name: str) -> Union[GeneFamily, None]:

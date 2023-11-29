@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 # coding: utf8
+import logging
 
 # default libraries
 
@@ -19,8 +20,26 @@ class GeneFamily(Fam):
     :param name: The name of the gene family (to be printed in output files)
     """
 
-    def __init__(self, family_id: int, name: str):
-        super().__init__(family_id, name)
+    def __init__(self, family_id: int = None, name: str = None, family: Fam = None):
+        if family is not None:  # Allow to cast
+            if not isinstance(family, Fam):
+                raise TypeError("PPanGGOLiN Gene Family type is expected")
+            if family_id is not None or name is not None:
+                logging.getLogger("Panorama").warning("The provided gene family identifier and name will not be used")
+            super().__init__(family.ID, family.name)
+            self._edges = family.edges
+            self._genePerOrg = family._genePerOrg
+            self._genes_getter = family._genes_getter
+            self.removed = family.removed  # for the repeated family not added in the main graph
+            self.sequence = family.sequence
+            self.partition = family.partition
+            self._spots = family.spots
+            self._modules = family.modules
+            self.bitarray = family.bitarray
+        elif family_id is not None and name is not None:
+            super().__init__(family_id, name)
+        else:
+            raise AssertionError("You must provide a Gene Family or a name and a family ID")
         self._hmm = None
         self.profile = None
         self.optimized_profile = None
@@ -32,6 +51,13 @@ class GeneFamily(Fam):
     def HMM(self) -> HMM:
         """Return gf HMM"""
         return self._hmm
+
+    @HMM.setter
+    def HMM(self, hmm: HMM):
+        if not isinstance(hmm, HMM):
+            raise TypeError(f"Expected type is {HMM.__class__.name}, found type was {type(hmm)}")
+        self._hmm = hmm
+
 
     # def add_annotation(self, source: str, annotation: Annotation, max_prediction: int = None):
     #     """ Add annotation to gene family
