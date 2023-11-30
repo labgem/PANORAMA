@@ -3,10 +3,10 @@
 
 # default libraries
 from __future__ import annotations
-from typing import Dict
+from typing import Dict, Union
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager, Lock
+from multiprocessing import Lock
 
 # installed libraries
 from tqdm import tqdm
@@ -23,7 +23,7 @@ def check_context_comparison(kwargs):
         raise Exception("At least one of --sequences or --family option must be given")
 
 
-def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, str], output: Path, tmpdir: Path,
+def search_context_mp(pangenome_name: str, pangenome_info: Dict[str, Union[int, str]], output: Path, tmpdir: Path,
                       threads_per_task: int = 1, **kwargs):
     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
     pangenome.add_file(pangenome_info["path"])

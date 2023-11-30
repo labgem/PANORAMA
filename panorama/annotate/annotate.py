@@ -138,7 +138,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, meta: Pa
     :param task: Number of task to split processes
     :param disable_bar: Disable bar
 
-    :return: Dictionnary with for each pangenome a dataframe containing families metadata given by HMM
+    :return: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
     """
     logging.info("Begin HMM searching")
     if meta is not None:
@@ -236,7 +236,7 @@ def parser_annot(parser):
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
-                          help='Name of the annotation source. Default use name of annnotation file or directory.')
+                          help='Name of the annotation source. Default use name of annotation file or directory.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
     exclusive_mode.add_argument('--tsv', type=Path, nargs='?', default=None,
                                 help='List of Gene families annotation in TSV format. One TSV per pangenome.'
@@ -271,21 +271,3 @@ def parser_annot(parser):
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads. If task is more than one,"
                                " threads will be divides by task.")
-
-
-if __name__ == "__main__":
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
-                                          formatter_class=argparse.RawTextHelpFormatter)
-    parser_annot(main_parser)
-    common = main_parser.add_argument_group(title="Common argument")
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    set_verbosity_level(main_parser.parse_args())
-    launch(main_parser.parse_args())
