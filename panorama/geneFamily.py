@@ -36,6 +36,9 @@ class GeneFamily(Fam):
             self._spots = family.spots
             self._modules = family.modules
             self.bitarray = family.bitarray
+            for meta in family.metadata:
+                self.add_metadata(meta.source, meta)
+
         elif family_id is not None and name is not None:
             super().__init__(family_id, name)
         else:
