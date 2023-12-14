@@ -6,6 +6,7 @@ from typing import Generator, Iterable, List, Set, Union
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
+from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
 from panorama.system import System
@@ -74,6 +75,12 @@ class Pangenome(Pan):
         self._fam_getter[new_fam.name] = new_fam
         return new_fam
 
+    def add_gene_family(self, family: Union[GeneFamily, Fam]):
+        assert isinstance(family, (GeneFamily, Fam)), "Family must be a GeneFamily from PANORAMA or PPanGGOLiN"
+        if isinstance(family, Fam):
+            family = GeneFamily.recast(family)
+        super().add_gene_family(family)
+
     def get_gene_family(self, name: str) -> Union[GeneFamily, None]:
         """ Get the gene family by his name in the pangenome
 
@@ -84,14 +91,7 @@ class Pangenome(Pan):
         :raise KeyError: Gene family doesn't exist in pangenome
         :raise Exception: Manage unexpected error
         """
-        try:
-            fam = super().get_gene_family(name)
-        except KeyError:
-            raise KeyError(f"{name} is not find in pangenome gene families")
-        except Exception:
-            raise Exception(f"Unexpected problems to get {name} gene familiy in pangenome")
-        else:
-            return fam
+        return super().get_gene_family(name)
 
     @property
     def systems(self) -> Generator[System, None, None]:

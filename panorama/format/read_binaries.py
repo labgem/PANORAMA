@@ -109,10 +109,7 @@ def check_pangenome_info(pangenome: Pangenome, sources: List[str] = None,
     check_pp(pangenome, need_annotations=need_annotations, need_families=need_families, need_graph=need_graph,
              need_partitions=need_partitions, need_rgp=need_rgp, need_spots=need_spots,
              need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-             need_metadata=need_metadata, metatype=kwargs["metatype"], sources=sources, disable_bar=disable_bar)
-
-    if need_families:
-        pangenome._cast_gene_families()
+             need_metadata=need_metadata, metatype="families", sources=sources, disable_bar=disable_bar)
 
     if hasattr(pangenome, "file"):
         filename = pangenome.file

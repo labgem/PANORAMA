@@ -274,7 +274,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 global_id = pd.concat([global_id, dataframe_id])
                 global_total = pd.concat([global_total, dataframe_total])
 
-                hbar_ID_total(name=pangenome_name, dataframe_id=dataframe_id, dataframe_total=dataframe_total, output=output)
+                hbar_id_total(name=pangenome_name, dataframe_id=dataframe_id, dataframe_total=dataframe_total,
+                              output=output)
                 logging.info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
 
                 if systems_asso or conserved_spot or draw_spot:
