@@ -1,14 +1,8 @@
-// const {ColumnDataSource} = require("@bokeh/bokehjs/lib/models/widgets/main");
-/**
- * @param source ColumnDataSource
- * @param {number} index
- */
-function hide_show_column(columns, index) {
-    console.log(index)
-    let column_to_hide_show = columns[index]
-    console.log(column_to_hide_show)
-    console.log(column_to_hide_show.visible)
-    column_to_hide_show.visible = !column_to_hide_show.visible;
+function hide_show_columns(source, columns, checkbox_groups){
+    for (let l = 1; l < columns.length; l++) {
+        columns[l].visible = !!checkbox_groups.active.includes(l);
+    }
+    source.change.emit();
 }
 
-hide_show_column(columns, index)
+hide_show_columns(source, columns, checkbox_group)

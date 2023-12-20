@@ -4,6 +4,8 @@
 # default libraries
 import argparse
 import logging
+from math import floor, ceil
+import re
 from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Union
@@ -13,9 +15,9 @@ from copy import copy
 from tqdm import tqdm
 import pandas as pd
 import tables
-from bokeh.models import ColumnDataSource, DataTable, TableColumn, RadioButtonGroup, Button, Div
+from bokeh.models import Button, CheckboxGroup, ColumnDataSource, DataTable, Div, RadioButtonGroup, RangeSlider, TableColumn
 from bokeh.layouts import column, row
-from bokeh.io import curdoc, output_file
+from bokeh.io import curdoc
 from bokeh.models.callbacks import CustomJS
 from bokeh.embed import file_html
 from ppanggolin.info.info import read_status, read_metadata_status
@@ -56,16 +58,15 @@ def export_status(status_dict: Dict[str, Union[bool, str]], output: Path):
     status_dt = DataTable(source=source, columns=columns, index_position=None,
                           width=1900, height = 30*status_df.shape[0])
     radio_buttons = []
-    labels = []
     for column_name in source.column_names:
         if source.data[column_name].dtype == 'bool':
             radio_buttons.append(RadioButtonGroup(labels=['all', 'true', 'false'], active=0, name=column_name))
-            labels.append(Div(text=f"<b>{column_name}</b>"))
 
     filter_button = Button(label="Filter", button_type="primary")
     filter_button.js_on_event('button_click',
                               CustomJS(args=dict(source=source, radio_buttons=radio_buttons, original_source=copy(source.data)),
-                                                 code=open(Path(__file__).parent/'filterData.js').read()))
+                                                 code=open(Path(__file__).parent/'filterData.js').read() +
+                                                      "filterDataBool(source, radio_buttons);"))
 
     download_button = Button(label="Download", button_type="success")
     download_button.js_on_event('button_click',
@@ -74,7 +75,6 @@ def export_status(status_dict: Dict[str, Union[bool, str]], output: Path):
 
 
     layout = column(status_dt,
-                    # row(*labels,  sizing_mode="scale_width", spacing=8),
                     row(Div(text='', width=160), row(*radio_buttons, spacing=29), Div(text='', width=20),
                         filter_button, download_button)
                     )
@@ -84,6 +84,82 @@ def export_status(status_dict: Dict[str, Union[bool, str]], output: Path):
     html_content = file_html(layout, "cdn", title="Pangenome status Information")
     with open(output / 'status_info.html', "w") as file:
         file.write(html_content)
+
+def unpack_content_dict(content_dict: Dict[str, Dict[str, Union[int, float, Dict[str, Union[int, float]]]]]):
+    unpack_dict = defaultdict(dict)
+    for name, content in content_dict.items():
+        for key, value in content.items():
+            if isinstance(value, dict):
+                for k, v in value.items():
+                    if isinstance(v, dict):
+                        unpack_dict[name].update({f'{k}.{i}': j for i, j in v.items()})
+                    elif k == "Number_of_modules" or re.match(r'.*_count', k):
+                        unpack_dict[name][key] = v
+                    else:
+                        unpack_dict[name][k] = v
+            else:
+                unpack_dict[name][key] = value
+    return unpack_dict
+
+def export_content(content_dict: Dict[str, Dict[str, Union[int, float, Dict[str, Union[int, float]]]]], output: Path):
+    column_names = {"min_genomes_frequency": "Genomes_frequency.min",
+                    "max_genomes_frequency": "Genomes_frequency.max",
+                    "mean_genomes_frequency": "Genomes_frequency.mean",
+                    "sd_genomes_frequency": "Genomes_frequency.sd"}
+    logging.getLogger("PANORAMA").debug("Exporting content")
+    content_df = pd.DataFrame.from_dict(unpack_content_dict(content_dict), orient="index")
+    content_df = content_df.reset_index().rename(columns={"index": "Pangenome name"})
+    content_df = content_df.rename(columns=column_names)
+    column_headers = content_df.columns.values.tolist()
+    column_order = (column_headers[:3] + column_headers[6:8] + column_headers[9: 7 :-1] + column_headers[3:6] +
+                    column_headers[10:13] + column_headers[17:20] + column_headers[13:17] + column_headers[20:])
+    content_df = content_df.reindex(columns = column_order)
+    source = ColumnDataSource(content_df)
+
+    visible_index = [0, 1, 2, 7, 8, 9, 10, 11, 16, 17, 18]
+    columns = [TableColumn(field=status, title=status, visible=True if index in visible_index else False)
+               for index, status in enumerate(content_df.columns)]
+    content_dt = DataTable(source=source, columns=columns, index_position=None,
+                           width=1900, height = 32*content_df.shape[0])
+    checkbox_group = CheckboxGroup(labels=source.column_names[1:], active=visible_index)
+    checkbox_group.js_on_change('active',
+                                CustomJS(args=dict(source=source, columns=columns, checkbox_group=checkbox_group),
+                                          code=open(Path(__file__).parent / 'hide_show.js').read()))
+    sliders = []
+    for column_name in source.column_names[1:]:
+        if source.data[column_name].dtype in (int, float):
+            start = min(source.data[column_name]) if source.data[column_name].dtype == int else floor(min(source.data[column_name]))
+            end = max(source.data[column_name]) if source.data[column_name].dtype == int else ceil(max(source.data[column_name]))
+            step = 1 if source.data[column_name].dtype == int else .1
+            if start == end:
+                if start > 1:
+                    start -= 1
+                end += 1
+            sliders.append(RangeSlider(start=start, end=end, value=(start, end), step = step, title=column_name))
+
+    for idx, slider in enumerate(sliders):
+        other_sliders = sliders[:idx] + sliders[idx+1:]
+        slider.js_on_change('value_throttled',
+                            CustomJS(args=dict(source=source, slider=slider, other_sliders=other_sliders,
+                                               original_source=copy(source.data)),
+                                                 code=open(Path(__file__).parent/'filterData.js').read() +
+                                                      "filterDataSliders(source, slider, other_sliders);"))
+    download_button = Button(label="Download", button_type="success")
+    download_button.js_on_event('button_click',
+                                CustomJS(args=dict(source=source, filename="pangenomes_content.tsv"),
+                                         code=open(Path(__file__).parent / 'download.js').read()))
+
+    layout = column(content_dt, row(checkbox_group,
+                                    column(*sliders[:6]), column(*sliders[6:12]),
+                                    column(*sliders[12:18]), column(*sliders[18:], download_button),
+                                    spacing=20))
+
+    curdoc().add_root(layout)
+
+    html_content = file_html(layout, "cdn", title="Pangenome content information")
+    with open(output / 'content_info.html', "w") as file:
+        file.write(html_content)
+
 
 
 def export_info(info_dict: dict, output: Path):
@@ -95,6 +171,9 @@ def export_info(info_dict: dict, output: Path):
     for info, value in info_dict.items():
         if info == "status":
             export_status(value, output)
+        elif info == "content":
+            export_content(value, output)
+
 
 def launch(args: argparse.Namespace):
     """

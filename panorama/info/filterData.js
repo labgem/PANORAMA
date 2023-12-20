@@ -1,5 +1,4 @@
-function filerDataBool(source, radio_buttons) {
-
+function filterDataBool(source, radio_buttons) {
     let selected_rows = [];
     for (let i = 0; i < source.get_length(); i++) {
         selected_rows.push(i);
@@ -18,11 +17,9 @@ function filerDataBool(source, radio_buttons) {
             }
         }
     }
-    console.log(selected_rows)
-    selected_rows = selected_rows.filter( function(x) {
+        selected_rows = selected_rows.filter( function(x) {
         return x !== undefined;
     });
-    console.log(selected_rows)
     const new_data = {};
     const columns = Object.keys(source.data)
     for (let l = 1; l < columns.length; l++) {// Begin at one to remove index column
@@ -39,7 +36,44 @@ function filerDataBool(source, radio_buttons) {
     source.data = new_data;
     source.change.emit();
 }
+
+function filterDataSlider(source, slider) {
+    let selected_rows = [];
+    for (let i = 0; i < source.get_length(); i++) {
+        selected_rows.push(i);
+    }
+
+    const column_name = slider.title
+    const column = source.data[column_name]
+    for (let j = 0; j < column.length; j++) {
+        if (column[j] < slider.value[0] || column[j] > slider.value[1]) {
+            delete selected_rows[j]
+        }
+    }
+        return selected_rows.filter( function(x) {
+        return x !== undefined;
+    });
+}
+
+function filterDataSliders(source, slider, other_sliders) {
+    let selected_rows = filterDataSlider(source, slider);
+    for (let i = 0; i < other_sliders.length; i++) {
+        const other_slider = other_sliders[i]
+        selected_rows = selected_rows.filter(x => filterDataSlider(source, other_slider).includes(x))
+    }
+
+    const new_data = {};
+    const columns = Object.keys(source.data)
+    for (let l = 1; l < columns.length; l++) {// Begin at one to remove index column
+        const column = columns[l]
+        new_data[column] = [];
+        for (let m = 0; m < selected_rows.length; m++) {
+            new_data[column].push(source.data[column][selected_rows[m]]);
+        }
+    }
+    source.data = new_data;
+    source.change.emit();
+}
 source.data = original_source;
 source.change.emit();
 
-filerDataBool(source, radio_buttons);

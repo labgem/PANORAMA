@@ -5,7 +5,7 @@ function table_to_csv(source) {
 
     for (let i = 0; i < nrows; i++) {
         let row = [];
-        for (let j = 1; j < columns.length; j++) {// Begin at one to remove index column
+        for (let j = 0; j < columns.length; j++) {// Begin at one to remove index column
             const column = columns[j]
             row.push(source.data[column][i].toString())
         }
