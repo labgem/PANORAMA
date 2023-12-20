@@ -173,6 +173,12 @@ def export_info(info_dict: dict, output: Path):
             export_status(value, output)
         elif info == "content":
             export_content(value, output)
+        elif info == "parameters":
+            raise NotImplementedError('Sorry I did not implement this for the time')
+        elif info == "metadata"
+            raise NotImplementedError('Sorry I did not implement this for the time')
+        else:
+            raise KeyError("The key to save information is not recognized")
 
 
 def launch(args: argparse.Namespace):
