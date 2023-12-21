@@ -32,7 +32,7 @@ def check_parameters(args):
                                                  "it's necessary to give hmm path to get hidden information")
 
 
-def check_models(models_path: Path, disable_bar: bool = False) -> Models:
+def check_models(models_path: Path, disable_bar: bool = False):
     """Read to check all json files models in the directory
 
     :param models_path: path of models directory

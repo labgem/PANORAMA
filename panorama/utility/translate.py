@@ -70,7 +70,7 @@ def write(path_output: Path, dict_data: dict):
 def parse_meta_padloc(meta: Path, output: Path) -> pd.DataFrame:
     meta_col_names = ["accession", "hmm_name", "protein_name", "secondary_name", "score_threshold",
                       "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
-    df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 8, 9, 10], header=0)
+    df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
     df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
     df['temp'].fillna('', inplace=True)
     df['secondary.name'].fillna('', inplace=True)
@@ -102,12 +102,12 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                             'presence': fam_type}
                 if fam_name in secondary_names:
                     filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                    fam_dict.update({"exchangeables": filter_df['protein_name'].dropna().unique().tolist()})
+                    fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
                 family_list.append(fam_dict)
         return family_list
 
-    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "core_genes", "optional_genes",
-                   "prohibited_genes"]
+    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "force_strand",
+                   "core_genes", "secondary_genes", "neutral_genes", "prohibited_genes"]
     if not all(key in padloc_keys for key in data_yaml.keys()):
         raise KeyError(f"Unexpected key in PADLOC model : {model_name}."
                        f"authorized keys are : {', '.join(padloc_keys)}")
@@ -119,7 +119,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     if len(canonical) > 0:
         data_json['canonical'] = canonical
     secondary_names = meta['secondary_name'].dropna().unique().tolist()
-    func_unit = {'name': model_name, 'presence': 'mandatory',
+    func_unit = {'name': model_name, 'presence': 'mandatory', 'same_strand': data_yaml["force_strand"],
                  'parameters':
                      {
                          "max_separation": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
@@ -131,7 +131,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     family_list = list()
     family_list += add_family(families_list=data_yaml["core_genes"] if "core_genes" in data_yaml else [],
                               secondary_names=secondary_names, meta=meta, fam_type='mandatory')
-    family_list += add_family(families_list=data_yaml["optional_genes"] if "optional_genes" in data_yaml else [],
+    family_list += add_family(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
                               secondary_names=secondary_names, meta=meta, fam_type='accessory')
     family_list += add_family(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
                               secondary_names=secondary_names, meta=meta, fam_type='forbidden')

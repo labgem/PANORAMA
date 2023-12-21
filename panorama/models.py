@@ -11,7 +11,7 @@ import json
 
 # TODO Try to add those variable in class
 suprules_params = ['min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
-keys_param = suprules_params.append('max_separation')
+keys_param = suprules_params + ['max_separation']
 rule_keys = ['name', 'parameters', 'presence']
 accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
 
@@ -21,7 +21,7 @@ def check_key(parameter_data: Dict, need_key: List):
     Global function to check if all the keys are present in the dict.
     This function is applied to check model, functional unit and family consistency
 
-    :param parameter_data: Dictonnary which define model, functional unit or family
+    :param parameter_data: Dictionary which define model, functional unit or family
     :param need_key: List of all the key needed
     """
     if not all([key in parameter_data for key in need_key]):
@@ -31,7 +31,7 @@ def check_key(parameter_data: Dict, need_key: List):
 def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
     """Check if all parameters are inside and with the good presence
 
-    :param param_dict: Dictionnary with all the parameters for the rule
+    :param param_dict: Dictionary with all the parameters for the rule
     :param mandatory_keys: list of the mandatory keys
 
     :raise KeyError: One or more mandatory parameters are missing
@@ -52,7 +52,7 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
                     raise TypeError(f"The {key} value is not an integer")
                 if value < -1:
                     raise ValueError(f"The {key} value is not positive. "
-                                     "You can also use -1 value to skip the check on this poarameter.")
+                                     "You can also use -1 value to skip the check on this parameter.")
             elif key in ["duplicate", "max_forbidden"]:
                 if not isinstance(value, int):
                     raise TypeError(f"The {key} value is not an integer")
@@ -69,7 +69,7 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
                param_keys: List[str] = None):
     """Check if all keys and values are present and with good presence before to add in model
 
-    :param data_dict: Dictionnary with all model information
+    :param data_dict: Dictionary with all model information
     :param mandatory_keys: list of the mandatory keys
     :param param_keys: list of the mandatory keys for parameters
 
@@ -112,11 +112,14 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
             elif key == 'canonical':
                 if not isinstance(value, list):
                     raise TypeError("canonical value in json must be an array")
-            elif key == 'exchangeables':
+            elif key == 'exchangeable':
                 if not isinstance(value, list):
-                    raise TypeError("exchangeables value from family in json must be a list")
+                    raise TypeError("exchangeable value from family in json must be a list")
                 if not all(isinstance(elem, str) for elem in value):
-                    raise ValueError("Exchangeables families must be a string")
+                    raise ValueError("Exchangeable families must be a string")
+            elif key == 'same_strand':
+                if not isinstance(value, bool):
+                    raise TypeError("same_strand in json must be a boolean")
             else:
                 raise KeyError(f"{key} is not an acceptable attribute")
 
@@ -149,36 +152,50 @@ class Models:
         return len(self.value)
 
     @property
-    def func_units(self) -> Dict[str, Model]:
-        """Get all functional units in models link to referent model
+    def func_units(self) -> Generator[FuncUnit, None, None]:
+        """Get all functional units in models
 
-        :return: Dictionnary of function unit link to referent model
+        :return: All functional unit
         """
-        func_unit_dict = {}
+        func_units = set()
         for model in self:
             for fu in model.func_units:
-                if fu.name not in func_unit_dict:
-                    func_unit_dict[fu.name] = {model}
-                else:
-                    func_unit_dict[fu.name].add(model)
-        return func_unit_dict
+                func_units.add(fu)
+        yield from func_units
+
+    def func_units_to_model(self) -> Dict[FuncUnit, Model]:
+        """Get all functional units in models and link them to the corresponding model
+
+        :return: All functional unit link to their model
+        """
+        fu2model = {}
+        for fu in self.func_units:
+            fu2model[fu] = fu.model
+        return fu2model
 
     @property
-    def families(self) -> Dict[str, Model]:
-        """Get all families in models link to referent model
+    def families(self) -> Generator[Family, None, None]:
+        """Get all families in models
 
-        :return: Dictionnary of families link to referent model
+        :return: All families in models
         """
-        families_dict = {}
-        for model in self.__iter__():
+        families = set()
+        for model in self:
             for family in model.families:
-                if family.name not in families_dict:
-                    families_dict[family.name] = [model]
-                else:
-                    families_dict[family.name].append(model)
-        return families_dict
+                families.add(family)
+        yield from families
 
-    def read(self, models_path: Path, disable_bar: bool = False) -> Models:
+    def families_to_model(self) -> Dict[Family, Model]:
+        """Get all families in models and link them to the corresponding model
+
+        :return: All families in models and link to their corresponding model
+        """
+        fam2model = {}
+        for family in self.families:
+            fam2model[family] = family.model
+        return fam2model
+
+    def read(self, models_path: Path, disable_bar: bool = False):
         """Read all json files models in the directory
 
         :param models_path: path of models directory
@@ -269,12 +286,12 @@ class _BasicFeatures:
 class _FuFamFeatures:
 
     def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0,
-                 exchangeables: List[str] = None, multi_system: bool = False, multi_model: bool = True):
+                 exchangeable: List[str] = None, multi_system: bool = False, multi_model: bool = True):
         """Constructor Method
         """
         self.presence = presence
         self.duplicate = duplicate
-        self.exchangeables = exchangeables if exchangeables is not None else []
+        self.exchangeable = exchangeable if exchangeable is not None else []
         self.multi_system = multi_system
         self.multi_model = multi_model
 
@@ -285,7 +302,8 @@ class _FuFamFeatures:
 class _ModFuFeatures:
     def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
                  accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
-                 neutral: Set[FuncUnit, Family] = None, forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0):
+                 forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0,
+                 neutral: Set[FuncUnit, Family] = None, same_strand: bool = False):
         """Constructor Method
         """
         self.mandatory = mandatory if mandatory is not None else set()
@@ -294,10 +312,11 @@ class _ModFuFeatures:
         self.accessory = accessory if accessory is not None else set()
         self.min_total = min_total
         self.max_total = max_total if max_total is not None else len(self.mandatory) + len(self.accessory)
-        self.max_forbidden = max_forbidden
         self.forbidden = forbidden if forbidden is not None else set()
+        self.max_forbidden = max_forbidden
         self.neutral = neutral if neutral is not None else set()
-        self._child_type = "Functional unit" if type(self) == Model else "Family"
+        self.same_strand = same_strand
+        self._child_type = "Functional unit" if isinstance(self, Model) else "Family"
 
     @property
     def _children(self):
@@ -344,7 +363,7 @@ class _ModFuFeatures:
         if self.min_total > len(list(self._children)) + sum([child.duplicate for child in self._duplicate()]):
             raise Exception(f"There is less {self._child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
-            raise Exception(f"Minimun mandatory {self._child_type} value is greater than minimum total.")
+            raise Exception(f"Minimum mandatory {self._child_type} value is greater than minimum total.")
         if len(self.mandatory) == 0:
             raise Exception(f"There is not mandatory {self._child_type}."
                             f"You should have at least one mandatory {self._child_type} mandatory presence.")
@@ -369,7 +388,7 @@ class _ModFuFeatures:
 class Model(_BasicFeatures, _ModFuFeatures):
     """Represent Model rules which describe biological system
 
-     :param name: Neme of the element
+     :param name: Name of the element
      :param mandatory: Set of mandatory sub element
      :param accessory: Set of accessory sub element
      :param forbidden: Set of forbidden sub element
@@ -434,7 +453,7 @@ class Model(_BasicFeatures, _ModFuFeatures):
         except Exception:
             raise Exception(f"Consistency not respected  in {self.name}")
 
-    def _read(self, data_model: dict):
+    def read(self, data_model: dict):
         mandatory_key = ['name', 'parameters', 'func_units']
         param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
 
@@ -445,7 +464,7 @@ class Model(_BasicFeatures, _ModFuFeatures):
         for dict_fu in data_model["func_units"]:
             func_unit = FuncUnit()
             func_unit.model = self
-            func_unit._read(dict_fu)
+            func_unit.read(dict_fu)
             self.add(func_unit)
         if 'canonical' in data_model and data_model["canonical"] is not None:
             self.canonical = data_model["canonical"]
@@ -457,14 +476,14 @@ class Model(_BasicFeatures, _ModFuFeatures):
         :param data_model: json data dictionary
         """
         model = Model()
-        model._read(data_model)
+        model.read(data_model)
         return model
 
 
 class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     """Represent functional unit definition rule
 
-    :param name: Neme of the element
+    :param name: Name of the element
     :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param mandatory: Set of mandatory sub element
     :param accessory: Set of accessory sub element
@@ -475,13 +494,13 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
                  accessory: set = None, neutral: set = None, min_total: int = 1, max_separation: int = 0,
                  forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None,
-                 exchangeables: List[str] = None, multi_system: bool = False, multi_model: bool = False
+                 exchangeable: List[str] = None, multi_system: bool = False, multi_model: bool = False
                  ):
         """Constructor Method
         """
         super().__init__(name=name, max_separation=max_separation)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model,
-                                             exchangeables=exchangeables, multi_system=multi_system,
+                                             exchangeable=exchangeable, multi_system=multi_system,
                                              multi_model=multi_model)
         super(_FuFamFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
@@ -535,7 +554,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         except Exception:
             raise Exception(f"Consistency not respected  in model {self.model.name} at functional unit {self.name}")
 
-    def _read(self, data_fu: dict):
+    def read(self, data_fu: dict):
         """Read functional unit
 
         :param data_fu: data json file of all function units
@@ -551,34 +570,34 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         for fam_dict in data_fu["families"]:
             family = Family()
             family.func_unit = self
-            family._read(fam_dict)
+            family.read(fam_dict)
             self.add(family)
 
     @staticmethod
     def read_func_unit(data_fu: dict) -> FuncUnit:
         func_unit = FuncUnit()
-        func_unit._read(data_fu)
+        func_unit.read(data_fu)
         return func_unit
 
 
 class Family(_BasicFeatures, _FuFamFeatures):
     """Represent family model definition rule
 
-    :param name: Neme of the element
+    :param name: Name of the element
     :param max_separation: maximum intergene distance
     :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
     :param func_unit: Functional unit in which is the family
-    :param exchangeables: List of exhangeable families
+    :param exchangeable: List of exchangeable families
     """
 
     def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
-                 duplicate: int = 0, exchangeables: List[str] = None, multi_system: bool = False,
+                 duplicate: int = 0, exchangeable: List[str] = None, multi_system: bool = False,
                  multi_model: bool = False):
         """Constructor Method
         """
         super().__init__(name=name, max_separation=max_separation)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit,
-                                             exchangeables=exchangeables, multi_system=multi_system,
+                                             exchangeable=exchangeable, multi_system=multi_system,
                                              multi_model=multi_model)
 
     @property
@@ -598,15 +617,15 @@ class Family(_BasicFeatures, _FuFamFeatures):
         """Get the model in which is family"""
         return self.func_unit.model
 
-    def _read(self, data_fam: dict):
+    def read(self, data_fam: dict):
         fam_param = ['max_separation', "duplicate", "multi_system", "multi_model"]
 
         check_dict(data_fam, mandatory_keys=['name', 'presence'])
         self.name = data_fam['name']
         self.presence = data_fam['presence']
         self.read_parameters(data_fam["parameters"] if "parameters" in data_fam else {}, param_keys=fam_param)
-        if 'exchangeables' in data_fam:
-            self.exchangeables = data_fam["exchangeables"]
+        if 'exchangeable' in data_fam:
+            self.exchangeable = data_fam["exchangeable"]
 
     @staticmethod
     def read_family(data_fam: dict) -> Family:
@@ -615,5 +634,5 @@ class Family(_BasicFeatures, _FuFamFeatures):
         :param data_fam: data json file with families
         """
         fam = Family()
-        fam._read(data_fam)
+        fam.read(data_fam)
         return fam
