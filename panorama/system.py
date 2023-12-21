@@ -20,7 +20,7 @@ class System:
     :param system_id: source of the annotation
     :param gene_families: source accesion identifier
     """
-
+    #TODO Generator of gene families and define setattr and getattr
     def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None):
         """Constructor Method
         """

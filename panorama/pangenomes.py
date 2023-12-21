@@ -6,6 +6,7 @@ from typing import Generator, Iterable, List, Set, Union
 
 # install libraries
 from ppanggolin.pangenome import Pangenome as Pan
+from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
 from panorama.system import System
@@ -50,8 +51,12 @@ class Pangenome(Pan):
         get_status(self, pangenome_file)
         self.file = pangenome_file
 
+    def _cast_gene_families(self):
+        for name, family in self._fam_getter.items():
+            self._fam_getter[name] = GeneFamily(family=family)
+
     @property
-    def gene_families(self) -> List[GeneFamily]:
+    def gene_families(self) -> Generator[GeneFamily, None, None]:
         """returns all the gene families in the pangenome
 
         :return: list of gene families
@@ -67,8 +72,14 @@ class Pangenome(Pan):
 
         new_fam = GeneFamily(family_id=self.max_fam_id, name=name)
         self.max_fam_id += 1
-        self._famGetter[new_fam.name] = new_fam
+        self._fam_getter[new_fam.name] = new_fam
         return new_fam
+
+    def add_gene_family(self, family: Union[GeneFamily, Fam]):
+        assert isinstance(family, (GeneFamily, Fam)), "Family must be a GeneFamily from PANORAMA or PPanGGOLiN"
+        if isinstance(family, Fam):
+            family = GeneFamily.recast(family)
+        super().add_gene_family(family)
 
     def get_gene_family(self, name: str) -> Union[GeneFamily, None]:
         """ Get the gene family by his name in the pangenome
@@ -80,14 +91,7 @@ class Pangenome(Pan):
         :raise KeyError: Gene family doesn't exist in pangenome
         :raise Exception: Manage unexpected error
         """
-        try:
-            fam = super().get_gene_family(name)
-        except KeyError:
-            raise KeyError(f"{name} is not find in pangenome gene families")
-        except Exception:
-            raise Exception(f"Unexpected problems to get {name} gene familiy in pangenome")
-        else:
-            return fam
+        return super().get_gene_family(name)
 
     @property
     def systems(self) -> Generator[System, None, None]:

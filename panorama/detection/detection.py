@@ -14,7 +14,7 @@ from multiprocessing import Manager, Lock
 
 # installed libraries
 import networkx as nx
-from ppanggolin.context.searchGeneContext import _compute_gene_context_graph, extract_gene_context
+from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.utils import init_lock
@@ -26,7 +26,7 @@ from panorama.system import System
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = False):
+def check_pangenome_detection(pangenome: Pangenome, sources: List[str], force: bool = False):
     """ Check and load pangenome information before adding annotation
 
     :param pangenome: Pangenome object
@@ -35,6 +35,7 @@ def check_pangenome_detection(pangenome: Pangenome, source: str, force: bool = F
 
     :raise KeyError: Provided source is not in the pangenome
     """
+    source = sources[0]
     if pangenome.status["systems"] == "inFile" and source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=source)
@@ -76,13 +77,13 @@ def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, S
     """
     annot2fam = {}
     for gf in pangenome.gene_families:
-        metadata = gf.get_source(source)
+        metadata = gf.get_metadata_by_source(source)
         if metadata is not None:
             for meta in metadata:
-                if meta.get("protein_name") in annot2fam:
-                    annot2fam[meta.get("protein_name")].add(gf)
+                if meta.protein_name in annot2fam:
+                    annot2fam[meta.protein_name].add(gf)
                 else:
-                    annot2fam[meta.get("protein_name")] = {gf}
+                    annot2fam[meta.protein_name] = {gf}
     return annot2fam
 
 
@@ -230,32 +231,6 @@ def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, f
     g.remove_nodes_from(remove_node)
 
 
-def compute_gene_context_graph(families: dict, fam2annot: dict, max_sep_global: int, disable_bar: bool = False) -> nx.Graph:
-    """
-    Construct the graph of gene contexts between families of the pan
-
-    :param families: Gene families of interest
-    :param fam2annot: link between gene family and annotation
-    :param max_sep_global: transitive value
-    :param disable_bar: Prevents progress bar printing
-
-    :return: Graph of gene contexts between interesting gene families of the pan
-    """
-
-    g = nx.Graph()
-    for gene_family in tqdm(families.values(), unit="families", disable=disable_bar):
-        for gene in gene_family.genes:
-            contig = gene.contig.genes
-            for fam in fam2annot[gene_family.name]:
-                max_sep = fam.max_separation if hasattr(fam, "max_separation") and fam.max_separation >= 0 else max_sep_global
-                pos_left, in_context_left, pos_right, in_context_right = extract_gene_context(gene, contig,
-                                                                                              families, max_sep + 1)
-                if in_context_left or in_context_right:
-                    for env_gene in contig[pos_left:pos_right + 1]:
-                        _compute_gene_context_graph(g, env_gene, contig, pos_right)
-    return g
-
-
 def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     """Search if model system is in pangenome
 
@@ -268,7 +243,9 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families, fam2annot, func_unit.max_separation + 1, disable_bar=True)
+        g = compute_gene_context_graph(families.values(), 1, func_unit.max_separation + 1,
+                                       True)
+        # print(g)
         if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
         verify_param(g, families, fam2annot, model, func_unit, source, detected_systems)
@@ -285,7 +262,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
     :param disable_bar: Disable progress bar
     """
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
-
     with ThreadPoolExecutor(max_workers=threads) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
@@ -347,10 +323,11 @@ def launch(args):
     manager = Manager()
     lock = manager.Lock()
     need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
-                 "metatype": "families", "source": args.source}
+                 "metatype": "families"}
     pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, lock=lock, max_workers=args.threads,
                                           need_info=need_info, check_function=check_pangenome_detection,
-                                          source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+                                          sources=[args.source], force=args.force,
+                                          disable_bar=args.disable_prog_bar)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source, threads=args.threads,
                                  task=args.task, lock=lock, disable_bar=args.disable_prog_bar)
 
@@ -387,21 +364,3 @@ def parser_detection(parser):
                           help="Number of available threads")
     optional.add_argument("--task", required=False, nargs='?', type=int, default=1,
                           help="Number of simultaneous task.")
-
-
-if __name__ == "__main__":
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
-                                          formatter_class=argparse.RawTextHelpFormatter)
-    parser_detection(main_parser)
-    common = main_parser.add_argument_group(title="Common argument")
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    set_verbosity_level(main_parser.parse_args())
-    launch(main_parser.parse_args())

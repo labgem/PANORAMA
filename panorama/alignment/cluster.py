@@ -250,23 +250,3 @@ def parser_clust(parser):
                           help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
-
-
-if __name__ == "__main__":
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
-                                          formatter_class=argparse.RawTextHelpFormatter)
-    parser_clust(main_parser)
-    common = main_parser._action_groups.pop(1)  # get the 'optional arguments' action group.
-    common.title = "Common arguments"
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    main_parser._action_groups.append(common)
-    set_verbosity_level(main_parser.parse_args())
-    launch(main_parser.parse_args())

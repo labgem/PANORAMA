@@ -2,56 +2,12 @@
 # coding:utf-8
 
 # default libraries
-import argparse
-import os
-import sys
 import logging
 from pathlib import Path
-import csv
-from typing import TextIO, Dict, Union, List
+import numpy as np
+import pandas as pd
+from typing import Dict, Union
 from multiprocessing import Manager, Lock
-import pkg_resources
-
-# installed libraries
-
-# local libraries
-
-
-def check_log(name: str) -> TextIO:
-    """Check if the output log is writable
-
-    :param name: Path to the log output
-
-    :return: file object to write log
-    """
-    if name == "stdout":
-        return sys.stdout
-    elif name == "stderr":
-        return sys.stderr
-    else:
-        return open(name, "w")
-
-
-def set_verbosity_level(args: argparse.Namespace):
-    """Set the verbosity level
-
-    :param args: argument pass by command line
-    """
-    level = logging.INFO  # info, warnings and errors, default verbose == 1
-    if hasattr(args, "verbose"):
-        if args.verbose == 2:
-            level = logging.DEBUG  # info, debug, warnings and errors
-        elif args.verbose == 0:
-            level = logging.WARNING  # only warnings and errors
-
-        if args.log != sys.stdout and not args.disable_prog_bar:  # if output is not to stdout we remove progress bars.
-            args.disable_prog_bar = True
-
-        logging.basicConfig(stream=args.log, level=level,
-                            format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        logging.info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
 
 
 # File managing system
@@ -81,35 +37,6 @@ def mkdir(output: Path, force: bool = False) -> Path:
         return Path(output)
 
 
-def path_exist(path: Path) -> Path:
-    try:
-        abs_path = path.resolve()
-        if not abs_path.exists():
-            raise FileNotFoundError
-    except FileNotFoundError:
-        raise FileNotFoundError(f"{path.resolve()} not exist")
-    except Exception:
-        raise Exception(f"An unexpected error happened. Please report to our github.")
-    else:
-        return abs_path
-
-
-def path_is_dir(path: Path) -> bool:
-    abs_path = path_exist(path)
-    if abs_path.is_dir():
-        return True
-    else:
-        return False
-
-
-def path_is_file(path: Path) -> bool:
-    abs_path = path_exist(path)
-    if abs_path.is_file():
-        return True
-    else:
-        return False
-
-
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
     """ Check if the given tsv is readable for the next PANORAMA step
 
@@ -120,47 +47,47 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
 
     :return: Dictionary with pangenome name as key and path to hdf5 file as value
     """
-    pan_to_path = {}
-    try:
-        p_file = open(tsv_path.absolute(), 'r')
-        tsv = csv.reader(p_file, delimiter="\t")
-    except IOError as ios_error:
-        raise IOError(ios_error)
-    except Exception as exception_error:
-        raise Exception(f"The following unexpected error happened when opening the list of pangenomes : "
-                        f"{exception_error}")
+    tsv = pd.read_csv(tsv_path, sep='\t', header=None)
+    if tsv.shape[1] < 2:
+        raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
     else:
-        for line in tsv:
-            if len(line) < 2:
-                raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
-            if " " in line[0]:
-                raise ValueError(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
-                                f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
-                                f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
-            try:
-                abs_path = path_exist(Path(line[1]))
-            except FileNotFoundError:
-                try:
-                    abs_path = path_exist(tsv_path.parent/Path(line[1]))
-                except FileNotFoundError as file_error:
-                    raise FileNotFoundError(f"{file_error}")
-                else:
-                    pan_to_path[line[0]] = {"path": abs_path,
-                                            "taxid": line[2] if len(line) > 2 else None}
-            except Exception:
-                raise Exception("Unexpected error")
-            else:
-                pan_to_path[line[0]] = {"path": abs_path,
-                                        "taxid": line[2] if len(line) > 2 else None}
-        p_file.close()
-        return pan_to_path
+        col_names = ['sp', 'path', 'taxid']
+        for col_idx in range(tsv.shape[1], len(col_names)):
+            tsv[col_names[col_idx]] = None
+    tsv.columns = col_names
+    if tsv['sp'].isnull().values.any():
+        err_df = pd.DataFrame([tsv['sp'], tsv['sp'].isnull()], ["pangenome_name", "error"]).T
+        logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+        raise ValueError("There is a line with no value in pangenome name (first column)")
+    else:
+        if tsv['sp'].str.count(" ").any():
+            err_df = pd.DataFrame([tsv['sp'], np.where(tsv['sp'].str.count(" ") >= 1, True, False)],
+                                  ["pangenome_name", "error"]).T
+            logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+            raise ValueError("Your pangenome names contain spaces. "
+                             "To ensure compatibility with all of the dependencies this is not allowed. "
+                             "Please remove spaces from your pangenome names.")
+    if tsv['path'].isnull().values.any():
+        err_df = pd.DataFrame([tsv['path'], tsv['path'].isnull()], ["pangenome_path", "error"]).T
+        logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+        raise ValueError("There is a line with no path (second column)")
+    else:
+        if not tsv["path"].map(lambda x: Path(x).exists()).all():
+            err_df = pd.DataFrame([tsv['path'], ~tsv["path"].map(lambda x: Path(x).exists())],
+                                  ["pangenome_path", "error"]).T
+            logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+            raise FileNotFoundError("Unable to locate one or more pangenome in your file.}")
+        tsv["path"] = tsv["path"].map(lambda x: Path(x).resolve().absolute())
+
+        return tsv.set_index('sp').to_dict('index')
 
 
 def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
-    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
+    This function initializes the `loading_lock` variable as a global variable,
+    assigning it the value of the `lock` parameter.
     If the `loading_lock` is already initialized, the function does nothing.
 
     :param lock: The lock object to be assigned to `loading_lock`.
