@@ -94,10 +94,18 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     assert canonical is not None and isinstance(canonical, list)
     assert meta is not None and isinstance(meta, pd.DataFrame)
 
-    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame, fam_type: str):
+    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame,
+                   fam_type: str) -> List[Dict[str, str]]:
         family_list = []
         for fam_name in families_list:
-            if fam_name != 'NA':
+            if fam_name == "cas_adaptation":
+                # TODO try to find an elegant way to manage this exception
+                filter_df = meta.loc[meta['secondary_name'] == fam_name]
+                for filter_fam in filter_df['protein_name'].dropna().unique().tolist():
+                    fam_dict = {'name': filter_fam,
+                                'presence': fam_type}
+                    family_list.append(fam_dict)
+            elif fam_name != 'NA':
                 fam_dict = {'name': fam_name,
                             'presence': fam_type}
                 if fam_name in secondary_names:
@@ -111,6 +119,8 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     if not all(key in padloc_keys for key in data_yaml.keys()):
         raise KeyError(f"Unexpected key in PADLOC model : {model_name}."
                        f"authorized keys are : {', '.join(padloc_keys)}")
+    if "core_genes" not in data_yaml:
+        raise KeyError("Core gene must be found in padloc keys")
 
     data_json = {"name": model_name, 'func_units': [],
                  'parameters': {"max_forbidden": 0, "max_separation": 0, "min_mandatory": 1, "min_total": 1,
@@ -129,7 +139,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                  }
 
     family_list = list()
-    family_list += add_family(families_list=data_yaml["core_genes"] if "core_genes" in data_yaml else [],
+    family_list += add_family(families_list=data_yaml["core_genes"],
                               secondary_names=secondary_names, meta=meta, fam_type='mandatory')
     family_list += add_family(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
                               secondary_names=secondary_names, meta=meta, fam_type='accessory')
