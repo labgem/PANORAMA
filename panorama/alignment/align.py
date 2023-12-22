@@ -22,7 +22,7 @@ from pandas import DataFrame
 # local libraries
 from panorama.utils import init_lock, mkdir
 from panorama.pangenomes import Pangenomes
-from panorama.format.read_binaries import load_multiple_pangenomes
+from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.common import get_gf_pangenomes, createdb
 
 align_format = ["query", "target", "fident", "qlen", "tlen", "alnlen", "evalue", "bits"]
@@ -218,9 +218,9 @@ def launch(args):
 
     manager = Manager()
     lock = manager.Lock()
-    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                          max_workers=args.task * args.threads_per_task,
-                                          disable_bar=args.disable_prog_bar)
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True},
+                                 max_workers=args.task * args.threads_per_task, lock=lock,
+                                 disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     if args.inter_pangenomes:
         inter_pangenome_align(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,

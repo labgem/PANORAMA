@@ -69,7 +69,7 @@ class GeneFamily(Fam):
         self.sequence = family.sequence
         self.partition = family.partition
         self._spots = family.spots
-        self._modules = family.modules
+        self._module = family.module
         self.bitarray = family.bitarray
         for meta in family.metadata:
             self.add_metadata(meta.source, meta)

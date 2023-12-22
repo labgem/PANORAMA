@@ -18,7 +18,7 @@ import pandas as pd
 # local libraries
 from panorama.utils import mkdir
 from panorama.pangenomes import Pangenomes
-from panorama.format.read_binaries import load_multiple_pangenomes
+from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.common import get_gf_pangenomes, createdb
 
 clust_col_names = ["cluster_id", "referent", "in_clust"]
@@ -172,8 +172,8 @@ def launch(args):
                    "clust_mode": args.clust_mode, "reassign": args.reassign}
     manager = Manager()
     lock = manager.Lock()
-    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                          max_workers=args.threads, disable_bar=args.disable_prog_bar)
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True},
+                                 max_workers=args.threads, lock=lock, disable_bar=args.disable_prog_bar)
     tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
     clust_res = cluster_gene_families(pangenomes=pangenomes, method=args.method, mmseqs2_opt=mmseqs2_opt, lock=lock,
                                       tmpdir=tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)

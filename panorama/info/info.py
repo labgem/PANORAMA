@@ -149,10 +149,12 @@ def export_content(content_dict: Dict[str, Dict[str, Union[int, float, Dict[str,
                                 CustomJS(args=dict(source=source, filename="pangenomes_content.tsv"),
                                          code=open(Path(__file__).parent / 'download.js').read()))
 
-    layout = column(content_dt, row(checkbox_group,
-                                    column(*sliders[:6]), column(*sliders[6:12]),
-                                    column(*sliders[12:18]), column(*sliders[18:], download_button),
-                                    spacing=20))
+    layout = column(content_dt,
+                    row(checkbox_group, column(*sliders[:6]), column(*sliders[6:12]),
+                        column(*sliders[12:18]), column(*sliders[18:],
+                                                        download_button),
+                        spacing=20),
+                    spacing=50)
 
     curdoc().add_root(layout)
 

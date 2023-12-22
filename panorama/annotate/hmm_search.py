@@ -129,7 +129,7 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     return metadata_df  # , hmm_to_metaname
 
 
-def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
+def read_hmms(hmm_path: List[Path], disable_bar: bool = False) -> List[pyhmmer.plan7.HMM]:
     """Read HMM file to create HMM object
 
     :param hmm_dir: Directory with the HMM
@@ -138,11 +138,21 @@ def read_hmm(hmm_dir: Generator[Path, None, None], disable_bar: bool = False) ->
     :return: List of HMM object
     """
     hmms = []
-    hmm_list_path = list(hmm_dir)
     logging.info("Reading HMM...")
+    hmm_list_path = []
+    for path in hmm_path:
+        if path.is_file():
+            hmm_list_path.append(path)
+        else: # path.isdir()
+            hmm_list_path += list(path.rglob("*.hmm"))
     for hmm_path in tqdm(hmm_list_path, total=len(hmm_list_path), unit='HMM', disable=disable_bar):
         end = False
-        hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
+
+        try:
+            hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
+        except Exception as error:
+            logging.getLogger("PANORAMA").error(f"Problem reading HMM: {hmm_path}")
+            raise error
         while not end:
             try:
                 hmm = next(hmm_file)
@@ -183,8 +193,8 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     result = collections.namedtuple("Result", res_col_names)
     logging.info("Align gene families to HMM")
     bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
-    bit_cutoffs = "gathering" if hmm_meta is None else None
-    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, bit_cutoffs=bit_cutoffs):
+    hmmsearch_args = {"bit_cutoffs": "gathering" if hmm_meta is None else None}
+    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=0, **hmmsearch_args):
         for hit in top_hits:
             cog = hit.best_domain.alignment
             target_covery = (max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) / seq_length[
@@ -214,7 +224,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], hmm_metadata: pd.DataFrame = None,
-                   threads: int = 1, disable_bar: bool = False) -> Tuple[pd.DataFrame, str]:
+                   threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
     """Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
     :param pangenome:  Pangenome with gene families
@@ -222,10 +232,9 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], hmm_meta
     :param hmm_metadata: Store the metadata of the hmms
     :param threads: Specify the number of threads to use for the hmm search
     :param disable_bar: bool: Disable the progress bar
-    :return: A dataframe with the best result for each pangenome families
-    :doc-author: Trelent
-    """
 
+    :return: A dataframe with the best result for each pangenome families
+    """
     gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
     logging.debug("Begin HMMsearch")
     res = annot_with_hmmsearch(hmms, gf_sequences, hmm_metadata, threads, disable_bar)
@@ -233,4 +242,4 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], hmm_meta
     metadata_df.replace(to_replace='-', value=nan, inplace=True)
     metadata_df.replace(to_replace='', value=nan, inplace=True)
     logging.info("HMM search done.")
-    return metadata_df, pangenome.name
+    return metadata_df

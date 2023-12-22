@@ -5,9 +5,9 @@
 from __future__ import annotations
 import argparse
 import logging
-from typing import Dict, Tuple
+from typing import Dict, List, Tuple
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 from multiprocessing import Manager, Lock
 
 # installed libraries
@@ -18,8 +18,8 @@ from ppanggolin.meta.meta import check_metadata_format, assign_metadata, write_p
 # local libraries
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import load_multiple_pangenomes
-from panorama.annotate.hmm_search import read_metadata, read_hmm, annot_with_hmm
+from panorama.format.read_binaries import load_pangenomes
+from panorama.annotate.hmm_search import read_metadata, read_hmms, annot_with_hmm
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
@@ -124,17 +124,14 @@ def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata:
                 future.result()
 
 
-def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, meta: Path = None,
-                              threads: int = 1, task: int = 1, lock: Lock = None,
-                              disable_bar: bool = False) -> Dict[str, pd.DataFrame]:
+def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: List[Path] = None, meta: Path = None,
+                              threads: int = 1, disable_bar: bool = False) -> Dict[str, pd.DataFrame]:
     """ Main function to add annotation to pangenome from tsv file
 
-    :param pangenomes: Pangenomes obejct containing all the pangenome to annotate
+    :param pangenomes: Pangenomes object containing all the pangenome to annotate
     :param hmm: Path to hmm file or directory
     :param meta: Metadata file to annotate with HMM
     :param threads: Number of available threads
-    :param lock: Lock for multiprocessing execution
-    :param task: Number of task to split processes
     :param disable_bar: Disable bar
 
     :return: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
@@ -145,25 +142,16 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, meta: Pa
     else:
         metadata = None
     # Get list of HMM with Plan7 data model
-    hmms = read_hmm(hmm_dir=hmm.iterdir(), disable_bar=disable_bar)
-    with ThreadPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
-            futures = []
+    pangenome2annot = {}
+    hmms = read_hmms(hmm_path=hmm, disable_bar=disable_bar)
+    for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
+        logging.debug(f"Align gene families to HMM for {pangenome.name}")
+        pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, metadata, threads, disable_bar)
 
-            for pangenome in pangenomes:
-                logging.debug(f"Align gene families to HMM for {pangenome.name} with {threads // task} threads...")
-                future = executor.submit(annot_with_hmm, pangenome, hmms, metadata, threads // task, disable_bar)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-
-            results = {}
-            for future in futures:
-                res = future.result()
-                results[res[1]] = res[0]
-    return results
+    return pangenome2annot
 
 
-def annot_pangenomes(pangenomes: Pangenomes, hmm: Path = None, table: Path = None, source: str = None,
+def annot_pangenomes(pangenomes: Pangenomes, hmm: List[Path] = None, table: Path = None, source: str = None,
                      threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False, **kwargs):
     """Gene families annotation with HMM or TSV files for multiple pangenomes in multiprocessing
 
@@ -184,7 +172,7 @@ def annot_pangenomes(pangenomes: Pangenomes, hmm: Path = None, table: Path = Non
         pangenomes2metadata = read_families_metadata_mp(pangenomes, table, threads, disable_bar)
     elif hmm is not None:
         pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, threads=threads,
-                                                        lock=lock, disable_bar=disable_bar, **kwargs)
+                                                        disable_bar=disable_bar, **kwargs)
     else:
         raise Exception("You did not provide tsv or hmm for annotation")
     write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, threads, lock, force, disable_bar)
@@ -198,14 +186,13 @@ def launch(args):
     """
     manager = Manager()
     lock = manager.Lock()
-    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_annotations": True,
-                                                                                     "need_families": True},
-                                          lock=lock, max_workers=args.threads,
-                                          check_function=check_pangenome_annotation,
-                                          source=args.source, force=args.force, disable_bar=args.disable_prog_bar)
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info={"need_annotations": True,
+                                                                            "need_families": True},
+                                 check_function=check_pangenome_annotation, max_workers=args.threads, lock=lock,
+                                 disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
 
     annot_pangenomes(pangenomes=pangenomes, hmm=args.hmm, table=args.table, source=args.source, threads=args.threads,
-                     lock=lock, disable_bar=args.disable_prog_bar)
+                     meta=args.meta, lock=lock, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -238,8 +225,8 @@ def parser_annot(parser):
                                 help='A list of TSV containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
                                      'and path to the TSV with annotation in second column.')
-    exclusive_mode.add_argument('--hmm', type=Path, nargs='?', default=None,
-                                help="File with all HMM or a directory with one HMM by file")
+    exclusive_mode.add_argument('--hmm', type=Path, nargs='+', default=None,
+                                help="Directory with one HMM by file or list of HMM file")
     hmm_param = parser.add_argument_group(title="HMM arguments",
                                           description="All of the following arguments are required,"
                                                       " if you're using HMM mode :")

@@ -89,8 +89,8 @@ def set_verbosity_level(args: argparse.Namespace) -> None:
             logging.basicConfig(filename=args.log, level=level,
                                 format=str_format,
                                 datefmt=datefmt)
-        logging.getLogger("PANORAMA").info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger("PANORAMA").info(f"PANORAMA version: {distribution('panorama').version}")
+        logging.getLogger("PANORAMA").debug("Command: " + " ".join([arg for arg in sys.argv]))
+        logging.getLogger("PANORAMA").debug(f"PANORAMA version: {distribution('panorama').version}")
 
 
 def cmd_line():

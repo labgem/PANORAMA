@@ -21,7 +21,7 @@ from ppanggolin.region import Region, Spot
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gfs
-from panorama.format.read_binaries import check_pangenome_info, load_multiple_pangenomes
+from panorama.format.read_binaries import check_pangenome_info, load_pangenomes
 from panorama.format.write_proksee import write_proksee
 from panorama.utils import check_tsv_sanity, mkdir
 from panorama.system import System
@@ -316,8 +316,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             logging.info("Begin write conserved spot")
             manager = Manager()
             lock = manager.Lock()
-            pans = load_multiple_pangenomes(pangenome_list=pangenomes, need_info={"need_families": True},
-                                            lock=lock, max_workers=1, disable_bar=False)
+            pans = load_pangenomes(pangenome_list=pangenomes, need_info={"need_families": True}, max_workers=1,
+                                   lock=lock, disable_bar=False)
             tmpdir = tempfile.TemporaryDirectory(dir=output)
             df_align = all_against_all(pangenomes=pans, output=output, lock=lock, tmpdir=tmpdir)
             identical_spot(df_borders_global=df_borders_global, number_org_per_spot_global=number_org_per_spot_global,

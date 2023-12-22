@@ -19,7 +19,7 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 # local libraries
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import load_multiple_pangenomes
+from panorama.format.read_binaries import load_pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.models import Models, Model, FuncUnit
 from panorama.system import System
@@ -324,10 +324,9 @@ def launch(args):
     lock = manager.Lock()
     need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
                  "metatype": "families"}
-    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, lock=lock, max_workers=args.threads,
-                                          need_info=need_info, check_function=check_pangenome_detection,
-                                          sources=[args.source], force=args.force,
-                                          disable_bar=args.disable_prog_bar)
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
+                                 check_function=check_pangenome_detection, max_workers=args.threads, lock=lock,
+                                 disable_bar=args.disable_prog_bar, sources=[args.source], force=args.force)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source, threads=args.threads,
                                  task=args.task, lock=lock, disable_bar=args.disable_prog_bar)
 
