@@ -51,7 +51,7 @@ def check_pangenome_detection(pangenome: Pangenome, sources: List[str], force: b
                         "Please see the command annotation before to detect systems")
 
 
-def read_models(models_path: Path, disable_bar: bool = False) -> Models:
+def read_models(models_path: List[Path], disable_bar: bool = False) -> Models:
     """Read all json files models in the directory
 
     :param models_path: path of models directory
@@ -62,8 +62,11 @@ def read_models(models_path: Path, disable_bar: bool = False) -> Models:
     :raise ValueError: One or more value are not non-acceptable
     :raise Exception: Manage unexpected error
     """
+
     models = Models()
-    models.read(models_path, disable_bar)
+    paths = ([path for p in models_path for path in [p] if path.is_file()] +
+             [path for p in models_path for path in list(p.rglob("*.json")) if path.is_file()])
+    models.read(paths, disable_bar)
     return models
 
 
@@ -105,7 +108,7 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
                     fam2annot[gf.name].add(fam_model)
                 else:
                     fam2annot[gf.name] = {fam_model}
-        for exchangeable in fam_model.exchangeables:
+        for exchangeable in fam_model.exchangeable:
             if exchangeable in annot2fam:
                 for gf in annot2fam[exchangeable]:
                     families[gf.name] = gf
@@ -132,13 +135,78 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, gr
             for pan_fam in annot2fam[mandatory_fam.name]:
                 if pan_fam not in graph.nodes:
                     detected_systems.append(System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
-        for exchangeable in mandatory_fam.exchangeables:
+        for exchangeable in mandatory_fam.exchangeable:
             if exchangeable in annot2fam:
                 for pan_fam in annot2fam[exchangeable]:
                     if pan_fam not in graph.nodes:
                         detected_systems.append(System(system_id=0, model=func_unit.model,
                                                        source=source, gene_families={pan_fam}))
     return detected_systems
+
+def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[GeneFamily]:
+    """ Get connected component of the gene family
+
+    :param node: node corresponding to gene family
+    :param graph: graph of connected component
+    :param seen: set of already check gene families
+
+    :return: set of connected component
+    """
+    nextlevel = {node}
+    cc = set()
+    while len(nextlevel) > 0:
+        thislevel = nextlevel
+        nextlevel = set()
+        for v in thislevel:
+            if v not in seen:
+                cc.add(v)
+                seen.add(v)
+                nextlevel |= set(graph.neighbors(v))
+    return cc
+
+def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> bool:
+    """Check parameters
+
+    :param cc: set of connected component
+    :param families: families find in context
+    :param fam2annot: link between gene family and annotation
+    :param func_unit:functional unit
+
+    :return: Boolean true if parameter respected
+    """
+    count_forbidden, count_mandatory, count_total = (0, 0, 0)
+    forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
+                                                      list(map(lambda x: x.name, func_unit.mandatory)),
+                                                      list(map(lambda x: x.name, func_unit.accessory)))
+    for fam, annot_set in fam2annot.items():
+        for annot in annot_set:
+            if annot.max_separation == -1:
+                cc.add(families[fam])
+    for node in cc:
+        annotations = fam2annot.get(node.name)
+        if annotations is not None:
+            for annot in annotations:
+                if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
+                    count_forbidden += 1
+                    forbidden_list.remove(annot.name)
+                    if count_forbidden > func_unit.max_forbidden:
+                        return False
+                elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                    count_mandatory += 1
+                    count_total += 1
+                    mandatory_list.remove(annot.name)
+                elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                    count_total += 1
+                    accessory_list.remove(annot.name)
+    if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
+            (count_total >= func_unit.min_total or func_unit.min_total == -1):
+        if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
+                (func_unit.max_total >= count_total or func_unit.max_total == -1):
+            return True
+        else:
+            return False
+    else:
+        return False
 
 
 def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, func_unit: FuncUnit, source: str,
@@ -155,75 +223,10 @@ def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, f
     """
     seen = set()
 
-    def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[GeneFamily]:
-        """ Get connected component of the gene family
-
-        :param node: node corresponding to gene family
-        :param graph: graph of connected component
-        :param seen: set of already check gene families
-
-        :return: set of connected component
-        """
-        nextlevel = {node}
-        cc = set()
-        while len(nextlevel) > 0:
-            thislevel = nextlevel
-            nextlevel = set()
-            for v in thislevel:
-                if v not in seen:
-                    cc.add(v)
-                    seen.add(v)
-                    nextlevel |= set(graph.neighbors(v))
-        return cc
-
-    def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> bool:
-        """Check parameters
-
-        :param cc: set of connected component
-        :param families: families find in context
-        :param fam2annot: link between gene family and annotation
-        :param func_unit:functional unit
-
-        :return: Boolean true if parameter respected
-        """
-        count_forbidden, count_mandatory, count_total = (0, 0, 0)
-        forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
-                                                          list(map(lambda x: x.name, func_unit.mandatory)),
-                                                          list(map(lambda x: x.name, func_unit.accessory)))
-        for fam, annot_set in fam2annot.items():
-            for annot in annot_set:
-                if annot.max_separation == -1:
-                    cc.add(families[fam])
-        for node in cc:
-            annotations = fam2annot.get(node.name)
-            if annotations is not None:
-                for annot in annotations:
-                    if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
-                        count_forbidden += 1
-                        forbidden_list.remove(annot.name)
-                        if count_forbidden > func_unit.max_forbidden:
-                            return False
-                    elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
-                        count_mandatory += 1
-                        count_total += 1
-                        mandatory_list.remove(annot.name)
-                    elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
-                        count_total += 1
-                        accessory_list.remove(annot.name)
-        if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
-                (count_total >= func_unit.min_total or func_unit.min_total == -1):
-            if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
-                    (func_unit.max_total >= count_total or func_unit.max_total == -1):
-                return True
-            else:
-                return False
-        else:
-            return False
-
     remove_node = set()
-    for node in g.nodes():  # pour chaque noeud du graphe
+    for node in g.nodes():
         if node not in seen:
-            cc = extract_cc(node, g, seen)  # extract coonnect component
+            cc = extract_cc(node, g, seen)  # extract connect component
             if check_cc(cc, families, fam2annot, func_unit):
                 detected_systems.append(System(system_id=0, model=model, gene_families=cc, source=source))
             else:
@@ -243,9 +246,8 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families.values(), 1, func_unit.max_separation + 1,
+        g = compute_gene_context_graph(families.values(), func_unit.max_separation + 1, func_unit.max_separation + 1,  # Rediscuter le +1 pour être sûr
                                        True)
-        # print(g)
         if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
         verify_param(g, families, fam2annot, model, func_unit, source, detected_systems)
@@ -323,7 +325,7 @@ def launch(args):
     manager = Manager()
     lock = manager.Lock()
     need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
-                 "metatype": "families"}
+                 "metatypes": ["families"], "sources": [args.source]}
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_detection, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, sources=[args.source], force=args.force)
@@ -354,7 +356,7 @@ def parser_detection(parser):
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
                           help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument('-m', '--models', required=True, type=Path, default=None,
+    required.add_argument('-m', '--models', required=True, type=Path, nargs='+',
                           help="Path to model directory")
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')

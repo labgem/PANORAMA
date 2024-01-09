@@ -10,7 +10,7 @@ import collections
 import itertools
 import logging
 from pathlib import Path
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Union
 
 # installed libraries
 import numpy as np
@@ -227,8 +227,10 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
     if systems or systems_asso or conserved_spot or draw_spot:
         need_annotations = True
         need_families = True
+        need_graph = True
         need_systems = True
         need_metadata = True
+        need_partitions = True
 
         global_systems_proj = pd.DataFrame()
         global_systems_distribution = pd.DataFrame()
@@ -245,10 +247,10 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             pangenome.add_file(pangenome_info["path"])
             if systems and not (systems_asso or conserved_spot or draw_spot):
                 check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
-                                    need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                     need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
-                                    sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
+                                    sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
             if systems_asso or conserved_spot or draw_spot:
                 need_rgp = True
                 need_modules = True
@@ -257,7 +259,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                                     need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
-                                    sources=kwargs["sources"], metatype="families", disable_bar=disable_bar)
+                                    sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
             logging.info(f"Begin writing systems projection for {pangenome_name}")
             for source in kwargs["sources"]:
                 systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,

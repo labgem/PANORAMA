@@ -195,7 +195,7 @@ class Models:
             fam2model[family] = family.model
         return fam2model
 
-    def read(self, models_path: Path, disable_bar: bool = False):
+    def read(self, models_path: List[Path], disable_bar: bool = False):
         """Read all json files models in the directory
 
         :param models_path: path of models directory
@@ -206,7 +206,7 @@ class Models:
         :raise ValueError: One or more value are not non-acceptable
         :raise Exception: Manage unexpected error
         """
-        for file in tqdm(list(models_path.glob("*.json")), unit='model', desc="Read model", disable=disable_bar):
+        for file in tqdm(models_path, unit='model', desc="Read model", disable=disable_bar):
             with open(file.resolve().as_posix()) as json_file:
                 data = json.load(json_file)
                 try:
@@ -286,12 +286,12 @@ class _BasicFeatures:
 class _FuFamFeatures:
 
     def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0,
-                 exchangeable: List[str] = None, multi_system: bool = False, multi_model: bool = True):
+                 exchangeable: Set[str] = None, multi_system: bool = False, multi_model: bool = True):
         """Constructor Method
         """
         self.presence = presence
         self.duplicate = duplicate
-        self.exchangeable = exchangeable if exchangeable is not None else []
+        self.exchangeable = exchangeable if exchangeable is not None else set()
         self.multi_system = multi_system
         self.multi_model = multi_model
 
@@ -494,7 +494,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
                  accessory: set = None, neutral: set = None, min_total: int = 1, max_separation: int = 0,
                  forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None,
-                 exchangeable: List[str] = None, multi_system: bool = False, multi_model: bool = False
+                 exchangeable: Set[str] = None, multi_system: bool = False, multi_model: bool = False
                  ):
         """Constructor Method
         """
@@ -591,7 +591,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
     """
 
     def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
-                 duplicate: int = 0, exchangeable: List[str] = None, multi_system: bool = False,
+                 duplicate: int = 0, exchangeable: Set[str] = None, multi_system: bool = False,
                  multi_model: bool = False):
         """Constructor Method
         """
@@ -625,7 +625,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
         self.presence = data_fam['presence']
         self.read_parameters(data_fam["parameters"] if "parameters" in data_fam else {}, param_keys=fam_param)
         if 'exchangeable' in data_fam:
-            self.exchangeable = data_fam["exchangeable"]
+            self.exchangeable = set(data_fam["exchangeable"])
 
     @staticmethod
     def read_family(data_fam: dict) -> Family:

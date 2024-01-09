@@ -57,6 +57,6 @@ class Module(Mod):
                 raise Exception("Two system with same ID but with different name are trying to be added to module."
                                 "This error is unexpected. Please report on our GitHub")
             else:
-                if system.gene_families != self._systemsGetter[system.ID].gene_families:
+                if system.families != self._systemsGetter[system.ID].families:
                     raise Exception("Two system with same ID and name but with different gene families are trying to be"
                                     " added to module. This error is unexpected. Please report on our GitHub")

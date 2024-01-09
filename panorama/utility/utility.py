@@ -4,6 +4,7 @@
 # default libraries
 import argparse
 import logging
+from typing import List
 from pathlib import Path
 import tempfile
 
@@ -32,7 +33,7 @@ def check_parameters(args):
                                                  "it's necessary to give hmm path to get hidden information")
 
 
-def check_models(models_path: Path, disable_bar: bool = False):
+def check_models(models_path: List[Path], disable_bar: bool = False):
     """Read to check all json files models in the directory
 
     :param models_path: path of models directory
@@ -45,8 +46,10 @@ def check_models(models_path: Path, disable_bar: bool = False):
     """
     try:
         logging.info("Check models translation...")
+        paths = ([path for p in models_path for path in [p] if path.is_file()] +
+                 [path for p in models_path for path in list(p.rglob("*.json")) if path.is_file()])
         models = Models()
-        models.read(models_path, disable_bar)
+        models.read(paths, disable_bar)
     except Exception:
         raise Exception("Problem with translated models. Check that you give correct input and option. "
                         "If nothing wrong please report an issue on our github.")
@@ -63,7 +66,7 @@ def launch(args):
         outdir = mkdir(output=args.output, force=args.force)
         launch_translate(models=args.translate, source=args.source, output=outdir, hmms_path=args.hmm,
                          meta_data=args.meta, tmpdir=args.tmpdir, disable_bar=args.disable_prog_bar)
-        check_models(models_path=outdir, disable_bar=args.disable_prog_bar)
+        check_models(models_path=[outdir], disable_bar=args.disable_prog_bar)
 
     if args.models is not None:
         check_models(models_path=args.models, disable_bar=args.disable_prog_bar)
@@ -103,7 +106,7 @@ def parser_utils(parser):
                            help='For Defense finder we need HMM to get all hidden information to translate models.')
     check_model = parser.add_argument_group(title="Check models arguments",
                                             description="Arguments necessary to check if models are readable")
-    check_model.add_argument("--models", required=False, type=Path, nargs="?", default=None,
+    check_model.add_argument("--models", required=False, type=Path, nargs="+", default=None,
                              help="Path to models directory")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument('-o', '--output', required=False, type=Path, nargs='?', default=None,

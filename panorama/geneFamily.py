@@ -8,10 +8,11 @@ import logging
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
+from ppanggolin.edge import Edge
 from pyhmmer.plan7 import HMM
 
-
 # local libraries
+
 
 
 class GeneFamily(Fam):
@@ -27,6 +28,7 @@ class GeneFamily(Fam):
         self._hmm = None
         self.profile = None
         self.optimized_profile = None
+        self._systems_getter = {}
 
     # def __init__(self, family_id: int = None, name: str = None, family: Fam = None):
         # if family is not None:  # Allow to cast
@@ -57,6 +59,26 @@ class GeneFamily(Fam):
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
+
+    def __hash__(self):
+        return hash((self.name, self.ID))
+
+    def __eq__(self, other: GeneFamily) -> bool:
+        """
+        Test whether two gene families have the same genes
+
+        :param other: Another system to test equality
+
+        :return: Equal or not
+
+        :raises TypeError: Try to compare a systems with another type object
+        """
+        if not isinstance(other, GeneFamily):
+            raise TypeError(f"Another gene family is expected to be compared to the first one. You give a {type(other)}")
+        return set(self.genes) == set(other.genes)
+
+    def __ne__(self, other: GeneFamily) -> bool:
+        return not self.__eq__(other)
 
     def _getattr_from_ppanggolin(self, family: Fam):
         """Get attribute from ppanggolin gene family to set in PANORAMA Gene Family object
@@ -94,3 +116,27 @@ class GeneFamily(Fam):
         panorama_fam = GeneFamily(family_id=family.ID, name=family.name)
         panorama_fam._getattr_from_ppanggolin(family)
         return panorama_fam
+
+    def add_system(self, system):
+        """Add a system to the family
+        :param system: System to add
+        :type system: System
+        """
+        if system.ID in self._systems_getter and self.get_system(system.ID) != system:
+            print(self.get_system(system.ID), system)
+            raise KeyError("A different system with the same name already exist in the gene family")
+        self._systems_getter[system.ID] = system
+
+    def get_system(self, identifier: int):
+        """Get a system by its identifier
+        :param identifier: name of the system
+
+        :return: the system searched in the family
+        :rtype: System
+
+        :raises KeyError: System with the given name does not exist in the module
+        """
+        try:
+            return self._systems_getter[identifier]
+        except KeyError:
+            raise KeyError(f"There isn't system with the ID {identifier} in the gene family")

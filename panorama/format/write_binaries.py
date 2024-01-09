@@ -49,7 +49,7 @@ def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
             max_id_len = len(system.name)
         if len(system.name) > max_name_len:
             max_name_len = len(system.name)
-        for gf in system.gene_families:
+        for gf in system.families:
             if len(gf.name) > max_gf_name_len:
                 max_gf_name_len = len(gf.name)
         return max_id_len, max_name_len, max_gf_name_len
@@ -63,10 +63,10 @@ def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
             canonical_name_len += len(canonical.name)
             max_id_len, max_name_len, max_gf_name_len = compare_len(canonical, max_id_len,
                                                                     max_name_len, max_gf_name_len)
-            expected_rows += len(canonical.gene_families)
+            expected_rows += len(canonical)
         if canonical_name_len > max_canonical_len:
             max_canonical_len = canonical_name_len + len(system.canonical) - 1
-        expected_rows += len(system.gene_families)
+        expected_rows += len(system)
 
     return max_id_len, max_name_len, max_canonical_len, max_gf_name_len, expected_rows
 
@@ -89,14 +89,14 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     source_row = source_table.row
     for system in tqdm(pangenome.systems, total=len(list(pangenome.get_system_by_source(source))),
                        unit="system", disable=disable_bar):
-        for gf in system.gene_families:
+        for gf in system.families:
             source_row["ID"] = system.ID
             source_row["name"] = system.name
             source_row["geneFam"] = gf.name
             source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
             source_row.append()
         for canonical in system.canonical:
-            for gf in canonical.gene_families:
+            for gf in canonical.families:
                 source_row["geneFam"] = gf.name
                 source_row["ID"] = canonical.ID
                 source_row["name"] = canonical.name

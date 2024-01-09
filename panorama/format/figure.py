@@ -156,11 +156,11 @@ def heatmap(global_systems_proj: pd.DataFrame, output: Path):
         sum_pans_systems = {}
         sum_pans_ratio = {}
         pan_df = global_systems_proj[global_systems_proj['pangenome name'] == name]
-        print("pika", pan_df['organism'].unique().shape)
+        # print("pika", pan_df['organism'].unique().shape)
         number_org_tot = pan_df['organism'].unique().shape[0]
         for system in systems_type:
             system_df = pan_df[pan_df['system name'] == system]
-            print("cara", system_df['organism'].unique().shape[0])
+            # print("cara", system_df['organism'].unique().shape[0])
             number_org = system_df['organism'].unique().shape[0]
             sum_pans_systems[system] = number_org
             sum_pans_ratio[system] = number_org / number_org_tot
