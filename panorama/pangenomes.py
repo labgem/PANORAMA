@@ -160,6 +160,9 @@ class Pangenome(Pan):
                 if len(system.intersection(system_in)) > 0:
                     system_in.add_canonical(system)
                     same_sys = True
+                    for family in system.families:
+                        family.add_system(system)
+                        family.add_system(system_in)
 
         if not same_sys:
             self._max_id_system += 1
