@@ -265,54 +265,54 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                                         threads=threads, force=force, disable_bar=disable_bar)
                 logging.info(f"Finish writing systems projection for {pangenome_name}")
-                global_systems_proj = pd.concat([global_systems_proj, systems_proj])
-                per_pan_heatmap(name=pangenome_name, system_projection=systems_proj, output=output)
-                logging.info(f"Finish drawing heatmap figure for {pangenome_name}")
-
-                systems_distribution = pan_distribution_system(name=pangenome_name, systems_projection=systems_proj)
-                global_systems_distribution = pd.concat([global_systems_distribution, systems_distribution])
-
-                dataframe_id, dataframe_total = pan_number_system(name=pangenome_name, systems_projection=systems_proj)
-                global_id = pd.concat([global_id, dataframe_id])
-                global_total = pd.concat([global_total, dataframe_total])
-
-                hbar_id_total(name=pangenome_name, dataframe_id=dataframe_id, dataframe_total=dataframe_total,
-                              output=output)
-                logging.info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
-
-                if systems_asso or conserved_spot or draw_spot:
-                    if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
-                        bool_rgp = True
-                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
-                        bool_modules = True
-                    if systems_asso in ["rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
-                        bool_spots = True
-
-                    logging.info("Begin write systems with features projection")
-                    df_sys2feat = systems_to_features(name=pangenome_name, pangenome=pangenome, systems_projection=systems_proj,
-                                                      output=output, source=source, bool_rgp=bool_rgp, bool_modules=bool_modules,
-                                                      bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
-
-                    df_borders, number_org_per_spot = write_borders_spot(name=pangenome_name, pangenome=pangenome)
-                    df_borders_global = pd.concat([df_borders_global, df_borders])
-                    number_org_per_spot_global = pd.concat([number_org_per_spot_global, number_org_per_spot])
-
-                    if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
-                        df_spot, dict_spot_org = spot2sys(name=pangenome_name, pangenome=pangenome, system_to_feature=df_sys2feat,
-                                                          df_borders=df_borders, output=output)
-                        df_spot_global = pd.concat([df_spot_global, df_spot])
-
-                    if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
-                        df_module = mod2sys(name=pangenome_name, system_to_feature=df_sys2feat, output=output)
-                        df_module_global = pd.concat([df_module_global, df_module])
-
-                    logging.info("Projection with features written")
-                    upsetplot(name=pangenome_name, systems_projection=systems_proj, system_to_feature=df_sys2feat, output=output)
-                    logging.info(f"Finish drawing upsetplot for {pangenome_name}")
-
-                    if draw_spot:
-                        draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot,
-                                   dict_spot_org=dict_spot_org, systems_projection=systems_proj)
+                # global_systems_proj = pd.concat([global_systems_proj, systems_proj])
+                # per_pan_heatmap(name=pangenome_name, system_projection=systems_proj, output=output)
+                # logging.info(f"Finish drawing heatmap figure for {pangenome_name}")
+                #
+                # systems_distribution = pan_distribution_system(name=pangenome_name, systems_projection=systems_proj)
+                # global_systems_distribution = pd.concat([global_systems_distribution, systems_distribution])
+                #
+                # dataframe_id, dataframe_total = pan_number_system(name=pangenome_name, systems_projection=systems_proj)
+                # global_id = pd.concat([global_id, dataframe_id])
+                # global_total = pd.concat([global_total, dataframe_total])
+                #
+                # hbar_id_total(name=pangenome_name, dataframe_id=dataframe_id, dataframe_total=dataframe_total,
+                #               output=output)
+                # logging.info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
+                #
+                # if systems_asso or conserved_spot or draw_spot:
+                #     if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+                #         bool_rgp = True
+                #     if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
+                #         bool_modules = True
+                #     if systems_asso in ["rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+                #         bool_spots = True
+                #
+                #     logging.info("Begin write systems with features projection")
+                #     df_sys2feat = systems_to_features(name=pangenome_name, pangenome=pangenome, systems_projection=systems_proj,
+                #                                       output=output, source=source, bool_rgp=bool_rgp, bool_modules=bool_modules,
+                #                                       bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
+                #
+                #     df_borders, number_org_per_spot = write_borders_spot(name=pangenome_name, pangenome=pangenome)
+                #     df_borders_global = pd.concat([df_borders_global, df_borders])
+                #     number_org_per_spot_global = pd.concat([number_org_per_spot_global, number_org_per_spot])
+                #
+                #     if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+                #         df_spot, dict_spot_org = spot2sys(name=pangenome_name, pangenome=pangenome, system_to_feature=df_sys2feat,
+                #                                           df_borders=df_borders, output=output)
+                #         df_spot_global = pd.concat([df_spot_global, df_spot])
+                #
+                #     if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
+                #         df_module = mod2sys(name=pangenome_name, system_to_feature=df_sys2feat, output=output)
+                #         df_module_global = pd.concat([df_module_global, df_module])
+                #
+                #     logging.info("Projection with features written")
+                #     upsetplot(name=pangenome_name, systems_projection=systems_proj, system_to_feature=df_sys2feat, output=output)
+                #     logging.info(f"Finish drawing upsetplot for {pangenome_name}")
+                #
+                #     if draw_spot:
+                #         draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot,
+                #                    dict_spot_org=dict_spot_org, systems_projection=systems_proj)
 
         if conserved_spot:
             logging.info("Begin write conserved spot")
@@ -325,18 +325,18 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             identical_spot(df_borders_global=df_borders_global, number_org_per_spot_global=number_org_per_spot_global,
                            df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
 
-        heatmap(global_systems_proj=global_systems_proj, output=output)
-        logging.info(f"Global heatmap figure created")
-        global_systems_distribution.to_csv(f"{output}/systems_distribution.tsv", sep="\t", index=False)
-        global_systems_proj.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
-        global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)
-        global_total.to_csv(f"{output}/global_systems_number_total.tsv", sep="\t", index=False)
-
-        if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
-            df_spot_global.to_csv(f"{output}/global_spot_to_system.tsv", sep="\t", index=False)
-
-        if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
-            df_module_global.to_csv(f"{output}/global_module_to_system.tsv", sep="\t", index=False)
+        # heatmap(global_systems_proj=global_systems_proj, output=output)
+        # logging.info(f"Global heatmap figure created")
+        # global_systems_distribution.to_csv(f"{output}/systems_distribution.tsv", sep="\t", index=False)
+        # global_systems_proj.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
+        # global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)
+        # global_total.to_csv(f"{output}/global_systems_number_total.tsv", sep="\t", index=False)
+        #
+        # if systems_asso in ["rgp", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
+        #     df_spot_global.to_csv(f"{output}/global_spot_to_system.tsv", sep="\t", index=False)
+        #
+        # if systems_asso in ["modules", "rgp-modules", "modules-spots", "all"] or conserved_spot or draw_spot:
+        #     df_module_global.to_csv(f"{output}/global_module_to_system.tsv", sep="\t", index=False)
 
     if proksee is not None:
         need_annotations = True

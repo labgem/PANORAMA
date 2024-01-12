@@ -9,11 +9,12 @@ from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from typing import Dict, List, Set
+from typing import Dict, List, Set, Union
 from multiprocessing import Manager, Lock
 
 # installed libraries
 import networkx as nx
+from ppanggolin.genome import Gene
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
@@ -143,7 +144,7 @@ def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, gr
                                                        source=source, gene_families={pan_fam}))
     return detected_systems
 
-def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[GeneFamily]:
+def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[Union[Gene, GeneFamily]]:
     """ Get connected component of the gene family
 
     :param node: node corresponding to gene family
