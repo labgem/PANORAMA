@@ -171,7 +171,6 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
             futures = []
             c = 0
             for system in pangenome.get_system_by_source(source):
-                c += 1
                 future = executor.submit(write_system_projection, system, annot2fam)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -181,7 +180,6 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
                 pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
 
-    print(c)
     pangenome_projection.columns = ["system number", "system name", "organism",
                                   "completeness", "strict", "conserved", "split"]
     pangenome_projection.sort_values(by=["system name", "system number", "organism", "completeness"],
@@ -197,7 +195,7 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
         org_df.to_csv(f"{output}/{name}/projection_{source}/{organism_name}.tsv", sep="\t", index=False)
-    pangenome_projection.to_csv(f"{output}/{name}/systems_{source}_{name}.tsv", sep="\t", index=False)
+    pangenome_projection.to_csv(f"{output}/{name}/systems_{source}.tsv", sep="\t", index=False)
     pangenome_projection.insert(0, "pangenome name", name)
     return pangenome_projection
 

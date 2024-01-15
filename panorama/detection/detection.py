@@ -247,7 +247,7 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families.values(), func_unit.max_separation + 1, func_unit.max_separation + 2,
+        g = compute_gene_context_graph(families.values(), func_unit.max_separation, func_unit.max_separation + 1,
                                        True)
         if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)

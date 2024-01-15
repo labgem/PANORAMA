@@ -155,7 +155,6 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
         if h5f.root.status._v_attrs.genesClustered:
             logging.getLogger("PPanGGOLiN").info("Reading pangenome gene families...")
             read_gene_families(pangenome, h5f, disable_bar=disable_bar)
-            print(pangenome.number_of_gene_families)
             logging.getLogger("PPanGGOLiN").debug("Reading pangenome gene families info...")
             read_gene_families_info(pangenome, h5f, disable_bar=disable_bar)
         else:
@@ -276,7 +275,6 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
         except Exception as error:
             logging.error(f"Pangenome {pangenome.name} reading return the below error")
             raise error
-    print(need_info, kwargs)
     check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
     return pangenome
 
