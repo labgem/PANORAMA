@@ -183,7 +183,7 @@ def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> b
         for annot in annot_set:
             if annot.max_separation == -1:
                 cc.add(families[fam])
-    for node in cc:
+    for node in sorted(cc, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
         annotations = fam2annot.get(node.name)
         if annotations is not None:
             for annot in annotations:
@@ -192,13 +192,16 @@ def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> b
                     forbidden_list.remove(annot.name)
                     if count_forbidden > func_unit.max_forbidden:
                         return False
+                    break
                 elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
                     count_mandatory += 1
                     count_total += 1
                     mandatory_list.remove(annot.name)
+                    break
                 elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
                     count_total += 1
                     accessory_list.remove(annot.name)
+                    break
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
         if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
@@ -247,7 +250,7 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     for func_unit in model.func_units:
         detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gene_context_graph(families.values(), func_unit.max_separation, func_unit.max_separation + 1,
+        g = compute_gene_context_graph(families.values(), func_unit.max_separation + 1, func_unit.max_separation + 2,
                                        True)
         if func_unit.min_total == 1:
             detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)

@@ -209,7 +209,7 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_dict: Dict[str, Lis
             else:
                 logging.warning("Unexpected relation")
         if len(exchangeable_set) > 0:
-            dict_elem["exchangeables"] = list(exchangeable_set.difference({name}))
+            dict_elem["exchangeable"] = list(exchangeable_set.difference({name}))
         return dict_elem
 
 
