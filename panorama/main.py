@@ -108,7 +108,7 @@ def cmd_line():
     desc += "       align           Align gene families from multiple pangenomes\n"
     desc += "       cluster         Cluster gene families from multiple pangenomes\n"
     desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
-    desc += "       utility         Some utility command to run analyses more easily\n"
+    desc += "       utils           Some utility command to run analyses more easily\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -174,7 +174,7 @@ def main():
         panorama.compare.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
-    elif args.subcommand == "utility":
+    elif args.subcommand == "utils":
         panorama.utility.launch(args)
 
 
