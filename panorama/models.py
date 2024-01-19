@@ -195,32 +195,30 @@ class Models:
             fam2model[family] = family.model
         return fam2model
 
-    def read(self, models_path: List[Path], disable_bar: bool = False):
+    def read(self, model_path: Path):
         """Read all json files models in the directory
 
-        :param models_path: path of models directory
-        :param disable_bar: Disable progress bar
+        :param model_path: path to model
 
         :raise KeyError: One or more keys are missing or non-acceptable
         :raise TypeError: One or more value are not with good presence
         :raise ValueError: One or more value are not non-acceptable
         :raise Exception: Manage unexpected error
         """
-        for file in tqdm(models_path, unit='model', desc="Read model", disable=disable_bar):
-            with open(file.resolve().as_posix()) as json_file:
-                data = json.load(json_file)
-                try:
-                    model = Model.read_model(data)
-                except KeyError:
-                    raise KeyError(f"Problem with one or more key in {file} are missing.")
-                except TypeError:
-                    raise TypeError(f"One or more attribute are not with the good presence in {file}.")
-                except ValueError:
-                    raise ValueError(f"One or more attribute are not with an acceptable value in {file}.")
-                except Exception:
-                    raise Exception(f"Unexpected problem to read json {file}")
-                else:
-                    self.add_model(model)
+        with open(model_path.resolve().as_posix()) as json_file:
+            data = json.load(json_file)
+            try:
+                model = Model.read_model(data)
+            except KeyError:
+                raise KeyError(f"Problem with one or more key in {model_path} are missing.")
+            except TypeError:
+                raise TypeError(f"One or more attribute are not with the good presence in {model_path}.")
+            except ValueError:
+                raise ValueError(f"One or more attribute are not with an acceptable value in {model_path}.")
+            except Exception:
+                raise Exception(f"Unexpected problem to read json {model_path}")
+            else:
+                self.add_model(model)
 
     def get_model(self, name: str) -> Model:
         """

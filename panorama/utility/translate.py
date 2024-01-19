@@ -444,7 +444,9 @@ def launch_translate(db: Path, source: str, output: Path, tmpdir: Path = None,
     logging.info("Write models for PANORAMA...")
     model_list = []
     mkdir(output/'models', force)
-    for data in tqdm(list_data, unit="model", disable=disable_bar):
+    for data in tqdm(list_data, unit="model", desc='Write models', disable=disable_bar):
         write_model(output, data)
-        model_list.append([data['name'], output/f"{data['name']}.json"])
-    pd.DataFrame(model_list).to_csv(output/"models_list.tsv", sep="\t", header=False, index=False)
+        model_list.append([data['name'], output/f"models/{data['name']}.json"])
+    model_df = pd.DataFrame(model_list, columns=['name', 'path'])
+    model_df = model_df.sort_values('name')
+    model_df.to_csv(output/"models_list.tsv", sep="\t", header=False, index=False)
