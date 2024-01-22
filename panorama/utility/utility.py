@@ -8,9 +8,9 @@ from typing import List
 from pathlib import Path
 import tempfile
 
-import pandas as pd
 # installed libraries
 from tqdm import tqdm
+import pandas as pd
 
 # local libraries
 from panorama.utils import mkdir
@@ -48,7 +48,20 @@ def check_parameters(args: argparse.Namespace) -> None:
             raise argparse.ArgumentError(argument=args.source, message="Required to know how to translate models")
 
 
-def create_models_list(models_path: List[Path], output:Path, recursive: bool = False, disable_bar: bool = False):
+def create_models_list(models_path: List[Path], output:Path, recursive: bool = False,
+                       disable_bar: bool = False) -> None:
+    """
+    Create a file that listing models and path to them. Also, models are checked
+
+    Args:
+        models_path: List of paths to models
+        output: Directory to write models list file
+        recursive: Flag to read models directory recursively (default: False)
+        disable_bar: Flag to disable progress bar (default: False)
+
+    Returns:
+        None
+    """
     logging.getLogger("PANORAMA").info("Begin to create model list file...")
     model_list = []
     models = Models()
