@@ -17,9 +17,17 @@ from numpy import nan
 def read_metadata(metadata: Path) -> pd.DataFrame:
     """ Read metadata associate with HMM
 
-    :param metadata: PAth to metadata
+    Args:
+        metadata (Path): path to the metadata file
 
-    :return: metadata dataframe and dictionary associate hmm name with protein and secondary name
+    Raises:
+        FileNotFoundError: If metadata path is not found.
+        IOError: If the metadata path is not a file
+        ValueError: If the number of field is unexpected
+        NameError: If the column names use in metadata are not allowed
+
+    Returns:
+        str: metadata dataframe with hmm information
     """
     logging.debug("Reading HMM metadata...")
     authorize_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",
@@ -30,7 +38,7 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     if not metadata.exists():
         raise FileNotFoundError(f"Metadata file does not exist at the given path: {metadata}")
     if not metadata.is_file():
-        raise TypeError(f"Metadata path is not a file: {metadata}")
+        raise IOError(f"Metadata path is not a file: {metadata}")
     metadata_df = pd.read_csv(metadata, delimiter="\t", header=0)
     if metadata_df.shape[1] == 1 or metadata_df.shape[1] > len(authorize_names):
         raise ValueError("The number of field is unexpected. Please check that tabulation is used as separator and "
@@ -45,15 +53,35 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     return metadata_df
 
 
-def gen_acc(acc: str, panorama_acc: Set[str]):
+def gen_acc(acc: str, panorama_acc: Set[str]) -> str:
+    """
+    Generates a unique accession number for the given HMM.
+
+    Args:
+        acc (str): The accession number to check.
+        panorama_acc (Set[str]): The set of existing accession numbers.
+
+    Returns:
+        str: A unique accession number.
+    """
     if acc in panorama_acc:
-        gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
+        return gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
     else:
         panorama_acc.add(acc)
         return acc
 
 
 def read_hmm(hmm_file: Path, metadata: pd.DataFrame = None) -> Dict[str, Union[str, int, float]]:
+    """
+    Reads the given HMM file and returns a dictionary containing information about the HMM.
+
+    Args:
+        hmm_file (Path): The path to the HMM file.
+        metadata (pd.DataFrame, optional): The metadata dataframe. Defaults to None.
+
+    Returns:
+        Dict[str, Union[str, int, float]]: A dictionary containing information about the HMM.
+    """
     hmm_dict = {"name": "", 'accession': "", 'path': hmm_file, "length": nan, "description": ""}
     stop = False
     with open(hmm_file, "r") as hmm:
@@ -81,7 +109,24 @@ def read_hmm(hmm_file: Path, metadata: pd.DataFrame = None) -> Dict[str, Union[s
 
 
 def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.DataFrame = None,
-                         recursive: bool = False, disable_bar: bool = False):
+                         recursive: bool = False, disable_bar: bool = False) -> None:
+    """
+    Creates a TSV file containing information about the given HMM files.
+
+    Args:
+        hmm_path (List[Path]): The paths to the HMM files.
+        output (Path): The path to the output directory.
+        metadata_df (pd.DataFrame, optional): The metadata dataframe. Defaults to None.
+        recursive (bool, optional): Whether to search for HMM files recursively in the given directory. Defaults to False.
+        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
+
+    Raises:
+        FileNotFoundError: If any of the given paths are not found.
+        Exception: If an unexpected error occurs.
+
+    Returns:
+        None
+    """
     logging.getLogger("PANORAMA").info("Begin to create hmm list file...")
     hmm_list = []
     hmm_path_list = []
@@ -94,7 +139,7 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
                 hmm_path_list.append(hmm_file)
         else:
             if not path.exists():
-                raise FileNotFoundError(f"The given path is not find: {path}")
+                raise FileNotFoundError(f"The given path is not found: {path}")
             else:
                 raise Exception("Unexpected error")
     for hmm in tqdm(hmm_path_list, unit="HMM", disable=disable_bar):

@@ -75,7 +75,7 @@ def check_models(models_list: Path, disable_bar: bool = False):
     Checks all JSON files in the given directory to ensure that they are valid models.
 
     Args:
-        models_path (List[Path]): The paths to the models directory.
+        models_list (Path): paths to the models_list.tsv.
         disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
 
     Raises:

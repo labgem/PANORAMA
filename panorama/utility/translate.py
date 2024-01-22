@@ -23,55 +23,83 @@ from panorama.utils import mkdir
 from panorama.utility.genInput import create_hmm_list_file, gen_acc
 
 
-def read_yaml(model):
+def read_yaml(model: Path) -> dict:
     """
-    Open yaml file and return data file
+    Reads a YAML file and returns its contents as a Python object.
 
-    :param model: yaml file
-    :return: data : data yaml file
+    Args:
+        model (str): The path to the YAML file to be read.
+
+    Raises:
+        IOError: If there is a problem opening the file.
+        Exception: If there is an unexpected problem reading the file.
+
+    Returns:
+        dict: The contents of the YAML file, as a Python object.
     """
     try:
         model_file = open(model, "r")
     except IOError as ioerror:
-        raise IOError(f"Problem to open {model}. The foolowing error is direct cause\n{ioerror}")
+        raise IOError(f"Problem to open {model}. The following error is the direct cause: {ioerror}")
     except Exception as error:
-        raise Exception(f"Unexepected Problem to read {model}. The foolowing error is direct cause\n{error}")
+        raise Exception(f"Unexpected problem reading {model}. The following error is the direct cause: {error}")
     else:
         data = yaml.safe_load(model_file)
         model_file.close()
         return data
 
 
-def read_xml(model):
-    """
-    Open xml file and return the data root
 
-    :param model: xml file
-    :return: data root
+def read_xml(model: Path) -> et.Element:
+    """
+    Reads an XML file and returns its contents as a Python object.
+
+    Args:
+        model (str): The path to the YAML file to be read.
+
+    Raises:
+        IOError: If there is a problem opening the file.
+        Exception: If there is an unexpected problem reading the file.
+
+    Returns:
+        et.Element: The contents of the YAML file, as a Python object.
     """
     try:
         my_tree = et.parse(model.absolute().as_posix())
     except IOError as ioerror:
-        raise IOError(f"Problem to open {model}. The foolowing error is direct cause\n{ioerror}")
+        raise IOError(f"Problem to open {model}. The following error is direct cause\n{ioerror}")
     except Exception as error:
-        raise Exception(f"Unexepected Problem to read {model}. The foolowing error is direct cause\n{error}")
+        raise Exception(f"Unexpected Problem to read {model}. The following error is direct cause\n{error}")
     else:
         my_root = my_tree.getroot()
         return my_root
 
 
-def write_model(path_output: Path, dict_data: dict):
+def write_model(path_output: Path, dict_data: dict) -> None:
     """
-    Create new json file and write json data dictionary
+    This function writes a model to a JSON file.
 
-    :param path_output: path of output directory
-    :param dict_data: json dictionary translated
+    Args:
+        path_output (Path): The path to the output directory.
+        dict_data (dict): The model data to be written to the file.
+
+    Returns:
+        None
     """
     with open(f"{path_output}/models/{dict_data['name']}.json", "w") as my_file:
         json.dump(dict_data, my_file, indent=2)
 
 
 def parse_meta_padloc(meta: Path) -> pd.DataFrame:
+    """
+    This function parses a PADLOC metadata file and returns a pandas DataFrame containing the metadata.
+
+    Args:
+        meta (Path): The path to the PADLOC metadata file.
+
+    Returns:
+        pd.DataFrame: A pandas DataFrame containing the metadata.
+    """
     meta_col_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",
                       "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
     df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
@@ -90,34 +118,57 @@ def parse_meta_padloc(meta: Path) -> pd.DataFrame:
     return df
 
 
-def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame = None, canonical: list = None):
+def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame = None, canonical: list = None) -> dict:
     """
-    Translate the yaml data in json dictionary
+    This function translates a PADLOC model from a YAML file into a JSON format that can be used by the PADLOC software.
 
-    :param data_yaml: data yaml file to translate
+    Args:
+        data_yaml (dict): The PADLOC model data in YAML format.
+        model_name (str): The name of the PADLOC model.
+        meta (pd.DataFrame, optional): The metadata associated with the model. Defaults to None.
+        canonical (list, optional): The canonical genes associated with the model. Defaults to None.
+
+    Returns:
+        dict: The translated PADLOC model in JSON format.
+
+    Raises:
+        AssertionError: if the meta argument is not a dataframe or if the canonical argument is not a list
+        KeyError: If the PADLOC model data contains unexpected keys.
     """
     assert canonical is not None and isinstance(canonical, list)
     assert meta is not None and isinstance(meta, pd.DataFrame)
 
-    def add_family(families_list: List[str], secondary_names: List[str], meta: pd.DataFrame,
-                   fam_type: str) -> List[Dict[str, str]]:
-        family_list = []
+    def add_families(families_list: List[str], sec_names: List[str], fam_type: str) -> List[Dict[str, str]]:
+        """
+        Add a list of families to the functional unit
+
+        Args:
+            families_list: list of families to add
+            sec_names: list of known secondary names for the families
+            fam_type: type of families
+
+        Returns:
+            List[Dict[str, str]]: list of families filled with information to be a PANORAMA model
+
+        Todo:
+            * Try to find an elegant way to manage the cas_adaptation exception
+        """
+        fam_list = []
         for fam_name in families_list:
             if fam_name == "cas_adaptation":
-                # TODO try to find an elegant way to manage this exception
                 filter_df = meta.loc[meta['secondary_name'] == fam_name]
                 for filter_fam in filter_df['protein_name'].dropna().unique().tolist():
                     fam_dict = {'name': filter_fam,
                                 'presence': fam_type}
-                    family_list.append(fam_dict)
+                    fam_list.append(fam_dict)
             elif fam_name != 'NA':
                 fam_dict = {'name': fam_name,
                             'presence': fam_type}
-                if fam_name in secondary_names:
+                if fam_name in sec_names:
                     filter_df = meta.loc[meta['secondary_name'] == fam_name]
                     fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
-                family_list.append(fam_dict)
-        return family_list
+                fam_list.append(fam_dict)
+        return fam_list
 
     padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "force_strand",
                    "core_genes", "secondary_genes", "neutral_genes", "prohibited_genes"]
@@ -144,18 +195,28 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                  }
 
     family_list = list()
-    family_list += add_family(families_list=data_yaml["core_genes"],
-                              secondary_names=secondary_names, meta=meta, fam_type='mandatory')
-    family_list += add_family(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
-                              secondary_names=secondary_names, meta=meta, fam_type='accessory')
-    family_list += add_family(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
-                              secondary_names=secondary_names, meta=meta, fam_type='forbidden')
+    family_list += add_families(families_list=data_yaml["core_genes"], sec_names=secondary_names,
+                                fam_type='mandatory')
+    family_list += add_families(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
+                                sec_names=secondary_names, fam_type='accessory')
+    family_list += add_families(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
+                                sec_names=secondary_names, fam_type='forbidden')
     func_unit["families"] = family_list
     data_json['func_units'].append(func_unit)
     return data_json
 
 
 def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
+    """
+    Search in PADLOC models which models is canonical of another
+
+    Args:
+        model_name: name of the currently inspected model
+        models: All other model in PADLOC model database
+
+    Returns:
+        List[str]: List of canonical models
+    """
     canonical_sys = []
     if re.search("_other", model_name):
         basename = re.split("_other", model_name)[0]
@@ -167,7 +228,18 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_padloc(padloc_db: Path, output: Path, disable_bar: bool = False):
+def translate_padloc(padloc_db: Path, output: Path, disable_bar: bool = False) -> List[dict]:
+    """
+    Translate PADLOC models to PANORAMA models
+
+    Args:
+        padloc_db: Path to the PADLOC database
+        output: Path to the directory where to write a HMM list file for PANORAMA annotation step
+        disable_bar: Flag to disable the progress bar
+
+    Returns:
+        List[dict]: List of dictionaries containing PANORAMA model information
+    """
     list_data = []
     meta_df = parse_meta_padloc(padloc_db/"hmm_meta.txt")
     create_hmm_list_file(hmm_path=[padloc_db/"hmm"], output=output, metadata_df=meta_df, disable_bar=disable_bar)
@@ -178,7 +250,17 @@ def translate_padloc(padloc_db: Path, output: Path, disable_bar: bool = False):
         list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
     return list_data
 
-def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, splitter: str):
+def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -> dict:
+    """ Translate a gene from Defense-finder or MacSyFinder models into PANORAMA family models
+
+    Args:
+        elem: XML element corresponding to the gene to be translated
+        data: Dictionary containing PANORAMA model information
+        hmm_df: HMM information useful to translate gene into PANORAMA family models
+
+    Returns:
+        dict: Dictionary containing PANORAMA family model information
+    """
     try:
         hmm_info = hmm_df.loc[elem.get('name')]
     except KeyError:
@@ -216,7 +298,17 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, s
         return dict_elem
 
 
-def translate_fu(elem, data: dict, hmm_df: pd.DataFrame, splitter: str):
+def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
+    """ Translate a gene from Defense-finder or MacSyFinder models into PANORAMA functional unit models
+
+    Args:
+        elem: XML element corresponding to the gene to be translated
+        data: Dictionary containing PANORAMA model information
+        hmm_df: HMM information useful to translate gene into PANORAMA family models
+
+    Returns:
+        dict: Dictionary containing PANORAMA functional unit model information
+    """
     try:
         name = elem.get('name')
     except KeyError:
@@ -244,21 +336,25 @@ def translate_fu(elem, data: dict, hmm_df: pd.DataFrame, splitter: str):
                 dict_elem['parameters']['multi_model'] = True
 
         for family in elem:
-            dict_elem["families"].append(translate_gene(family, data, hmm_df, splitter))
+            dict_elem["families"].append(translate_gene(family, data, hmm_df))
         return dict_elem
 
 
-def translate_macsyfinder_model(root, model_name: str, hmm_df: pd.DataFrame, canonical: List[str], splitter: str):
+def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.DataFrame,
+                                canonical: List[str]) -> dict:
     """
-    Translate the xml data in json dictionary
+    Translate macsyfinder model (or DefenseFinder) into PANORAMA model
 
-    :param root: root of xml data
-    :param model_name: name of the model
+    Args:
+        root: Model root information
+        model_name: name of the model
+        hmm_df: HMM information to translate models into PANORAMA models
+        canonical: List of canonical models
+
+    Returns:
+        dict: PANORAMA model information
     """
-
     data_json = {"name": model_name, 'func_units': [], 'parameters': dict(), "canonical": canonical}
-    if model_name == "modules":
-        print("pika")
     if root.attrib is not None:  # Read attributes root
         for parameter, value in root.attrib.items():
             if parameter == 'inter_gene_max_space':
@@ -281,9 +377,9 @@ def translate_macsyfinder_model(root, model_name: str, hmm_df: pd.DataFrame, can
     fam_list = []
     for elem in root:
         if elem.tag == "gene":
-            fam_list.append(translate_gene(elem, data_json, hmm_df, splitter))
+            fam_list.append(translate_gene(elem, data_json, hmm_df))
         elif elem.tag == "functional_unit":
-            fu_list.append(translate_fu(elem, data_json, hmm_df, splitter))
+            fu_list.append(translate_fu(elem, data_json, hmm_df))
     if len(fu_list) == 0:  # only genes
         data_json["func_units"].append({'name': data_json["name"], 'presence': 'mandatory',
                                         "families": fam_list, 'parameters': data_json["parameters"]})
@@ -296,6 +392,15 @@ def translate_macsyfinder_model(root, model_name: str, hmm_df: pd.DataFrame, can
 
 
 def read_dfinder_hmm(hmm_file: Path) -> Dict[str, Union[str, int, float]]:
+    """
+    Read DefenseFinder HMM file and get information for PANORAMA annotation step
+
+    Args:
+        hmm_file: Path to the DefenseFinder HMM
+
+    Returns:
+        Dict[str, Union[str, int, float]]: Dictionary with all necessary information
+    """
     hmm_dict = {"name": "", 'accession': "", 'path': hmm_file, "length": nan,
                 "description": "", "protein_name": "", "secondary_name": ""}
     stop = False
@@ -328,6 +433,16 @@ def read_dfinder_hmm(hmm_file: Path) -> Dict[str, Union[str, int, float]]:
 
 
 def parse_dfinder_hmm(hmms_path: Path, output: Path) -> pd.DataFrame:
+    """
+    Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
+
+    Args:
+        hmms_path: Path to the HMM directory
+        output: Path to the output directory where HMM list file will be written
+
+    Returns:
+        pd.Dataframe: Dataframe containing the HMM information needed for model translation
+    """
     logging.getLogger("PANORAMA").info("Begin to create hmm list file...")
     panorama_acc = set()
     hmm_list = []
@@ -341,18 +456,24 @@ def parse_dfinder_hmm(hmms_path: Path, output: Path) -> pd.DataFrame:
                          "hmm_cov_threshold": nan, "target_cov_threshold": nan})
         hmm_list.append(hmm_dict)
     hmm_df = pd.DataFrame(hmm_list)
-    hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=[True, True, True], inplace=True)
+    hmm_df = hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=[True, True, True])
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     hmm_df.set_index('name', inplace=True)
     logging.getLogger("PANORAMA").info("HMM list file created.")
     return hmm_df
 
 
-
-
-
-
 def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
+    """
+    Search Canonical models for defense finder
+
+    Args:
+        model_name: Name of the model
+        models: Path to all other models
+
+    Returns:
+        List[str]: List with name of canonical model
+    """
     canonical_sys = []
     if re.search("-Type-", model_name):
         basename = re.split("-Type-", model_name)
@@ -369,18 +490,40 @@ def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_defense_finder(df_db: Path,  output: Path, tmpdir: Path, disable_bar: bool = False):
+def translate_defense_finder(df_db: Path,  output: Path, tmpdir: Path, disable_bar: bool = False) -> List[dict]:
+    """
+    Translate DefenseFinder models into PANORAMA models and write all necessary file for PANORAMA steps
+
+    Args:
+        df_db: DefenseFinder models database path
+        output: Path to output directory for PANORAMA files
+        tmpdir: Path to temporary directory
+        disable_bar: Flag to disable progress bar
+
+    Returns:
+         List[dict]: List of dictionaries containing translated models
+    """
     assert tmpdir is not None and isinstance(tmpdir, Path)
     hmm_df = parse_dfinder_hmm(df_db/"profiles", output)
     list_data = []
     for model in tqdm(list(Path(df_db/"definitions").rglob("*.xml")), unit='file', disable=disable_bar):
         canonical_sys = search_canonical_dfinder(model.stem, model.parent)
         root = read_xml(model)
-        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_df, canonical_sys, splitter="__"))
+        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_df, canonical_sys))
     return list_data
 
 
 def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
+    """
+    Search Canonical models for MacSyFinder
+
+    Args:
+        model_name: Name of the model
+        models: Path to all other models
+
+    Returns:
+        List[str]: List with name of canonical model
+    """
     canonical_sys = []
     if re.search("-Type-", model_name):
         basename = re.split("-Type-", model_name)
@@ -398,6 +541,14 @@ def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
 
 
 def parse_macsyfinder_hmm(hmms_path: Path):
+    """
+    Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
+
+    Args:
+
+    Returns:
+        List[str]: List with name of canonical model
+    """
     hmm_dict = {}
     for hmm_path in tqdm(list(hmms_path.glob('*.hmm')), unit="HMM"):
         hmm_names = []
@@ -419,25 +570,50 @@ def parse_macsyfinder_hmm(hmms_path: Path):
 
 
 def translate_macsyfinder(models: Path, hmms_path: Path, tmpdir: Path, disable_bar: bool = False):
+    """
+    Translate MacSyFinder models into PANORAMA models and write all necessary file for PANORAMA steps
+
+    Args:
+        tmpdir: Path to temporary directory
+        disable_bar: Flag to disable progress bar
+
+    Returns:
+         List[dict]: List of dictionaries containing translated models
+    """
     assert tmpdir is not None and isinstance(tmpdir, Path)
     hmm_dict = parse_macsyfinder_hmm(hmms_path)
     list_data = []
     for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
         root = read_xml(model)
-        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_dict, [], splitter="_"))
+        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_dict, []))
     return list_data
 
 
 def launch_translate(db: Path, source: str, output: Path, tmpdir: Path = None,
                      force: bool = False, disable_bar: bool = False):
+    """
+    Launch models translation process and write results for PANORAMA
+
+    Args:
+        db: Path to the models database that need to be translated
+        source: Name of the source model. PADLOC, DefenseFinder and MacSyFinder are supported for now
+        output: Path to the output directory to write all files needed for PANORAMA
+        tmpdir: A Temporary directory for models translation process
+        force: Flag to force overwrite existing files
+        disable_bar: Flag to disable progress bar
+
+    Returns:
+        None
+    """
     if source == "padloc":
         list_data = translate_padloc(padloc_db=db, output=output, disable_bar=disable_bar)
     elif source == "defense-finder":
         logging.info("Begin to translate defense finder models...")
         list_data = translate_defense_finder(df_db=db, output=output, tmpdir=tmpdir, disable_bar=disable_bar)
     elif source == "macsy-finder":
-        logging.info("Begin to translate macsy finder models...")
-        list_data = translate_macsyfinder(models=db, tmpdir=tmpdir, disable_bar=disable_bar)
+        raise NotImplementedError
+        # logging.info("Begin to translate macsy finder models...")
+        # list_data = translate_macsyfinder(models=db, tmpdir=tmpdir, disable_bar=disable_bar)
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")
