@@ -99,7 +99,7 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
             array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
     out_df = out_df.sort_values(by=['Pangenome', 'families'] + list(column_name[range(3, len(column_name), 2)]))
-    logging.info(",".join(out_df.columns[1:]))
+    logging.getLogger("PANORAMA").info(",".join(out_df.columns[1:]))
     out_df.to_csv(f"{output}/{pangenome.name}/families_annotations.tsv", sep="\t",
                   columns=out_df.columns[1:], header=True, index=False)
 
@@ -189,7 +189,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
 
     if annotation:
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.info('Write annotation')
+            logging.getLogger("PANORAMA").info('Write annotation')
             with tqdm(total=len(pan_to_path.keys()), unit='pangenome', disable=disable_bar) as progress:
                 need_families = True
                 need_metadata = True
@@ -202,7 +202,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 for future in futures:
                     future.result()
 
-            logging.info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
+            logging.getLogger("PANORAMA").info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
 
     if hmm:
         need_families = True
@@ -260,14 +260,14 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
                                     sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
-            logging.info(f"Begin writing systems projection for {pangenome_name}")
+            logging.getLogger("PANORAMA").info(f"Begin writing systems projection for {pangenome_name}")
             for source in kwargs["sources"]:
                 systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
                                                         threads=threads, force=force, disable_bar=disable_bar)
-                logging.info(f"Finish writing systems projection for {pangenome_name}")
+                logging.getLogger("PANORAMA").info(f"Finish writing systems projection for {pangenome_name}")
                 # global_systems_proj = pd.concat([global_systems_proj, systems_proj])
                 # per_pan_heatmap(name=pangenome_name, system_projection=systems_proj, output=output)
-                # logging.info(f"Finish drawing heatmap figure for {pangenome_name}")
+                # logging.getLogger("PANORAMA").info(f"Finish drawing heatmap figure for {pangenome_name}")
                 #
                 # systems_distribution = pan_distribution_system(name=pangenome_name, systems_projection=systems_proj)
                 # global_systems_distribution = pd.concat([global_systems_distribution, systems_distribution])
@@ -278,7 +278,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 #
                 # hbar_id_total(name=pangenome_name, dataframe_id=dataframe_id, dataframe_total=dataframe_total,
                 #               output=output)
-                # logging.info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
+                # logging.getLogger("PANORAMA").info(f"Finish drawing histogram (ID and total count) for {pangenome_name}")
                 #
                 # if systems_asso or conserved_spot or draw_spot:
                 #     if systems_asso in ["rgp", "rgp-modules", "rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
@@ -288,7 +288,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 #     if systems_asso in ["rgp-spots", "modules-spots", "all"] or conserved_spot or draw_spot:
                 #         bool_spots = True
                 #
-                #     logging.info("Begin write systems with features projection")
+                #     logging.getLogger("PANORAMA").info("Begin write systems with features projection")
                 #     df_sys2feat = systems_to_features(name=pangenome_name, pangenome=pangenome, systems_projection=systems_proj,
                 #                                       output=output, source=source, bool_rgp=bool_rgp, bool_modules=bool_modules,
                 #                                       bool_spots=bool_spots, threads=threads, disable_bar=disable_bar)
@@ -306,16 +306,16 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 #         df_module = mod2sys(name=pangenome_name, system_to_feature=df_sys2feat, output=output)
                 #         df_module_global = pd.concat([df_module_global, df_module])
                 #
-                #     logging.info("Projection with features written")
+                #     logging.getLogger("PANORAMA").info("Projection with features written")
                 #     upsetplot(name=pangenome_name, systems_projection=systems_proj, system_to_feature=df_sys2feat, output=output)
-                #     logging.info(f"Finish drawing upsetplot for {pangenome_name}")
+                #     logging.getLogger("PANORAMA").info(f"Finish drawing upsetplot for {pangenome_name}")
                 #
                 #     if draw_spot:
                 #         draw_spots(name=pangenome_name, pangenome=pangenome, output=output, df_spot=df_spot,
                 #                    dict_spot_org=dict_spot_org, systems_projection=systems_proj)
 
         if conserved_spot:
-            logging.info("Begin write conserved spot")
+            logging.getLogger("PANORAMA").info("Begin write conserved spot")
             manager = Manager()
             lock = manager.Lock()
             pans = load_pangenomes(pangenome_list=pangenomes, need_info={"need_families": True}, max_workers=1,
@@ -326,7 +326,7 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                            df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
 
         # heatmap(global_systems_proj=global_systems_proj, output=output)
-        # logging.info(f"Global heatmap figure created")
+        # logging.getLogger("PANORAMA").info(f"Global heatmap figure created")
         # global_systems_distribution.to_csv(f"{output}/systems_distribution.tsv", sep="\t", index=False)
         # global_systems_proj.to_csv(f"{output}/global_systems.tsv", sep="\t", index=False)
         # global_id.to_csv(f"{output}/global_systems_number_id.tsv", sep="\t", index=False)

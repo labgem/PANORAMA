@@ -29,7 +29,7 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     Returns:
         str: metadata dataframe with hmm information
     """
-    logging.debug("Reading HMM metadata...")
+    logging.getLogger("PANORAMA").debug("Reading HMM metadata...")
     authorize_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",
                        "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
     dtype = {"accession": "string", "name": "string", "protein_name": "string", "secondary_name": "string",

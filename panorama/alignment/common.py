@@ -33,7 +33,7 @@ def createdb(seq_files: List[Path], tmpdir: tempfile.TemporaryDirectory, db_type
     seqdb = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
     cmd = ["mmseqs", "createdb"] + list(map(Path.as_posix, map(Path.absolute, seq_files))) + \
           [seqdb.name, "--dbtype", str(db_type)]
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     return Path(seqdb.name)
 
@@ -48,17 +48,17 @@ def get_gf_pangenome(pangenome: Pangenome, tmpdir: tempfile.TemporaryDirectory,
 
     :return: Pangenome name and path to the sequences or the database if asked
     """
-    logging.debug(f"Creating {pangenome.name} gene families sequence file...")
+    logging.getLogger("PANORAMA").debug(f"Creating {pangenome.name} gene families sequence file...")
     gf_fasta_path = Path(f"{tmpdir.name}/{pangenome.name}_gf.fna")
     with open(gf_fasta_path, "w") as gf_fasta:
         write_gene_fam_sequences(pangenome, gf_fasta)
         if create_db:
-            logging.debug(f"Creating {pangenome.name} gene families sequence file...")
+            logging.getLogger("PANORAMA").debug(f"Creating {pangenome.name} gene families sequence file...")
             pan_db = createdb([gf_fasta_path], tmpdir)
-            logging.debug(f"{pangenome.name} gene families database created")
+            logging.getLogger("PANORAMA").debug(f"{pangenome.name} gene families database created")
             return pangenome.name, pan_db
         else:
-            logging.debug(f"{pangenome.name} gene families fasta created")
+            logging.getLogger("PANORAMA").debug(f"{pangenome.name} gene families fasta created")
             return pangenome.name, gf_fasta_path
 
 
@@ -75,7 +75,7 @@ def get_gf_pangenomes(pangenomes: Pangenomes, create_db: bool, lock: Lock, tmpdi
 
     :return: Dictionary with pangenome name and path to the sequences or database
     """
-    logging.debug("Begin create pangenomes gene families database...")
+    logging.getLogger("PANORAMA").debug("Begin create pangenomes gene families database...")
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
@@ -87,5 +87,5 @@ def get_gf_pangenomes(pangenomes: Pangenomes, create_db: bool, lock: Lock, tmpdi
             for future in futures:
                 results = future.result()
                 pangenomes_gf[results[0]] = results[1]
-    logging.debug("All pangenomes gene families database created")
+    logging.getLogger("PANORAMA").debug("All pangenomes gene families database created")
     return pangenomes_gf

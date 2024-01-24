@@ -268,7 +268,7 @@ def write_proksee_organism(pangenome: Pangenome, organism: Organism, output: Pat
     if "systems" in features or "all" in features:
         proksee_data["cgview"]["features"] += write_systems(pangenome=pangenome, organism=organism,
                                                             gf2genes=gf2genes, sources=sources)
-    logging.debug(f"Write proksee for {organism.name}")
+    logging.getLogger("PANORAMA").debug(f"Write proksee for {organism.name}")
     with open(output.joinpath(organism.name).with_suffix(".json"), "w") as out_json:
         json.dump(proksee_data, out_json, indent=2)
 

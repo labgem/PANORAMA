@@ -40,8 +40,8 @@ def write_alignment(query_db: Path, target_db: Path, aln_db: Path, outfile: Path
     """
     cmd = ["mmseqs", "convertalis", query_db.as_posix(), target_db.as_posix(), aln_db.as_posix(),
            outfile.as_posix(), "--format-output", ",".join(align_format), "--threads", str(threads)]
-    logging.debug(" ".join(cmd))
-    logging.info("Extracting alignments...")
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").info("Extracting alignments...")
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
 
 
@@ -63,11 +63,11 @@ def align_db(query_db: Path, target_db: Path, tmpdir: tempfile.TemporaryDirector
     cmd = ["mmseqs", "search", query_db.absolute().as_posix(), target_db.absolute().as_posix(),
            aln_db.absolute().as_posix(), tmpdir.name, "-a", "--min-seq-id", str(identity), "-c", str(coverage),
            "--cov-mode", str(cov_mode), "--threads", str(threads)]
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     align_time = time() - begin_time
-    logging.debug(f"Aligning done in {round(align_time, 2)} seconds")
+    logging.getLogger("PANORAMA").debug(f"Aligning done in {round(align_time, 2)} seconds")
     return aln_db
 
 
@@ -86,13 +86,13 @@ def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path,
 
     :return: Path to the alignment results
     """
-    logging.debug(f"Aligning gene families between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
+    logging.getLogger("PANORAMA").debug(f"Aligning gene families between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
     aln_db = align_db(query_db=db_pair[0], target_db=db_pair[1], tmpdir=tmpdir, identity=identity,
                       coverage=coverage, cov_mode=cov_mode, threads=threads)
-    logging.debug(f"Write alignment results between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
+    logging.getLogger("PANORAMA").debug(f"Write alignment results between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
     aln_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
     write_alignment(db_pair[0], db_pair[1], Path(aln_db.name), Path(aln_res.name), threads)
-    logging.debug("Write alignment done")
+    logging.getLogger("PANORAMA").debug("Write alignment done")
     return Path(aln_res.name)
 
 
@@ -117,7 +117,7 @@ def align_pangenomes(pangenomes_to_db: Dict[str, Path], lock: Lock, tmpdir: temp
         pangenomes_pairs = list(combinations(pangenomes_to_db.keys(), 2))
         with tqdm(total=len(pangenomes_pairs), unit='pangenomes pair', disable=disable_bar) as progress:
             futures = []
-            logging.info("Aligning gene families between pangenomes...")
+            logging.getLogger("PANORAMA").info("Aligning gene families between pangenomes...")
             for pangenomes_pair in pangenomes_pairs:
                 db_pair = (pangenomes_to_db[pangenomes_pair[0]], pangenomes_to_db[pangenomes_pair[1]])
                 future = executor.submit(align_pangenomes_pair, pangenomes_pair, db_pair, tmpdir,
@@ -141,7 +141,7 @@ def merge_aln_res(align_results: List[Path], outfile: Path):
         merge_res = pd.concat([merge_res, pd.read_csv(aln_res, sep="\t", names=align_column)],
                               ignore_index=True, copy=False)
     merge_res.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
 
 
 def inter_pangenome_align(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
@@ -165,7 +165,7 @@ def inter_pangenome_align(pangenomes: Pangenomes, output: Path, lock: Lock, tmpd
     align_results = align_pangenomes(pangenomes_db, lock, tmpdir=tmpdir, identity=identity, coverage=coverage,
                                      cov_mode=cov_mode, task=task, threads_per_task=threads_per_task,
                                      disable_bar=disable_bar)
-    logging.info("Merging pangenomes gene families aligment...")
+    logging.getLogger("PANORAMA").info("Merging pangenomes gene families aligment...")
     outfile = output / "pangenome_gf_similarities.tsv"
     merge_aln_res(align_results, outfile)
 
@@ -192,17 +192,17 @@ def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: te
                                 threads=task * threads_per_task, disable_bar=disable_bar)
     merge_db = createdb(list(gf_seqs.values()), tmpdir)
     aln_db = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
-    logging.debug("Aligning all gene families...")
+    logging.getLogger("PANORAMA").debug("Aligning all gene families...")
     align_db(query_db=merge_db, target_db=merge_db, aln_db=Path(aln_db.name), tmpdir=tmpdir,
              identity=identity, coverage=coverage, cov_mode=cov_mode, threads=task * threads_per_task)
     aln_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
     write_alignment(merge_db, merge_db, Path(aln_db.name),
                     Path(aln_res.name), task * threads_per_task)
-    logging.debug("Write alignment done")
+    logging.getLogger("PANORAMA").debug("Write alignment done")
     align_df = pd.read_csv(Path(aln_res.name), sep="\t", names=align_column)
     outfile = output / "pangenome_gf_similarities.tsv"
     align_df.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
 
     return align_df
 

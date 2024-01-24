@@ -189,12 +189,12 @@ def launch(args: argparse.Namespace):
 
     :param args: All arguments provide by user
     """
-    logging.debug("launch info command")
+    logging.getLogger("PANORAMA").debug("launch info command")
     pangenomes_to_path = check_tsv_sanity(args.pangenomes)
     info_dict = get_info(pangenomes_path=pangenomes_to_path, status=args.status, content=args.content,
                          parameters=args.parameters, metadata=args.metadata, disable_bar=args.disable_prog_bar)
     export_info(info_dict, args.output)
-    logging.info("Done")
+    logging.getLogger("PANORAMA").info("Done")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

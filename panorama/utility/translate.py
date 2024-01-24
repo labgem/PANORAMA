@@ -336,7 +336,7 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -
                             name_set = set(exchangeable_info.index.to_list())
                             exchangeable_set |= prot_name_set | name_set | secondary_name_set
             else:
-                logging.warning("Unexpected relation")
+                logging.getLogger("PANORAMA").warning("Unexpected relation")
         if len(exchangeable_set) > 0:
             if isinstance(hmm_info, pd.Series):
                 dict_elem["exchangeable"] = list(exchangeable_set.difference({hmm_info["protein_name"], ""}))
@@ -687,12 +687,12 @@ def launch_translate(db: Path, source: str, output: Path, force: bool = False, d
         list_data = translate_defense_finder(df_db=db, output=output, force=force, disable_bar=disable_bar)
     elif source == "macsy-finder":
         raise NotImplementedError
-        # logging.info("Begin to translate macsy finder models...")
+        # logging.getLogger("PANORAMA").info("Begin to translate macsy finder models...")
         # list_data = translate_macsyfinder(models=db, tmpdir=tmpdir, disable_bar=disable_bar)
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")
-    logging.info("Write models for PANORAMA...")
+    logging.getLogger("PANORAMA").info("Write models for PANORAMA...")
     model_list = []
     mkdir(output / 'models', force)
     for data in tqdm(list_data, unit="model", desc='Write models', disable=disable_bar):

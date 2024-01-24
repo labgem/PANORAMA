@@ -31,14 +31,14 @@ def write_clustering(clust_res: Path, outfile: Path):
     :param outfile: Path to the final output file
     """
 
-    logging.debug("Begin writing clustering...")
+    logging.getLogger("PANORAMA").debug("Begin writing clustering...")
     clust_df = pd.read_csv(clust_res, sep="\t", names=clust_col_names[1:])
     clust_id = {index: ref_fam for index, ref_fam in enumerate(clust_df[clust_col_names[1]].unique().tolist())}
     clust_id_df = pd.DataFrame.from_dict(clust_id, orient="index").reset_index()
     clust_id_df.columns = clust_col_names[0:2]
     merge_clust = clust_id_df.merge(clust_df, on=clust_col_names[1])
     merge_clust.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
 
 
 def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):
@@ -71,7 +71,7 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
 
     if lclust_db is None:
         lclust_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
-    logging.debug("Clustering all gene families with linclust process...")
+    logging.getLogger("PANORAMA").debug("Clustering all gene families with linclust process...")
     cmd = list(map(str, ['mmseqs', 'cluster', seq_db.absolute().as_posix(), lclust_db.absolute().as_posix(),
                          tmpdir.name, '--threads', threads, '--comp-bias-corr', mmseqs2_opt["comp_bias_corr"],
                          "--kmer-per-seq", mmseqs2_opt["kmer_per_seq"], "--min-seq-id", mmseqs2_opt["identity"],
@@ -81,11 +81,11 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
                          "--max-rejected", mmseqs2_opt["max_reject"], "--cluster-mode", mmseqs2_opt["clust_mode"]]
                    )
                )
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     lclust_time = time() - begin_time
-    logging.debug(f"Linclust done in {round(lclust_time, 2)} seconds")
+    logging.getLogger("PANORAMA").debug(f"Linclust done in {round(lclust_time, 2)} seconds")
     return lclust_db
 
 
@@ -104,7 +104,7 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
 
     if cluster_db is None:
         cluster_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
-    logging.debug("Clustering all gene families with cluster process...")
+    logging.getLogger("PANORAMA").debug("Clustering all gene families with cluster process...")
     cmd = list(map(str,
                    ['mmseqs', 'cluster', seq_db.absolute().as_posix(), cluster_db.absolute().as_posix(),
                     tmpdir.name, '--threads', threads, '--max-seqs', mmseqs2_opt["max_seqs"], '--min-ungapped-score',
@@ -116,11 +116,11 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
                     mmseqs2_opt["clust_mode"]]
                    )
                )
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     lclust_time = time() - begin_time
-    logging.debug(f"Linclust done in {round(lclust_time, 2)} seconds")
+    logging.getLogger("PANORAMA").debug(f"Linclust done in {round(lclust_time, 2)} seconds")
     return cluster_db
 
 
@@ -152,7 +152,7 @@ def cluster_gene_families(pangenomes: Pangenomes, method: str, mmseqs2_opt: Dict
     clust_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False).name)
     logging.getLogger().info("Writting clustering in tsv file")
     create_tsv(db=merge_db, clust=clust_db, output=clust_res, threads=threads)
-    logging.debug("Clustering done")
+    logging.getLogger("PANORAMA").debug("Clustering done")
     return clust_res
 
 

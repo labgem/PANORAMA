@@ -120,7 +120,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
             for pangenome in pangenomes:
-                logging.debug(f"read metadata for pangenome {pangenome.name}")
+                logging.getLogger("PANORAMA").debug(f"read metadata for pangenome {pangenome.name}")
                 metadata_file = path_to_metadata.loc[path_to_metadata["Pangenome"] == pangenome.name]["path"].squeeze()
                 future = executor.submit(read_families_metadata, pangenome, metadata_file)
                 future.add_done_callback(lambda p: progress.update())
@@ -188,7 +188,7 @@ def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata:
             futures = []
             for pangenome_name, metadata in pangenomes2metadata.items():
                 pangenome = pangenomes.get_pangenome(pangenome_name)
-                logging.debug(f"Write annotation for pangenome {pangenome.name}")
+                logging.getLogger("PANORAMA").debug(f"Write annotation for pangenome {pangenome.name}")
                 future = executor.submit(write_annotations_to_pangenome, pangenome,
                                          metadata, source, k_best_hit, force, disable_bar)
                 future.add_done_callback(lambda p: progress.update())
@@ -214,12 +214,12 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
     """
-    logging.info("Begin HMM searching")
+    logging.getLogger("PANORAMA").info("Begin HMM searching")
     # Get list of HMM with Plan7 data model
     pangenome2annot = {}
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        logging.debug(f"Align gene families to HMM for {pangenome.name}")
+        logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
         pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, bit_cutoffs,
                                                          threads, disable_bar)
 
@@ -282,10 +282,10 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Subparser to launch PANORAMA in Command line
 
     Args:
-        sub_parser: sub_parser for align command
+        sub_parser: sub_parser for annot command
 
     Returns:
-        argparse.ArgumentParser: parser arguments for align command
+        argparse.ArgumentParser: parser arguments for annot command
     """
     parser = sub_parser.add_parser("annotation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_annot(parser)

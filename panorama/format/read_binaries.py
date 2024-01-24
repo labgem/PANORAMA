@@ -55,7 +55,7 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
                               source=system_table.name)
             systems[row["ID"].decode()] = curr_sys
         curr_sys.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
-    logging.info(f"Add system from {system_table.name} to pangenome...")
+    logging.getLogger("PANORAMA").info(f"Add system from {system_table.name} to pangenome...")
     for system in tqdm(systems.values(), unit="system", disable=False if logging.getLogger().level == logging.DEBUG else True):
         pangenome.add_system(system)
 
@@ -78,9 +78,9 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
         models = Models()
         models.read(list(models_path[index].rglob("*.json")), disable_bar)
         systems_table = h5f.get_node(systems_group, source)
-        logging.info(f"Read system from {source}...")
+        logging.getLogger("PANORAMA").info(f"Read system from {source}...")
         read_systems_by_source(pangenome, systems_table, models, disable_bar)
-        logging.debug(f"{source} has been read and added")
+        logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
 
 
@@ -273,7 +273,7 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
         try:
             check_function(pangenome, **kwargs)
         except Exception as error:
-            logging.error(f"Pangenome {pangenome.name} reading return the below error")
+            logging.getLogger("PANORAMA").error(f"Pangenome {pangenome.name} reading return the below error")
             raise error
     check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
     return pangenome

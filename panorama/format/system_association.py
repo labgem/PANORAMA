@@ -190,7 +190,7 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
     organisms_projection = pd.DataFrame()
     annot2fam = get_annotation_to_families(pangenome, source)
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.info(f'Write system projection for source : {source}')
+        logging.getLogger("PANORAMA").info(f'Write system projection for source : {source}')
         with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system', disable=disable_bar) as progress:
             futures = []
             c = 0
