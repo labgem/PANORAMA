@@ -129,9 +129,8 @@ def launch(args: argparse.Namespace):
             metadata_df = None
         create_hmm_list_file(args.hmm, outdir, metadata_df, args.recursive, args.disable_prog_bar)
     if args.translate is not None:
-        outdir = mkdir(output=args.output, force=args.force)
-        launch_translate(db=args.translate, source=args.source, output=outdir,
-                         tmpdir=args.tmp, force=args.force, disable_bar=args.disable_prog_bar)
+        outdir = mkdir(output=args.output, force=args.force, erase=True)
+        launch_translate(db=args.translate, source=args.source, output=outdir, force=args.force, disable_bar=args.disable_prog_bar)
         check_models(models_list=outdir/"models_list.tsv", disable_bar=args.disable_prog_bar)
 
     if args.models is not None:
@@ -186,5 +185,5 @@ def parser_utils(parser: argparse.ArgumentParser):
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument('-o', '--output', required=False, type=Path, nargs='?', default=None,
                           help='Path to output directory.')
-    optional.add_argument("--tmp", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
-                          help="directory for storing temporary files")
+    # optional.add_argument("--tmp", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+    #                       help="directory for storing temporary files")
