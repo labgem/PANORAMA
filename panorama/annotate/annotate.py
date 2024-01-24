@@ -33,7 +33,7 @@ def check_parameter(args):
     Raises:
         argparse.ArgumentError: If any required arguments are missing or invalid.
     """
-    if args.table is None and args.hmms is None:
+    if args.table is None and args.hmm is None:
         raise argparse.ArgumentError(argument=None, message="Please provide either a table with annotation for gene "
                                                             "families or a hmms to annotate them.")
     if args.table is not None:

@@ -17,6 +17,7 @@ from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
 # local libraries
+from panorama.utility.utility import check_models
 from panorama.system import System
 from panorama.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
@@ -75,8 +76,7 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
         sources = pangenome.status["systems_sources"]
 
     for index, source in enumerate(sources):
-        models = Models()
-        models.read(list(models_path[index].rglob("*.json")), disable_bar)
+        models = check_models(models_path[index], disable_bar)
         systems_table = h5f.get_node(systems_group, source)
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
         read_systems_by_source(pangenome, systems_table, models, disable_bar)

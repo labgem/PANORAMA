@@ -43,7 +43,7 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     """
     global seq_length
     digit_gf_sequence = []
-    logging.info("Begin to digitalized gene families sequences...")
+    logging.getLogger("PANORAMA").info("Begin to digitalized gene families sequences...")
     for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
                        desc="Digitalized gene families sequences", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
@@ -66,7 +66,7 @@ def get_msa(tmpdir: Path):
         NotImplementedError: Function is not implemented yet
     """
     _ = tempfile.TemporaryDirectory(prefix="msa_panorama", dir=tmpdir)
-    logging.warning("In Dev")
+    logging.getLogger("PANORAMA").warning("In Dev")
     raise NotImplementedError
 
 
@@ -86,7 +86,7 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
     builder = pyhmmer.plan7.Builder(alphabet)
     background = pyhmmer.plan7.Background(alphabet)
     if os.stat(msa_file).st_size == 0:
-        logging.warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
+        logging.getLogger("PANORAMA").warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
     else:
         try:
             with pyhmmer.easel.MSAFile(msa_file.absolute().as_posix(), format=msa_format,
@@ -117,7 +117,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
     else:
         msa_file_list = list(msa_path.iterdir())
         with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.info("Compute gene families HMM and profile")
+            logging.getLogger("PANORAMA").info("Compute gene families HMM and profile")
             with tqdm(total=len(msa_file_list), unit='file', disable=disable_bar) as progress:
                 futures = []
                 for msa_file in msa_file_list:
@@ -148,7 +148,7 @@ def read_hmms(hmm: Path, disable_bar: bool = False) -> Tuple[List[pyhmmer.plan7.
     hmm_df = pd.read_csv(hmm, delimiter="\t", names=meta_col_names,
                          dtype=meta_dtype, header=0).set_index('accession')
     hmm_df['description'] = hmm_df["description"].fillna('unknown')
-    logging.info("Begin to read HMM...")
+    logging.getLogger("PANORAMA").info("Begin to read HMM...")
     for hmm_path in tqdm(map(lambda x: Path(x), hmm_df["path"]), total=hmm_df.shape[0],
                          desc="Reading HMM", unit='HMM', disable=disable_bar):
         end = False
@@ -188,7 +188,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     """
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    logging.info("Begin alignment of gene families to HMM")
+    logging.getLogger("PANORAMA").info("Begin alignment of gene families to HMM")
     bar = tqdm(range(len(hmm_list)), unit="hmm", desc="Align gene families to HMM", disable=disable_bar)
     options = {"bit_cutoffs": bit_cutoffs}
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, **options):
@@ -246,10 +246,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], meta: pd
         raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
     else:
         raise ValueError("Unrecognized mode: {}".format(mode))
-    logging.debug("Launch pyHMMer-HMMsearch")
+    logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMsearch")
     res = annot_with_hmmsearch(hmms, gf_sequences, meta, bit_cutoffs, threads, disable_bar)
     metadata_df = pd.DataFrame(res).fillna(nan)
     metadata_df.replace(to_replace='-', value=nan, inplace=True)
     metadata_df.replace(to_replace='', value=nan, inplace=True)
-    logging.info("HMM search done.")
+    logging.getLogger("PANORAMA").info("HMM search done.")
     return metadata_df

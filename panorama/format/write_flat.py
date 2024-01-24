@@ -424,7 +424,7 @@ def parser_write(parser):
     optional.add_argument("--draw_spot", required=False, action="store_true",
                           help="Draw spots containing at least one system")
     optional.add_argument('--models', required=False, type=Path, default=None, nargs="+",
-                          help="Path to model directory")
+                          help="Path to model list file.")
     optional.add_argument("--sources", required=False, type=str, nargs="+", default=None,
                           help='Name of the annotation source where panorama as to select in pangenomes')
     optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',

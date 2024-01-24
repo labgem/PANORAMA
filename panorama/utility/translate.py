@@ -697,7 +697,7 @@ def launch_translate(db: Path, source: str, output: Path, force: bool = False, d
     mkdir(output / 'models', force)
     for data in tqdm(list_data, unit="model", desc='Write models', disable=disable_bar):
         write_model(output, data)
-        model_list.append([data['name'], output / f"models/{data['name']}.json"])
+        model_list.append([data['name'], output.resolve() / f"models/{data['name']}.json"])
     model_df = pd.DataFrame(model_list, columns=['name', 'path'])
     model_df = model_df.sort_values('name')
     model_df.to_csv(output / "models_list.tsv", sep="\t", header=False, index=False)

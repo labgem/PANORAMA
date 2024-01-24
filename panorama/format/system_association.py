@@ -26,10 +26,8 @@ from panorama.utils import mkdir
 from panorama.system import System
 from panorama.region import Module
 from panorama.pangenomes import Pangenome
-from panorama.geneFamily import GeneFamily
-from panorama.models import Family
 from panorama.models import FuncUnit
-from panorama.detection.detection import get_annotation_to_families, dict_families_context, extract_cc, check_cc
+from panorama.detection.detection import get_annotation_to_families, dict_families_context, extract_cc, check_cc, compute_gc_graph
 
 # For Quentin
 from collections import OrderedDict, Counter
@@ -137,36 +135,13 @@ def write_system_projection(system: System, annot2fam: dict) -> Tuple[pd.DataFra
     pangenome_projection, organisms_projection = [], []
     system_orgs = set.union(*list([set(gf.organisms) for gf in system.families]))
     func_unit = list(system.model.func_units)[0]
-    graph = compute_gene_context_graph(set(system.families), func_unit.max_separation + 1, 0, True)
+    graph = compute_gc_graph(set(system.families), func_unit.max_separation + 1, 0, 0.5, True)
     families, fam2annot = dict_families_context(func_unit, annot2fam)
-    wm, wa, wo = (1, 0.5, -0.175)
-    wpm, wsm, wcm = (2, 1.5, 1)
-    wpa, wsa, wca = (1, 0.75, 0.5)
-    wpo, wso, wco = (0.5, 0.25, 0.25)
     for organism in system_orgs:
         org_graph = graph.subgraph([n for n in graph.nodes if organism in n.organisms])
         org_graph = nx.Graph((u,v,e) for u,v,e in org_graph.edges(data=True) if organism in e['genomes'])
         if check_cc(set(org_graph.nodes), families, fam2annot, func_unit):
-            # m = sum(1 for n in org_graph.nodes if n.name in fam2annot and fam2annot[n.name].presence == "mandatory")
-            mdt_p, acc_p, oth_p = (0, 0, 0)
-            mdt_s, acc_s, oth_s = (0, 0, 0)
-            mdt_c, acc_c, oth_c = (0, 0, 0)
-            for n in org_graph.nodes:
-                if n.name in fam2annot:
-                    for model_fam in fam2annot[n.name]:
-                        if model_fam.model.name == system.name:
-                             mdt_p += 1 if model_fam.presence == "mandatory" and n.named_partition == "persistent" else 0
-                             mdt_s += 1 if model_fam.presence == "mandatory" and n.named_partition == "shell" else 0
-                             mdt_c += 1 if model_fam.presence == "mandatory" and n.named_partition == "cloud" else 0
-                             acc_p += 1 if model_fam.presence == "accessory" and n.named_partition == "persistent" else 0
-                             acc_s += 1 if model_fam.presence == "accessory" and n.named_partition == "shell" else 0
-                             acc_c += 1 if model_fam.presence == "accessory" and n.named_partition == "cloud" else 0
-                else:
-                    oth_p += 1 if n.named_partition == "persistent" else 0
-                    oth_s += 1 if n.named_partition == "persistent" else 0
-                    oth_c += 1 if n.named_partition == "persistent" else 0
-            score = (mdt_p*wpm + mdt_s*wsm + mdt_c*wcm)*wm + (acc_p*wpa + acc_s*wsa + acc_c*wca)*wa + (oth_p*wpo + oth_s*wso + oth_c*wco)*wo
-            pan_proj = [system.ID, system.name, organism.name, score, len(org_graph.nodes)/len(system)]
+            pan_proj = [system.ID, system.name, organism.name, len(org_graph.nodes)/len(system)]
             genes_graph = compute_genes_graph(org_graph, organism, func_unit.max_separation + 1)
             org_proj, counter = project_system_on_organisms(genes_graph, system, organism, fam2annot)
             pangenome_projection.append(pan_proj + counter)
@@ -204,10 +179,10 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
                 pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
 
-    pangenome_projection.columns = ["system number", "system name", "organism", "score",
+    pangenome_projection.columns = ["system number", "system name", "organism",
                                     "completeness", "strict", "conserved", "split"]
-    pangenome_projection.sort_values(by=["system name", "system number", "organism", "score", "completeness"],
-                                     ascending=[True, True, True, True, True], inplace=True)
+    pangenome_projection.sort_values(by=["system name", "system number", "organism", "completeness"],
+                                     ascending=[True, True, True, True], inplace=True)
     organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition", "annotation",
                                     "gene", "start", "stop", "strand", "is_fragment", "genomic organization"]
     organisms_projection.sort_values(by=["system name", "system number", "organism", "start", "stop"],

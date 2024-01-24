@@ -68,11 +68,11 @@ def create_models_list(models_path: List[Path], output:Path, recursive: bool = F
     for path in tqdm(models_path, unit="models", disable=disable_bar):
         if path.is_file():
             models.read(path)
-            model_list.append([path.stem, path])
+            model_list.append([path.stem, path.resolve()])
         elif path.is_dir():
             for model_file in path.rglob("*.hmm") if recursive else path.glob("*.hmm"):
                 models.read(model_file)
-                model_list.append([model_file.stem, model_file])
+                model_list.append([model_file.stem, model_file.resolve()])
         else:
             if not path.exists():
                 raise FileNotFoundError(f"The given path is not find: {path}")
@@ -83,21 +83,21 @@ def create_models_list(models_path: List[Path], output:Path, recursive: bool = F
     model_df.to_csv(output/"models_list.tsv", sep="\t", header=False, index=False)
 
 
-def check_models(models_list: Path, disable_bar: bool = False):
+def check_models(models_list: Path, disable_bar: bool = False) -> Models:
     """
-    Checks all JSON files in the given directory to ensure that they are valid models.
+    Checks all JSON files listed in models_list to ensure that they are valid models.
 
     Args:
         models_list (Path): paths to the models_list.tsv.
         disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
 
+    Returns
+        Models: A Models object to get all models
+
     Raises:
-        KeyError: If any keys are missing or non-acceptable.
-        TypeError: If any values are not with good presence.
-        ValueError: If any values are not non-acceptable.
-        Exception: If an unexpected error occurs.
+        Exception: If a model is not readable.
     """
-    logging.info("Check models translation...")
+    logging.getLogger("PANORAMA").info("Check models...")
     models_df = pd.read_csv(models_list, sep="\t", names=['name', 'path'])
     models = Models()
     for idx, model_file in tqdm(models_df["path"].items(), total=models_df.shape[0],
@@ -107,6 +107,7 @@ def check_models(models_list: Path, disable_bar: bool = False):
         except Exception:
             raise Exception(f"Problem with model {model_file}. Check that you give correct input and option. "
                             "If nothing wrong please report an issue on our github.")
+    return models
 
 
 def launch(args: argparse.Namespace):
