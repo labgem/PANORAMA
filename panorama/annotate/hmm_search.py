@@ -5,9 +5,8 @@
 import os
 import collections
 import logging
-import re
 from pathlib import Path
-from typing import List, Generator, Tuple
+from typing import List, Tuple
 from tqdm import tqdm
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -32,12 +31,15 @@ seq_length = {}
 
 
 def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmmer.easel.DigitalSequence]:
-    """Digitalised pangenome gene families sequences for hmmsearch
+    """
+    Digitalised pangenome gene families sequences for hmmsearch
 
-    :param pangenome: Pangenome object with gene families
-    :param disable_bar: Disable bar
+    Args:
+        pangenome: Pangenome object with gene families
+        disable_bar: Flag to disable progress bar
 
-    :return: list of digitalised gene family sequences
+    Returns:
+        List[pyhmmer.easel.DigitalSequence]: list of digitalised gene family sequences
     """
     global seq_length
     digit_gf_sequence = []
@@ -54,19 +56,31 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
 
 
 def get_msa(tmpdir: Path):
+    """
+    Get the MSA profile
+
+    Args:
+        tmpdir: Path to the temporary directory
+
+    Raises:
+        NotImplementedError: Function is not implemented yet
+    """
     _ = tempfile.TemporaryDirectory(prefix="msa_panorama", dir=tmpdir)
     logging.warning("In Dev")
     raise NotImplementedError
 
 
 def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
-    """ Compute a profile for a gene family
+    """
+    Compute a profile for a gene family
 
-    :param gf: Gene family to profile
-    :param msa_file: path to file containing msa
-    :param msa_format: format used to write msa
+    Args:
+        gf: Gene family to profile
+        msa_file: path to file containing msa
+        msa_format: format used to write msa
 
-    :raise Exception: Problem to compute profile
+    Raises:
+        Exception: Problem to compute profile
     """
     alphabet = pyhmmer.easel.Alphabet.amino()
     builder = pyhmmer.plan7.Builder(alphabet)
@@ -87,14 +101,16 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
 
 def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa",
                 tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
-    """Create an HMM profile for each gene families
+    """
+    Create an HMM profile for each gene families
 
-    :param pangenome: Pangenome contaning gene families to profile
-    :param msa_path: path to file containing msa
-    :param msa_format: format used to write msa
-    :param tmpdir: Temporary directory for profiling
-    :param threads: Number of available threads
-    :param disable_bar: Disable progress bar
+    Args:
+        pangenome: Pangenome contaning gene families to profile
+        msa_path: Path to file containing msa
+        msa_format: format used to write msa
+        tmpdir: Temporary directory for profiling
+        threads: Number of available threads
+        disable_bar: Flag to disable progress bar
     """
     if msa_path is None:
         get_msa(tmpdir)
@@ -114,27 +130,19 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
                     future.result()
 
 
-def read_metadata(metadata: Path) -> pd.DataFrame:
-    """ Read metadata associate with HMM
-
-    :param metadata: PAth to metadata
-
-    :return: metadata dataframe and dictionnary associate hmm name with protein and secondary name
-    """
-    logging.debug("Reading HMM metadata...")
-    metadata_df = pd.read_csv(metadata, delimiter="\t", names=meta_col_names,
-                              dtype=meta_dtype, header=0).set_index('accession')
-    metadata_df['description'] = metadata_df["description"].fillna('unknown')
-    return metadata_df  # , hmm_to_metaname
-
-
 def read_hmms(hmm: Path, disable_bar: bool = False) -> Tuple[List[pyhmmer.plan7.HMM], pd.DataFrame]:
-    """Read HMM file to create HMM object
+    """
+    Read HMM file to create HMM object
 
-    :param hmm_dir: Directory with the HMM
-    :param disable_bar: Disable progress bar
+    Args:
+        hmm: Path to the HMM list file
+        disable_bar: Flag to disable the progress bar
 
-    :return: List of HMM object
+    Returns:
+        Tuple[List[pyhmmer.plan7.HMM], pd.DataFrame]: List of HMM object
+
+    Raises:
+        Exception: Unexpected error occurred while reading HMM
     """
     hmms = []
     hmm_df = pd.read_csv(hmm, delimiter="\t", names=meta_col_names,
@@ -164,15 +172,19 @@ def read_hmms(hmm: Path, disable_bar: bool = False) -> Tuple[List[pyhmmer.plan7.
 def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[pyhmmer.easel.DigitalSequence],
                          meta: pd.DataFrame = None, bit_cutoffs: str = None, threads: int = 1,
                          disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
-    """Compute HMMer alignment between gene families sequences and HMM
+    """
+    Compute HMMer alignment between gene families sequences and HMM
 
-    :param hmm_list: List of HMM
-    :param gf_sequences: List of gene families sequences
-    :param hmm_meta: Metadata associate with HMM
-    :param threads: Number of available threads
-    :param disable_bar: Disable progress bar
+    Args:
+        hmm_list: List of HMM
+        gf_sequences: List of digitalized gene families sequences
+        meta: Metadata associate with HMM
+        bit_cutoffs:
+        threads: Number of available threads
+        disable_bar:  Disable progress bar
 
-    :return: Alignment results
+    Returns:
+         List[Tuple[str, str, str, float, float, float, str, str]]: Alignment results
     """
     res = []
     result = collections.namedtuple("Result", res_col_names)
@@ -188,7 +200,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
             hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
             add_res = False
             if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])) and
-                (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
+                    (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
                 if pd.isna(hmm_info['score_threshold']):
                     if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
                         add_res = True
@@ -198,7 +210,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
             if add_res:
                 secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
                 res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                           hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
+                                  hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
         bar.update()
     bar.close()
     return res
@@ -206,20 +218,32 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
 
 def annot_with_hmm(pangenome: Pangenome, hmms: List[pyhmmer.plan7.HMM], meta: pd.DataFrame = None, mode: str = "fast",
                    bit_cutoffs: str = None, threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
-    """Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
+    """
+    Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
-    :param pangenome:  Pangenome with gene families
-    :param hmms: Specify the hmm profiles to be used for annotation
-    :param hmm_metadata: Store the metadata of the hmms
-    :param threads: Specify the number of threads to use for the hmm search
-    :param disable_bar: bool: Disable the progress bar
+    Args:
+        pangenome: Pangenome with gene families
+        hmms: Specify the hmm profiles to be used for annotation
+        meta: Store the metadata of the hmms
+        mode: Specify the number of threads to use for the hmm search
+        bit_cutoffs: Specify the model-specific thresholding
+        threads: Number of available threads
+        disable_bar: bool: Disable the progress bar
 
-    :return: A dataframe with the best result for each pangenome families
+    Returns:
+        pd.DataFrame: A dataframe with the best results for each pangenome families
+
+    Raises:
+        ValueError: if the mode is not recognized. Possible value are fast and profile
+        NotImplementedError: If the mode is profile. This option is not implemented yet
+
+    Todo:
+        Make the possibility to use the profile with the profile mode
     """
     if mode == "fast":
         gf_sequences = digit_gf_seq(pangenome, disable_bar=disable_bar)
     elif mode == "profile":
-        raise NotImplementedError
+        raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
     else:
         raise ValueError("Unrecognized mode: {}".format(mode))
     logging.debug("Launch pyHMMer-HMMsearch")

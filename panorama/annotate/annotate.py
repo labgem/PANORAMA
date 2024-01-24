@@ -33,6 +33,9 @@ def check_parameter(args):
     Raises:
         argparse.ArgumentError: If any required arguments are missing or invalid.
     """
+    if args.table is None and args.hmms is None:
+        raise argparse.ArgumentError(argument=None, message="Please provide either a table with annotation for gene "
+                                                            "families or a hmms to annotate them.")
     if args.table is not None:
         if args.mode is not None:
             logging.getLogger('PANORAMA').error("You cannot specify both --table and --mode in the same command")
@@ -71,12 +74,14 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
         pangenome: pangenome object that will be checked
         source: source of annotation to check if already in pangenome
         force: Flag to allow overwriting/erasing annotation
+    Raises:
+        KeyError: if a source with the same name already exists and force is False
     """
     if pangenome.status["metadata"]["families"] == "inFile" and source in pangenome.status["metasources"]["families"]:
         if force:
             erase_pangenome(pangenome, metadata=True, source=source)
         else:
-            raise Exception(f"A metadata corresponding to the source : '{source}' already exist in pangenome."
+            raise KeyError(f"A metadata corresponding to the source : '{source}' already exist in pangenome."
                             f"Add the option --force to erase")
 
 
@@ -239,13 +244,15 @@ def annot_pangenomes(pangenomes: Pangenomes, source: str = None, table: Path = N
         lock: Lock for multiprocessing
         force: Flag to allow force overwrite in pangenomes
         disable_bar: Flag to disable progress bar
+
+    Raises:
+        AssertionError: If neither HMM nor TSV are provided
     """
+    assert table is not None or hmm is not None, 'Must provide either table or hmm'
     if table is not None:
         pangenomes2metadata = read_families_metadata_mp(pangenomes, table, threads, disable_bar)
-    elif hmm is not None:
+    else:  # hmm is not None:
         pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, mode, bit_cutoffs, threads, disable_bar)
-    else:
-        raise Exception("You did not provide tsv or hmm for annotation")
     write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, k_best_hit, threads, lock, force, disable_bar)
 
 
