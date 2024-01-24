@@ -13,7 +13,7 @@ from multiprocessing import Manager, Lock
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
-from ppanggolin.meta.meta import check_metadata_format, assign_metadata, write_pangenome
+from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries
 from panorama.utils import init_lock

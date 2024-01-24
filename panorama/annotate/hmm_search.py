@@ -23,8 +23,8 @@ from panorama.geneFamily import GeneFamily
 
 res_col_names = ['families', 'Accession', 'protein_name', 'e_value',
                  'score', 'bias', 'secondary_name', 'Description']
-meta_col_names = ["name", "accession", "path", "length", "description", "protein_name", "secondary_name",
-                  "score_threshold", "eval_threshold", "hmm_cov_threshold", "target_cov_threshold"]
+meta_col_names = ["name", "accession", "path", "length", "protein_name", "secondary_name", "score_threshold",
+                  "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
 meta_dtype = {"accession": "string", "name": "string", "path": "string", "length": "int", "description": "string",
               "protein_name": "string", "secondary_name": "string", "score_threshold": "float",
               "eval_threshold": "float", "hmm_cov_threshold": "float", "target_cov_threshold": "float"}
@@ -41,9 +41,9 @@ def digit_gf_seq(pangenome: Pangenome, disable_bar: bool = False) -> List[pyhmme
     """
     global seq_length
     digit_gf_sequence = []
-    logging.info("Digitalized gene families sequences")
-    for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families,
-                       unit="gene families", disable=disable_bar):
+    logging.info("Begin to digitalized gene families sequences...")
+    for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
+                       desc="Digitalized gene families sequences", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
         seq = pyhmmer.easel.TextSequence(name=bit_name,
                                          sequence=family.sequence if family.HMM is None
@@ -140,8 +140,9 @@ def read_hmms(hmm: Path, disable_bar: bool = False) -> Tuple[List[pyhmmer.plan7.
     hmm_df = pd.read_csv(hmm, delimiter="\t", names=meta_col_names,
                          dtype=meta_dtype, header=0).set_index('accession')
     hmm_df['description'] = hmm_df["description"].fillna('unknown')
-    logging.info("Reading HMM...")
-    for hmm_path in tqdm(map(lambda x: Path(x), hmm_df["path"]), total=hmm_df.shape[0], unit='HMM', disable=disable_bar):
+    logging.info("Begin to read HMM...")
+    for hmm_path in tqdm(map(lambda x: Path(x), hmm_df["path"]), total=hmm_df.shape[0],
+                         desc="Reading HMM", unit='HMM', disable=disable_bar):
         end = False
         try:
             hmm_file = pyhmmer.plan7.HMMFile(hmm_path)
@@ -175,8 +176,8 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     """
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    logging.info("Align gene families to HMM")
-    bar = tqdm(range(len(hmm_list)), unit="hmm", disable=disable_bar)
+    logging.info("Begin alignment of gene families to HMM")
+    bar = tqdm(range(len(hmm_list)), unit="hmm", desc="Align gene families to HMM", disable=disable_bar)
     options = {"bit_cutoffs": bit_cutoffs}
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, **options):
         for hit in top_hits:
@@ -186,16 +187,18 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
                              seq_length[cog.target_name])
             hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
             add_res = False
-            if target_covery >= hmm_info["target_cov_threshold"] and hmm_covery >= hmm_info["hmm_cov_threshold"]:
+            if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])) and
+                (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
                 if pd.isna(hmm_info['score_threshold']):
-                    if hit.evalue < hmm_info['eval_threshold']:
+                    if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
                         add_res = True
                 else:
                     if hit.score > hmm_info['score_threshold']:
                         add_res = True
             if add_res:
+                secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
                 res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                           hit.evalue, hit.score, hit.bias, hmm_info.secondary_name, hmm_info.description))
+                           hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
         bar.update()
     bar.close()
     return res
