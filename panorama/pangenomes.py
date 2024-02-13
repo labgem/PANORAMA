@@ -163,7 +163,6 @@ class Pangenome(Pan):
                     for family in system.families:
                         family.add_system(system)
                         family.add_system(system_in)
-
         if not same_sys:
             self._max_id_system += 1
             system.ID = str(self._max_id_system)

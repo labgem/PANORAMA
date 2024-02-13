@@ -3,6 +3,8 @@
 
 # default libraries
 import logging
+import sys
+
 from tqdm import tqdm
 from typing import Any, Callable, Dict, List, Set
 from pathlib import Path
@@ -49,15 +51,19 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
     """
     systems = {}
     for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="line", disable=disable_bar):
-        curr_sys = systems.get(row["ID"].decode())
-        model = models.get_model(row["name"].decode())
-        if curr_sys is None:
-            curr_sys = System(system_id=row["ID"].decode(), model=model,
-                              source=system_table.name)
-            systems[row["ID"].decode()] = curr_sys
-        curr_sys.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
+        sys_id = row["ID"].decode()
+        if sys_id not in systems:
+            model = models.get_model(row["name"].decode())
+            system = System(system_id=row["ID"].decode(), model=model,
+                            source=system_table.name)
+            systems[row["ID"].decode()] = system
+        else:
+            system = systems[sys_id]
+        system.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
     logging.getLogger("PANORAMA").info(f"Add system from {system_table.name} to pangenome...")
-    for system in tqdm(systems.values(), unit="system", disable=False if logging.getLogger().level == logging.DEBUG else True):
+    logging.getLogger("PANORAMA").debug(f"Number of systems found: {len(systems)}")
+    for system in tqdm(sorted(systems.values(), key=lambda x: len(x), reverse=True), unit="system",
+                       disable=False if logging.getLogger().level == logging.DEBUG else True):
         pangenome.add_system(system)
 
 
@@ -141,7 +147,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
             logging.getLogger("PPanGGOLiN").info("Reading pangenome annotations...")
             read_annotation(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' has not been annotated, or has been improperly filled")
+            raise Exception(
+                f"The pangenome in file '{pangenome.file}' has not been annotated, or has been improperly filled")
 
     if gene_sequences:
         if h5f.root.status._v_attrs.geneSequences:
@@ -206,7 +213,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
                         f"Reading the {metatype} metadata from sources {metatype_sources}...")
                     read_metadata(pangenome, h5f, metatype, metatype_sources, disable_bar=disable_bar)
             else:
-                raise KeyError(f"The pangenome in file '{pangenome.file}' does not have metadata associated to {metatype}, ")
+                raise KeyError(
+                    f"The pangenome in file '{pangenome.file}' does not have metadata associated to {metatype}, ")
 
     if systems:
         read_systems(pangenome, h5f, models, sources, disable_bar)
@@ -280,9 +288,9 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
 
 
 def load_pangenomes(pangenome_list: Path, need_info: Dict[str, bool],
-                             check_function: Callable[[Pangenome, Any], None] = None,
-                             max_workers: int = 1, lock: Lock = None,
-                             disable_bar: bool = False, **kwargs) -> Pangenomes:
+                    check_function: Callable[[Pangenome, Any], None] = None,
+                    max_workers: int = 1, lock: Lock = None,
+                    disable_bar: bool = False, **kwargs) -> Pangenomes:
     """
     Load multiple pangenomes in parallel using a process pool executor.
 

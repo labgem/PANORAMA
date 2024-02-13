@@ -78,25 +78,27 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
     column_name = np.array(f"Pangenome,families,{','.join([f'Annotation_{source},Accession_{source},Secondary_names_{source}' for source in source_list])}".split(','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
-        annot_array = np.empty((gf.max_metadata_by_source()[1], 2 + nb_source * 3), dtype=object)
-        if annot_array.shape[0] > 0:
-            annot_array[:, 0] = pangenome.name
-            annot_array[:, 1] = gf.name
-            index_source = 2
-            for source in source_list:
-                index_annot = 0
-                if source in gf.sources:
-                    for annotation in gf.get_source(source):
-                        annotation: ppanggolin.metadata.Metadata
-                        annot_array[index_annot, index_source] = annotation.get("protein_name")
-                        annot_array[index_annot, index_source + 1] = annotation.get("Accession")
-                        if annotation.get("secondary_names", skip_error=True) not in [pd.NA, None]:
-                            annot_array[index_annot, index_source + 2] = annotation.get("secondary_names")
-                        else:
-                            annot_array[index_annot, index_source + 2] = '-'
-                        index_annot += 1
-                index_source += 3
-            array_list.append(annot_array)
+        if any(source in source_list for source in gf.sources):
+            annot_array = np.empty((gf.max_metadata_by_source()[1], 2 + nb_source * 3), dtype=object)
+            if annot_array.shape[0] > 0:
+                annot_array[:, 0] = pangenome.name
+                annot_array[:, 1] = gf.name
+                index_source = 2
+                for source in source_list:
+                    index_annot = 0
+                    if source in gf.sources:
+                        for annotation in gf.get_metadata_by_source(source):
+                            annotation: ppanggolin.metadata.Metadata
+                            annot_array[index_annot, index_source] = annotation.protein_name
+                            annot_array[index_annot, index_source + 1] = annotation.Accession
+                            if ('secondary_name' in annotation.__dict__.keys() and
+                                    (annotation.secondary_name is not None or annotation.secondary_name != pd.NA)):
+                                    annot_array[index_annot, index_source + 2] = annotation.secondary_name
+                            else:
+                                annot_array[index_annot, index_source + 2] = '-'
+                            index_annot += 1
+                    index_source += 3
+                array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
     out_df = out_df.sort_values(by=['Pangenome', 'families'] + list(column_name[range(3, len(column_name), 2)]))
     logging.getLogger("PANORAMA").info(",".join(out_df.columns[1:]))
@@ -108,14 +110,12 @@ def write_annotation_to_families_mp(pangenome_name: str, pangenome_info: dict, o
                                     disable_bar: bool = False):
     pangenome = Pangenome(name=pangenome_name, taxid=pangenome_info["taxid"])
     pangenome.add_file(pangenome_info["path"])
-    print(sources)
     sources = sources if sources is not None else pangenome.status['metasources']["families"]
-
     check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                          need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
                          need_spots=need_spots, need_gene_sequences=need_gene_sequences,
                          need_modules=need_modules, need_metadata=need_metadata, sources=sources,
-                         metatype="families", disable_bar=disable_bar)
+                         metatypes={"families"}, disable_bar=disable_bar)
     write_annotations_to_families(pangenome, output, sources=sources, disable_bar=disable_bar)
 
 def write_hmm(gf: GeneFamily, output: Path):

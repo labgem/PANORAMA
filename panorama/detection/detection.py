@@ -4,19 +4,18 @@
 
 # default libraries
 from __future__ import annotations
-import time
 import argparse
+from itertools import combinations
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from typing import Dict, Iterable, List, Set, Union
+from typing import Dict, Iterable, List, Set, Tuple
 from multiprocessing import Manager, Lock
 
 # installed libraries
 import networkx as nx
-from ppanggolin.genome import Gene
-from ppanggolin.context.searchGeneContext import compute_gene_context_graph, compute_edge_metrics
+from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.utils import init_lock
@@ -102,97 +101,46 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
     return families, fam2annot
 
 
-def compute_gc_graph(families: Iterable[GeneFamily], transitive: int = 4, window_size: int = 0,
-                     jaccard: float = 0.85, disable_bar: bool = False) -> nx.Graph:
-    """
-    Compute the graph with transitive closure size and window provided as parameter and filter edges based on jaccard index
-
-    Args:
-        families:
-        transitive:
-        window_size:
-        jaccard:
-        disable_bar:
-
-    Returns:
-        nx.Graph: The gene context with edges filtered based on jaccard index
-
-    Todo:
-        This function is copy/paste from PPanGGOLiN make this as function in PPanGGOLiN to call it directly
-    """
-    start_time = time.time()
-
-    logging.getLogger("PANORAMA").debug("Building the graph...")
-
-    gene_context_graph = compute_gene_context_graph(families=families, transitive=transitive,
-                                                    window_size=window_size, disable_bar=disable_bar)
-
-    logging.getLogger("PANORAMA").debug(
-        f"Took {round(time.time() - start_time, 2)} seconds to build the graph to find common gene contexts")
-
-    logging.getLogger("PANORAMA").debug(
-        f"Context graph made of {nx.number_of_nodes(gene_context_graph)} nodes and "
-        f"{nx.number_of_edges(gene_context_graph)} edges")
-
-    compute_edge_metrics(gene_context_graph, jaccard)
-
-    filter_flag = f'is_jaccard_gene_>_{jaccard}'
-
-    edges_to_remove = [(n, v) for n, v, d in gene_context_graph.edges(data=True) if not d[filter_flag]]
-    gene_context_graph.remove_edges_from(edges_to_remove)
-
-    return gene_context_graph
+def create_combinations(families: Set[GeneFamily], minimum_size: int, max_recursive_depth: int) -> Set[GeneFamily]:
+    combinations_set = set()
+    stop = False
+    size = len(families)
+    while not stop:
+        new_combinations = {c for c in combinations(families, size)}
+        if len(new_combinations) + len(combinations_set) > max_recursive_depth or size < minimum_size:
+            stop = True
+        else:
+            size -= 1
+            combinations_set.update(new_combinations)
+    return combinations_set
 
 
-def search_fu_with_one_fam(func_unit: FuncUnit, annot2fam: dict, source: str, graph: nx.Graph) -> List[System]:
-    """Search defense system with only one family necessary
+def filter_local_context(graph: nx.Graph, families: Iterable[GeneFamily], jaccard_cutoff: float = 0.8):
+    # Compute local jaccard
+    graph_org = {gene.organism for u, v, data in graph.edges(data=True) for genes in data['genes'].values()
+                 for gene in genes if u in set(families) and v in set(families)}
+    for f1, f2, data in graph.edges(data=True):
+        d = {gene for gene in f1.genes if gene.organism in graph_org}
+        e = {gene for gene in f2.genes if gene.organism in graph_org}
+        f1_gene_proportion = len(data['genes'][f1]) / len(d) if len(d) > 0 else 0
+        f2_gene_proportion = len(data['genes'][f2]) / len(e) if len(e) > 0 else 0
 
-    :param func_unit: Functional unit
-    :param annot2fam: Dictionnary which link annotation with gene family
-    :param source: name of the annotation source
-    :param graph: connected component graph
+        data['f1'] = f1.name
+        data['f2'] = f2.name
+        data['f1_jaccard_gene'] = f1_gene_proportion
+        data['f2_jaccard_gene'] = f2_gene_proportion
 
-    :return: Detected system in pangenome
-    """
-    detected_systems = []
-    for mandatory_fam in func_unit.mandatory:
-        if mandatory_fam.name in annot2fam:
-            for pan_fam in annot2fam[mandatory_fam.name]:
-                if pan_fam not in graph.nodes:
-                    detected_systems.append(
-                        System(system_id=0, model=func_unit.model, source=source, gene_families={pan_fam}))
-        for exchangeable in mandatory_fam.exchangeable:
-            if exchangeable in annot2fam:
-                for pan_fam in annot2fam[exchangeable]:
-                    if pan_fam not in graph.nodes:
-                        detected_systems.append(System(system_id=0, model=func_unit.model,
-                                                       source=source, gene_families={pan_fam}))
-    return detected_systems
+        data[f'is_jaccard_gene_>_{jaccard_cutoff}'] = ((f1_gene_proportion >= jaccard_cutoff) and
+                                                       (f2_gene_proportion >= jaccard_cutoff))
 
+    # Filter cc
+    filter_flag = f'is_jaccard_gene_>_{jaccard_cutoff}'
 
-def extract_cc(node: GeneFamily, graph: nx.Graph, seen: set) -> Set[Union[Gene, GeneFamily]]:
-    """ Get connected component of the gene family
-
-    :param node: node corresponding to gene family
-    :param graph: graph of connected component
-    :param seen: set of already check gene families
-
-    :return: set of connected component
-    """
-    nextlevel = {node}
-    cc = set()
-    while len(nextlevel) > 0:
-        thislevel = nextlevel
-        nextlevel = set()
-        for v in thislevel:
-            if v not in seen:
-                cc.add(v)
-                seen.add(v)
-                nextlevel |= set(graph.neighbors(v))
-    return cc
+    edges_to_remove = [(n, v) for n, v, d in graph.edges(data=True) if not d[filter_flag]]
+    graph.remove_edges_from(edges_to_remove)
 
 
-def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> bool:
+def check_for_forbidden(cc: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit) -> bool:
     """Check parameters
 
     :param cc: set of connected component
@@ -202,25 +150,38 @@ def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> b
 
     :return: Boolean true if parameter respected
     """
-    count_forbidden, count_mandatory, count_total = (0, 0, 0)
-    forbidden_list, mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.forbidden)),
-                                                      list(map(lambda x: x.name, func_unit.mandatory)),
-                                                      list(map(lambda x: x.name, func_unit.accessory)))
-    for fam, annot_set in fam2annot.items():
-        for annot in annot_set:
-            if annot.max_separation == -1:
-                cc.add(families[fam])
+    count_forbidden = 0
+    forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
     for node in sorted(cc, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
-        annotations = fam2annot.get(node.name)
-        if annotations is not None:
-            for annot in annotations:
+        annots = fam2annot.get(node.name)
+        if annots is not None:
+            for annot in annots:
                 if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
                     count_forbidden += 1
                     forbidden_list.remove(annot.name)
                     if count_forbidden > func_unit.max_forbidden:
-                        return False
+                        return True
                     break
-                elif annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+    return False
+
+
+def check_for_needed(cc: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit) -> bool:
+    """Check parameters
+
+    :param cc: set of connected component
+    :param fam2annot: link between gene family and annotation
+    :param func_unit:functional unit
+
+    :return: Boolean true if parameter respected
+    """
+    count_mandatory, count_total = (0, 0)
+    mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
+                                      list(map(lambda x: x.name, func_unit.accessory)))
+    for node in sorted(cc, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
+        annots = fam2annot.get(node.name)
+        if annots is not None:
+            for annot in annots:
+                if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
                     count_mandatory += 1
                     count_total += 1
                     mandatory_list.remove(annot.name)
@@ -240,34 +201,43 @@ def check_cc(cc: set, families: dict, fam2annot: dict, func_unit: FuncUnit) -> b
         return False
 
 
-def verify_param(g: nx.Graph(), families: dict, fam2annot: dict, model: Model, func_unit: FuncUnit, source: str,
-                 detected_systems: list):
-    """
-    Check if the models parameters are respected
+def search_system_in_context_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit,
+                                   model: Model, source: str, jaccard_cutoff: float = 0.8,
+                                   seen: Set[Tuple[GeneFamily]] = None, depth: int = 0,
+                                   max_depth: int = 2) -> Set[System]:
+    detected_systems = set()
+    seen = set() if seen is None else seen
+    depth += 1
+    if check_for_needed(graph.nodes(), fam2annot, func_unit):
+        involved_families = set()
+        local_graph = graph.copy()
+        filter_local_context(local_graph, families, jaccard_cutoff)
+        for cc in nx.connected_components(local_graph):
+            if check_for_needed(cc, fam2annot, func_unit) and not check_for_forbidden(cc, fam2annot, func_unit):
+                detected_systems.add(System(system_id=0, model=model, gene_families=cc, source=source))
+                involved_families |= cc.intersection(families)
+                seen.add(tuple(cc.intersection(families)))
+        if len(involved_families) < len(families) and len(families) - 1 >= func_unit.min_total and depth <= max_depth:
+            for families_combination in combinations(families, len(families) - 1):
+                if families_combination not in seen:
+                    seen.add(families_combination)
+                    families_combination = set(families_combination)
+                    if check_for_needed(families_combination, fam2annot, func_unit):
+                        dissociate_family = families.difference(families_combination)
+                        filtered_graph = graph.copy()
+                        filtered_graph.remove_nodes_from(dissociate_family)
+                        # print(model.name, depth, len(families_combination))
+                        for cc in nx.connected_components(filtered_graph):
+                            cc_graph = filtered_graph.subgraph(cc).copy()
+                            families_in_cc_graph = families_combination & cc
+                            detected_systems.update(search_system_in_context_graph(cc_graph, families_in_cc_graph,
+                                                                                   fam2annot, func_unit, model,
+                                                                                   source, jaccard_cutoff, seen,
+                                                                                   depth, max_depth))
+    return detected_systems
 
-    Args:
-        g: Connected component graph
-        families: families find in context
-        fam2annot: dictionary of families interesting
-        model: Defined model
-        func_unit: Functional unit
-        source: annotation source
-        detected_systems: detected system list
-    """
-    seen = set()
 
-    remove_node = set()
-    for node in g.nodes():
-        if node not in seen:
-            cc = extract_cc(node, g, seen)  # extract connect component
-            if check_cc(cc, families, fam2annot, func_unit):
-                detected_systems.append(System(system_id=0, model=model, gene_families=cc, source=source))
-            else:
-                remove_node |= cc
-    g.remove_nodes_from(remove_node)
-
-
-def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
+def search_system(model: Model, annot2fam: dict, source: str, jaccard_cutoff: float = 0.8) -> Set[System]:
     """
     Search if model system is in pangenome
 
@@ -279,17 +249,23 @@ def search_system(model: Model, annot2fam: dict, source: str) -> List[System]:
     Returns:
         List[System]: List of systems detected in pangenome for the given model
     """
+    detected_systems = set()
     for func_unit in model.func_units:
-        detected_systems = []
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        g = compute_gc_graph(families=families.values(),
-                             transitive=func_unit.max_separation + 1,
-                             window_size=func_unit.max_separation + 2,
-                             jaccard=0.25,
-                             disable_bar=True)
-        if func_unit.min_total == 1:
-            detected_systems += search_fu_with_one_fam(func_unit, annot2fam, source, g)
-        verify_param(g, families, fam2annot, model, func_unit, source, detected_systems)
+        if check_for_needed(families.values(), fam2annot, func_unit):
+            t = int((func_unit.max_separation + 1) / 2) if func_unit.max_separation % 2 == 1 else int(
+                func_unit.max_separation / 2)
+            # t = func_unit.max_separation + 1
+            # t = func_unit.max_separation
+            context = compute_gene_context_graph(families=families.values(), transitive=t,
+                                                 window_size=t + 1, disable_bar=True)
+            for cc_graph in [context.subgraph(c).copy() for c in nx.connected_components(context)]:
+                families_in_cc = ({fam for fam in families.values()
+                                   if fam2annot[fam.name] not in list(map(lambda x: x.name, func_unit.neutral))}
+                                  & cc_graph.nodes)
+                detected_systems.update(search_system_in_context_graph(cc_graph, families_in_cc, fam2annot,
+                                                                       func_unit, model, source, jaccard_cutoff)
+                                        )
         return detected_systems
 
 
@@ -309,7 +285,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
-                future = executor.submit(search_system, model, annot2fam, source)
+                future = executor.submit(search_system, model, annot2fam, source, 0.8)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
@@ -317,9 +293,12 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, threads: i
             for future in futures:
                 result = future.result()
                 detected_systems += result
-    for system in detected_systems:
+
+    for system in sorted(detected_systems, key=lambda x: len(x), reverse=True):
         pangenome.add_system(system)
+
     logging.getLogger("PANORAMA").info(f"System detection done in pangenome {pangenome.name}")
+
     if len(detected_systems) > 0:
         pangenome.status["systems"] = "Computed"
         logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")

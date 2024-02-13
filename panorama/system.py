@@ -21,6 +21,7 @@ class System(MetaFeatures):
     :param system_id: source of the annotation
     :param gene_families: source accesion identifier
     """
+
     def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None):
         """Constructor Method
         """
@@ -36,7 +37,7 @@ class System(MetaFeatures):
     def __hash__(self) -> int:
         """Create a hash value for the region
         """
-        return id(self)
+        return hash(self.name)
 
     def __repr__(self):
         return f"System ID: {self.ID}, Name: {self.name}"

@@ -296,7 +296,6 @@ class _FuFamFeatures:
         self._parent = parent
 
 
-
 class _ModFuFeatures:
     def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
                  accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
@@ -453,7 +452,8 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
     def read(self, data_model: dict):
         mandatory_key = ['name', 'parameters', 'func_units']
-        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
+        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory",
+                           "max_total"]
 
         check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
@@ -558,8 +558,8 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         :param data_fu: data json file of all function units
         """
         mandatory_key = ['name', 'families', 'presence']
-        fu_params = ['duplicate', 'min_total', 'min_mandatory', "max_forbidden",  'max_separation',
-                     'max_mandatory', 'max_total',  "multi_system", "multi_model"]
+        fu_params = ['duplicate', 'min_total', 'min_mandatory', "max_forbidden", 'max_separation',
+                     'max_mandatory', 'max_total', "multi_system", "multi_model"]
         check_dict(data_fu, mandatory_keys=mandatory_key)
 
         self.name = data_fu["name"]

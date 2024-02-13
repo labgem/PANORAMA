@@ -27,7 +27,7 @@ from panorama.system import System
 from panorama.region import Module
 from panorama.pangenomes import Pangenome
 from panorama.models import FuncUnit
-from panorama.detection.detection import get_annotation_to_families, dict_families_context, extract_cc, check_cc, compute_gc_graph
+from panorama.detection.detection import get_annotation_to_families, dict_families_context, check_for_needed
 
 # For Quentin
 from collections import OrderedDict, Counter
@@ -49,6 +49,7 @@ def get_models_families_by_types(system: System):
             logging.getLogger("PANORAMA").error("It's strange to arrive here. Please report an issue on our GitHub.")
     return mandatory_families, accessory_families, neutral_families
 
+
 def check_project_system_with_one_family(system: System, func_unit: FuncUnit, organism: Organism, graph: nx.Graph) -> list:
     projection = []
     default_projection = [system.ID, system.name, organism.name]
@@ -65,19 +66,11 @@ def check_project_system_with_one_family(system: System, func_unit: FuncUnit, or
 
 
 def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism, fam2annot: dict) -> Tuple[list, list]:
-    def extract_all_cc(graph: nx.graph):
-        seen = set()
-        cc_list = []
-        for node in graph.nodes():
-            if node not in seen:
-                found_cc = extract_cc(node, graph, seen)
-                cc_list.append(found_cc)
-        return cc_list
 
     projection = []
     counter = [0, 0, 0]  # count strict, conserved and split CC
     model_family = {node for node in graph.nodes if system.source in node.family.sources}  # Get all gene that have an annotation to code the system
-    for cc in extract_all_cc(graph):
+    for cc in nx.connected_components(graph):
         model_cc = {gene for gene in cc if system.source in gene.family.sources}
         if model_cc.issuperset(model_family):  # Contain all model families in the system
             if len(cc) == len(model_family):  # Subgraph with only model families
@@ -92,7 +85,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         for gene in cc:
             annot = list(fam2annot.get(gene.family.name))[0].name if fam2annot.get(gene.family.name) is not None else None
             line_projection = [gene.family.name, gene.family.named_partition, annot,
-                               gene.name if gene.name != "" else gene.local_identifier,
+                               gene.name if gene.name != "" else gene.local_identifier if gene.local_identifier != "" else gene.ID,
                                gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org]
             projection.append([system.ID, system.name, organism.name] + line_projection)
     return projection, counter
@@ -135,12 +128,18 @@ def write_system_projection(system: System, annot2fam: dict) -> Tuple[pd.DataFra
     pangenome_projection, organisms_projection = [], []
     system_orgs = set.union(*list([set(gf.organisms) for gf in system.families]))
     func_unit = list(system.model.func_units)[0]
-    graph = compute_gc_graph(set(system.families), func_unit.max_separation + 1, 0, 0.5, True)
+    t = int((func_unit.max_separation + 1) / 2) if func_unit.max_separation % 2 == 1 else int(
+        func_unit.max_separation / 2)
+    # t = func_unit.max_separation + 1
+    graph = compute_gene_context_graph(families=set(system.families), transitive=t,
+                                       window_size=t + 1, disable_bar=True)
     families, fam2annot = dict_families_context(func_unit, annot2fam)
     for organism in system_orgs:
-        org_graph = graph.subgraph([n for n in graph.nodes if organism in n.organisms])
-        org_graph = nx.Graph((u,v,e) for u,v,e in org_graph.edges(data=True) if organism in e['genomes'])
-        if check_cc(set(org_graph.nodes), families, fam2annot, func_unit):
+        org_graph = graph.copy()
+        org_graph.remove_nodes_from([n for n in graph.nodes if organism not in n.organisms])
+        edges_to_remove = [(u, v) for u, v, e in org_graph.edges(data=True) if organism not in e['genomes']]
+        org_graph.remove_edges_from(edges_to_remove)
+        if check_for_needed(set(org_graph.nodes), fam2annot, func_unit):
             pan_proj = [system.ID, system.name, organism.name, len(org_graph.nodes)/len(system)]
             genes_graph = compute_genes_graph(org_graph, organism, func_unit.max_separation + 1)
             org_proj, counter = project_system_on_organisms(genes_graph, system, organism, fam2annot)
@@ -168,7 +167,6 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
         logging.getLogger("PANORAMA").info(f'Write system projection for source : {source}')
         with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system', disable=disable_bar) as progress:
             futures = []
-            c = 0
             for system in pangenome.get_system_by_source(source):
                 future = executor.submit(write_system_projection, system, annot2fam)
                 future.add_done_callback(lambda p: progress.update())

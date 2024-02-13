@@ -144,6 +144,7 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Filtered metadata dataframe with only the k best hit
     """
+    logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
     get_best_hit = lambda group: group.nlargest(k_best_hit, columns=['score', 'e_value', 'bias'])
     return metadata.groupby('families', group_keys=False).apply(get_best_hit)
 

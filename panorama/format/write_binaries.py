@@ -87,20 +87,22 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     source_table = h5f.create_table(systems_group, source, description=system_desc(*system_len[:-1]),
                                     expectedrows=system_len[-1])
     source_row = source_table.row
-    for system in tqdm(pangenome.systems, total=len(list(pangenome.get_system_by_source(source))),
-                       unit="system", disable=disable_bar):
-        for gf in system.families:
-            source_row["ID"] = system.ID
-            source_row["name"] = system.name
-            source_row["geneFam"] = gf.name
-            source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
-            source_row.append()
-        for canonical in system.canonical:
-            for gf in canonical.families:
+    with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
+        for system in pangenome.systems:
+            for gf in system.families:
+                source_row["ID"] = system.ID
+                source_row["name"] = system.name
                 source_row["geneFam"] = gf.name
-                source_row["ID"] = canonical.ID
-                source_row["name"] = canonical.name
+                source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
                 source_row.append()
+            progress.update()
+            for canonical in system.canonical:
+                for gf in canonical.families:
+                    source_row["geneFam"] = gf.name
+                    source_row["ID"] = canonical.ID
+                    source_row["name"] = canonical.name
+                    source_row.append()
+                progress.update()
     source_table.flush()
 
 
