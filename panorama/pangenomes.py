@@ -135,6 +135,8 @@ class Pangenome(Pan):
         """Add a detected system in the pangenome
 
         :param system: Detected system that will be added
+
+        TODO merge systems
         """
         same_sys = False
         canonical_systems = []

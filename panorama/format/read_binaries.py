@@ -6,7 +6,7 @@ import logging
 import sys
 
 from tqdm import tqdm
-from typing import Any, Callable, Dict, List, Set
+from typing import Any, Callable, Dict, List, Optional, Set
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
@@ -258,7 +258,7 @@ def check_pangenome_info(pangenome, need_annotations: bool = False, need_familie
 
 
 def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
-                   check_function: Callable[[Pangenome, Any], None] = None,
+                   check_function: Callable[[Pangenome, Any, Optional[Any]], None] = None,
                    disable_bar: bool = False, **kwargs) -> Pangenome:
     """
     Load a pangenome from a given path and check the required information.
@@ -288,7 +288,7 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
 
 
 def load_pangenomes(pangenome_list: Path, need_info: Dict[str, bool],
-                    check_function: Callable[[Pangenome, Any], None] = None,
+                    check_function: Callable[[Pangenome, Any, Optional[Any]], None] = None,
                     max_workers: int = 1, lock: Lock = None,
                     disable_bar: bool = False, **kwargs) -> Pangenomes:
     """
