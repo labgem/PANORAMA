@@ -228,14 +228,16 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def parse_padloc_hmm(hmm_path: Path, output: Path, metadata_df: pd.DataFrame = None,
-                     force: bool = False, disable_bar: bool = False) -> None:
+def parse_padloc_hmm(hmm_path: Path, output: Path, metadata_df: pd.DataFrame = None, hmm_coverage: float = None,
+                     target_coverage: float = None, force: bool = False, disable_bar: bool = False) -> None:
     """
     Parse the HMM from PADLOC models and save a copy in the output directory
     Args:
         hmm_path: Path to the PADLOC HMMs
         output: Path tot the output directory
         metadata_df: Path to the metadata link to PADLOC HMM
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         force: Flag to overwrite the output directory
         disable_bar: Disable the progress bar
     """
@@ -252,17 +254,26 @@ def parse_padloc_hmm(hmm_path: Path, output: Path, metadata_df: pd.DataFrame = N
     hmm_df = pd.DataFrame(hmm_list).sort_values(by=["accession"])
     hmm_df = hmm_df[['name', 'accession', 'path', 'length', 'protein_name', 'secondary_name', 'score_threshold',
                      'eval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
+    if hmm_coverage is not None:
+        logging.getLogger("PANORAMA").warning("HMM coverage threshold will be overwritten")
+        hmm_df["hmm_cov_threshold"] = hmm_coverage
+    if target_coverage is not None:
+        logging.getLogger("PANORAMA").warning("target coverage threshold will be overwritten")
+        hmm_df["target_cov_threshold"] = target_coverage
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     logging.getLogger("PANORAMA").info("HMM list file created.")
 
 
-def translate_padloc(padloc_db: Path, output: Path, force: bool = False, disable_bar: bool = False) -> List[dict]:
+def translate_padloc(padloc_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
+                     force: bool = False, disable_bar: bool = False) -> List[dict]:
     """
     Translate PADLOC models to PANORAMA models
 
     Args:
         padloc_db: Path to the PADLOC database
         output: Path to the directory where to write a HMM list file for PANORAMA annotation step
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         force: Flag to overwrite the output directory
         disable_bar: Flag to disable the progress bar
 
@@ -271,8 +282,8 @@ def translate_padloc(padloc_db: Path, output: Path, force: bool = False, disable
     """
     list_data = []
     meta_df = parse_meta_padloc(padloc_db / "hmm_meta.txt")
-    parse_padloc_hmm(hmm_path=padloc_db / "hmm", output=output, metadata_df=meta_df, force=force,
-                     disable_bar=disable_bar)
+    parse_padloc_hmm(hmm_path=padloc_db / "hmm", output=output, metadata_df=meta_df, hmm_coverage=hmm_coverage,
+                     target_coverage=target_coverage, force=force, disable_bar=disable_bar)
     logging.getLogger("PANORAMA").info("Begin to translate padloc models...")
     for model in tqdm(list(padloc_db.rglob("*.yaml")), unit="file", disable=disable_bar):
         canonical_sys = search_canonical_padloc(model.stem, padloc_db)
@@ -439,15 +450,15 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     return data_json
 
 
-def translate_dfinder_hmm(hmm_file: Path, output: Path, panorama_acc: Set[str]) -> List[
-    Dict[str, Union[str, int, float]]]:
+def translate_dfinder_hmm(hmm_file: Path, output: Path,
+                          panorama_acc: Set[str]) -> List[Dict[str, Union[str, int, float]]]:
     """
     Read DefenseFinder HMM file and get information for PANORAMA annotation step
 
     Args:
         hmm_file: Path to the DefenseFinder HMM
         output: Path to the output directory to save the HMM compatible with PANORAMA
-        panorama_acc: Set of PANORAMA accesion ID for HMM
+        panorama_acc: Set of PANORAMA accession ID for HMM
 
     Returns:
         List[Dict[str, Union[str, int, float]]]: List of dictionaries with all necessary information to write HMM metadata
@@ -491,11 +502,11 @@ def translate_dfinder_hmm(hmm_file: Path, output: Path, panorama_acc: Set[str]) 
             hmm_dict["description"] = 'unknown'
             lines.insert(3, f"DESC  {hmm_dict['description']}\n")
         hmm_dict.update({"path": output.resolve() / f'{hmm_dict["accession"]}.hmm', "score_threshold": nan,
-                         "eval_threshold": nan, "hmm_cov_threshold": nan, "target_cov_threshold": nan})
+                         "eval_threshold": nan, "hmm_cov_threshold": 0.4, "target_cov_threshold": nan})
         hmm_dict_list.append(hmm_dict)
 
         with open(hmm_dict["path"], 'w') as w_hmm:
-            w_hmm.write(''.join([l for l in lines]))
+            w_hmm.write(''.join([row for row in lines]))
 
     hmm_dict_list = []
     with open(hmm_file, 'r') as r_hmm:
@@ -513,13 +524,16 @@ def translate_dfinder_hmm(hmm_file: Path, output: Path, panorama_acc: Set[str]) 
     return hmm_dict_list
 
 
-def parse_dfinder_hmm(hmms_path: Path, output: Path, force: bool = False, disable_bar: bool = False) -> pd.DataFrame:
+def parse_dfinder_hmm(hmms_path: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
+                      force: bool = False, disable_bar: bool = False) -> pd.DataFrame:
     """
     Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
 
     Args:
         hmms_path: Path to the HMM directory
         output: Path to the output directory where HMM list file will be written
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         force: Flag to overwrite the output directory
         disable_bar: Flag to disable the progress bar
 
@@ -537,6 +551,12 @@ def parse_dfinder_hmm(hmms_path: Path, output: Path, force: bool = False, disabl
     hmm_df = hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=[True, True, True])
     hmm_df = hmm_df[['name', 'accession', 'path', 'length', 'protein_name', 'secondary_name', 'score_threshold',
                      'eval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
+    if hmm_coverage is not None:
+        logging.getLogger("PANORAMA").warning("HMM coverage threshold will be overwritten")
+        hmm_df["hmm_cov_threshold"] = hmm_coverage
+    if target_coverage is not None:
+        logging.getLogger("PANORAMA").warning("target coverage threshold will be overwritten")
+        hmm_df["target_cov_threshold"] = target_coverage
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     hmm_df.set_index('name', inplace=True)
     logging.getLogger("PANORAMA").info("HMM list file created.")
@@ -570,20 +590,23 @@ def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_defense_finder(df_db: Path, output: Path, force: bool = False, disable_bar: bool = False) -> List[dict]:
+def translate_defense_finder(df_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
+                             force: bool = False, disable_bar: bool = False) -> List[dict]:
     """
     Translate DefenseFinder models into PANORAMA models and write all necessary file for PANORAMA steps
 
     Args:
         df_db: DefenseFinder models database path
         output: Path to output directory for PANORAMA files
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         force: Flag to force overwrite files
         disable_bar: Flag to disable progress bar
 
     Returns:
          List[dict]: List of dictionaries containing translated models
     """
-    hmm_df = parse_dfinder_hmm(df_db / "profiles", output, force, disable_bar)
+    hmm_df = parse_dfinder_hmm(df_db / "profiles", output, hmm_coverage, target_coverage, force, disable_bar)
     list_data = []
     logging.getLogger('PANORAMA').info("Begin to translate DefenseFinder models")
     for model in tqdm(list(Path(df_db / "definitions").rglob("*.xml")), unit='file',
@@ -670,7 +693,8 @@ def translate_macsyfinder(models: Path, hmms_path: Path, tmpdir: Path, disable_b
     return list_data
 
 
-def launch_translate(db: Path, source: str, output: Path, force: bool = False, disable_bar: bool = False):
+def launch_translate(db: Path, source: str, output: Path, hmm_coverage: float = None, target_coverage: float = None,
+                     force: bool = False, disable_bar: bool = False):
     """
     Launch models translation process and write results for PANORAMA
 
@@ -678,13 +702,17 @@ def launch_translate(db: Path, source: str, output: Path, force: bool = False, d
         db: Path to the models database that need to be translated
         source: Name of the source model. PADLOC, DefenseFinder and MacSyFinder are supported for now
         output: Path to the output directory to write all files needed for PANORAMA
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         force: Flag to force overwrite existing files
         disable_bar: Flag to disable progress bar
     """
     if source == "padloc":
-        list_data = translate_padloc(padloc_db=db, output=output, force=force, disable_bar=disable_bar)
+        list_data = translate_padloc(padloc_db=db, output=output, hmm_coverage=hmm_coverage,
+                                     target_coverage=target_coverage, force=force, disable_bar=disable_bar)
     elif source == "defense-finder":
-        list_data = translate_defense_finder(df_db=db, output=output, force=force, disable_bar=disable_bar)
+        list_data = translate_defense_finder(df_db=db, output=output, hmm_coverage=hmm_coverage,
+                                             target_coverage=target_coverage, force=force, disable_bar=disable_bar)
     elif source == "macsy-finder":
         raise NotImplementedError
         # logging.getLogger("PANORAMA").info("Begin to translate macsy finder models...")

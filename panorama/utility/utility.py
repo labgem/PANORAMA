@@ -6,11 +6,11 @@ import argparse
 import logging
 from typing import List
 from pathlib import Path
-import tempfile
 
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
+from ppanggolin.utils import restricted_float
 
 # local libraries
 from panorama.utils import mkdir
@@ -29,10 +29,38 @@ def check_parameters(args: argparse.Namespace) -> None:
     Raises:
         argparse.ArgumentError: If any required arguments are missing or invalid.
     """
+    def check_coverage_parameters():
+        """Check if coverage parameters to ensure that they are valid
+        """
+        if args.coverage != (None, None):
+            args.coverage = (restricted_float(args.coverage[0]), restricted_float(args.coverage[1]))
+        if args.coverage[0] is not None:
+            if args.hmm_coverage is not None:
+                args.hmm_coverage = restricted_float(args.hmm_coverage)
+                logging.getLogger("PANORAMA").warning(
+                    "coverage argument value for hmm will be overwrite by the value given for hmm_coverage."
+                    "Note: --coverage is an alias to set quicly --hmm_coverage and --target_coverage."
+                )
+            else:
+                args.hmm_coverage = args.coverage[0]
+
+        if args.coverage[1] is not None:
+            if args.target_coverage is not None:
+                args.target_coverage = restricted_float(args.target_coverage)
+                logging.getLogger("PANORAMA").warning(
+                    "coverage argument value for target will be overwrite by the value given for target_coverage."
+                    "Note: --coverage is an alias to set quicly --hmm_coverage and --target_coverage."
+                )
+            else:
+                args.target_coverage = args.coverage[1]
+
     if not any(arg is not None for arg in [args.hmm, args.translate, args.models]):
         raise argparse.ArgumentError(argument=None, message="You did not provide any action to do")
-    if args.hmm is not None and args.output is None:
-        raise argparse.ArgumentError(argument=args.output, message="Required to give an output directory to translate")
+    if args.hmm is not None:
+        if args.output is None:
+            raise argparse.ArgumentError(argument=args.output,
+                                         message="Required to give an output directory to translate")
+        check_coverage_parameters()
     if args.models is not None:
         if args.output is None:
             raise argparse.ArgumentError(argument=args.output,
@@ -46,9 +74,10 @@ def check_parameters(args: argparse.Namespace) -> None:
                                          message="Required to give an output directory to translate")
         if args.source is None:
             raise argparse.ArgumentError(argument=args.source, message="Required to know how to translate models")
+        check_coverage_parameters()
 
 
-def create_models_list(models_path: List[Path], output:Path, recursive: bool = False,
+def create_models_list(models_path: List[Path], output: Path, recursive: bool = False,
                        disable_bar: bool = False) -> None:
     """
     Create a file that listing models and path to them. Also, models are checked
@@ -80,7 +109,7 @@ def create_models_list(models_path: List[Path], output:Path, recursive: bool = F
                 raise Exception("Unexpected error")
     model_df = pd.DataFrame(model_list, columns=['name', 'path'])
     model_df = model_df.sort_values('name')
-    model_df.to_csv(output/"models_list.tsv", sep="\t", header=False, index=False)
+    model_df.to_csv(output / "models_list.tsv", sep="\t", header=False, index=False)
 
 
 def check_models(models_list: Path, disable_bar: bool = False) -> Models:
@@ -121,6 +150,7 @@ def launch(args: argparse.Namespace):
         None
     """
     check_parameters(args)
+    print(args)
     if args.hmm:
         outdir = mkdir(output=args.output, force=args.force)
         if args.meta:
@@ -128,15 +158,20 @@ def launch(args: argparse.Namespace):
             metadata_df = read_metadata(args.meta)
         else:
             metadata_df = None
-        create_hmm_list_file(args.hmm, outdir, metadata_df, args.recursive, args.disable_prog_bar)
+        create_hmm_list_file(args.hmm, outdir, metadata_df, recursive=args.hmm_coverage,
+                             hmm_coverage=args.hmm_coverage, target_coverage=args.target_coverage,
+                             disable_bar=args.target_coverage)
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force, erase=True)
-        launch_translate(db=args.translate, source=args.source, output=outdir, force=args.force, disable_bar=args.disable_prog_bar)
-        check_models(models_list=outdir/"models_list.tsv", disable_bar=args.disable_prog_bar)
+        launch_translate(db=args.translate, source=args.source, output=outdir,
+                         hmm_coverage=args.hmm_coverage, target_coverage=args.target_coverage,
+                         force=args.force, disable_bar=args.disable_prog_bar)
+        check_models(models_list=outdir / "models_list.tsv", disable_bar=args.disable_prog_bar)
 
     if args.models is not None:
         outdir = mkdir(output=args.output, force=args.force)
-        create_models_list(models_path=args.models, output=outdir, recursive=args.recursive, disable_bar=args.disable_prog_bar)
+        create_models_list(models_path=args.models, output=outdir, recursive=args.recursive,
+                           disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
@@ -166,14 +201,32 @@ def parser_utils(parser: argparse.ArgumentParser):
     """
     panorama_input = parser.add_argument_group("Create input files arguments",
                                                description="Create some input files used by PANORAMA")
-    panorama_input.add_argument("--hmm", required=False, type=Path, default=None, nargs='+',
-                                help="Path to HMM files or directory containing HMM")
     panorama_input.add_argument("--models", required=False, type=Path, nargs="+", default=None,
                                 help="Create a models_list.tsv file from the given models and check them.")
     panorama_input.add_argument("--meta", required=False, type=Path, default=None, nargs='?',
                                 help="Path to metadata file to add some to list file")
     panorama_input.add_argument("--recursive", required=False, action="store_true", default=False,
                                 help="Flag to indicate if directories should be read recursively")
+    hmm = parser.add_argument_group(title="HMM utils arguments",
+                                    description="Arguments to create an HMM list. "
+                                                "Arguments are common with translate arguments.")
+    hmm.add_argument("--hmm", required=False, type=Path, default=None, nargs='+',
+                     help="Path to HMM files or directory containing HMM")
+    hmm.add_argument("-c", "--coverage", required=False, type=float, default=(None, None), nargs=2,
+                     help="Set the coverage threshold for the hmm and the target. "
+                          "The same threshold will be used for all HMM and target. "
+                          "It's Not recommended for PADLOC. "
+                          "For defense finder and macsy finder see --hmm_coverage.")
+    hmm.add_argument("--hmm_coverage", required=False, type=float, default=None, nargs='?',
+                     help="Set the coverage threshold on the hmm. "
+                          "The same threshold will be used for all HMM. "
+                          "It's Not recommended for PADLOC. "
+                          "For defense finders it's correspond to --coverage arguments."
+                          "For macsyfinder it's correspond to --coverage-profile.")
+    hmm.add_argument("--target_coverage", required=False, type=float, default=None, nargs='?',
+                     help="Set the coverage threshold on the target. "
+                          "The same threshold will be used for all target. "
+                          "It's Not recommended for PADLOC, defensefinder or macsyfinder.")
     translate = parser.add_argument_group(title="Translate arguments",
                                           description="Arguments to translate systems models from different sources")
     translate.add_argument("--translate", required=False, type=Path, default=None,

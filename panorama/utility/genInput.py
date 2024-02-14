@@ -109,6 +109,7 @@ def read_hmm(hmm_file: Path, metadata: pd.DataFrame = None) -> Dict[str, Union[s
 
 
 def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.DataFrame = None,
+                         hmm_coverage: float = None, target_coverage: float = None,
                          recursive: bool = False, disable_bar: bool = False) -> None:
     """
     Creates a TSV file containing information about the given HMM files.
@@ -117,6 +118,8 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
         hmm_path (List[Path]): The paths to the HMM files.
         output (Path): The path to the output directory.
         metadata_df (pd.DataFrame, optional): The metadata dataframe. Defaults to None.
+        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
+        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
         recursive (bool, optional): Whether to search for HMM files recursively in the given directory. Defaults to False.
         disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
 
@@ -149,5 +152,10 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
         if hmm_dict["description"] == "":
             hmm_dict["description"] = 'unknown'
         hmm_list.append(hmm_dict)
-    pd.DataFrame(hmm_list).to_csv(output / "hmm_list.tsv", sep="\t", index=False)
+    hmm_df = pd.DataFrame(hmm_list)
+    if hmm_coverage is not None:
+        hmm_df["hmm_cov_threshold"] = hmm_coverage
+    if target_coverage is not None:
+        hmm_df["target_cov_threshold"] = target_coverage
+    hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     logging.getLogger("PANORAMA").info("HMM list file created.")
