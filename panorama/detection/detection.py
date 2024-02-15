@@ -10,8 +10,9 @@ from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from typing import Dict, Iterable, List, Set, Tuple
+from typing import Dict, List, Set, Tuple
 from multiprocessing import Manager, Lock
+from collections import defaultdict
 
 # installed libraries
 import networkx as nx
@@ -24,7 +25,7 @@ from panorama.utility.utility import check_models
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
 from panorama.geneFamily import GeneFamily
-from panorama.models import Models, Model, FuncUnit
+from panorama.models import Models, Model, FuncUnit, Family
 from panorama.system import System
 from panorama.pangenomes import Pangenome, Pangenomes
 
@@ -43,7 +44,8 @@ def check_detection_parameters(args: argparse.Namespace) -> None:
     args.annotation_source = args.source if args.annotation_source is None else args.annotation_source
 
 
-def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, system_source: str, force: bool = False):
+def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, system_source: str,
+                              force: bool = False) -> None:
     """
      Check and load pangenome information before adding annotation
 
@@ -54,7 +56,9 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
         force: Force to erase pangenome systems from source
 
     Raises:
-        KeyError: Provided source is not in the pangenome
+        KeyError: Provided annotation source is not in the pangenome
+        Exception: If System already exists in the Pangenome
+        AttributeError: If there is no metadata associated to families
     """
     if pangenome.status["systems"] == "inFile" and system_source in pangenome.status["systems_sources"]:
         if force:
@@ -67,8 +71,8 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
             raise KeyError(f"There is no metadata associate to families "
                            f"from source {annotation_source} in pangenome {pangenome.name}.")
     elif pangenome.status["metadata"]["families"] not in ["Computed", "Loaded"]:
-        raise Exception(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
-                        "Please see the command annotation before to detect systems")
+        raise AttributeError(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
+                             "Please see the command annotation before to detect systems")
 
 
 def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, Set[GeneFamily]]:
@@ -94,7 +98,8 @@ def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, S
     return annot2fam
 
 
-def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
+def dict_families_context(func_unit: FuncUnit, annot2fam: Dict[str, Set[GeneFamily]]) \
+        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]]]:
     """
     Recover all families in the function unit
 
@@ -103,30 +108,25 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: dict) -> (dict, dict):
         annot2fam: dictionary of annotated families
 
     Returns:
-        dictionary of families interesting
+        The set of families of interest in the functional unit and
+        a dictionary which link families to their annotation for the functional unit
     """
-    families = dict()
-    fam2annot = dict()
+    families = set()
+    fam2annot = defaultdict(set)
     for fam_model in func_unit.families:
         if fam_model.name in annot2fam:
             for gf in annot2fam[fam_model.name]:
-                families[gf.name] = gf
-                if gf.name in fam2annot:
-                    fam2annot[gf.name].add(fam_model)
-                else:
-                    fam2annot[gf.name] = {fam_model}
+                families.add(gf)
+                fam2annot[gf.name].add(fam_model)
         for exchangeable in fam_model.exchangeable:
             if exchangeable in annot2fam:
                 for gf in annot2fam[exchangeable]:
-                    families[gf.name] = gf
-                    if gf.name in fam2annot:
-                        fam2annot[gf.name].add(fam_model)
-                    else:
-                        fam2annot[gf.name] = {fam_model}
+                    families.add(gf)
+                    fam2annot[gf.name].add(fam_model)
     return families, fam2annot
 
 
-def filter_local_context(graph: nx.Graph, families: Iterable[GeneFamily], jaccard_threshold: float = 0.8):
+def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_threshold: float = 0.8) -> None:
     """
     Filtered a graph based on a local jaccard index
 
@@ -159,7 +159,8 @@ def filter_local_context(graph: nx.Graph, families: Iterable[GeneFamily], jaccar
     graph.remove_edges_from(edges_to_remove)
 
 
-def check_for_forbidden(families: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit) -> bool:
+def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+                        func_unit: FuncUnit) -> bool:
     """
     Check if there is forbidden in families.
 
@@ -186,7 +187,8 @@ def check_for_forbidden(families: Set[GeneFamily], fam2annot: dict, func_unit: F
     return False
 
 
-def check_for_needed(families: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit) -> bool:
+def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+                     func_unit: FuncUnit) -> bool:
     """
     Check if presence/absence rules for needed families are respected
 
@@ -225,9 +227,9 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: dict, func_unit: Func
         return False
 
 
-def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: dict, func_unit: FuncUnit,
-                           source: str, jaccard_threshold: float = 0.8, seen: Set[Tuple[GeneFamily]] = None,
-                           depth: int = 0, max_depth: int = 1) -> Set[System]:
+def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+                           func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
+                           seen: Set[Tuple[GeneFamily]] = None, depth: int = 0, max_depth: int = 1) -> Set[System]:
     """Search systems corresponding to model in a graph
 
     Args:
@@ -259,7 +261,8 @@ def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot
         if (len(involved_families) < len(families) and
                 len(families) - 1 >= func_unit.min_total and
                 depth <= max_depth and not
-                check_for_forbidden(graph.nodes(), fam2annot, func_unit)):  # Enhance by using combination only with the forbidden
+                check_for_forbidden(graph.nodes(), fam2annot,
+                                    func_unit)):  # Enhance by using combination only with the forbidden
             for families_combination in combinations(families, len(families) - 1):
                 if families_combination not in seen:
                     seen.add(families_combination)
@@ -277,8 +280,8 @@ def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot
     return detected_systems
 
 
-def search_system(model: Model, annot2fam: dict, source: str, jaccard_threshold: float = 0.8,
-                  max_depth: int = 0) -> Set[System]:
+def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: str,
+                  jaccard_threshold: float = 0.8, max_depth: int = 0) -> Set[System]:
     """
     Search if model system is in pangenome
 
@@ -295,15 +298,12 @@ def search_system(model: Model, annot2fam: dict, source: str, jaccard_threshold:
     detected_systems = set()
     for func_unit in model.func_units:
         families, fam2annot = dict_families_context(func_unit, annot2fam)
-        if check_for_needed(families.values(), fam2annot, func_unit):
-            t = int(func_unit.max_separation / 2) if func_unit.max_separation % 2 == 0 else \
-                int((func_unit.max_separation + 1) / 2)
-            # t = func_unit.max_separation + 1
-            # t = func_unit.max_separation
-            context = compute_gene_context_graph(families=families.values(), transitive=t,
+        if check_for_needed(families, fam2annot, func_unit):
+            t = func_unit.max_separation + 1
+            context = compute_gene_context_graph(families=families, transitive=t,
                                                  window_size=t + 1, disable_bar=True)
             for cc_graph in [context.subgraph(c).copy() for c in nx.connected_components(context)]:
-                families_in_cc = ({fam for fam in families.values()
+                families_in_cc = ({fam for fam in families
                                    if fam2annot[fam.name] not in list(map(lambda x: x.name, func_unit.neutral))}
                                   & cc_graph.nodes)
                 detected_systems.update(
