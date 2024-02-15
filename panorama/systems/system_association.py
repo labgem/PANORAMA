@@ -20,14 +20,14 @@ from tqdm import tqdm
 from ppanggolin.region import Region, Spot
 from ppanggolin.genome import Organism
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
-# local libraries
 
+# local libraries
 from panorama.utils import mkdir
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.region import Module
 from panorama.pangenomes import Pangenome
-from panorama.models import FuncUnit
-from panorama.detection.detection import get_annotation_to_families, dict_families_context, check_for_needed
+from panorama.systems.models import FuncUnit
+from panorama.systems.detection import get_annotation_to_families, dict_families_context, check_for_needed
 
 # For Quentin
 from collections import OrderedDict, Counter
@@ -50,7 +50,8 @@ def get_models_families_by_types(system: System):
     return mandatory_families, accessory_families, neutral_families
 
 
-def check_project_system_with_one_family(system: System, func_unit: FuncUnit, organism: Organism, graph: nx.Graph) -> list:
+def check_project_system_with_one_family(system: System, func_unit: FuncUnit, organism: Organism,
+                                         graph: nx.Graph) -> list:
     projection = []
     default_projection = [system.ID, system.name, organism.name]
     for model_family in func_unit.mandatory:
@@ -60,16 +61,18 @@ def check_project_system_with_one_family(system: System, func_unit: FuncUnit, or
                 if model_family.name in metadata:
                     for gene in gene_family.get_genes_per_org(organism):
                         line_projection = [gene_family.name, gene_family.named_partition, model_family.name,
-                                           gene.name, gene.start, gene.stop, gene.strand, gene.is_fragment, 1/len(system)]
+                                           gene.name, gene.start, gene.stop, gene.strand, gene.is_fragment,
+                                           1 / len(system)]
                         projection.append(default_projection + line_projection)
     return projection
 
 
-def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism, fam2annot: dict) -> Tuple[list, list]:
-
+def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism, fam2annot: dict) -> Tuple[
+    list, list]:
     projection = []
     counter = [0, 0, 0]  # count strict, conserved and split CC
-    model_family = {node for node in graph.nodes if system.source in node.family.sources}  # Get all gene that have an annotation to code the system
+    model_family = {node for node in graph.nodes if
+                    system.source in node.family.sources}  # Get all gene that have an annotation to code the system
     for cc in nx.connected_components(graph):
         model_cc = {gene for gene in cc if system.source in gene.family.sources}
         if model_cc.issuperset(model_family):  # Contain all model families in the system
@@ -80,10 +83,11 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
                 counter[1] += 1
                 sys_state_in_org = "conserved"
         else:  # system is split
-            counter[2] +=1
+            counter[2] += 1
             sys_state_in_org = "split"
         for gene in cc:
-            annot = list(fam2annot.get(gene.family.name))[0].name if fam2annot.get(gene.family.name) is not None else None
+            annot = list(fam2annot.get(gene.family.name))[0].name if fam2annot.get(
+                gene.family.name) is not None else None
             line_projection = [gene.family.name, gene.family.named_partition, annot,
                                gene.name if gene.name != "" else gene.local_identifier if gene.local_identifier != "" else gene.ID,
                                gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org]
@@ -94,7 +98,8 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
 def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.Graph:
     def compute_for_multigenic(family, node):
         for g in family.get_genes_per_org(organism):
-            left_genes = g.contig.get_genes(begin=g.position, end=g.position + t) if g.position < g.contig.number_of_genes else [g]
+            left_genes = g.contig.get_genes(begin=g.position,
+                                            end=g.position + t) if g.position < g.contig.number_of_genes else [g]
             right_genes = g.contig.get_genes(begin=g.position - t, end=g.position)
             if (node in left_genes or node in right_genes):
                 genes_graph.add_edge(node, g)
@@ -128,19 +133,17 @@ def write_system_projection(system: System, annot2fam: dict) -> Tuple[pd.DataFra
     pangenome_projection, organisms_projection = [], []
     system_orgs = set.union(*list([set(gf.organisms) for gf in system.families]))
     func_unit = list(system.model.func_units)[0]
-    t = int((func_unit.max_separation + 1) / 2) if func_unit.max_separation % 2 == 1 else int(
-        func_unit.max_separation / 2)
-    # t = func_unit.max_separation + 1
+    t = func_unit.max_separation + 1
     graph = compute_gene_context_graph(families=set(system.families), transitive=t,
                                        window_size=t + 1, disable_bar=True)
-    families, fam2annot = dict_families_context(func_unit, annot2fam)
+    _, fam2annot = dict_families_context(func_unit, annot2fam)
     for organism in system_orgs:
         org_graph = graph.copy()
         org_graph.remove_nodes_from([n for n in graph.nodes if organism not in n.organisms])
         edges_to_remove = [(u, v) for u, v, e in org_graph.edges(data=True) if organism not in e['genomes']]
         org_graph.remove_edges_from(edges_to_remove)
         if check_for_needed(set(org_graph.nodes), fam2annot, func_unit):
-            pan_proj = [system.ID, system.name, organism.name, len(org_graph.nodes)/len(system)]
+            pan_proj = [system.ID, system.name, organism.name, len(org_graph.nodes) / len(system)]
             genes_graph = compute_genes_graph(org_graph, organism, func_unit.max_separation + 1)
             org_proj, counter = project_system_on_organisms(genes_graph, system, organism, fam2annot)
             pangenome_projection.append(pan_proj + counter)
@@ -165,7 +168,8 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
     annot2fam = get_annotation_to_families(pangenome, source)
     with ThreadPoolExecutor(max_workers=threads) as executor:
         logging.getLogger("PANORAMA").info(f'Write system projection for source : {source}')
-        with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system', disable=disable_bar) as progress:
+        with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system',
+                  disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(source):
                 future = executor.submit(write_system_projection, system, annot2fam)
@@ -181,7 +185,8 @@ def write_systems_projection(name: str, pangenome: Pangenome, output: Path, sour
                                     "completeness", "strict", "conserved", "split"]
     pangenome_projection.sort_values(by=["system name", "system number", "organism", "completeness"],
                                      ascending=[True, True, True, True], inplace=True)
-    organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition", "annotation",
+    organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
+                                    "annotation",
                                     "gene", "start", "stop", "strand", "is_fragment", "genomic organization"]
     organisms_projection.sort_values(by=["system name", "system number", "organism", "start", "stop"],
                                      ascending=[True, True, True, True, True], inplace=True)
@@ -536,7 +541,7 @@ def write_sys_in_feature(system: System, feature: Region or Module, mandatory_fa
 
 
 def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_borders: DataFrame, output: Path) -> \
-Tuple[DataFrame, Dict]:
+        Tuple[DataFrame, Dict]:
     """Write systems associated to spots of pangenome and extract spot content
 
     :param name: pangenome name

@@ -9,7 +9,7 @@ from typing import List, Set, Union, Generator
 from ppanggolin.metadata import MetaFeatures
 
 # local libraries
-from panorama.models import Model
+from panorama.systems.models import Model
 from panorama.geneFamily import GeneFamily
 
 

@@ -9,7 +9,7 @@ from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.geneFamily import GeneFamily
 from panorama.region import Module
 

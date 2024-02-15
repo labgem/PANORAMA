@@ -17,7 +17,7 @@ from typing import TextIO
 import panorama.utility
 import panorama.info
 import panorama.annotate
-import panorama.detection
+import panorama.systems
 import panorama.alignment
 import panorama.compare
 import panorama.format.write_flat
@@ -103,11 +103,12 @@ def cmd_line():
     desc += "  Global:\n"
     desc += "       info            Provide and compare information through pangenomes\n"
     desc += "       annotation      Annotate pangenome gene families with HMM or TSV file\n"
-    desc += "       detection       Detect systems in pangenome based on one annotation source\n"
+    desc += "       systems       Detect systems in pangenome based on one annotation source\n"
     desc += "       compare         Pangenome comparison methods\n"
     desc += "       align           Align gene families from multiple pangenomes\n"
     desc += "       cluster         Cluster gene families from multiple pangenomes\n"
-    desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
+    desc += "       write           Writes 'flat' files representing pangenomes some can be used with other software\n"
+    desc += "       write_systems   Writes 'flat' files about systems detected in pangenomes\n"
     desc += "       utils           Some utility command to run analyses more easily\n"
     desc += "\n"
 
@@ -127,11 +128,12 @@ def cmd_line():
 
     subs = [panorama.info.subparser(subparsers),
             panorama.annotate.subparser(subparsers),
-            panorama.detection.subparser(subparsers),
+            panorama.systems.detection.subparser(subparsers),
             panorama.alignment.align.subparser(subparsers),
             panorama.alignment.cluster.subparser(subparsers),
             panorama.compare.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
+            panorama.systems.write_systems.subparser(subparsers),
             panorama.utility.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
@@ -164,8 +166,8 @@ def main():
         panorama.info.launch(args)
     elif args.subcommand == "annotation":
         panorama.annotate.launch(args)
-    elif args.subcommand == "detection":
-        panorama.detection.launch(args)
+    elif args.subcommand == "systems":
+        panorama.systems.detection.launch(args)
     elif args.subcommand == "align":
         panorama.alignment.align.launch(args)
     elif args.subcommand == "cluster":
@@ -174,6 +176,8 @@ def main():
         panorama.compare.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
+    elif args.subcommand == "write_systems":
+        panorama.systems.write_systems.launch(args)
     elif args.subcommand == "utils":
         panorama.utility.launch(args)
 

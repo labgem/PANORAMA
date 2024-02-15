@@ -21,12 +21,11 @@ from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.utils import init_lock
-from panorama.utility.utility import check_models
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
 from panorama.geneFamily import GeneFamily
-from panorama.models import Models, Model, FuncUnit, Family
-from panorama.system import System
+from panorama.systems.models import Models, Model, FuncUnit, Family
+from panorama.systems.system import System
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
@@ -344,7 +343,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_th
     for system in sorted(detected_systems, key=lambda x: len(x), reverse=True):
         pangenome.add_system(system)
 
-    logging.getLogger("PANORAMA").info(f"System detection done in pangenome {pangenome.name}")
+    logging.getLogger("PANORAMA").info(f"System systems done in pangenome {pangenome.name}")
 
     if len(detected_systems) > 0:
         pangenome.status["systems"] = "Computed"
@@ -371,7 +370,7 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
         disable_bar: Disable progress bar (default: False)
     """
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        logging.getLogger("PANORAMA").debug(f"Begin system detection for {pangenome.name}")
+        logging.getLogger("PANORAMA").debug(f"Begin system systems for {pangenome.name}")
         search_systems(models, pangenome, source, jaccard_threshold, max_depth, threads, lock, disable_bar)
 
 
@@ -382,6 +381,8 @@ def launch(args):
     Args:
         args: argument given in CLI
     """
+    from panorama.utility.utility import check_models
+
     check_detection_parameters(args)
     models = check_models(args.models, disable_bar=args.disable_prog_bar)
     manager = Manager()
@@ -402,22 +403,22 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Subparser to launch PANORAMA in Command line
 
     Args:
-        sub_parser: sub_parser for detection command
+        sub_parser: sub_parser for systems command
 
     Returns:
         argparse.ArgumentParser: parser arguments for align command
     """
-    parser = sub_parser.add_parser("detection", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("systems", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_detection(parser)
     return parser
 
 
 def parser_detection(parser):
     """
-    Add argument to parser for detection command
+    Add argument to parser for systems command
 
     Args:
-        parser: parser for detection argument
+        parser: parser for systems argument
 
     TODO:
         - add an option to write projection

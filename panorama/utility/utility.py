@@ -16,7 +16,7 @@ from ppanggolin.utils import restricted_float
 from panorama.utils import mkdir
 from panorama.utility.genInput import create_hmm_list_file, read_metadata
 from panorama.utility.translate import launch_translate
-from panorama.models import Models
+from panorama.systems.models import Models
 
 
 def check_parameters(args: argparse.Namespace) -> None:

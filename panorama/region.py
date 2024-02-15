@@ -2,15 +2,13 @@
 # coding: utf8
 
 # default libraries
-import logging
-from typing import Dict, Generator, List, Union
 
 # installed libraries
 from ppanggolin.region import Module as Mod
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.system import System
+from panorama.systems.system import System
 
 class Module(Mod):
     """

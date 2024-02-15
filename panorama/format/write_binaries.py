@@ -12,7 +12,7 @@ from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pang
 from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pangenome
 
 # local libraries
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.pangenomes import Pangenome
 
 

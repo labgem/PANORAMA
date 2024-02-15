@@ -4,39 +4,24 @@
 # default libraries
 from __future__ import annotations
 import argparse
-from concurrent.futures import ThreadPoolExecutor
-from copy import copy
-import collections
-import itertools
-import logging
-from pathlib import Path
-from typing import Dict, List, Set, Union
+from typing import Union
 
 # installed libraries
-import numpy as np
-import pandas as pd
 import ppanggolin.metadata
-from tqdm import tqdm
-from ppanggolin.region import Region, Spot
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gfs
 from panorama.format.read_binaries import check_pangenome_info, load_pangenomes
 from panorama.format.write_proksee import write_proksee
-from panorama.utils import check_tsv_sanity, mkdir
-from panorama.system import System
-from panorama.region import Module
+from panorama.utils import check_tsv_sanity
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenomes
-from panorama.format.system_association import *
 from panorama.format.conserved_spot import *
-from panorama.format.draw_spot_system import draw_spots
 from panorama.alignment.align import all_against_all
 
 # For Quentin
-from collections import OrderedDict
 from panorama.format.figure import *
-from multiprocessing import Manager, Lock
+from multiprocessing import Manager
 import tempfile
 
 need_annotations = False
@@ -75,7 +60,9 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
     """
     nb_source = len(sources)
     source_list = list(sources)
-    column_name = np.array(f"Pangenome,families,{','.join([f'Annotation_{source},Accession_{source},Secondary_names_{source}' for source in source_list])}".split(','))
+    column_name = np.array(
+        f"Pangenome,families,{','.join([f'Annotation_{source},Accession_{source},Secondary_names_{source}' for source in source_list])}".split(
+            ','))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit='gene families', disable=disable_bar):
         if any(source in source_list for source in gf.sources):
@@ -93,7 +80,7 @@ def write_annotations_to_families(pangenome: Pangenome, output: Path, sources: S
                             annot_array[index_annot, index_source + 1] = annotation.Accession
                             if ('secondary_name' in annotation.__dict__.keys() and
                                     (annotation.secondary_name is not None or annotation.secondary_name != pd.NA)):
-                                    annot_array[index_annot, index_source + 2] = annotation.secondary_name
+                                annot_array[index_annot, index_source + 2] = annotation.secondary_name
                             else:
                                 annot_array[index_annot, index_source + 2] = '-'
                             index_annot += 1
@@ -117,6 +104,7 @@ def write_annotation_to_families_mp(pangenome_name: str, pangenome_info: dict, o
                          need_modules=need_modules, need_metadata=need_metadata, sources=sources,
                          metatypes={"families"}, disable_bar=disable_bar)
     write_annotations_to_families(pangenome, output, sources=sources, disable_bar=disable_bar)
+
 
 def write_hmm(gf: GeneFamily, output: Path):
     """ Write an HMM profile for a gene family
@@ -153,8 +141,10 @@ def write_hmm_profile(pangenome: Pangenome, output: Path, threads: int = 1,
 
 def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangenomes: Pangenomes, output: Path,
                      annotation: bool = False, hmm: bool = False, systems: bool = False, systems_asso: List[str] = None,
-                     conserved_spot: int = None, draw_spot: bool = False, proksee: List[str] = None, proksee_template: Path = None,
-                     organisms_list: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False, **kwargs):
+                     conserved_spot: int = None, draw_spot: bool = False, proksee: List[str] = None,
+                     proksee_template: Path = None,
+                     organisms_list: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False,
+                     **kwargs):
     """Launcher to write flat file from pangenomes
 
     :param pan_to_path: Pangenome name as key and path to hdf5 file as value
@@ -202,7 +192,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
                 for future in futures:
                     future.result()
 
-            logging.getLogger("PANORAMA").info(f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
+            logging.getLogger("PANORAMA").info(
+                f"Annotation has been written in {output}/{pangenome_name}/families_annotations.tsv")
 
     if hmm:
         need_families = True
@@ -222,7 +213,6 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             threads = kwargs.get('threads', 1)
             profile_gfs(pangenome, msa_path, msa_format, threads, disable_bar)
             write_hmm_profile(pangenome, output, threads, disable_bar)
-
 
     if systems or systems_asso or conserved_spot or draw_spot:
         need_annotations = True
@@ -248,21 +238,24 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             if systems and not (systems_asso or conserved_spot or draw_spot):
                 check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                                      need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
-                                    need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-                                    need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
-                                    sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
+                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                                     need_modules=need_modules,
+                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
+                                     sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
             if systems_asso or conserved_spot or draw_spot:
                 need_rgp = True
                 need_modules = True
                 need_spots = True
                 check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
-                                    need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
-                                    need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
-                                    need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
-                                    sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
+                                     need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
+                                     need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                                     need_modules=need_modules,
+                                     need_metadata=need_metadata, need_systems=need_systems, models=kwargs["models"],
+                                     sources=kwargs["sources"], metatypes={"families"}, disable_bar=disable_bar)
             logging.getLogger("PANORAMA").info(f"Begin writing systems projection for {pangenome_name}")
             for source in kwargs["sources"]:
-                systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output, source=source,
+                systems_proj = write_systems_projection(name=pangenome_name, pangenome=pangenome, output=output,
+                                                        source=source,
                                                         threads=threads, force=force, disable_bar=disable_bar)
                 logging.getLogger("PANORAMA").info(f"Finish writing systems projection for {pangenome_name}")
                 # global_systems_proj = pd.concat([global_systems_proj, systems_proj])
@@ -360,7 +353,8 @@ def write_flat_files(pan_to_path: Dict[str, Dict[str, Union[int, str]]], pangeno
             pangenome.add_file(pangenome_info["path"])
             check_pangenome_info(pangenome, need_annotations=need_annotations, need_families=need_families,
                                  need_graph=need_graph, need_partitions=need_partitions, need_rgp=need_rgp,
-                                 need_spots=need_spots, need_gene_sequences=need_gene_sequences, need_modules=need_modules,
+                                 need_spots=need_spots, need_gene_sequences=need_gene_sequences,
+                                 need_modules=need_modules,
                                  need_metadata=need_metadata, need_systems=need_systems,
                                  models=kwargs["models"], sources=kwargs["sources"], metatype="families",
                                  disable_bar=disable_bar)
@@ -377,12 +371,13 @@ def launch(args):
     check_flat_parameters(args)
     pan_to_path = check_tsv_sanity(args.pangenomes)
     mkdir(args.output, force=args.force)
-    write_flat_files(pan_to_path, args.pangenomes, output=args.output, annotation=args.annotations, systems=args.systems,
+    write_flat_files(pan_to_path, args.pangenomes, output=args.output, annotation=args.annotations,
+                     systems=args.systems,
                      systems_asso=args.systems_asso, conserved_spot=args.conserved_spot, draw_spot=args.draw_spot,
-                     models=args.models, sources=args.sources, proksee=args.proksee, proksee_template=args.proksee_template,
+                     models=args.models, sources=args.sources, proksee=args.proksee,
+                     proksee_template=args.proksee_template,
                      organisms_list=args.organisms, hmm=args.hmm, msa_path=args.msa, msa_format=args.msa_format,
                      threads=args.threads, force=args.force, disable_bar=args.disable_prog_bar)
-
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

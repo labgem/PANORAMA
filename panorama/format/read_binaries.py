@@ -3,7 +3,6 @@
 
 # default libraries
 import logging
-import sys
 
 from tqdm import tqdm
 from typing import Any, Callable, Dict, List, Optional, Set
@@ -19,9 +18,8 @@ from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
 # local libraries
-from panorama.utility.utility import check_models
-from panorama.system import System
-from panorama.models import Models
+from panorama.systems.system import System
+from panorama.systems.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
 from panorama.utils import check_tsv_sanity, init_lock
@@ -77,6 +75,7 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path]
     :param sources: list of different source
     :param disable_bar: Disable the progress bar
     """
+    from panorama.utility.utility import check_models
     systems_group = h5f.root.systems
     if sources is None:
         sources = pangenome.status["systems_sources"]
