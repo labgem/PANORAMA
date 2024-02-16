@@ -5,7 +5,7 @@
 import logging
 
 from tqdm import tqdm
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Set, Union
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
@@ -65,26 +65,22 @@ def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, d
         pangenome.add_system(system)
 
 
-def read_systems(pangenome: Pangenome, h5f: tables.File, models_path: List[Path], sources: List[str],
+def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], sources: List[str],
                  disable_bar: bool = False):
     """Read information about systems in pangenome hdf5 file to add in pangenome object
 
     :param pangenome: Pangenome object without gene families information
     :param h5f: Pangenome HDF5 file with gene families information
-    :param models_path: list of path to models for each source
+    :param models: list of models for each source
     :param sources: list of different source
     :param disable_bar: Disable the progress bar
     """
-    from panorama.utility.utility import check_models
     systems_group = h5f.root.systems
-    if sources is None:
-        sources = pangenome.status["systems_sources"]
 
     for index, source in enumerate(sources):
-        models = check_models(models_path[index], disable_bar)
         systems_table = h5f.get_node(systems_group, source)
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, systems_table, models, disable_bar)
+        read_systems_by_source(pangenome, systems_table, models[index], disable_bar)
         logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
 
@@ -117,8 +113,9 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
 
 def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families: bool = False, graph: bool = False,
                    rgp: bool = False, spots: bool = False, gene_sequences: bool = False, modules: bool = False,
-                   systems: bool = False, models: List[Path] = None, metadata: bool = False, metatypes: Set[str] = None,
-                   sources: List[str] = None, disable_bar: bool = False):
+                   metadata: bool = False, metatypes: Set[str] = None, meta_sources: List[str] = None,
+                   systems: bool = False, models: List[Models] = None, systems_sources: List[str] = None,
+                   disable_bar: bool = False):
     """
     Reads a previously written pangenome, with all of its parts, depending on what is asked,
     with regard to what is filled in the 'status' field of the hdf5 file.
@@ -206,7 +203,7 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
                 metastatus = h5f.root.status._f_get_child("metastatus")
                 metasources = h5f.root.status._f_get_child("metasources")
 
-                metatype_sources = set(metasources._v_attrs[metatype]) & set(sources)
+                metatype_sources = set(metasources._v_attrs[metatype]) & set(meta_sources)
                 if metastatus._v_attrs[metatype] and len(metatype_sources) > 0:
                     logging.getLogger("PPanGGOLiN").info(
                         f"Reading the {metatype} metadata from sources {metatype_sources}...")
@@ -216,40 +213,28 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
                     f"The pangenome in file '{pangenome.file}' does not have metadata associated to {metatype}, ")
 
     if systems:
-        read_systems(pangenome, h5f, models, sources, disable_bar)
+        read_systems(pangenome, h5f, models, systems_sources, disable_bar)
     h5f.close()
 
 
-def check_pangenome_info(pangenome, need_annotations: bool = False, need_families: bool = False,
-                         need_graph: bool = False, need_partitions: bool = False, need_rgp: bool = False,
-                         need_spots: bool = False, need_gene_sequences: bool = False, need_modules: bool = False,
-                         need_systems: bool = False, models: List[Path] = None, need_metadata: bool = False,
-                         metatypes: Set[str] = None, sources: List[str] = None, disable_bar: bool = False):
+def check_pangenome_info(pangenome, need_systems: bool = False, models: List[Models] = None,
+                         systems_sources: List[str] = None, disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`
 
     :param pangenome: Pangenome object without some information
-    :param need_annotations: get annotation
-    :param need_families: get gene families
-    :param need_graph: get graph
-    :param need_partitions: get partition
-    :param need_rgp: get RGP
-    :param need_spots: get hotspot
-    :param need_gene_sequences: get gene sequences
-    :param need_modules: get modules
-    :param need_metadata: get metadata
-    :param metatypes: metatype of the metadata to get (None means all types with metadata)
-    :param sources: sources of the metadata to get (None means all possible sources)
     :param disable_bar: Allow to disable the progress bar
     """
-    need_info = get_need_info(pangenome, need_annotations, need_families, need_graph, need_partitions,
-                              need_rgp, need_spots, need_gene_sequences, need_modules, need_metadata,
-                              metatypes, sources)
+
+    need_info = get_need_info(pangenome, **kwargs)
+    need_info["meta_sources"] = need_info.pop("sources")
+
     if need_systems:
-        assert models is not None and sources is not None
+        assert models is not None and systems_sources is not None
         need_info["systems"] = True
         need_info["models"] = models
+        need_info["systems_sources"] = systems_sources
 
     if any(need_info.values()):
         # if no flag is true, then nothing is needed.
@@ -257,7 +242,7 @@ def check_pangenome_info(pangenome, need_annotations: bool = False, need_familie
 
 
 def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
-                   check_function: Callable[[Pangenome, Any, Optional[Any]], None] = None,
+                   check_function: Callable[[Pangenome, ...], None] = None,
                    disable_bar: bool = False, **kwargs) -> Pangenome:
     """
     Load a pangenome from a given path and check the required information.
@@ -286,10 +271,8 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
     return pangenome
 
 
-def load_pangenomes(pangenome_list: Path, need_info: Dict[str, bool],
-                    check_function: Callable[[Pangenome, Any, Optional[Any]], None] = None,
-                    max_workers: int = 1, lock: Lock = None,
-                    disable_bar: bool = False, **kwargs) -> Pangenomes:
+def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: callable = None,
+                    max_workers: int = 1, lock: Lock = None, disable_bar: bool = False, **kwargs: object) -> Pangenomes:
     """
     Load multiple pangenomes in parallel using a process pool executor.
 

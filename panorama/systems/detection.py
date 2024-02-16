@@ -20,9 +20,6 @@ from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
-from panorama.utils import init_lock
-from panorama.format.write_binaries import write_pangenome, erase_pangenome
-from panorama.format.read_binaries import load_pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Models, Model, FuncUnit, Family
 from panorama.systems.system import System
@@ -43,7 +40,7 @@ def check_detection_parameters(args: argparse.Namespace) -> None:
     args.annotation_source = args.source if args.annotation_source is None else args.annotation_source
 
 
-def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, system_source: str,
+def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, systems_source: str,
                               force: bool = False) -> None:
     """
      Check and load pangenome information before adding annotation
@@ -51,7 +48,7 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
     Args:
         pangenome:  Pangenome object
         annotation_source: Source used to annotate gene famillies
-        system_source: Source used to detect system
+        systems_source: Source used to detect system
         force: Force to erase pangenome systems from source
 
     Raises:
@@ -59,11 +56,12 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
         Exception: If System already exists in the Pangenome
         AttributeError: If there is no metadata associated to families
     """
-    if pangenome.status["systems"] == "inFile" and system_source in pangenome.status["systems_sources"]:
+    from panorama.format.write_binaries import erase_pangenome
+    if pangenome.status["systems"] == "inFile" and systems_source in pangenome.status["systems_sources"]:
         if force:
-            erase_pangenome(pangenome, systems=True, source=system_source)
+            erase_pangenome(pangenome, systems=True, source=systems_source)
         else:
-            raise Exception(f"Systems are already detected based on the source : {system_source}."
+            raise Exception(f"Systems are already detected based on the source : {systems_source}."
                             f" Use the --force option to erase the already computed systems.")
     if pangenome.status["metadata"]["families"] == "inFile":
         if annotation_source not in pangenome.status["metasources"]["families"]:
@@ -326,6 +324,9 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_th
         lock: Global lock for multiprocessing execution (default: None)
         disable_bar: Flag to disable progress bar
     """
+    from panorama.utils import init_lock
+    from panorama.format.write_binaries import write_pangenome
+
     annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
@@ -382,6 +383,7 @@ def launch(args):
         args: argument given in CLI
     """
     from panorama.utility.utility import check_models
+    from panorama.format.read_binaries import load_pangenomes
 
     check_detection_parameters(args)
     models = check_models(args.models, disable_bar=args.disable_prog_bar)
@@ -392,7 +394,7 @@ def launch(args):
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_detection, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, annotation_source=args.annotation_source,
-                                 system_source=args.source, force=args.force)
+                                 systems_source=args.source, force=args.force)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source,
                                  jaccard_threshold=args.jaccard, max_depth=args.max_depth,
                                  threads=args.threads, lock=lock, disable_bar=args.disable_prog_bar)
