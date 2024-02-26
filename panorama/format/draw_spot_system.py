@@ -59,7 +59,7 @@ def draw_spots(name: str, pangenome: Pangenome, output: Path, df_spot: DataFrame
     fam2sys_related = {}
     # fam2annot_related = {}
     for sys in pangenome.systems:
-        for fam in sys.gene_families:
+        for fam in sys.families:
             existing_sys = fam2sys_related.get(fam)
             if existing_sys:
                 fam2sys_related[fam].append(sys.name)

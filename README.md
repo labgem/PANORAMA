@@ -54,7 +54,7 @@ pangenome. In the next step to detect systems you must provide the same annotati
 It's now possible to detect systems with PANORAMA.
 
 ```shell
-panorama detection --pangenomes organisms_pangenome.list --models models_directory --source source
+panorama systems --pangenomes organisms_pangenome.list --models models_directory --source source
 ```
 System are now saved in the pangenome. 
 

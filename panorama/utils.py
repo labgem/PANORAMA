@@ -3,6 +3,7 @@
 
 # default libraries
 import logging
+import shutil
 from pathlib import Path
 import numpy as np
 import pandas as pd
@@ -11,7 +12,7 @@ from multiprocessing import Manager, Lock
 
 
 # File managing system
-def mkdir(output: Path, force: bool = False) -> Path:
+def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
     """Create a directory at the given path
 
     :param output: Path to output directory
@@ -29,8 +30,17 @@ def mkdir(output: Path, force: bool = False) -> Path:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.warning(f"{output.as_posix()} already exist and file could be overwrite by the new generated")
-            return Path(output)
+            if erase:
+                logging.getLogger("PANORAMA").warning(f"Erasing the directory: {output}")
+                try:
+                    shutil.rmtree(output)
+                except Exception:
+                    raise Exception(f"It's not possible to remove {output}. Could be due to read-only files.")
+                else:
+                    return mkdir(output, force=force, erase=erase)
+            else:
+                logging.getLogger("PANORAMA").warning(f"{output.as_posix()} already exist and file could be overwrite by the new generated")
+                return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")
     else:

@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 from typing import Dict, List, Set, Tuple
 
+import networkx as nx
 # installed libraries
 import numpy as np
 import pandas as pd
@@ -18,175 +19,54 @@ from pandas import DataFrame
 from tqdm import tqdm
 from ppanggolin.region import Region, Spot
 from ppanggolin.genome import Organism
-# local libraries
+from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
+# local libraries
 from panorama.utils import mkdir
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.region import Module
 from panorama.pangenomes import Pangenome
+from panorama.systems.models import FuncUnit
+from panorama.systems.detection import get_annotation_to_families, dict_families_context, check_for_needed
 
 # For Quentin
 from collections import OrderedDict, Counter
 
 
-def write_sys_to_organism(system: System, organism, projection, mandatory_family, accessory_family, fu) -> bool:
-    """ Project system to organism
-
-    :param system: Detected system
-    :param organism: organism in pangenome
-    :param projection: projection list output
-    :param mandatory_family: list of mandatory families in system
-    :param accessory_family: list of accessory family in system
-    :param fu: functional unit
-
-    :return: True if a projection occurs in organism
-    """
-
-    def search_diagonal(matrix: np.ndarray, min_necessary: int = None) -> List[List[int]]:
-        """Search any possible diagonals in matrix to confirm system projection
-
-        :param matrix: matrix with present family in system and pangenome
-        :param min_necessary: minimum length of diagonal to project
-
-        :return: list of diagonals found
-        """
-        r_diags = []
-        min_necessary = matrix.shape[0] if min_necessary is None else min_necessary
-        nonull_matrix = matrix[:, ~np.all(matrix == 0, axis=0)]
-        diags = [nonull_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
-                 if len(nonull_matrix.diagonal(i).tolist()) >= min_necessary]
-        for comb_cols in itertools.permutations(range(0, nonull_matrix.shape[1]), 2):
-            copy_matrix = copy(nonull_matrix)
-            copy_matrix[:, [comb_cols[1], comb_cols[0]]] = nonull_matrix[:, comb_cols]
-            diags.extend(copy_matrix.diagonal(i).tolist() for i in range(-min_necessary, min_necessary, 1)
-                         if len(copy_matrix.diagonal(i).tolist()) >= min_necessary)
-        for diag in diags:
-            for comb in [diag[i: i + min_necessary] for i in range(0, len(diag) - min_necessary + 1)]:
-                if all(x > 0 for x in comb):
-                    r_diags.append(comb)
-        r_diags.sort()
-        return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
-
-    org_projection = [system.ID, system.name, organism.name]
-    select_families = system.gene_families.intersection(set(organism.families))
-    mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}
-    accessory_index = {accessory: index for index, accessory in enumerate(accessory_family,
-                                                                          start=1 + len(mandatory_family))}
-    nb_annotation = len(mandatory_family) + len(accessory_family)
-    bool_projection = False
-    for comb_gf in itertools.permutations(select_families, fu.min_total):
-        mandatory_matrix = np.zeros((len(comb_gf), len(mandatory_family)))
-        all_matrix = np.concatenate((mandatory_matrix, np.zeros((len(comb_gf), len(accessory_family)))), axis=1)
-        coordinate_dict = {}
-        for index_gf, gf in enumerate(comb_gf):
-            for index_annot, annot in enumerate(mandatory_family + accessory_family, start=1):
-                coordinate_dict[index_gf * nb_annotation + index_annot] = (gf, annot)
-            if gf.get_metadata_by_source(system.source) is not None:
-                for annotation in [annot.protein_name for annot in gf.get_metadata_by_source(system.source)]:
-                    if annotation in mandatory_family:
-                        mandatory_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
-                                                                                      mandatory_index[annotation]
-                        all_matrix[index_gf][mandatory_index[annotation] - 1] = index_gf * nb_annotation + \
-                                                                                mandatory_index[annotation]
-                    elif annotation in accessory_family:
-                        all_matrix[index_gf][accessory_index[annotation] - 1] = index_gf * nb_annotation + \
-                                                                                accessory_index[annotation]
-        if len(search_diagonal(mandatory_matrix, fu.min_mandatory)) > 0:
-            search_diag = search_diagonal(all_matrix)
-            if len(search_diag) > 0:
-                for diag in search_diag:
-                    for coord in diag:
-                        gf, annotation = coordinate_dict[coord]
-                        genes = gf.get_genes_per_org(organism)
-                        for gene in genes:
-                            projection.append(org_projection + [gf.name, gf.named_partition, annotation,
-                                                                gene.name, gene.start, gene.stop, gene.strand,
-                                                                gene.is_fragment])
-                bool_projection = True
-    return bool_projection
+def get_models_families_by_types(system: System):
+    mandatory_families, accessory_families, neutral_families = (set(), set(), set())
+    for model_family in system.model.families:
+        if model_family.presence == 'mandatory':
+            mandatory_families.add(model_family.name)
+            mandatory_families |= model_family.exchangeable
+        elif model_family.presence == 'accessory':
+            accessory_families.add(model_family.name)
+            accessory_families |= model_family.exchangeable
+        elif model_family.presence == 'neutral':
+            neutral_families.add(model_family.name)
+            neutral_families |= model_family.exchangeable
+        else:
+            logging.getLogger("PANORAMA").error("It's strange to arrive here. Please report an issue on our GitHub.")
+    return mandatory_families, accessory_families, neutral_families
 
 
-def write_system_projection(system: System) -> pd.DataFrame:
-    """Project system on all pangenome organisms
-
-    :param system: system to project
-
-    :return: Dataframe result of projection
-    """
-
-    projection, mandatory_family, accessory_family = ([], [], [])
-    for fam in system.model.families:
-        if fam.presence == 'mandatory':
-            mandatory_family.append(fam.name)
-            mandatory_family += fam.exchangeables
-        if fam.presence == 'accessory':
-            accessory_family.append(fam.name)
-            accessory_family += fam.exchangeables
-
-    system_orgs = set.union(*list([set(gf.organisms) for gf in system.gene_families]))
-    fu = list(system.model.func_units)[0]
-    for organism in system_orgs:
-        find_projection = write_sys_to_organism(system, organism, projection, mandatory_family, accessory_family, fu)
-        if not find_projection:
-            for canonical_system in system.canonical:
-
-                canonical_mandatory_family, canonical_accessory_family = ([], [])
-                for fam in canonical_system.model.families:
-                    if fam.presence == 'mandatory':
-                        canonical_mandatory_family.append(fam.name)
-                        canonical_mandatory_family += fam.exchangeables
-                    if fam.presence == 'accessory':
-                        canonical_accessory_family.append(fam.name)
-                        canonical_accessory_family += fam.exchangeables
-
-                canonical_fu = list(canonical_system.model.func_units)[0]
-                write_sys_to_organism(canonical_system, organism, projection, canonical_mandatory_family,
-                                      canonical_accessory_family, canonical_fu)
-    projection_df = pd.DataFrame(projection).drop_duplicates()
-    return projection_df
+def check_project_system_with_one_family(system: System, func_unit: FuncUnit, organism: Organism,
+                                         graph: nx.Graph) -> list:
+    projection = []
+    default_projection = [system.ID, system.name, organism.name]
+    for model_family in func_unit.mandatory:
+        for gene_family in graph.nodes:
+            if system.source in gene_family.sources:
+                metadata = [meta.protein_name for meta in gene_family.get_metadata_by_source(system.source)]
+                if model_family.name in metadata:
+                    for gene in gene_family.get_genes_per_org(organism):
+                        line_projection = [gene_family.name, gene_family.named_partition, model_family.name,
+                                           gene.name, gene.start, gene.stop, gene.strand, gene.is_fragment,
+                                           1 / len(system)]
+                        projection.append(default_projection + line_projection)
+    return projection
 
 
-def write_systems_projection(name: str, pangenome: Pangenome, output: Path, source: str, threads: int = 1,
-                             force: bool = False, disable_bar: bool = False) -> DataFrame:
-    """ Write all systems in pangenomes and project on organisms
-
-    :param name: Name of the pangenome
-    :param pangenome: Pangenome to project
-    :param output: Path to output directory
-    :param source:  Annotation source
-    :param threads:  Number of threads available
-    :param force: Force to write into the output directory
-    :param disable_bar: Allow to disable progress bar
-    """
-    systems_projection = pd.DataFrame()
-    # for system in pangenome.get_system_by_source(source):
-    #     write_system_projection(system)
-    with ThreadPoolExecutor(max_workers=threads) as executor:
-        logging.info(f'Write system projection for source : {source}')
-        with tqdm(total=pangenome.number_of_systems(), unit='system', disable=disable_bar) as progress:
-            futures = []
-            for system in pangenome.get_system_by_source(source):
-                future = executor.submit(write_system_projection, system)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-
-            for future in futures:
-                systems_projection = pd.concat([systems_projection, future.result()], ignore_index=True)
-
-    systems_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
-                                  "annotation name", "gene", "start", "stop", "strand", "is_fragment"]
-    systems_projection.sort_values(by=["system number", "system name", "organism", "start", "stop"],
-                                   ascending=[True, True, True, True, True], inplace=True)
-    mkdir(output / f"{name}/projection_{source}_{name}", force=force)
-    for organism_name in systems_projection["organism"].unique():
-        org_df = systems_projection.loc[systems_projection["organism"] == organism_name]
-        org_df = org_df.iloc[:, [0, 1, 3, 4, 5, 6, 7, 8, 9, 10]]
-        org_df.sort_values(by=["system number", "system name", "start", "stop"],
-                           ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/{name}/projection_{source}_{name}/{organism_name}.tsv", sep="\t", index=False)
-    systems_projection.to_csv(f"{output}/{name}/systems_{source}_{name}.tsv", sep="\t", index=False)
-    systems_projection.insert(0, "pangenome name", name)
-    return systems_projection
 
 
 def pan_distribution_system(name: str, systems_projection: DataFrame) -> DataFrame:
@@ -430,15 +310,15 @@ def system_to_features(system: System, regions: Set[Region], modules: Set[Module
     for fam in system.model.families:
         if fam.presence == 'mandatory':
             mandatory_family.append(fam.name)
-            mandatory_family += fam.exchangeables
+            mandatory_family += fam.exchangeable
         if fam.presence == 'accessory':
             accessory_family.append(fam.name)
-            accessory_family += fam.exchangeables
+            accessory_family += fam.exchangeable
 
     rgp_present = []
     if bool_rgp:
         for rgp in regions:
-            completion = len(list(system.gene_families & rgp.families)) / len(system.gene_families)
+            completion = len(list(system.families & rgp.families)) / len(system.families)
             if completion != 0:
                 find_projection = write_sys_in_feature(system=system, feature=rgp, mandatory_family=mandatory_family,
                                                        accessory_family=accessory_family, fu=fu)
@@ -448,7 +328,7 @@ def system_to_features(system: System, regions: Set[Region], modules: Set[Module
     modules_present = []
     if bool_modules:
         for module in modules:
-            completion = len(list(system.gene_families & module.families)) / len(system.gene_families)
+            completion = len(list(system.families & module.families)) / len(system.families)
             if completion != 0:
                 find_projection = write_sys_in_feature(system=system, feature=module, mandatory_family=mandatory_family,
                                                        accessory_family=accessory_family, fu=fu)
@@ -497,7 +377,7 @@ def write_sys_in_feature(system: System, feature: Region or Module, mandatory_fa
         r_diags.sort()
         return list(r_diag for r_diag, _ in itertools.groupby(r_diags))
 
-    select_families = system.gene_families.intersection(feature.families)
+    select_families = system.families.intersection(feature.families)
     mandatory_index = {mandatory: index for index, mandatory in enumerate(mandatory_family, start=1)}
     accessory_index = {accessory: index for index, accessory in enumerate(accessory_family,
                                                                           start=1 + len(mandatory_family))}
@@ -528,7 +408,7 @@ def write_sys_in_feature(system: System, feature: Region or Module, mandatory_fa
 
 
 def spot2sys(name: str, pangenome: Pangenome, system_to_feature: DataFrame, df_borders: DataFrame, output: Path) -> \
-Tuple[DataFrame, Dict]:
+        Tuple[DataFrame, Dict]:
     """Write systems associated to spots of pangenome and extract spot content
 
     :param name: pangenome name

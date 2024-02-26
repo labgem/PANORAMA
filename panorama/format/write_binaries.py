@@ -12,7 +12,7 @@ from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pang
 from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pangenome
 
 # local libraries
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.pangenomes import Pangenome
 
 
@@ -49,7 +49,7 @@ def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
             max_id_len = len(system.name)
         if len(system.name) > max_name_len:
             max_name_len = len(system.name)
-        for gf in system.gene_families:
+        for gf in system.families:
             if len(gf.name) > max_gf_name_len:
                 max_gf_name_len = len(gf.name)
         return max_id_len, max_name_len, max_gf_name_len
@@ -63,10 +63,10 @@ def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
             canonical_name_len += len(canonical.name)
             max_id_len, max_name_len, max_gf_name_len = compare_len(canonical, max_id_len,
                                                                     max_name_len, max_gf_name_len)
-            expected_rows += len(canonical.gene_families)
+            expected_rows += len(canonical)
         if canonical_name_len > max_canonical_len:
             max_canonical_len = canonical_name_len + len(system.canonical) - 1
-        expected_rows += len(system.gene_families)
+        expected_rows += len(system)
 
     return max_id_len, max_name_len, max_canonical_len, max_gf_name_len, expected_rows
 
@@ -87,20 +87,22 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     source_table = h5f.create_table(systems_group, source, description=system_desc(*system_len[:-1]),
                                     expectedrows=system_len[-1])
     source_row = source_table.row
-    for system in tqdm(pangenome.systems, total=len(list(pangenome.get_system_by_source(source))),
-                       unit="system", disable=disable_bar):
-        for gf in system.gene_families:
-            source_row["ID"] = system.ID
-            source_row["name"] = system.name
-            source_row["geneFam"] = gf.name
-            source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
-            source_row.append()
-        for canonical in system.canonical:
-            for gf in canonical.gene_families:
+    with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
+        for system in pangenome.systems:
+            for gf in system.families:
+                source_row["ID"] = system.ID
+                source_row["name"] = system.name
                 source_row["geneFam"] = gf.name
-                source_row["ID"] = canonical.ID
-                source_row["name"] = canonical.name
+                source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
                 source_row.append()
+            progress.update()
+            for canonical in system.canonical:
+                for gf in canonical.families:
+                    source_row["geneFam"] = gf.name
+                    source_row["ID"] = canonical.ID
+                    source_row["name"] = canonical.name
+                    source_row.append()
+                progress.update()
     source_table.flush()
 
 
@@ -147,7 +149,7 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
         assert source is not None
         systems_group = h5f.root.systems
         if source in systems_group:
-            logging.info(f"Erasing the formerly computed systems from source {source}")
+            logging.getLogger("PANORAMA").info(f"Erasing the formerly computed systems from source {source}")
             h5f.remove_node("/systems", source)
             status_group._v_attrs.systems_sources.remove(source)
             pangenome.status["systems_sources"].remove(f"{source}")
@@ -174,7 +176,7 @@ def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
 
     if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
         assert source is not None
-        logging.info("Writing detected systems...")
+        logging.getLogger("PANORAMA").info("Writing detected systems...")
         write_systems(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
         pangenome.status["systems"] = "Loaded"
 

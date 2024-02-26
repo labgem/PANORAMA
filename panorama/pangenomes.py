@@ -9,7 +9,7 @@ from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
-from panorama.system import System
+from panorama.systems.system import System
 from panorama.geneFamily import GeneFamily
 from panorama.region import Module
 
@@ -77,7 +77,7 @@ class Pangenome(Pan):
 
     def add_gene_family(self, family: Union[GeneFamily, Fam]):
         assert isinstance(family, (GeneFamily, Fam)), "Family must be a GeneFamily from PANORAMA or PPanGGOLiN"
-        if isinstance(family, Fam):
+        if not isinstance(family, GeneFamily):  # isinstance PPanGGOLiN gene family
             family = GeneFamily.recast(family)
         super().add_gene_family(family)
 
@@ -135,33 +135,44 @@ class Pangenome(Pan):
         """Add a detected system in the pangenome
 
         :param system: Detected system that will be added
+
+        TODO merge systems
         """
         same_sys = False
         canonical_systems = []
         drop_sys_key = []
         for system_in in self.get_system_by_source(system.source):
-            if system_in.name == system.name and system_in.gene_families.issubset(system.gene_families):
-                # A system with this name already exist and system in pangenome is subset of new system
-                system.ID = system_in.ID
-                self._system_getter[system.ID] = system
-                same_sys = True
+            if system_in.name == system.name:
+                if system_in.is_subset(system):
+                    # A system with this name already exist and system in pangenome is subset of new system
+                    system.ID = system_in.ID
+                    self._system_getter[system.ID] = system
+                    same_sys = True
+                    for family in system.difference(system_in):
+                        family.add_system(system)
+                elif system_in.is_superset(system):
+                    same_sys = True
             elif system.name in system_in.canonical_models():
                 # System in pangenome is a canonical system for new system
-                if len(system.gene_families.intersection(system_in.gene_families)) > 0:
+                if len(system.intersection(system_in)) > 0:
                     canonical_systems.append(system_in)
                     drop_sys_key.append(system_in.ID)
             elif system_in.name in system.canonical_models():
                 # New system is a canonical system for a system in pangenome
-                if len(system.gene_families.intersection(system_in.gene_families)) > 0:
+                if len(system.intersection(system_in)) > 0:
                     system_in.add_canonical(system)
                     same_sys = True
-
+                    for family in system.families:
+                        family.add_system(system)
+                        family.add_system(system_in)
         if not same_sys:
             self._max_id_system += 1
             system.ID = str(self._max_id_system)
             self._system_getter[system.ID] = system
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)
+            for family in system.families:
+                family.add_system(system)
         self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
 
     def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:
