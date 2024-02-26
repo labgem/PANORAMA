@@ -10,12 +10,15 @@ from typing import List
 from multiprocessing import Manager, Lock
 from pathlib import Path
 
+import pandas as pd
 # installed libraries
 from tqdm import tqdm
 
 # local libraries
 from panorama.utils import mkdir
 from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.systems.systems_projection import project_pangenome_systems, write_projection_systems
+from panorama.systems.systems_partitions import systems_partition
 
 
 def check_write_systems_args(args: argparse.Namespace) -> None:
@@ -65,7 +68,7 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
 
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False, association: str = None,
                              partition: bool = False, proksee: str = None, organisms: List[str] = None,
-                             threads: int = 1, lock: Lock = None,force: bool = False, disable_bar: bool = False):
+                             threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
     Write flat files about systems for all pangenomes
 
@@ -82,27 +85,28 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
         force: Flag to allow overwriting files (default: False)
         disable_bar: Flag to disable the progress bar (default: False)
     """
+    pangenomes_proj = pd.DataFrame()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
         for source in pangenome.systems_sources:
             logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} and source {source}.")
-            if projection or partition:
-                from panorama.systems.systems_projection import project_pangenome_systems
-                pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, source, threads=threads,
-                                                                           lock=lock, disable_bar=disable_bar)
-                if projection:
-                    from panorama.systems.systems_projection import write_projection_systems
-                    logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-                    write_projection_systems(pangenome.name, output, source, pangenome_proj, organisms_proj,
-                                             organisms, force)
-                if partition:
-                    from panorama.systems.systems_partitions import systems_partition
-                    logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
-                    systems_partition(pangenome.name, pangenome_proj, output)
+            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, source, threads=threads,
+                                                                       lock=lock, disable_bar=disable_bar)
+            if projection:
+                logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
+                write_projection_systems(pangenome.name, output, source, pangenome_proj, organisms_proj,
+                                         organisms, force)
+            if partition:
+                logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
+                systems_partition(pangenome.name, pangenome_proj, output)
             if association:
                 raise NotImplementedError("Association not implemented")
             if proksee:
                 raise NotImplementedError("Proksee not implemented")
+            pangenome_proj.insert(0, "pangenome name", pangenome.name)
+            pangenomes_proj = pd.concat([pangenomes_proj, pangenome_proj])
+    if partition:
+        raise NotImplementedError("Partition system not implemented")
 
 
 def launch(args):
