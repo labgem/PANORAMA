@@ -447,8 +447,8 @@ class Model(_BasicFeatures, _ModFuFeatures):
         """
         try:
             self._check()
-        except Exception:
-            raise Exception(f"Consistency not respected  in {self.name}")
+        except Exception as err:
+            raise Exception(f"Consistency not respected  in {self.name}. {err}")
 
     def read(self, data_model: dict):
         mandatory_key = ['name', 'parameters', 'func_units']
