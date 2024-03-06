@@ -307,7 +307,7 @@ def parser_annot(parser):
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--table', type=Path, nargs='+', default=None,
+    exclusive_mode.add_argument('--table', type=Path,  default=None, #nargs='+',
                                 help='A list of tab-separated file, containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
                                      'and path to the TSV with annotation in second column.')
