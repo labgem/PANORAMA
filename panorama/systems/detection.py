@@ -37,17 +37,17 @@ def check_detection_parameters(args: argparse.Namespace) -> None:
         argparse.ArgumentTypeError: If jaccard is not with the correct type
     """
     args.jaccard = restricted_float(args.jaccard)
-    args.annotation_source = args.source if args.annotation_source is None else args.annotation_source
+    args.annotation_source = [args.source] if args.annotation_sources is None else args.annotation_sources
 
 
-def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, systems_source: str,
+def check_pangenome_detection(pangenome: Pangenome, annotation_sources: List[str], systems_source: str,
                               force: bool = False) -> None:
     """
      Check and load pangenome information before adding annotation
 
     Args:
         pangenome:  Pangenome object
-        annotation_source: Source used to annotate gene famillies
+        annotation_sources: Source used to annotate gene famillies
         systems_source: Source used to detect system
         force: Force to erase pangenome systems from source
 
@@ -64,15 +64,16 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
             raise ValueError(f"Systems are already detected based on the source : {systems_source}. "
                              f"Use the --force option to erase the already computed systems.")
     if pangenome.status["metadata"]["families"] == "inFile":
-        if annotation_source not in pangenome.status["metasources"]["families"]:
-            raise KeyError(f"There is no metadata associate to families "
-                           f"from source {annotation_source} in pangenome {pangenome.name}.")
+        for annotation_source in annotation_sources:
+            if annotation_source not in pangenome.status["metasources"]["families"]:
+                raise KeyError(f"There is no metadata associate to families "
+                               f"from source {annotation_source} in pangenome {pangenome.name}.")
     elif pangenome.status["metadata"]["families"] not in ["Computed", "Loaded"]:
         raise AttributeError(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
                              "Please see the command annotation before to detect systems")
 
 
-def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, Set[GeneFamily]]:
+def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict[str, Set[GeneFamily]]:
     """
     Get for each annotation a set of families with this annotation
 
@@ -83,15 +84,13 @@ def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, S
     Returns:
         Dictionary with for each annotation a set of gene families
     """
-    annot2fam = {}
-    for gf in pangenome.gene_families:
-        metadata = gf.get_metadata_by_source(source)
-        if metadata is not None:
-            for meta in metadata:
-                if meta.protein_name in annot2fam:
+    annot2fam = defaultdict(set)
+    for source in sources:
+        for gf in pangenome.gene_families:
+            metadata = gf.get_metadata_by_source(source)
+            if metadata is not None:
+                for meta in metadata:
                     annot2fam[meta.protein_name].add(gf)
-                else:
-                    annot2fam[meta.protein_name] = {gf}
     return annot2fam
 
 
@@ -310,7 +309,7 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
         return detected_systems
 
 
-def search_systems(models: Models, pangenome: Pangenome, source: str, annotation_source: str,
+def search_systems(models: Models, pangenome: Pangenome, source: str, annotation_sources: List[str],
                    jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1, lock: Lock = None,
                    disable_bar: bool = False):
     """
@@ -329,7 +328,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
     from panorama.utils import init_lock
     from panorama.format.write_binaries import write_pangenome
 
-    annot2fam = get_annotation_to_families(pangenome=pangenome, source=annotation_source)
+    annot2fam = get_annotation_to_families(pangenome=pangenome, sources=annotation_sources)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         # with ProcessPoolExecutor(max_workers=threads, mp_context=get_context('fork'),
         #                          initializer=init_lock, initargs=(lock,)) as executor:
@@ -359,7 +358,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
         logging.getLogger("PANORAMA").info("No system detected")
 
 
-def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, annotation_source: str,
+def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, annotation_sources: List[str],
                                  jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1,
                                  lock: Lock = None, disable_bar: bool = False):
     """
@@ -377,7 +376,7 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
     """
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
-        search_systems(models, pangenome, source, annotation_source, jaccard_threshold,
+        search_systems(models, pangenome, source, annotation_sources, jaccard_threshold,
                        max_depth, threads, lock, disable_bar)
 
 
@@ -396,13 +395,13 @@ def launch(args):
     manager = Manager()
     lock = manager.Lock()
     need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
-                 "metatypes": ["families"], "sources": [args.annotation_source]}
+                 "metatypes": ["families"], "sources": args.annotation_sources}
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_detection, max_workers=args.threads, lock=lock,
-                                 disable_bar=args.disable_prog_bar, annotation_source=args.annotation_source,
+                                 disable_bar=args.disable_prog_bar, annotation_sources=args.annotation_sources,
                                  systems_source=args.source, force=args.force)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source,
-                                 annotation_source=args.annotation_source, jaccard_threshold=args.jaccard,
+                                 annotation_sources=args.annotation_sources, jaccard_threshold=args.jaccard,
                                  max_depth=args.max_depth, threads=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar)
 
@@ -442,8 +441,9 @@ def parser_detection(parser):
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument('--annotation_sources', required=False, type=str, default=None,
-                          help="Name of the annotation source to load if different from system source")
+    optional.add_argument('--annotation_sources', required=False, type=str, default=None, nargs='+',
+                          help="Name of the annotation sources to load if different from system source. "
+                               "Could be more than one, separated by space.")
     optional.add_argument('--jaccard', required=False, type=float, default=0.8,
                           help="minimum jaccard similarity used to filter edges between gene families. "
                                "Increasing it will improve precision but lower sensitivity a lot.")
