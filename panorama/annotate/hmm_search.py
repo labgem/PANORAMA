@@ -186,14 +186,20 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     Returns:
          List[Tuple[str, str, str, float, float, float, str, str]]: Alignment results
     """
+
+    def hmmsearch_callback(hmm, total):
+        logging.getLogger('PANORAMA').debug("Finished annotation with HMM %s", hmm.name.decode())
+        bar.update()
+
     res = []
     result = collections.namedtuple("Result", res_col_names)
     logging.getLogger("PANORAMA").info("Begin alignment of gene families to HMM")
     bar = tqdm(range(len(hmm_list)), unit="hmm", desc="Align gene families to HMM", disable=disable_bar)
     options = {"bit_cutoffs": bit_cutoffs}
-    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, **options):
+    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
         for hit in top_hits:
             cog = hit.best_domain.alignment
+            logging.getLogger("PANORAMA").debug(f'HMM: {cog.hmm_name.decode("UTF-8")}')
             hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
             target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
                              seq_length[cog.target_name])
@@ -211,7 +217,7 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
                 secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
                 res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
                                   hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
-        bar.update()
+            # print("hello")
     bar.close()
     return res
 
