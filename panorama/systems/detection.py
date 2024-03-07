@@ -61,8 +61,8 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_source: str, syst
         if force:
             erase_pangenome(pangenome, systems=True, source=systems_source)
         else:
-            raise Exception(f"Systems are already detected based on the source : {systems_source}."
-                            f" Use the --force option to erase the already computed systems.")
+            raise ValueError(f"Systems are already detected based on the source : {systems_source}. "
+                             f"Use the --force option to erase the already computed systems.")
     if pangenome.status["metadata"]["families"] == "inFile":
         if annotation_source not in pangenome.status["metasources"]["families"]:
             raise KeyError(f"There is no metadata associate to families "
@@ -95,8 +95,8 @@ def get_annotation_to_families(pangenome: Pangenome, source: str) -> Dict[str, S
     return annot2fam
 
 
-def dict_families_context(func_unit: FuncUnit, annot2fam: Dict[str, Set[GeneFamily]]) \
-        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]]]:
+def dict_families_context(model: Model, annot2fam: Dict[str, Set[GeneFamily]]) \
+        -> Tuple[Set[GeneFamily], Dict[str, Set[Family]]]:
     """
     Recover all families in the function unit
 
@@ -110,7 +110,7 @@ def dict_families_context(func_unit: FuncUnit, annot2fam: Dict[str, Set[GeneFami
     """
     families = set()
     fam2annot = defaultdict(set)
-    for fam_model in func_unit.families:
+    for fam_model in model.families:
         if fam_model.name in annot2fam:
             for gf in annot2fam[fam_model.name]:
                 families.add(gf)
@@ -156,7 +156,7 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
     graph.remove_edges_from(edges_to_remove)
 
 
-def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
                         func_unit: FuncUnit) -> bool:
     """
     Check if there is forbidden in families.
@@ -172,19 +172,18 @@ def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, S
     count_forbidden = 0
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
     for node in sorted(families, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
-        annots = fam2annot.get(node.name)
-        if annots is not None:
-            for annot in annots:
-                if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
-                    count_forbidden += 1
-                    forbidden_list.remove(annot.name)
-                    if count_forbidden > func_unit.max_forbidden:
-                        return True
-                    break
+        annots = fam2annot.get(node.name, [])
+        for annot in annots:
+            if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
+                count_forbidden += 1
+                forbidden_list.remove(annot.name)
+                if count_forbidden > func_unit.max_forbidden:
+                    return True
+                break
     return False
 
 
-def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
                      func_unit: FuncUnit) -> bool:
     """
     Check if presence/absence rules for needed families are respected
@@ -201,18 +200,17 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[
     mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
                                       list(map(lambda x: x.name, func_unit.accessory)))
     for node in sorted(families, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
-        annots = fam2annot.get(node.name)
-        if annots is not None:
-            for annot in annots:
-                if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
-                    count_mandatory += 1
-                    count_total += 1
-                    mandatory_list.remove(annot.name)
-                    break
-                elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
-                    count_total += 1
-                    accessory_list.remove(annot.name)
-                    break
+        annots = fam2annot.get(node.name, [])
+        for annot in annots:
+            if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                count_mandatory += 1
+                count_total += 1
+                mandatory_list.remove(annot.name)
+                break
+            elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                count_total += 1
+                accessory_list.remove(annot.name)
+                break
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
         if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
@@ -224,7 +222,7 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[
         return False
 
 
-def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[GeneFamily, Set[Family]],
+def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
                            func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
                            seen: Set[Tuple[GeneFamily]] = None, depth: int = 0, max_depth: int = 1) -> Set[System]:
     """Search systems corresponding to model in a graph
@@ -292,9 +290,12 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
     Returns:
         List[System]: List of systems detected in pangenome for the given model
     """
+    logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     detected_systems = set()
+    families, fam2annot = dict_families_context(model, annot2fam)
     for func_unit in model.func_units:
-        families, fam2annot = dict_families_context(func_unit, annot2fam)
+        fu_families = {fam for fam in families if any(annot in func_unit.families for annot in fam2annot[fam.name])}
+        print(families, fu_families)
         if check_for_needed(families, fam2annot, func_unit):
             t = func_unit.max_separation + 1
             context = compute_gene_context_graph(families=families, transitive=t,
@@ -309,8 +310,9 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
         return detected_systems
 
 
-def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_threshold: float = 0.8,
-                   max_depth: int = 0, threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+def search_systems(models: Models, pangenome: Pangenome, source: str, annotation_source: str,
+                   jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1, lock: Lock = None,
+                   disable_bar: bool = False):
     """
     Search systems present in the pangenome for all models
 
@@ -327,8 +329,10 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_th
     from panorama.utils import init_lock
     from panorama.format.write_binaries import write_pangenome
 
-    annot2fam = get_annotation_to_families(pangenome=pangenome, source=source)
+    annot2fam = get_annotation_to_families(pangenome=pangenome, source=annotation_source)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        # with ProcessPoolExecutor(max_workers=threads, mp_context=get_context('fork'),
+        #                          initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
@@ -344,7 +348,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_th
     for system in sorted(detected_systems, key=lambda x: len(x), reverse=True):
         pangenome.add_system(system)
 
-    logging.getLogger("PANORAMA").info(f"System systems done in pangenome {pangenome.name}")
+    logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
 
     if len(detected_systems) > 0:
         pangenome.status["systems"] = "Computed"
@@ -355,8 +359,9 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, jaccard_th
         logging.getLogger("PANORAMA").info("No system detected")
 
 
-def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, jaccard_threshold: float = 0.8,
-                                 max_depth: int = 0, threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, annotation_source: str,
+                                 jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1,
+                                 lock: Lock = None, disable_bar: bool = False):
     """
     Search systems in pangenomes by multithreading on pangenomes
 
@@ -371,8 +376,9 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
         disable_bar: Disable progress bar (default: False)
     """
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        logging.getLogger("PANORAMA").debug(f"Begin system systems for {pangenome.name}")
-        search_systems(models, pangenome, source, jaccard_threshold, max_depth, threads, lock, disable_bar)
+        logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
+        search_systems(models, pangenome, source, annotation_source, jaccard_threshold,
+                       max_depth, threads, lock, disable_bar)
 
 
 def launch(args):
@@ -396,8 +402,9 @@ def launch(args):
                                  disable_bar=args.disable_prog_bar, annotation_source=args.annotation_source,
                                  systems_source=args.source, force=args.force)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source,
-                                 jaccard_threshold=args.jaccard, max_depth=args.max_depth,
-                                 threads=args.threads, lock=lock, disable_bar=args.disable_prog_bar)
+                                 annotation_source=args.annotation_source, jaccard_threshold=args.jaccard,
+                                 max_depth=args.max_depth, threads=args.threads, lock=lock,
+                                 disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -435,7 +442,7 @@ def parser_detection(parser):
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source where panorama as to select in pangenomes')
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument('--annotation_source', required=False, type=str, default=None,
+    optional.add_argument('--annotation_sources', required=False, type=str, default=None,
                           help="Name of the annotation source to load if different from system source")
     optional.add_argument('--jaccard', required=False, type=float, default=0.8,
                           help="minimum jaccard similarity used to filter edges between gene families. "
