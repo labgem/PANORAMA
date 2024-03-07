@@ -65,7 +65,8 @@ def read_xml(model: Path) -> et.Element:
         et.Element: The contents of the YAML file, as a Python object.
     """
     try:
-        my_tree = et.parse(model.absolute().as_posix())
+        parser = et.XMLParser(remove_comments=True, resolve_entities=False, no_network=True)
+        my_tree = et.parse(model.absolute().as_posix(), parser=parser)
     except IOError as ioerror:
         raise IOError(f"Problem to open {model}. The following error is direct cause\n{ioerror}")
     except Exception as error:
@@ -611,9 +612,13 @@ def translate_defense_finder(df_db: Path, output: Path, hmm_coverage: float = No
     logging.getLogger('PANORAMA').info("Begin to translate DefenseFinder models")
     for model in tqdm(list(Path(df_db / "definitions").rglob("*.xml")), unit='file',
                       desc='Translate models', disable=disable_bar):
-        canonical_sys = search_canonical_dfinder(model.stem, model.parent)
-        root = read_xml(model)
-        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_df, canonical_sys))
+        try:
+            canonical_sys = search_canonical_dfinder(model.stem, model.parent)
+            root = read_xml(model)
+            list_data.append(translate_macsyfinder_model(root, model.stem, hmm_df, canonical_sys))
+        except Exception as error:
+            logging.getLogger('PANORAMA').error(f"Error translating {model.stem}")
+            raise Exception(f"Error translating {model} due to error: {error}")
     return list_data
 
 
