@@ -79,7 +79,7 @@ def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict
 
     Args:
         pangenome: Pangenome with gene families
-        source: name of the annotation source
+        sources: list of annotation source name
 
     Returns:
         Dictionary with for each annotation a set of gene families
@@ -100,7 +100,7 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Set[GeneFamily]]) \
     Recover all families in the function unit
 
     Args:
-        func_unit: function unit object of model
+        model: model containing the families
         annot2fam: dictionary of annotated families
 
     Returns:
@@ -294,8 +294,7 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
     families, fam2annot = dict_families_context(model, annot2fam)
     for func_unit in model.func_units:
         fu_families = {fam for fam in families if any(annot in func_unit.families for annot in fam2annot[fam.name])}
-        print(families, fu_families)
-        if check_for_needed(families, fam2annot, func_unit):
+        if check_for_needed(fu_families, fam2annot, func_unit):
             t = func_unit.max_separation + 1
             context = compute_gene_context_graph(families=families, transitive=t,
                                                  window_size=t + 1, disable_bar=True)
@@ -318,7 +317,8 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
     Args:
         models: Models to search in pangenomes
         pangenome: Pangenome with gene families
-        source: name of the annotation source
+        source: name of the source for the system
+        annotation_sources: list of the annotation source for the families
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
         max_depth: maximum depth of recursion to search for systems (default: 0)
         threads: number of available threads (default: 1)
@@ -330,8 +330,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
 
     annot2fam = get_annotation_to_families(pangenome=pangenome, sources=annotation_sources)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
-        # with ProcessPoolExecutor(max_workers=threads, mp_context=get_context('fork'),
-        #                          initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
@@ -367,7 +365,8 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
     Args:
         models: Models to search in pangenomes
         pangenomes: Getter object with Pangenome
-        source: name of the annotation source
+        source: name of the source for the system
+        annotation_sources: list of the annotation source for the families
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
         max_depth: maximum depth of recursion to search for systems (default: 0)
         threads: number of available threads (default: 1)
