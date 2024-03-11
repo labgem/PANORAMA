@@ -261,6 +261,7 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
 
     need_info = get_need_info(pangenome, **kwargs)
     need_info["meta_sources"] = need_info.pop("sources")
+    logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
 
     if need_families_info or need_families_sequences:
         if kwargs.get('gene_families'):
