@@ -54,8 +54,9 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
             gene_name = gene.name
         else:
             gene_name = gene.local_identifier if gene.local_identifier != "" else gene.ID
+
         line_projection = [gene.family.name, gene.family.named_partition, annot, gene_name,
-                           gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org]
+                           gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product ]
         return list(map(str, [system.ID, system.name, organism.name] + line_projection))
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
@@ -224,7 +225,7 @@ def project_pangenome_systems(pangenome: Pangenome, source: str, threads: int = 
                                      ascending=[True, True, True, True, True], inplace=True)  # Try to order system number numericaly
     organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
                                     "annotation",
-                                    "gene", "start", "stop", "strand", "is_fragment", "genomic organization"]
+                                    "gene", "start", "stop", "strand", "is_fragment", "genomic organization", "product"]
     organisms_projection.sort_values(by=["system name", "system number", "organism", "start", "stop"],
                                      ascending=[True, True, True, True, True], inplace=True)
     # pangenome_projection.insert(0, "pangenome name", pangenome_name)
@@ -254,6 +255,7 @@ def write_projection_systems(pangenome_name: str, output: Path, source: str, pan
     if organisms is not None:
         pangenome_projection.drop(pangenome_projection["organism" in organisms].index)
         organisms_projection.drop(organisms_projection["organism" in organisms].index)
+
     for organism_name in pangenome_projection["organism"].unique():
         org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]
         org_df = org_df.drop(columns=["organism"])
