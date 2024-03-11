@@ -5,24 +5,28 @@
 from __future__ import annotations
 import argparse
 import logging
-from typing import Dict, Union
+from pathlib import Path
+from typing import Dict, Union, List
 from multiprocessing import Manager, Lock
 from concurrent.futures import ThreadPoolExecutor
 
 # installed libraries
 from tqdm import tqdm
 import numpy as np
+import pandas as pd
 import ppanggolin.metadata
 
 # local libraries
-from panorama.annotate.hmm_search import profile_gfs
-from panorama.format.read_binaries import check_pangenome_info, load_pangenomes
-from panorama.format.write_proksee import write_proksee
-from panorama.utils import check_tsv_sanity, mkdir, init_lock
+from panorama.annotate.hmm_search import profile_gf
+from panorama.format.read_binaries import load_pangenomes
+from panorama.utils import mkdir, init_lock
 from panorama.geneFamily import GeneFamily
-from panorama.pangenomes import Pangenomes
-from panorama.format.conserved_spot import *
-from panorama.alignment.align import all_against_all
+from panorama.pangenomes import Pangenomes, Pangenome
+
+
+# from panorama.format.write_proksee import write_proksee
+# from panorama.format.conserved_spot import *
+# from panorama.alignment.align import all_against_all
 
 
 def check_flat_parameters(args: argparse.Namespace) -> Dict[str, Union[bool, List[str]]]:
@@ -35,33 +39,71 @@ def check_flat_parameters(args: argparse.Namespace) -> Dict[str, Union[bool, Lis
     Returns:
         Dictionary needed to load pangenomes information
     """
-    # if args.hmm and (args.msa is None or args.msa_format is None):
-    #     raise Exception("To write HMM you need to give msa files and format")
-    need_info = {}
-    if args.annotations is not None:
-        if args.sources is None:
-            raise argparse.ArgumentError(argument=None, message="You need to provide at least "
-                                                                "one annotation source to write annotation")
-        else:
-            need_info.update({"need_families": True, "need_metadata": True,
-                              "metatypes": ["families"], "sources": args.sources})
-    return need_info
+    if not args.hmm and not args.annotations:
+        raise argparse.ArgumentError(argument=None, message="You need to provide at least --annotation or --hmm")
+    else:
+        need_info = {}
+        if args.annotations:
+            if args.sources is None:
+                raise argparse.ArgumentError(argument=None, message="You need to provide at least "
+                                                                    "one annotation source to write annotation")
+            else:
+                need_info.update({"need_families": True, "need_metadata": True,
+                                  "metatypes": ["families"], "sources": args.sources})
+        if args.hmm:
+            if args.msa is None or args.msa_format is None:
+                raise argparse.ArgumentError(None, "To write HMM you need to give msa files and format")
+            else:
+                need_info["need_families"] = True
+        return need_info
 
 
-def check_pangenome_write_flat(pangenome: Pangenome, sources: List[str]) -> None:
+def check_pangenome_write_flat_annotations(func):
+    """
+    Decorator to check pangenome to write annotations
+
+    Args:
+        func: Function to decorate
+
+    Returns:
+        wrapped function
+    """
+
+    def wrapper(pangenome, *args, **kwargs):
+        """Wrapper function
+
+        Args:
+            pangenome: pangenome to check
+            *args: all possible necessary args
+            **kwargs: all possible necessary kwargs
+
+        Returns:
+            the function wrapped
+        """
+        if kwargs.get("check_annotations", False):
+            if pangenome.status["metadata"]["families"] != "inFile":
+                raise ValueError("Pangenome families are not associated to any metadata/annotation")
+            else:
+                for source in kwargs["sources"]:
+                    if source not in pangenome.status["metasources"]["families"]:
+                        raise KeyError(f"There is non metadata corresponding to the source : '{source}' "
+                                       f"in pangenome: {pangenome.name}")
+        return func(pangenome, *args, **kwargs)
+
+    return wrapper
+
+
+@check_pangenome_write_flat_annotations
+def check_pangenome_write_flat(pangenome: Pangenome, **kwargs) -> None:
     """
     Function to check and load one pangenome in the loading process
     Args:
         pangenome:
-        sources:
     """
-    if pangenome.status["metadata"]["families"] != "inFile":
-        raise ValueError("Pangenome families are not associated to any metadata/annotation")
-    else:
-        for source in sources:
-            if source not in pangenome.status["metasources"]["families"]:
-                raise KeyError(f"There is non metadata corresponding to the source : '{source}' "
-                               f"in pangenome: {pangenome.name}")
+    if pangenome.status["genesClustered"] == "No" and pangenome.status["genomesAnnotated"] in ['inFile', 'Computed',
+                                                                                               'Loaded']:
+        raise AttributeError("You did not cluster the genes. "
+                             "See the 'ppanggolin cluster' command if you want to do that.")
 
 
 def write_pangenome_families_annotations(pangenome: Pangenome, output: Path, sources: List[str],
@@ -142,8 +184,64 @@ def write_pangenomes_families_annotations(pangenomes: Pangenomes, output: Path, 
                 future.result()
 
 
-def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bool = False, threads: int = 1,
-                     lock: Lock = None, force: bool = False, disable_bar: bool = False, **kwargs):
+def write_hmm(family: GeneFamily, output: Path, msa_file_path: Path = None, msa_format: str = "afa"):
+    """
+    Write an HMM profile for a gene family
+
+    Args:
+        family: A pangenome gene family
+        output: Path to the directory to save the HMM
+        msa_file_path: Path to the msa file to compute the HMM
+        msa_format: format of the msa file to read it correctly (default: "afa")
+    """
+    if family.HMM is None:
+        if msa_file_path is None:
+            raise AssertionError("Your gene family is not associated to a HMM "
+                                 "and it could not be computed without a MSA file.")
+        profile_gf(family, msa_file_path, msa_format=msa_format)
+    with open(output / f"{family.name}.hmm", 'wb') as hmm_file:
+        family.HMM.write(hmm_file)
+
+
+def write_hmm_profile(pangenomes: Pangenomes, msa_tsv_path: Path, output: Path, msa_format: str = "afa",
+                      threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
+    """
+    Write an HMM profile for all gene families in pangenomes
+
+    Args:
+        pangenomes: Pangenomes object with all pangenome
+        msa_tsv_path: Path to the tsv file with msa
+        output: Path to the output directory
+        msa_format: format of the msa file to read it correctly (default: "afa")
+        threads: Number of available threads (default: 1)
+        lock: Global lock for multiprocessing execution (default: None)
+        force: Flag to indicate if a path can be overwritten (default: False)
+        disable_bar: Disable progress bar (default: False)
+    """
+    msa_df = pd.read_csv(msa_tsv_path, sep="\t", names=['path'], index_col=0, )
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        total_families = sum(pangenome.number_of_gene_families for pangenome in pangenomes)
+        with tqdm(total=total_families, unit='gene families', desc='write gene families hmm/profile',
+                  disable=disable_bar) as progress:
+            futures = []
+            for pangenome in pangenomes:
+                output_path = mkdir(output / f"{pangenome.name}/HMM", force)
+                msa_dir_path = Path(msa_df.loc[pangenome.name].to_list()[0])
+                for family in pangenome.gene_families:
+                    msa_file_path = msa_dir_path / f"{family.name}.aln"
+                    if msa_file_path.exists():
+                        future = executor.submit(write_hmm, family, output_path, msa_file_path, msa_format)
+                    else:
+                        future = executor.submit(write_hmm, family, output_path, None, msa_format)
+                    future.add_done_callback(lambda p: progress.update())
+                    futures.append(future)
+
+            for future in futures:
+                future.result()
+
+
+def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bool = False,
+                     threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False, **kwargs):
     """
     Global function to write all flat files from pangenomes.
 
@@ -159,12 +257,13 @@ def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bo
         **kwargs: Additional keyword needed according to expected flat file
     """
     for pangenome in pangenomes:
-        mkdir(output/pangenome.name, force=force)
+        mkdir(output / pangenome.name, force=force)
     if annotation:
         assert 'sources' in kwargs, "No sources were given to write families annotations."
         write_pangenomes_families_annotations(pangenomes, output, kwargs["sources"], threads, lock, force, disable_bar)
     if hmm:
-        raise NotImplementedError("Hidden Markov Model for gene families is not implemented yet.")
+        write_hmm_profile(pangenomes, msa_tsv_path=kwargs["msa_tsv_path"], msa_format=kwargs["msa_format"],
+                          output=output, threads=threads, lock=lock, force=force, disable_bar=disable_bar)
 
 
 def launch(args):
@@ -178,10 +277,12 @@ def launch(args):
     manager = Manager()
     lock = manager.Lock()
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
-                                 check_function=check_pangenome_write_flat, max_workers=args.threads, lock=lock,
-                                 disable_bar=args.disable_prog_bar, sources=args.sources)
+                                 check_function=check_pangenome_write_flat,
+                                 max_workers=args.threads, lock=lock, disable_bar=args.disable_prog_bar,
+                                 check_annotations=args.annotations, sources=args.sources)
     write_flat_files(pangenomes, output=flat_outdir, annotation=args.annotations, sources=args.sources,
-                     force=args.force, disable_bar=args.disable_prog_bar)
+                     hmm=args.hmm, msa_tsv_path=args.msa, msa_format=args.msa_format,
+                     threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -216,12 +317,12 @@ def parser_write(parser):
                           help='Name of the annotation source where panorama as to select in pangenomes')
     optional.add_argument("--hmm", required=False, action="store_true",
                           help="Write an hmm for each gene families in pangenomes")
-    # optional.add_argument("--msa", required=False, type=Path, default=None,
-    #                       help="To create a HMM profile for families, you can give a msa of each gene in families."
-    #                            "This msa could be get from ppanggolin (See ppanggolin msa). "
-    #                            "If no msa provide Panorama will launch one.")
-    # optional.add_argument("--msa_format", required=False, type=str, default="afa",
-    #                       choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-    #                                "clustal", "clustallike", "phylip", "phylips"],
-    #                       help="Format of the input MSA.")
+    optional.add_argument("--msa", required=False, type=Path, default=None,
+                          help="To create a HMM profile for families, you can give a msa of each gene in families."
+                               "This msa could be get from ppanggolin (See ppanggolin msa). "
+                               "Should be a 2 column tsv file with pangenome name in first and path to MSA in second")
+    optional.add_argument("--msa_format", required=False, type=str, default="afa",
+                          choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                                   "clustal", "clustallike", "phylip", "phylips"],
+                          help="Format of the input MSA.")
     optional.add_argument("--threads", required=False, type=int, default=1)

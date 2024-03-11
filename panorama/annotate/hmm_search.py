@@ -70,13 +70,13 @@ def get_msa(tmpdir: Path):
     raise NotImplementedError
 
 
-def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
+def profile_gf(gf: GeneFamily, msa_path: Path, msa_format: str = "afa", ):
     """
     Compute a profile for a gene family
 
     Args:
         gf: Gene family to profile
-        msa_file: path to file containing msa
+        msa_path: path to file containing msa
         msa_format: format used to write msa
 
     Raises:
@@ -85,18 +85,23 @@ def profile_gf(gf: GeneFamily, msa_file: Path, msa_format: str = "afa", ):
     alphabet = pyhmmer.easel.Alphabet.amino()
     builder = pyhmmer.plan7.Builder(alphabet)
     background = pyhmmer.plan7.Background(alphabet)
-    if os.stat(msa_file).st_size == 0:
-        logging.getLogger("PANORAMA").warning(f"{msa_file.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
+    if os.stat(msa_path).st_size == 0:
+        logging.getLogger("PANORAMA").warning(
+            f"{msa_path.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
     else:
         try:
-            with pyhmmer.easel.MSAFile(msa_file.absolute().as_posix(), format=msa_format,
-                                       digital=True, alphabet=alphabet) as easel_msa:
-                msa = next(easel_msa)
+            with pyhmmer.easel.MSAFile(msa_path.absolute().as_posix(), format=msa_format,
+                                       digital=True, alphabet=alphabet) as msa_file:
+                msa = msa_file.read()
+        except Exception as error:
+            raise Exception(f"The following error happened while reading file {msa_path} : {error}")
+        else:
+            try:
                 msa.name = gf.name.encode('UTF-8')
                 msa.accession = f"PAN{gf.ID}".encode('UTF-8')
                 gf._hmm, gf.profile, gf.optimized_profile = builder.build_msa(msa, background)
-        except Exception as error:
-            raise Exception(f"The following error happened with file {msa_file} : {error}")
+            except Exception as error:
+                raise Exception(f"The following error happened while building HMM from file {msa_path} : {error}")
 
 
 def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa",
@@ -105,7 +110,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
     Create an HMM profile for each gene families
 
     Args:
-        pangenome: Pangenome contaning gene families to profile
+        pangenome: Pangenome containing gene families to profile
         msa_path: Path to file containing msa
         msa_format: format used to write msa
         tmpdir: Temporary directory for profiling
