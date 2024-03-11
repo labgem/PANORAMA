@@ -13,7 +13,7 @@ from multiprocessing import Lock
 # installed libraries
 import tables
 from ppanggolin.formats import (read_chunks, read_annotation, read_graph, read_rgp, read_spots, read_modules,
-                                read_gene_families_info, read_gene_sequences, read_metadata, get_need_info)
+                                read_gene_sequences, read_metadata, get_need_info)
 from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
@@ -85,6 +85,30 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], s
     pangenome.status["systems"] = "Loaded"
 
 
+def read_gene_families_info(pangenome: Pangenome, h5f: tables.File, information: bool = False,
+                            sequences: bool = False, disable_bar: bool = False):
+    """
+    Read information about gene families in pangenome hdf5 file to add in pangenome object
+
+    :param pangenome: Pangenome object without gene families information
+    :param h5f: Pangenome HDF5 file with gene families information
+    :param disable_bar: Disable the progress bar
+    """
+    table = h5f.root.geneFamiliesInfo
+
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family", disable=disable_bar):
+        fam = pangenome.get_gene_family(row["name"].decode())
+        if information:
+            fam.partition = row["partition"].decode()
+        if sequences:
+            fam.add_sequence(row["protein"].decode())
+
+    if information and h5f.root.status._v_attrs.Partitioned:
+        pangenome.status["partitioned"] = "Loaded"
+    if sequences and h5f.root.status._v_attrs.geneFamilySequences:
+        pangenome.status["geneFamilySequences"] = "Loaded"
+
+
 def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
     """
     Read gene families in pangenome hdf5 file to add in pangenome object
@@ -111,7 +135,8 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
     pangenome.status["genesClustered"] = "Loaded"
 
 
-def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families: bool = False, graph: bool = False,
+def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families: bool = False,
+                   gene_families_info: bool = False, gene_families_sequences: bool = False, graph: bool = False,
                    rgp: bool = False, spots: bool = False, gene_sequences: bool = False, modules: bool = False,
                    metadata: bool = False, metatypes: Set[str] = None, meta_sources: List[str] = None,
                    systems: bool = False, models: List[Models] = None, systems_sources: List[str] = None,
@@ -143,26 +168,32 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
             logging.getLogger("PPanGGOLiN").info("Reading pangenome annotations...")
             read_annotation(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(
-                f"The pangenome in file '{pangenome.file}' has not been annotated, or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' has not been annotated, "
+                             "or has been improperly filled")
 
     if gene_sequences:
         if h5f.root.status._v_attrs.geneSequences:
             logging.getLogger("PPanGGOLiN").info("Reading pangenome gene dna sequences...")
             read_gene_sequences(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have gene sequences, "
-                            f"or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' does not have gene sequences, "
+                             "or has been improperly filled")
 
     if gene_families:
         if h5f.root.status._v_attrs.genesClustered:
             logging.getLogger("PPanGGOLiN").info("Reading pangenome gene families...")
             read_gene_families(pangenome, h5f, disable_bar=disable_bar)
-            logging.getLogger("PPanGGOLiN").debug("Reading pangenome gene families info...")
-            read_gene_families_info(pangenome, h5f, disable_bar=disable_bar)
+            if gene_families_info or gene_families_sequences:
+                debug_msg = "Reading pangenome gene families "
+                if gene_families_info:
+                    debug_msg += f"info{' and sequences...' if gene_families_sequences else '...'}"
+                elif gene_families_sequences:
+                    debug_msg += "sequences..."
+                logging.getLogger("PPanGGOLiN").debug(debug_msg)
+                read_gene_families_info(pangenome, h5f, gene_families_info, gene_families_sequences, disable_bar)
         else:
-            raise Exception(
-                f"The pangenome in file '{pangenome.file}' does not have gene families, or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' does not have gene families, "
+                             "or has been improperly filled")
 
     if graph:
         if h5f.root.status._v_attrs.NeighborsGraph:
@@ -217,7 +248,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
     h5f.close()
 
 
-def check_pangenome_info(pangenome, need_systems: bool = False, models: List[Models] = None,
+def check_pangenome_info(pangenome, need_families_info: bool = False, need_families_sequences: bool = False,
+                         need_systems: bool = False, models: List[Models] = None,
                          systems_sources: List[str] = None, disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
@@ -229,6 +261,13 @@ def check_pangenome_info(pangenome, need_systems: bool = False, models: List[Mod
 
     need_info = get_need_info(pangenome, **kwargs)
     need_info["meta_sources"] = need_info.pop("sources")
+
+    if need_families_info or need_families_sequences:
+        if kwargs.get('gene_families'):
+            raise AssertionError("gene families need to be loaded to load either information or sequences.")
+        else:
+            need_info["gene_families_info"] = need_families_info
+            need_info["gene_families_sequences"] = need_families_sequences
 
     if need_systems:
         assert models is not None and systems_sources is not None

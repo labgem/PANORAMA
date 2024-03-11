@@ -199,7 +199,6 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
         for hit in top_hits:
             cog = hit.best_domain.alignment
-            logging.getLogger("PANORAMA").debug(f'HMM: {cog.hmm_name.decode("UTF-8")}')
             hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
             target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
                              seq_length[cog.target_name])

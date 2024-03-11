@@ -44,8 +44,10 @@ def check_parameter(args):
             logging.getLogger('PANORAMA').error("You cannot specify both --table and --k_best_hit in the same command")
             raise argparse.ArgumentError(argument=None, message="--table is Incompatible option with '--k_best_hit'.")
         if args.only_best_hit:
-            logging.getLogger('PANORAMA').error("You cannot specify both --table and --only_best_hit in the same command")
-            raise argparse.ArgumentError(argument=None, message="--table is Incompatible option with '--only_best_hit'.")
+            logging.getLogger('PANORAMA').error(
+                "You cannot specify both --table and --only_best_hit in the same command")
+            raise argparse.ArgumentError(argument=None,
+                                         message="--table is Incompatible option with '--only_best_hit'.")
 
     else:  # args.hmm is not None
         if args.mode is None:
@@ -58,13 +60,15 @@ def check_parameter(args):
                     logging.getLogger("PANORAMA").warning("'--only_best_hit' is an alias for '--k_best_hit 1'. "
                                                           "You can use only one of them.")
                 else:
-                    logging.getLogger("PANORAMA").error(f"You set the maximum of hit at {args.k_best_hit} but "
-                                                        f"you also use '--only_best_hit' which is an alias for '--k_best_hit 1'. "
-                                                        f"Please use only one of those.")
-                    raise argparse.ArgumentError(argument=None, message="--k_best_hit is incompatible with --only_best_hit")
+                    logging.getLogger("PANORAMA").error(f"You set the maximum of hit at {args.k_best_hit} but you also "
+                                                        f"use '--only_best_hit' which is an alias for '--k_best_hit 1'."
+                                                        f" Please use only one of those.")
+                    raise argparse.ArgumentError(argument=None,
+                                                 message="--k_best_hit is incompatible with --only_best_hit")
         else:
             if args.only_best_hit:
                 args.k_best_hit = 1
+
 
 def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = False):
     """
@@ -82,7 +86,7 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
             erase_pangenome(pangenome, metadata=True, source=source)
         else:
             raise KeyError(f"A metadata corresponding to the source : '{source}' already exist in pangenome."
-                            f"Add the option --force to erase")
+                           f"Add the option --force to erase")
 
 
 def read_families_metadata(pangenome: Pangenome, metadata: Path) -> Tuple[pd.DataFrame, str]:
@@ -147,7 +151,6 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
     get_best_hit = lambda group: group.nlargest(k_best_hit, columns=['score', 'e_value', 'bias'])
     return metadata.groupby('families', group_keys=False).apply(get_best_hit)
-
 
 
 def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame, source: str, k_best_hit: int = None,
@@ -221,6 +224,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
+        print(pangenome.status)
         pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, bit_cutoffs,
                                                          threads, disable_bar)
 
@@ -254,7 +258,8 @@ def annot_pangenomes(pangenomes: Pangenomes, source: str = None, table: Path = N
         pangenomes2metadata = read_families_metadata_mp(pangenomes, table, threads, disable_bar)
     else:  # hmm is not None:
         pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, mode, bit_cutoffs, threads, disable_bar)
-    write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, k_best_hit, threads, lock, force, disable_bar)
+    write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, k_best_hit,
+                                    threads, lock, force, disable_bar)
 
 
 def launch(args: argparse.Namespace) -> None:
@@ -267,9 +272,8 @@ def launch(args: argparse.Namespace) -> None:
     manager = Manager()
     lock = manager.Lock()
     check_parameter(args)
-
-    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info={"need_annotations": True,
-                                                                            "need_families": True},
+    need_info = {"need_families": True, 'need_families_sequences': True}
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_annotation, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
 
