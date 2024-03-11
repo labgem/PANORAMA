@@ -183,7 +183,7 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
 
 
-def project_pangenome_systems(pangenome: Pangenome, source: str, threads: int = 1, lock: Lock = None,
+def project_pangenome_systems(pangenome: Pangenome, system_source:str, annotation_sources: List[str], threads: int = 1, lock: Lock = None,
                               disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
          Write all systems in pangenomes and project on organisms
@@ -191,7 +191,8 @@ def project_pangenome_systems(pangenome: Pangenome, source: str, threads: int = 
         Args:
             pangenome: Pangenome to project
             output: Path to output directory
-            source: Annotation source
+            system_source: source of the systems to project
+            annotation_sources: sources of the annotation
             organisms: List of organisms to project (defaults to all organisms)
             threads: Number of threads available (default: 1)
             lock: Global lock for multiprocessing execution (default: None)
@@ -203,13 +204,13 @@ def project_pangenome_systems(pangenome: Pangenome, source: str, threads: int = 
         """
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    annot2fam = get_annotation_to_families(pangenome, source)
+    annot2fam = get_annotation_to_families(pangenome, annotation_sources)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
-        logging.getLogger("PANORAMA").info(f'Begin system projection for source : {source}')
-        with tqdm(total=pangenome.number_of_systems(source, with_canonical=False), unit='system',
+        logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
+        with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=False), unit='system',
                   disable=disable_bar) as progress:
             futures = []
-            for system in pangenome.get_system_by_source(source):
+            for system in pangenome.get_system_by_source(system_source):
                 future = executor.submit(system_projection, system, annot2fam)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)

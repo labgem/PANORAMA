@@ -66,7 +66,7 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
                                f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}.")
 
 
-def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False, association: str = None,
+def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_sources: List[str], projection: bool = False, association: str = None,
                              partition: bool = False, proksee: str = None, organisms: List[str] = None,
                              threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
@@ -88,13 +88,13 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
     pangenomes_proj = pd.DataFrame()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
-        for source in pangenome.systems_sources:
-            logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} and source {source}.")
-            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, source, threads=threads,
+        for system_source in pangenome.systems_sources:
+            logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} on system source {system_source}. Based on annotation sources {annotation_sources} ")
+            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources, threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
             if projection:
                 logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-                write_projection_systems(pangenome.name, output, source, pangenome_proj, organisms_proj,
+                write_projection_systems(pangenome.name, output, system_source, pangenome_proj, organisms_proj,
                                          organisms, force)
             if partition:
                 logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
@@ -118,21 +118,23 @@ def launch(args):
     from panorama.format.read_binaries import load_pangenomes
     from panorama.utility.utility import check_models
 
-    check_write_systems_args(args)
+    # check_write_systems_args(args)
     models_list = []
     for models in args.models:
         models_list.append(check_models(models, disable_bar=args.disable_prog_bar))
+
     outdir = mkdir(args.output, force=args.force)
     manager = Manager()
     lock = manager.Lock()
     need_info = {"need_annotations": True, "need_families": True, "need_graph": True, "need_partitions": True,
                  "need_metadata": True, "metatypes": ["families"], "sources": args.annotation_sources,
                  "need_systems": True, "systems_sources": args.sources, "models": models_list}
+                 
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, check_function=check_pangenome_write_systems,
                                  need_info=need_info, sources=args.sources, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar)
 
-    write_pangenomes_systems(pangenomes, outdir, projection=args.projection, proksee=args.proksee,
+    write_pangenomes_systems(pangenomes, outdir, args.annotation_sources, projection=args.projection, proksee=args.proksee,
                              association=args.association, partition=args.partition, organisms=args.organisms,
                              threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
 
