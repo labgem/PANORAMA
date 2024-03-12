@@ -310,19 +310,23 @@ def parser_write(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')
+    annotation = parser.add_argument_group(title="Write annotation",
+                                           description="Arguments for writing annotation/metadata "
+                                                       "assigned to gene families in pangenomes")
+    annotation.add_argument("--annotations", required=False, action="store_true",
+                            help="Write all the annotations from families for the given sources")
+    annotation.add_argument("--sources", required=False, type=str, nargs="+", default=None,
+                            help='Name of the annotation source where panorama as to select in pangenomes')
+    hmm = parser.add_argument_group(title="Write HMM", description="Arguments for writing gene families HMM")
+    hmm.add_argument("--hmm", required=False, action="store_true",
+                     help="Write an hmm for each gene families in pangenomes")
+    hmm.add_argument("--msa", required=False, type=Path, default=None,
+                     help="To create a HMM profile for families, you can give a msa of each gene in families."
+                          "This msa could be get from ppanggolin (See ppanggolin msa). "
+                          "Should be a 2 column tsv file with pangenome name in first and path to MSA in second")
+    hmm.add_argument("--msa_format", required=False, type=str, default="afa",
+                     choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
+                              "clustal", "clustallike", "phylip", "phylips"],
+                     help="Format of the input MSA.")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--annotations", required=False, action="store_true",
-                          help="Write all the annotations from families for the given sources")
-    optional.add_argument("--sources", required=False, type=str, nargs="+", default=None,
-                          help='Name of the annotation source where panorama as to select in pangenomes')
-    optional.add_argument("--hmm", required=False, action="store_true",
-                          help="Write an hmm for each gene families in pangenomes")
-    optional.add_argument("--msa", required=False, type=Path, default=None,
-                          help="To create a HMM profile for families, you can give a msa of each gene in families."
-                               "This msa could be get from ppanggolin (See ppanggolin msa). "
-                               "Should be a 2 column tsv file with pangenome name in first and path to MSA in second")
-    optional.add_argument("--msa_format", required=False, type=str, default="afa",
-                          choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-                                   "clustal", "clustallike", "phylip", "phylips"],
-                          help="Format of the input MSA.")
     optional.add_argument("--threads", required=False, type=int, default=1)
