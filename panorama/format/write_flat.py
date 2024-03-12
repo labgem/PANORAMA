@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Dict, Union, List
 from multiprocessing import Manager, Lock
 from concurrent.futures import ThreadPoolExecutor
+import tempfile
 
 # installed libraries
 from tqdm import tqdm
@@ -22,11 +23,8 @@ from panorama.format.read_binaries import load_pangenomes
 from panorama.utils import mkdir, init_lock
 from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenomes, Pangenome
-
-
-# from panorama.format.write_proksee import write_proksee
-# from panorama.format.conserved_spot import *
-# from panorama.alignment.align import all_against_all
+from panorama.alignment.align import all_against_all
+from panorama.format.conserved_spot import identical_spot
 
 
 def check_flat_parameters(args: argparse.Namespace) -> Dict[str, Union[bool, List[str]]]:
@@ -39,8 +37,9 @@ def check_flat_parameters(args: argparse.Namespace) -> Dict[str, Union[bool, Lis
     Returns:
         Dictionary needed to load pangenomes information
     """
-    if not args.hmm and not args.annotations:
-        raise argparse.ArgumentError(argument=None, message="You need to provide at least --annotation or --hmm")
+    if not args.hmm and not args.annotations and not args.conserved_spots:
+        raise argparse.ArgumentError(argument=None, message="You need to provide at least "
+                                                            "--annotation, --hmm or --conserved_spots")
     else:
         need_info = {}
         if args.annotations:
@@ -55,6 +54,11 @@ def check_flat_parameters(args: argparse.Namespace) -> Dict[str, Union[bool, Lis
                 raise argparse.ArgumentError(None, "To write HMM you need to give msa files and format")
             else:
                 need_info["need_families"] = True
+        if args.conserved_spots:
+            if not args.tmp.exists() or not args.tmp.is_dir():
+                raise NotADirectoryError("The given path for temporary directory is not found or not a directory."
+                                         "Please check your path and try again.")
+            need_info.update({"need_families": True, "need_spots": True})
         return need_info
 
 
@@ -81,7 +85,7 @@ def check_pangenome_write_flat_annotations(func):
             the function wrapped
         """
         if kwargs.get("check_annotations", False):
-            if pangenome.status["metadata"]["families"] != "inFile":
+            if pangenome.status["metadata"]["families"] not in ["inFile", "Computed", "Loaded"]:
                 raise ValueError("Pangenome families are not associated to any metadata/annotation")
             else:
                 for source in kwargs["sources"]:
@@ -93,7 +97,42 @@ def check_pangenome_write_flat_annotations(func):
     return wrapper
 
 
+def check_pangenome_write_flat_conserved_spots(func):
+    """
+    Decorator to check pangenome to write conserved_spots
+
+    Args:
+        func: Function to decorate
+
+    Returns:
+        wrapped function
+    """
+
+    def wrapper(pangenome, *args, **kwargs):
+        """Wrapper function
+
+        Args:
+            pangenome: pangenome to check
+            *args: all possible necessary args
+            **kwargs: all possible necessary kwargs
+
+        Returns:
+            the function wrapped
+        """
+        if kwargs.get("check_conserved_spots", False):
+            if pangenome.status["predictedRGP"] not in ["inFile", "Computed", "Loaded"]:
+                raise ValueError(f"RGPs did not have been predicted in your pangenome {pangenome.name}."
+                                 "Please look at 'ppanggolin rgp' command")
+            if pangenome.status["spots"] not in ["inFile", "Computed", "Loaded"]:
+                raise ValueError(f"Spots did not have been predicted in your pangenome {pangenome.name}."
+                                 "Please look at 'ppanggolin spot' command")
+        return func(pangenome, *args, **kwargs)
+
+    return wrapper
+
+
 @check_pangenome_write_flat_annotations
+@check_pangenome_write_flat_conserved_spots
 def check_pangenome_write_flat(pangenome: Pangenome, **kwargs) -> None:
     """
     Function to check and load one pangenome in the loading process
@@ -240,8 +279,31 @@ def write_hmm_profile(pangenomes: Pangenomes, msa_tsv_path: Path, output: Path, 
                 future.result()
 
 
+def write_conserved_spots(pangenomes: Pangenomes, output: Path, tmp: Path = None, keep_tmp: bool = False,
+                          threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
+    """
+    Write conserved spots between pangenomes
+
+    Args:
+        pangenomes: Pangenomes object with all pangenome
+        output: Path to the output directory
+        threads: Number of available threads (default: 1)
+        lock: Global lock for multiprocessing execution (default: None)
+        force: Flag to indicate if a path can be overwritten (default: False)
+        disable_bar: Disable progress bar (default: False)
+    """
+    assert tmp is not None, "Temporary directory is required to align gene families between pangenomes"
+
+    raise NotImplementedError
+    tmpdir = tempfile.TemporaryDirectory(dir=tmp, delete=not keep_tmp)
+    df_align = all_against_all(pangenomes=pangenomes, output=output, lock=lock, tmpdir=tmpdir, task=threads)
+    identical_spot(df_borders_global=df_borders_global, number_org_per_spot_global=number_org_per_spot_global,
+                   df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
+
+
 def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bool = False,
-                     threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False, **kwargs):
+                     conserved_spots: bool = False, threads: int = 1, lock: Lock = None,
+                     force: bool = False, disable_bar: bool = False, **kwargs):
     """
     Global function to write all flat files from pangenomes.
 
@@ -250,6 +312,7 @@ def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bo
         output: Path to the output directory for all flat files
         annotation: Flag to indicate whether annotations should be written or not (default: False)
         hmm: Flag to indicate whether hmms should be written or not (default: False)
+        conserved_spots: Flag to indicate whether conserved spots should be written or not (default: False)
         threads: Number of available threads (default: 1)
         lock: Global lock for multiprocessing execution (default: None)
         force: Flag to indicate if a path can be overwritten (default: False)
@@ -264,6 +327,9 @@ def write_flat_files(pangenomes, output: Path, annotation: bool = False, hmm: bo
     if hmm:
         write_hmm_profile(pangenomes, msa_tsv_path=kwargs["msa_tsv_path"], msa_format=kwargs["msa_format"],
                           output=output, threads=threads, lock=lock, force=force, disable_bar=disable_bar)
+    if conserved_spots:
+        write_conserved_spots(pangenomes,
+                              output=output, threads=threads, lock=lock, force=force, disable_bar=disable_bar)
 
 
 def launch(args):
@@ -279,7 +345,8 @@ def launch(args):
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_write_flat,
                                  max_workers=args.threads, lock=lock, disable_bar=args.disable_prog_bar,
-                                 check_annotations=args.annotations, sources=args.sources)
+                                 check_annotations=args.annotations, sources=args.sources,
+                                 check_conserved_spots=args.conserved_spots)
     write_flat_files(pangenomes, output=flat_outdir, annotation=args.annotations, sources=args.sources,
                      hmm=args.hmm, msa_tsv_path=args.msa, msa_format=args.msa_format,
                      threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
@@ -328,5 +395,13 @@ def parser_write(parser):
                      choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
                               "clustal", "clustallike", "phylip", "phylips"],
                      help="Format of the input MSA.")
+    spot = parser.add_argument_group("Write conserved spots", description="Arguments for writing conserved spots "
+                                                                          "between pangenomes")
+    spot.add_argument("--conserved_spots", required=False, action="store_true",
+                      help="Write all conserved spot in pangenomes having common families as borders")
+    spot.add_argument("--tmpdir", required=False, type=str, default=Path(tempfile.gettempdir()),
+                      help="directory for storing temporary files")
+    spot.add_argument("--keep_tmp", required=False, default=False, action="store_true",
+                      help="Keeping temporary files (useful for debugging).")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, type=int, default=1)
