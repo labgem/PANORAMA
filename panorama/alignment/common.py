@@ -41,35 +41,6 @@ def createdb(seq_files: List[Path], tmpdir: Path, db_type: int = 0, keep_tmp: bo
     return Path(seqdb.name)
 
 
-def get_gf_pangenomes(pangenomes: Pangenomes, create_db: bool, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
-                      threads: int = 1, disable_bar: bool = False) -> Dict[str, Path]:
-    """Get gene families sequences from pangenomes and if ask create an MMSeqs2 database for each pangenome gene families
-
-    :param pangenomes: Pangenomes with gene families
-    :param create_db: boolean to create or not database of gene families
-    :param lock: Global lock for multiprocessing execution
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param threads: Number of available threads
-    :param disable_bar: Disable progressive bar
-
-    :return: Dictionary with pangenome name and path to the sequences or database
-    """
-    logging.getLogger("PANORAMA").debug("Begin create pangenomes gene families database...")
-    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
-        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
-            futures = []
-            for pangenome in pangenomes:
-                future = executor.submit(get_gf_pangenome, pangenome, tmpdir, create_db)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-            pangenomes_gf = {}
-            for future in futures:
-                results = future.result()
-                pangenomes_gf[results[0]] = results[1]
-    logging.getLogger("PANORAMA").debug("All pangenomes gene families database created")
-    return pangenomes_gf
-
-
 def write_pangenomes_families_sequences(pangenomes: Pangenomes, tmpdir: Path, threads: int = 1,
                                         lock: Lock = None, disable_bar: bool = False) -> Dict[str, Path]:
     """

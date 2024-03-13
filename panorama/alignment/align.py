@@ -222,7 +222,7 @@ def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.
         identity: Set the identity use to construct clustering [0-1]. (Defaults 0.9)
         coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8)
         cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 1).
-        threads: Number of available threads for each worker. (Defaults 1).
+        threads: Number of available threads. (Defaults 1).
         keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
 
     Returns:
@@ -283,10 +283,10 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Subparser to launch PANORAMA in Command line
 
     Args:
-        sub_parser: sub_parser for annot command
+        sub_parser: sub_parser for align command
 
     Returns:
-        argparse.ArgumentParser: parser arguments for annot command
+        argparse.ArgumentParser: parser arguments for align command
     """
     parser = sub_parser.add_parser("align", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_align(parser)
