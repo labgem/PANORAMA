@@ -323,7 +323,7 @@ def parser_align(parser):
     mmseqs.add_argument('--cov_mode', required=False, type=int, default=0,
                         help="covery_mode")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+    optional.add_argument("--tmpdir", required=False, type=Path, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--keep_tmp", required=False, default=False, action="store_true",
                           help="Keeping temporary files (useful for debugging).")
