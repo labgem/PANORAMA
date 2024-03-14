@@ -191,7 +191,7 @@ def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
             for pangenome_name, metadata in pangenomes2metadata.items():
-                pangenome = pangenomes.get_pangenome(pangenome_name)
+                pangenome = pangenomes.get(pangenome_name)
                 logging.getLogger("PANORAMA").debug(f"Write annotation for pangenome {pangenome.name}")
                 future = executor.submit(write_annotations_to_pangenome, pangenome,
                                          metadata, source, k_best_hit, force, disable_bar)

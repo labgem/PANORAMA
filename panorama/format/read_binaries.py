@@ -96,7 +96,8 @@ def read_gene_families_info(pangenome: Pangenome, h5f: tables.File, information:
     """
     table = h5f.root.geneFamiliesInfo
 
-    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family", disable=disable_bar):
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
+                    desc="Reading gene families sequences", disable=disable_bar):
         fam = pangenome.get_gene_family(row["name"].decode())
         if information:
             fam.partition = row["partition"].decode()
@@ -121,7 +122,8 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
 
     link = True if pangenome.status["genomesAnnotated"] in ["Computed", "Loaded"] else False
 
-    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family", disable=disable_bar):
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
+                    desc="Reading gene families", disable=disable_bar):
         try:
             fam = pangenome.get_gene_family(name=row["geneFam"].decode())
         except KeyError:
@@ -261,7 +263,6 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
 
     need_info = get_need_info(pangenome, **kwargs)
     need_info["meta_sources"] = need_info.pop("sources")
-    logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
 
     if need_families_info or need_families_sequences:
         if kwargs.get('gene_families'):
@@ -275,6 +276,8 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
         need_info["systems"] = True
         need_info["models"] = models
         need_info["systems_sources"] = systems_sources
+
+    logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
 
     if any(need_info.values()):
         # if no flag is true, then nothing is needed.
@@ -344,5 +347,5 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
 
             for future in futures:
                 with lock:
-                    pangenomes.add_pangenome(future.result())
+                    pangenomes.add(future.result())
     return pangenomes

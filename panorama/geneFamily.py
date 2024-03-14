@@ -4,16 +4,17 @@
 
 # default libraries
 from __future__ import annotations
+
 import logging
+from typing import Iterable
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
-from ppanggolin.edge import Edge
 from ppanggolin.genome import Organism
 from pyhmmer.plan7 import HMM
 
-# local libraries
 
+# local libraries
 
 
 class GeneFamily(Fam):
@@ -30,6 +31,7 @@ class GeneFamily(Fam):
         self.profile = None
         self.optimized_profile = None
         self._systems_getter = {}
+        self._akin = None
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
@@ -48,7 +50,8 @@ class GeneFamily(Fam):
         :raises TypeError: Try to compare a systems with another type object
         """
         if not isinstance(other, GeneFamily):
-            raise TypeError(f"Another gene family is expected to be compared to the first one. You give a {type(other)}")
+            raise TypeError(f"Another gene family is expected to be compared to the first one. "
+                            f"You give a {type(other)}")
         return set(self.genes) == set(other.genes)
 
     def __ne__(self, other: GeneFamily) -> bool:
@@ -85,6 +88,7 @@ class GeneFamily(Fam):
     def recast(family: Fam) -> GeneFamily:
         """Recast a family from PPanGGOLiN into PANORAMA Gene Family
 
+        Todo look at this function is still needed
         """
         assert isinstance(family, Fam), "family must be a Gene Family object from PPanGGOLiN"
         panorama_fam = GeneFamily(family_id=family.ID, name=family.name)
@@ -128,3 +132,51 @@ class GeneFamily(Fam):
             return True
         else:
             return False
+    @property
+    def akin(self):
+        if self._akin is None:
+            logging.getLogger('PANORAMA').debug(f"Not any akin families has been assigned to {self.name}")
+        return self._akin
+
+    @akin.setter
+    def akin(self, akin: Akin):
+        if not isinstance(akin, Akin):
+            raise TypeError(f"{akin} is not an instance of Akin.")
+        if self._akin is not None and self._akin != akin:
+            logging.getLogger("PANORAMA").debug(f"Akin families is already set for {self.name} and "
+                                                "a different one is given. Could be an error")
+        self._akin = Akin
+
+
+
+class Akin:
+    """
+    This class represents a group of gene families that are similar between multiple pangenomes
+    """
+    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily):
+        self.ID = identifier
+        self.reference = reference.name
+        self._families = {reference.name: reference}
+        for gene_family in gene_families:
+            self.add(gene_family)
+
+    def __setitem__(self, name: str, family: GeneFamily):
+        try:
+            _ = self._families[name]
+        except KeyError:
+            self._families[name] = family
+        else:
+            raise KeyError(f"Gene family: {name} already exists in the cluster")
+
+    def __getitem__(self, name: str):
+        try:
+            return self._families[name]
+        except KeyError:
+            raise KeyError(f"There is no gene family: {name} in the cluster")
+
+    def add(self, family: GeneFamily):
+        assert isinstance(family, GeneFamily), "A GeneFamily object is expected to be added to cluster"
+        self._families[family.name] = family
+
+    def get(self, name: str) -> GeneFamily:
+        return self._families[name]
