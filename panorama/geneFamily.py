@@ -132,6 +132,7 @@ class GeneFamily(Fam):
             return True
         else:
             return False
+
     @property
     def akin(self):
         if self._akin is None:
@@ -148,11 +149,11 @@ class GeneFamily(Fam):
         self._akin = Akin
 
 
-
 class Akin:
     """
     This class represents a group of gene families that are similar between multiple pangenomes
     """
+
     def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily):
         self.ID = identifier
         self.reference = reference.name
@@ -177,6 +178,7 @@ class Akin:
     def add(self, family: GeneFamily):
         assert isinstance(family, GeneFamily), "A GeneFamily object is expected to be added to cluster"
         self._families[family.name] = family
+        family.akin = self
 
     def get(self, name: str) -> GeneFamily:
         return self._families[name]

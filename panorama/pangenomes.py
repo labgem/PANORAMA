@@ -286,19 +286,23 @@ class Pangenomes:
         else:
             raise KeyError(f"Cluster with ID {cluster.ID} already exist in pangenomes")
 
-    def read_clustering(self, clustering: Path, disable_bar: bool = False):
+    def read_clustering(self, clustering: Union[Path, pd.DataFrame], disable_bar: bool = False):
         from panorama.alignment.cluster import clust_col_names
 
         logging.getLogger("PANORAMA").info("Reading clustering...")
-        cluster_df = pd.read_csv(clustering, sep="\t", names=clust_col_names, header=0)
-        cluster_df = cluster_df.sort_values(by=clust_col_names[0])
-        lines = cluster_df.iterrows()
+        if isinstance(clustering, Path):
+            logging.getLogger("PANORAMA").debug(f"Reading clustering from {clustering}")
+            clustering = pd.read_csv(clustering, sep="\t", names=clust_col_names, header=0)
+        if clustering.shape[1] != len(clust_col_names) or clustering.columns.tolist() != clust_col_names:
+            raise pd.errors.ParserError("given Clustering has inconsistent number of columns or names")
+        clustering = clustering.sort_values(by=clust_col_names[0])
+        lines = clustering.iterrows()
         line = next(lines)[1]
         cluster_id = line[clust_col_names[0]]
         referent = self.get_family(line[clust_col_names[1]])
         gene_families = set()
         stop = False
-        with tqdm(total=cluster_df.shape[0], unit="line", disable=disable_bar) as pbar:
+        with tqdm(total=clustering.shape[0], unit="line", disable=disable_bar) as pbar:
             while not stop:
                 try:
                     line = next(lines)[1]

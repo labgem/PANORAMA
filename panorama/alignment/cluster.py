@@ -64,11 +64,9 @@ def write_clustering(clust_res: Path, outfile: Path):
     clust_id = {index: ref_fam for index, ref_fam in enumerate(clust_df[clust_col_names[1]].unique().tolist())}
     clust_id_df = pd.DataFrame.from_dict(clust_id, orient="index").reset_index()
     clust_id_df.columns = clust_col_names[0:2]
-    print(clust_df, clust_id_df)
     merge_clust = clust_id_df.merge(clust_df, on=clust_col_names[1], how="inner", validate="one_to_many")
     merge_clust.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.getLogger("PANORAMA").info(
-        f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.as_posix()}")
 
 
 def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):

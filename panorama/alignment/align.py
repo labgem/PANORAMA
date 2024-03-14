@@ -17,7 +17,6 @@ from time import time
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
-from pandas import DataFrame
 
 # local libraries
 from panorama.utils import mkdir
@@ -211,7 +210,7 @@ def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
 
 def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.8, coverage: float = 0.8,
                     cov_mode: int = 0, tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False,
-                    threads: int = 1) -> DataFrame:
+                    threads: int = 1) -> pd.DataFrame:
     """
     Main function to align all gene families from all pangenomes with inside alignment
 
