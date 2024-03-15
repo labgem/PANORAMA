@@ -87,7 +87,7 @@ def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):
 
 
 def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], lclust_db: Path = None,
-                      tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False, threads: int = 1) -> Path:
+                      tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Launch a linclust clustering provide by MMSeqs2 on pangenomes gene families
 
     Args:
@@ -101,7 +101,7 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
     Returns:
         Dataframe with clustering results
     """
-
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     if lclust_db is None:
         lclust_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
     logging.getLogger("PANORAMA").debug("Clustering all gene families with linclust process...")
@@ -123,7 +123,7 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
 
 
 def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], cluster_db: Path = None,
-                     tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False, threads: int = 1) -> Path:
+                     tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Launch a cluster clustering provide by MMSeqs2 on pangenomes gene families
 
     Args:
@@ -137,7 +137,7 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
     Returns:
         Dataframe with clustering results
     """
-
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     if cluster_db is None:
         cluster_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
     logging.getLogger("PANORAMA").debug("Clustering all gene families with cluster process...")
@@ -161,7 +161,7 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
 
 
 def cluster_gene_families(families_seq: List[Path], method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
-                          tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False, threads: int = 1) -> Path:
+                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Cluster pangenomes gene families with MMSeqs2
 
     Args:
@@ -175,6 +175,7 @@ def cluster_gene_families(families_seq: List[Path], method: str, mmseqs2_opt: Di
     Returns:
         Dataframe with clustering results
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     merge_db = createdb(families_seq, tmpdir)
     if method == "linclust":
         clust_db = linclust_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt,

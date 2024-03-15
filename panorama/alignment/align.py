@@ -71,7 +71,7 @@ def write_alignment(query_db: Path, target_db: Path, aln_db: Path, outfile: Path
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
 
 
-def align_db(query_db: Path, target_db: Path, aln_db: Path = None, tmpdir: Path = Path(tempfile.gettempdir()),
+def align_db(query_db: Path, target_db: Path, aln_db: Path = None, tmpdir: Path = None,
              identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0, threads: int = 1,
              keep_tmp: bool = False) -> Path:
     """
@@ -88,6 +88,7 @@ def align_db(query_db: Path, target_db: Path, aln_db: Path = None, tmpdir: Path 
         keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
         threads: Number of available threads. (Defaults 1).
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     aln_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name) if aln_db is None else aln_db
     cmd = ["mmseqs", "search", query_db.absolute().as_posix(), target_db.absolute().as_posix(),
            aln_db.absolute().as_posix(), tmpdir.name, "-a", "--min-seq-id", str(identity), "-c", str(coverage),
@@ -101,7 +102,7 @@ def align_db(query_db: Path, target_db: Path, aln_db: Path = None, tmpdir: Path 
 
 
 def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path, Path], identity: float = 0.8,
-                          coverage: float = 0.8, cov_mode: int = 0, tmpdir: Path = Path(tempfile.gettempdir()),
+                          coverage: float = 0.8, cov_mode: int = 0, tmpdir: Path = None,
                           keep_tmp: bool = False, threads: int = 1) -> Path:
     """
     Align with MMSeqs2 gene families from 2 different pangenomes
@@ -119,6 +120,7 @@ def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path,
     Returns:
         Path to the alignment results
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     logging.getLogger("PANORAMA").debug(f"Aligning gene families between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
     aln_db = align_db(query_db=db_pair[0], target_db=db_pair[1], tmpdir=tmpdir, identity=identity,
                       coverage=coverage, cov_mode=cov_mode, threads=threads)
@@ -131,7 +133,7 @@ def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path,
 
 
 def align_pangenomes(pangenome2db: Dict[str, Path], identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                     tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False,
+                     tmpdir: Path = None, keep_tmp: bool = False,
                      threads: int = 1, disable_bar: bool = False) -> List[Path]:
     """
     Align all gene families between pangenomes
@@ -149,6 +151,7 @@ def align_pangenomes(pangenome2db: Dict[str, Path], identity: float = 0.8, cover
     Returns:
         List of alignment results between pangenomes
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     pangenomes_pairs = list(combinations(pangenome2db.keys(), 2))
     with tqdm(total=len(pangenomes_pairs), unit='pangenomes pair', disable=disable_bar) as progress:
         logging.getLogger("PANORAMA").info("Aligning gene families between pangenomes...")
@@ -181,7 +184,7 @@ def merge_aln_res(align_results: List[Path], outfile: Path):
 
 def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
                           identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                          tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False, threads: int = 1,
+                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1,
                           disable_bar: bool = False):
     """
     Main function to align gene families between pangenomes without inside pangenome alignment
@@ -197,6 +200,7 @@ def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
         threads: Number of available threads. (Defaults 1).
         disable_bar: Disable progressive bar. (Defaults False).
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     pangenome2db = {}
     for name, sequences in pangenome2families_seq.items():
         logging.getLogger("PANORAMA").debug(f"Constructing sequences database for pangenome {name}")
@@ -209,8 +213,7 @@ def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
 
 
 def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.8, coverage: float = 0.8,
-                    cov_mode: int = 0, tmpdir: Path = Path(tempfile.gettempdir()), keep_tmp: bool = False,
-                    threads: int = 1) -> pd.DataFrame:
+                    cov_mode: int = 0, tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> pd.DataFrame:
     """
     Main function to align all gene families from all pangenomes with inside alignment
 
@@ -227,6 +230,7 @@ def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.
     Returns:
         Dataframe with alignment results
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     merge_db = createdb(families_seq, tmpdir)
     aln_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
     logging.getLogger("PANORAMA").debug("Aligning all gene families...")
