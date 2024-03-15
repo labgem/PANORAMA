@@ -2,13 +2,95 @@
 # coding: utf8
 
 # default libraries
+from typing import Generator, List, Tuple
 
 # installed libraries
+from ppanggolin.region import Spot as Hotspot
 from ppanggolin.region import Module as Mod
 
 # local libraries
 from panorama.geneFamily import GeneFamily
 from panorama.systems.system import System
+
+
+class Spot(Hotspot):
+    """"""
+
+    def __init__(self, spot_id: int):
+        """Constructor method
+        """
+        super().__init__(spot_id)
+        self.pangenome = None
+        self.conserved_id = None
+
+    @property
+    def conserved(self) -> True:
+        """Return True if the spot is conserved between pangenomes, False otherwise."""
+        return True if self.conserved_id is not None else False
+
+
+class ConservedSpots:
+    def __init__(self, identifier: int, *spots: Spot):
+        """Constructor method
+        """
+        self.ID = identifier
+        self._spots_getter = {}
+        for spot in spots:
+            self.add(spot)
+
+    def __setitem__(self, key: Tuple[str, int], value: Spot):
+        try:
+            self._spots_getter[key]
+        except KeyError:
+            self._spots_getter[key] = value
+        else:
+            raise KeyError(f"Spot {key} already exist in conserved spots with ID {self.ID}")
+
+    def __getitem__(self, key: Tuple[str, int]) -> Spot:
+        try:
+            return self._spots_getter[key]
+        except KeyError:
+            raise KeyError(f"Spot {key} is not in conserved spot with ID {self.ID}")
+
+    def add(self, spot: Spot) -> None:
+        """
+        Add a spot in the conserved set of spots
+
+        Args:
+            spot: spot to add in the object
+        """
+        assert isinstance(spot, Spot), f"Spot object is expected, given type is {type(spot)}"
+        self[(spot.pangenome.name, spot.ID)] = spot
+        spot.conserved_id = self.ID
+
+    def get(self, spot_id: int, pangenome_name: str) -> Spot:
+        """
+        Get a spot in the conserved set of spots
+        Args:
+            spot_id: spot identifier
+            pangenome_name: name of the pangenome from which the spot belongs
+
+        Returns:
+            The spot with the given id and pangenome
+        """
+        assert isinstance(spot_id, int), f"Spot id should be an integer, given type is {type(spot_id)}"
+        return self[(pangenome_name, spot_id)]
+
+    @property
+    def spots(self) -> Generator[Spot, None, None]:
+        """Generator of the spots in the conserved object"""
+        for spot in self._spots_getter.values():
+            yield spot
+
+    def pangenomes(self) -> List[str]:
+        """
+        Get the list of pangenomes where the conserved spot belongs
+
+        Returns:
+            List of pangenome
+        """
+        return [k[0] for k in self._spots_getter.keys()]
+
 
 class Module(Mod):
     """
@@ -16,6 +98,7 @@ class Module(Mod):
     :param module_id: identifier of the module
     :param families: Set of families which define the module
     """
+
     def __init__(self, module_id: int, families: set = None):
         """
         'core' are gene families that define the module.

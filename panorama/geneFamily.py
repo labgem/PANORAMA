@@ -4,9 +4,7 @@
 
 # default libraries
 from __future__ import annotations
-
 import logging
-from typing import Iterable
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
@@ -101,7 +99,6 @@ class GeneFamily(Fam):
         :type system: System
         """
         if system.ID in self._systems_getter and self.get_system(system.ID) != system:
-            print(self.get_system(system.ID), system)
             raise KeyError("A different system with the same name already exist in the gene family")
         self._systems_getter[system.ID] = system
 
@@ -134,19 +131,32 @@ class GeneFamily(Fam):
             return False
 
     @property
-    def akin(self):
+    def akin(self) -> Akin:
+        """Get the akin families with other pangenomes
+
+        Returns:
+            Similar families
+        """
         if self._akin is None:
             logging.getLogger('PANORAMA').debug(f"Not any akin families has been assigned to {self.name}")
         return self._akin
 
     @akin.setter
     def akin(self, akin: Akin):
+        """Set the akin families with other pangenomes
+
+        Args:
+            akin: Similar families
+
+        Raises:
+            KeyError: if akin is not instance Akin
+        """
         if not isinstance(akin, Akin):
             raise TypeError(f"{akin} is not an instance of Akin.")
         if self._akin is not None and self._akin != akin:
             logging.getLogger("PANORAMA").debug(f"Akin families is already set for {self.name} and "
                                                 "a different one is given. Could be an error")
-        self._akin = Akin
+        self._akin = akin
 
 
 class Akin:
@@ -154,10 +164,11 @@ class Akin:
     This class represents a group of gene families that are similar between multiple pangenomes
     """
 
-    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily):
+    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily) -> None:
         self.ID = identifier
+        self._families = {}
         self.reference = reference.name
-        self._families = {reference.name: reference}
+        self.add(reference)
         for gene_family in gene_families:
             self.add(gene_family)
 
@@ -176,9 +187,21 @@ class Akin:
             raise KeyError(f"There is no gene family: {name} in the cluster")
 
     def add(self, family: GeneFamily):
+        """
+        Add a gene family to the set of akin families
+
+        Args:
+            family: the akin gene families
+        """
         assert isinstance(family, GeneFamily), "A GeneFamily object is expected to be added to cluster"
         self._families[family.name] = family
         family.akin = self
 
     def get(self, name: str) -> GeneFamily:
+        """
+        Get a gene family from the set of akin families
+
+        Args:
+            name: the gene family name to get
+        """
         return self._families[name]

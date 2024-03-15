@@ -4,16 +4,18 @@
 # default libraries
 import logging
 from pathlib import Path
-from typing import Dict, Generator, List, Set, Union
-from tqdm import tqdm
+from typing import Generator, List, Set, Union
+
 # install libraries
 import pandas as pd
+from tqdm import tqdm
 from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
 from panorama.systems.system import System
 from panorama.geneFamily import GeneFamily, Akin
+from panorama.region import Spot, ConservedSpots
 
 
 class Pangenome(Pan):
@@ -113,6 +115,10 @@ class Pangenome(Pan):
         """
         return super().get_gene_family(name)
 
+    def add_spot(self, spot: Spot):
+        super().add_spot(spot)
+        spot.pangenome = self
+
     @property
     def systems(self) -> Generator[System, None, None]:
         """Get all systems in the pangenome
@@ -160,7 +166,7 @@ class Pangenome(Pan):
                 if not find_in_canonical:
                     raise KeyError(f"There is no system with ID = {system_id} in pangenome")
                 else:
-                    # You should not arrive here because if find in canonical is True the function return a value
+                    # You should not arrive here because if `find_in_canonical` is True the function return a value
                     raise Exception("Something unexpected happened here. Please report an issue on our GitHub")
             else:
                 raise KeyError(f"There is no system with ID = {system_id} in pangenome")
@@ -207,6 +213,7 @@ class Pangenomes:
         self._pangenomes_getter = {}
         self._clusters = {}
         self._families2pangenome = {}
+        self._conserved_spots_getter = {}
 
     def __len__(self):
         """Get the number of pangenomes in the collection."""
@@ -253,6 +260,15 @@ class Pangenomes:
         return self._pangenomes_getter[name]
 
     def mk_families_to_pangenome(self, check_duplicate_names: bool = True):
+        """
+        Fill the families2pangenome dictionary to know from which pangenome the family belongs to
+
+        Args:
+            check_duplicate_names: Flag to return an error if families name is duplicated between pangenome.
+
+        Raises:
+            KeyError: If there is a duplicate family names
+        """
         for pangenome in self:
             for family in pangenome.gene_families:
                 try:
@@ -274,11 +290,30 @@ class Pangenomes:
                         family.name = f"{pangenome.name}_{family.name}"
 
     def get_family(self, name: str, check_duplicate_names: bool = True) -> GeneFamily:
+        """
+        Get a family in the pangenomes
+
+        Args:
+            name: name of the gene family
+            check_duplicate_names: Flag to raise an error if duplicate family names between pangenomes.
+
+        Returns:
+            The gene family with the given name
+        """
         if len(self._families2pangenome) == 0:
             self.mk_families_to_pangenome(check_duplicate_names)
         return self.get(self._families2pangenome[name]).get_gene_family(name)
 
     def add_cluster(self, cluster: Akin) -> None:
+        """
+        Add a cluster of similar gene families between pangenomes
+
+        Args:
+            cluster: A set of akin gene families
+
+        Raises:
+            KeyError: If there is already an Akin object with this ID
+        """
         try:
             _ = self._clusters[cluster.ID]
         except KeyError:
@@ -287,6 +322,13 @@ class Pangenomes:
             raise KeyError(f"Cluster with ID {cluster.ID} already exist in pangenomes")
 
     def read_clustering(self, clustering: Union[Path, pd.DataFrame], disable_bar: bool = False):
+        """
+        Read clustering result from panorama
+
+        Args:
+            clustering: Clustering result
+            disable_bar: Flag to disable progress bar (default: False)
+        """
         from panorama.alignment.cluster import clust_col_names
 
         logging.getLogger("PANORAMA").info("Reading clustering...")
@@ -322,3 +364,39 @@ class Pangenomes:
                         gene_families.add(self.get_family(in_clust_name))
                 finally:
                     pbar.update()
+        self.add_cluster(Akin(cluster_id, referent, *gene_families))
+
+    @property
+    def conserved_spots(self) -> Generator[ConservedSpots, None, None]:
+        """Generator of conserved spots between pangenomes
+        Yields:
+            ConservedSpots: a set of spots conserved between pangenomes
+        """
+        for conserved_spot in self._conserved_spots_getter.values():
+            yield conserved_spot
+
+    def add_conserved_spots(self, conserved_spots: ConservedSpots):
+        """
+        Add a set of conserved spots between pangenomes
+
+        Args:
+            conserved_spots: Conserved spots object
+
+        Raises:
+            KeyError: if conserved_spots identifier already exist in pangenomes.
+        """
+        try:
+            _ = self._conserved_spots_getter[conserved_spots.ID]
+        except KeyError:
+            self._conserved_spots_getter[conserved_spots.ID] = conserved_spots
+        else:
+            raise KeyError(f"Conserved spots {conserved_spots.ID} already exists between pangenomes")
+
+    @property
+    def number_of_conserved_spots(self) -> int:
+        """Get the number of conserved spots
+
+        Returns:
+            Number of conserved spots
+        """
+        return len(self._conserved_spots_getter)

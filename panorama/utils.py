@@ -47,7 +47,7 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         return Path(output)
 
 
-def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
+def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
     """ Check if the given tsv is readable for the next PANORAMA step
 
     :param tsv_path: Path to tsv file with list of pangenome

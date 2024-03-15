@@ -26,7 +26,8 @@ from panorama.geneFamily import GeneFamily
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.alignment.common import write_pangenomes_families_sequences
 from panorama.alignment.align import all_against_all
-from panorama.format.conserved_spot import identical_spot
+from panorama.format.conserved_spot import identify_conserved_spot
+from panorama.format.conserved_spot import write_conserved_spots as write_cs
 
 
 def check_flat_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Union[bool, Any]], Dict[str, Union[bool, Any]]]:
@@ -67,7 +68,7 @@ def check_flat_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Union[boo
                                          "Please check your path and try again.")
             if args.cluster is not None and not args.cluster.is_file():
                 raise FileNotFoundError("The given clustering file is not found or not a file.")
-            need_info.update({"need_families": True, "need_annotations": True,
+            need_info.update({"need_families": True, "need_annotations": True, "need_families_info": True,
                               "need_rgp": True, "need_spots": True})
             kwargs.update({"tmpdir": args.tmpdir, "cluster": args.cluster, "keep_tmp": args.keep_tmp})
         return need_info, kwargs
@@ -320,7 +321,7 @@ def write_hmm_profile(pangenomes: Pangenomes, msa_tsv_path: Path, output: Path, 
                 future.result()
 
 
-def write_conserved_spots(pangenomes: Pangenomes, output: Path, cluster: Path = None, tmpdir: Path = None,
+def write_conserved_spots(pangenomes: Pangenomes, output: Path, clustering: Path = None, tmpdir: Path = None,
                           keep_tmp: bool = False, threads: int = 1, lock: Lock = None, force: bool = False,
                           disable_bar: bool = False):
     """
@@ -329,27 +330,31 @@ def write_conserved_spots(pangenomes: Pangenomes, output: Path, cluster: Path = 
     Args:
         pangenomes: Pangenomes object with all pangenome
         output: Path to the output directory
+        clustering: Path to the clustering file results (default: None)
+        tmpdir: Path to the temporary directory (default: None)
+        keep_tmp: Flag to keep temporary files (default: False)
         threads: Number of available threads (default: 1)
         lock: Global lock for multiprocessing execution (default: None)
         force: Flag to indicate if a path can be overwritten (default: False)
         disable_bar: Disable progress bar (default: False)
     """
-    if cluster is None:
-        # TODO change assertion by default value of tempfile.getdir() with a logging.warning()
-        assert tmpdir is not None, "Temporary directory is required to align gene families between pangenomes"
-        tmpdir = Path(tempfile.mkdtemp(dir=tmpdir))
-        pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, lock=lock,
+    if clustering is None:
+        if tmpdir is None:
+            tmpdir = Path(tempfile.gettempdir())
+            logging.getLogger("PANORAMA").warning("Temporary directory has not been set. "
+                                                  f"Default tmpdir: {tmpdir.as_posix()} will be used.")
+        tmp = Path(tempfile.mkdtemp(dir=tmpdir))
+        pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmp, lock=lock,
                                                                      threads=threads, disable_bar=disable_bar)
         # TODO change for clustering function
-        cluster = all_against_all(families_seq=list(pangenome2families_seq.values()), output=output,
-                                  tmpdir=tmpdir, threads=threads, keep_tmp=keep_tmp)
+        clustering = all_against_all(families_seq=list(pangenome2families_seq.values()), output=output,
+                                     tmpdir=tmpdir, threads=threads, keep_tmp=keep_tmp)
 
         if not keep_tmp:
-            rmtree(tmpdir)
-    pangenomes.read_clustering(clustering=cluster)
-    raise NotImplementedError
-    identical_spot(df_borders_global=df_borders_global, number_org_per_spot_global=number_org_per_spot_global,
-                   df_spot_global=df_spot_global, df_align=df_align, output=output, threshold=conserved_spot)
+            rmtree(tmp)
+    pangenomes.read_clustering(clustering=clustering)
+    identify_conserved_spot(pangenomes, threads=threads, lock=lock, disable_bar=disable_bar)
+    write_cs(pangenomes, output, force=force, disable_bar=disable_bar)
 
 
 def write_flat_files(pangenomes: Pangenomes, output: Path, annotation: bool = False, hmm: bool = False,
@@ -379,7 +384,7 @@ def write_flat_files(pangenomes: Pangenomes, output: Path, annotation: bool = Fa
         write_hmm_profile(pangenomes, msa_tsv_path=kwargs["msa_tsv_path"], msa_format=kwargs["msa_format"],
                           output=output, threads=threads, lock=lock, force=force, disable_bar=disable_bar)
     if conserved_spots:
-        write_conserved_spots(pangenomes, output=output, cluster=kwargs["cluster"], tmpdir=kwargs["tmpdir"],
+        write_conserved_spots(pangenomes, output=output, clustering=kwargs["cluster"], tmpdir=kwargs["tmpdir"],
                               threads=threads, lock=lock, force=force, disable_bar=disable_bar)
 
 
