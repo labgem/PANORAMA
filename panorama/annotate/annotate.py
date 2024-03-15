@@ -217,6 +217,10 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
 
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
+
+    Todo:
+        - Use the methods in pangenomes object to align all families to HMM and annot after
+        - look at pyhmmer doc for tips to improve implementation
     """
     logging.getLogger("PANORAMA").info("Begin HMM searching")
     # Get list of HMM with Plan7 data model
@@ -224,7 +228,6 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
-        print(pangenome.status)
         pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, bit_cutoffs,
                                                          threads, disable_bar)
 

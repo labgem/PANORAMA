@@ -199,30 +199,28 @@ def annot_with_hmmsearch(hmm_list: List[pyhmmer.plan7.HMM], gf_sequences: List[p
     res = []
     result = collections.namedtuple("Result", res_col_names)
     logging.getLogger("PANORAMA").info("Begin alignment of gene families to HMM")
-    bar = tqdm(range(len(hmm_list)), unit="hmm", desc="Align gene families to HMM", disable=disable_bar)
-    options = {"bit_cutoffs": bit_cutoffs}
-    for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
-        for hit in top_hits:
-            cog = hit.best_domain.alignment
-            hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-            target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
-                             seq_length[cog.target_name])
-            hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
-            add_res = False
-            if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])) and
-                    (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
-                if pd.isna(hmm_info['score_threshold']):
-                    if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
-                        add_res = True
-                else:
-                    if hit.score > hmm_info['score_threshold']:
-                        add_res = True
-            if add_res:
-                secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
-                res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                                  hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
-            # print("hello")
-    bar.close()
+    with tqdm(range(len(hmm_list)), unit="hmm", desc="Align gene families to HMM", disable=disable_bar) as bar:
+        options = {"bit_cutoffs": bit_cutoffs}
+        for top_hits in pyhmmer.hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
+            for hit in top_hits:
+                cog = hit.best_domain.alignment
+                hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
+                target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
+                                 seq_length[cog.target_name])
+                hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
+                add_res = False
+                if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])) and
+                        (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
+                    if pd.isna(hmm_info['score_threshold']):
+                        if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
+                            add_res = True
+                    else:
+                        if hit.score > hmm_info['score_threshold']:
+                            add_res = True
+                if add_res:
+                    secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
+                    res.append(result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
+                                      hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
     return res
 
 
