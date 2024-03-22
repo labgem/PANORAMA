@@ -96,9 +96,14 @@ def read_gene_families_info(pangenome: Pangenome, h5f: tables.File, information:
     :param disable_bar: Disable the progress bar
     """
     table = h5f.root.geneFamiliesInfo
+    description = "Reading gene families "
+    if information:
+        description += f"information {'and sequences' if sequences else ''}"
+    else:
+        description += f"{'sequences' if sequences else ''}"
 
     for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
-                    desc="Reading gene families sequences", disable=disable_bar):
+                    desc=description, disable=disable_bar):
         fam = pangenome.get_gene_family(row["name"].decode())
         if information:
             fam.partition = row["partition"].decode()
@@ -124,7 +129,7 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
     link = True if pangenome.status["genomesAnnotated"] in ["Computed", "Loaded"] else False
 
     for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
-                    desc="Reading gene families", disable=disable_bar):
+                    desc="Associate gene to gene families", disable=disable_bar):
         try:
             fam = pangenome.get_gene_family(name=row["geneFam"].decode())
         except KeyError:
@@ -289,9 +294,8 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
     if need_families_info or need_families_sequences:
         if kwargs.get('gene_families'):
             raise AssertionError("gene families need to be loaded to load either information or sequences.")
-        else:
-            need_info["gene_families_info"] = need_families_info
-            need_info["gene_families_sequences"] = need_families_sequences
+    need_info["gene_families_info"] = need_families_info
+    need_info["gene_families_sequences"] = need_families_sequences
 
     if need_systems:
         assert models is not None and systems_sources is not None

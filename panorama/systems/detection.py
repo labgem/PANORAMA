@@ -5,12 +5,11 @@
 # default libraries
 from __future__ import annotations
 import argparse
-from itertools import combinations
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, FrozenSet
 from multiprocessing import Manager, Lock
 from collections import defaultdict
 
@@ -37,7 +36,7 @@ def check_detection_parameters(args: argparse.Namespace) -> None:
         argparse.ArgumentTypeError: If jaccard is not with the correct type
     """
     args.jaccard = restricted_float(args.jaccard)
-    args.annotation_source = [args.source] if args.annotation_sources is None else args.annotation_sources
+    args.annotation_sources = [args.source] if args.annotation_sources is None else args.annotation_sources
 
 
 def check_pangenome_detection(pangenome: Pangenome, annotation_sources: List[str], systems_source: str,
@@ -132,8 +131,14 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
     """
     # Compute local jaccard
-    graph_orgs = {gene.organism for u, v, data in graph.edges(data=True) for genes in data['genes'].values()
-                  for gene in genes if u in set(families) and v in set(families)}
+    if len(families) > 1:
+        graph_orgs = {gene.organism for u, v, data in graph.edges(data=True) for genes in data['genes'].values()
+                      for gene in genes if u in set(families) and v in set(families)}
+    elif len(families) == 1:
+        graph_orgs = set(list(families)[0].organisms)
+    else:
+        raise AssertionError("No families of interest")
+
     for f1, f2, data in graph.edges(data=True):
         f1_genes_in_orgs = {gene for gene in f1.genes if gene.organism in graph_orgs}
         f2_genes_in_orgs = {gene for gene in f2.genes if gene.organism in graph_orgs}
@@ -221,9 +226,23 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
         return False
 
 
-def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
-                           func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
-                           seen: Set[Tuple[GeneFamily]] = None, depth: int = 0, max_depth: int = 1) -> Set[System]:
+def get_subcombinations(combi: Set[GeneFamily],
+                        combinations: List[FrozenSet[GeneFamily]]) -> List[FrozenSet[GeneFamily]]:
+    """Remove combinations from combinations and all subcombination
+    """
+    index = 0
+    remove_combinations = []
+    while index < len(combinations):
+        if combinations[index].issubset(combi):
+            remove_combinations.append(combinations.pop(index))
+        else:
+            index += 1
+    return remove_combinations
+
+
+def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
+                        func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
+                        combinations: List[FrozenSet[GeneFamily]] = None) -> List[System]:
     """Search systems corresponding to model in a graph
 
     Args:
@@ -233,49 +252,53 @@ def search_system_in_graph(graph: nx.Graph, families: Set[GeneFamily], fam2annot
         func_unit: One functional unit corresponding to the model
         source: Name of the source
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        seen: Set of combination of families already pass
-        depth: Depth of the recursion search
-        max_depth: Maximum depth of the recursion
 
     Returns:
         A set of all detected systems in the graph
     """
-    detected_systems = set()
-    seen = set() if seen is None else seen
-    depth += 1
-    if check_for_needed(graph.nodes(), fam2annot, func_unit):
-        involved_families = set()
-        local_graph = graph.copy()
-        filter_local_context(local_graph, families, jaccard_threshold)
-        for cc in nx.connected_components(local_graph):
-            if check_for_needed(cc, fam2annot, func_unit) and not check_for_forbidden(cc, fam2annot, func_unit):
-                detected_systems.add(System(system_id=0, model=func_unit.model, gene_families=cc, source=source))
-                involved_families |= cc.intersection(families)
-                seen.add(tuple(cc.intersection(families)))
-        if (len(involved_families) < len(families) and
-                len(families) - 1 >= func_unit.min_total and
-                depth <= max_depth and not
-                check_for_forbidden(graph.nodes(), fam2annot,
-                                    func_unit)):  # Enhance by using combination only with the forbidden
-            for families_combination in combinations(families, len(families) - 1):
-                if families_combination not in seen:
-                    seen.add(families_combination)
-                    families_combination = set(families_combination)
-                    if check_for_needed(families_combination, fam2annot, func_unit):
-                        dissociate_family = families.difference(families_combination)
-                        filtered_graph = graph.copy()
-                        filtered_graph.remove_nodes_from(dissociate_family)
-                        for cc in nx.connected_components(filtered_graph):
-                            cc_graph = filtered_graph.subgraph(cc).copy()
-                            families_in_cc_graph = families_combination & cc
-                            detected_systems.update(
-                                search_system_in_graph(cc_graph, families_in_cc_graph, fam2annot, func_unit, source,
-                                                       jaccard_threshold, seen, depth, max_depth))
+    detected_systems = []
+    while len(combinations) > 0:
+        families_combination = set(combinations.pop(0))
+        if check_for_needed(families_combination, fam2annot, func_unit):
+            if not check_for_forbidden(families_combination, fam2annot, func_unit):
+                local_graph = graph.copy()
+                local_graph.remove_nodes_from(families.difference(families_combination))
+                filter_local_context(local_graph, families_combination, jaccard_threshold)
+                for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
+                    cc: Set[GeneFamily]
+                    if check_for_needed(cc, fam2annot, func_unit) and not check_for_forbidden(cc, fam2annot, func_unit):
+                        detected_systems.append(System(system_id=0, model=func_unit.model,
+                                                       gene_families=cc, source=source))
+                        get_subcombinations(cc.intersection(families_combination), combinations)
+        else:
+            # We can remove all sub combinations because the bigger one does not have the needed
+            get_subcombinations(families_combination, combinations)
+
+    return detected_systems
+
+
+def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
+                             func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
+                             combinations: List[FrozenSet[GeneFamily]] = None) -> List[System]:
+    detected_systems = []
+    for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
+                                                              key=len, reverse=True)]:
+        families_in_cc = ({fam for fam in families
+                           if fam2annot[fam.name] not in list(map(lambda x: x.name, func_unit.neutral))}
+                          & cc_graph.nodes)
+        if len(families_in_cc) > 0:
+            combinations_in_cc = get_subcombinations(families_in_cc, combinations)
+            new_detected_systems = search_system_in_cc(cc_graph, families_in_cc, fam2annot,
+                                                       func_unit, source, jaccard_threshold,
+                                                       combinations=combinations_in_cc)
+            detected_systems += new_detected_systems
+        else:
+            print("Pika")
     return detected_systems
 
 
 def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: str,
-                  jaccard_threshold: float = 0.8, max_depth: int = 0) -> Set[System]:
+                  jaccard_threshold: float = 0.8) -> List[System]:
     """
     Search if model system is in pangenome
 
@@ -284,32 +307,28 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
         annot2fam: Dictionary with for each annotation a set of gene families
         source: Name of the annotation source
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        max_depth: maximum depth of recursion to search for systems (default: 0)
 
     Returns:
         List[System]: List of systems detected in pangenome for the given model
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
-    detected_systems = set()
+
+    detected_systems = []
     families, fam2annot = dict_families_context(model, annot2fam)
     for func_unit in model.func_units:
         fu_families = {fam for fam in families if any(annot in func_unit.families for annot in fam2annot[fam.name])}
         if check_for_needed(fu_families, fam2annot, func_unit):
             t = func_unit.max_separation + 1
-            context = compute_gene_context_graph(families=families, transitive=t,
-                                                 window_size=t + 1, disable_bar=True)
-            for cc_graph in [context.subgraph(c).copy() for c in nx.connected_components(context)]:
-                families_in_cc = ({fam for fam in families
-                                   if fam2annot[fam.name] not in list(map(lambda x: x.name, func_unit.neutral))}
-                                  & cc_graph.nodes)
-                detected_systems.update(
-                    search_system_in_graph(cc_graph, families_in_cc, fam2annot, func_unit, source, jaccard_threshold,
-                                           max_depth=max_depth))
-        return detected_systems
+            context, combinations2orgs = compute_gene_context_graph(families=families, transitive=t,
+                                                                    window_size=t + 1, disable_bar=True)
+            combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
+            detected_systems += search_system_in_context(context, families, fam2annot, func_unit,
+                                                         source, jaccard_threshold, combinations)
+    return detected_systems
 
 
 def search_systems(models: Models, pangenome: Pangenome, source: str, annotation_sources: List[str],
-                   jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1, lock: Lock = None,
+                   jaccard_threshold: float = 0.8, threads: int = 1, lock: Lock = None,
                    disable_bar: bool = False):
     """
     Search systems present in the pangenome for all models
@@ -320,7 +339,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
         source: name of the source for the system
         annotation_sources: list of the annotation source for the families
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        max_depth: maximum depth of recursion to search for systems (default: 0)
         threads: number of available threads (default: 1)
         lock: Global lock for multiprocessing execution (default: None)
         disable_bar: Flag to disable progress bar
@@ -333,7 +351,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
             for model in models:
-                future = executor.submit(search_system, model, annot2fam, source, jaccard_threshold, max_depth)
+                future = executor.submit(search_system, model, annot2fam, source, jaccard_threshold)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
@@ -348,6 +366,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
     logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
 
     if len(detected_systems) > 0:
+        # print(len(detected_systems))
         pangenome.status["systems"] = "Computed"
         logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")
         write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
@@ -357,7 +376,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
 
 
 def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, annotation_sources: List[str],
-                                 jaccard_threshold: float = 0.8, max_depth: int = 0, threads: int = 1,
+                                 jaccard_threshold: float = 0.8, threads: int = 1,
                                  lock: Lock = None, disable_bar: bool = False):
     """
     Search systems in pangenomes by multithreading on pangenomes
@@ -368,7 +387,6 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
         source: name of the source for the system
         annotation_sources: list of the annotation source for the families
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        max_depth: maximum depth of recursion to search for systems (default: 0)
         threads: number of available threads (default: 1)
         lock: Global lock for multiprocessing execution (default: None)
         disable_bar: Disable progress bar (default: False)
@@ -376,7 +394,7 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
         search_systems(models, pangenome, source, annotation_sources, jaccard_threshold,
-                       max_depth, threads, lock, disable_bar)
+                       threads, lock, disable_bar)
 
 
 def launch(args):
@@ -401,8 +419,7 @@ def launch(args):
                                  systems_source=args.source, force=args.force)
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source,
                                  annotation_sources=args.annotation_sources, jaccard_threshold=args.jaccard,
-                                 max_depth=args.max_depth, threads=args.threads, lock=lock,
-                                 disable_bar=args.disable_prog_bar)
+                                 threads=args.threads, lock=lock, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -446,7 +463,5 @@ def parser_detection(parser):
     optional.add_argument('--jaccard', required=False, type=float, default=0.8,
                           help="minimum jaccard similarity used to filter edges between gene families. "
                                "Increasing it will improve precision but lower sensitivity a lot.")
-    optional.add_argument('--max_depth', required=False, type=int, nargs='?', default=0,
-                          help="Set the maximum recursion depth. Greater is the maximum longer it will take.")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")

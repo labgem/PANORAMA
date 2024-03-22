@@ -182,6 +182,9 @@ class Pangenome(Pan):
         Yields:
             Generator[System, None, None]: Systems with the given source.
         """
+        for system in self.systems:
+            if system.source == source:
+                yield system
 
     def add_system(self, system: System):
         """Add a detected system to the pangenome.
@@ -192,6 +195,42 @@ class Pangenome(Pan):
         TODO:
             Merge systems.
         """
+        same_sys = False
+        canonical_systems = []
+        drop_sys_key = []
+        for system_in in self.get_system_by_source(system.source):
+            if system_in.name == system.name:
+                if system_in.is_subset(system):
+                    # A system with this name already exist and system in pangenome is subset of new system
+                    system.ID = system_in.ID
+                    self._system_getter[system.ID] = system
+                    same_sys = True
+                    for family in system.difference(system_in):
+                        family.add_system(system)
+                elif system_in.is_superset(system):
+                    same_sys = True
+            elif system.name in system_in.canonical_models():
+                # System in pangenome is a canonical system for new system
+                if len(system.intersection(system_in)) > 0:
+                    canonical_systems.append(system_in)
+                    drop_sys_key.append(system_in.ID)
+            elif system_in.name in system.canonical_models():
+                # New system is a canonical system for a system in pangenome
+                if len(system.intersection(system_in)) > 0:
+                    system_in.add_canonical(system)
+                    same_sys = True
+                    for family in system.families:
+                        family.add_system(system)
+                        family.add_system(system_in)
+        if not same_sys:
+            self._max_id_system += 1
+            system.ID = str(self._max_id_system)
+            self._system_getter[system.ID] = system
+            for canonical_system in canonical_systems:
+                system.add_canonical(canonical_system)
+            for family in system.families:
+                family.add_system(system)
+        self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
 
     def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:
         """Get the number of systems in the pangenome.
@@ -203,6 +242,11 @@ class Pangenome(Pan):
         Returns:
             int: Number of systems.
         """
+        nb_systems = 0
+        systems = self.systems if source is None else self.get_system_by_source(source)
+        for system in systems:
+            nb_systems += 1 + len(system.canonical) if with_canonical else 1
+        return nb_systems
 
 
 class Pangenomes:
