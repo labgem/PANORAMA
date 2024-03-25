@@ -7,6 +7,7 @@ from typing import List, Set, Union, Generator
 
 # installed libraries
 from ppanggolin.metadata import MetaFeatures
+from ppanggolin.genome import Organism
 
 # local libraries
 from panorama.systems.models import Model
@@ -22,12 +23,14 @@ class System(MetaFeatures):
     :param gene_families: source accesion identifier
     """
 
-    def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None):
+    def __init__(self, system_id: Union[str, int], model: Model, source: str,
+                 gene_families: Set[GeneFamily] = None, families_source: List[str] = None):
         """Constructor Method
         """
         self.ID = system_id if isinstance(system_id, str) else str(system_id)
         self.model = model
-        self.source = source
+        self.system_source = source
+        self.families_sources = families_source if families_source is not None else [source]
         self._families_getter = {}
         self.canonical = set()
         if gene_families is not None:
@@ -87,6 +90,20 @@ class System(MetaFeatures):
         return set(self.families) == set(other.families)
 
     @property
+    def name(self) -> str:
+        """Name of the system inhereted by the model
+
+        :return: name of the system
+        """
+        return self.model.name
+
+    @property
+    def source(self) -> str:
+        """Alias to return the source name for the system
+        """
+        return self.system_source
+
+    @property
     def families(self) -> Generator[GeneFamily, None, None]:
         """Get the families in the system
         """
@@ -94,12 +111,39 @@ class System(MetaFeatures):
             yield family
 
     @property
-    def name(self) -> str:
-        """Name of the system inhereted by the model
-
-        :return: name of the system
+    def models_families(self) -> Generator[GeneFamily, None, None]:
+        """Get the gene families that are describing in the model
         """
-        return self.model.name
+        families_name = set()
+        for fam in self.model.families:
+            families_name.add(fam.name)
+            families_name |= fam.exchangeable
+
+        for family in self.families:
+            for families_source in self.families_sources:
+                metadata = family.get_metadata_by_source(families_source)
+                if metadata is not None:
+                    if any(value.protein_name in families_name for value in metadata):
+                        yield family
+
+
+    @property
+    def organisms(self) -> Generator[Organism, None, None]:
+        """Get the organisms where the system belongs
+        """
+        organisms = set()
+        for family in self.families:
+            organisms |= set(family.organisms)
+        yield from organisms
+
+    @property
+    def models_organisms(self) -> Generator[Organism, None, None]:
+        """Get the organisms where the system belongs but take into account only families that are in the model
+        """
+        organisms = set()
+        for family in self.models_families:
+            organisms |= set(family.organisms)
+        yield from organisms
 
     def canonical_models(self) -> List[str]:
         """List of the canonical models

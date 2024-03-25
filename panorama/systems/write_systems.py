@@ -55,8 +55,8 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
         AttributeError: If there is no metadata associated to families
     """
     if pangenome.status["systems"] != "inFile":
-        raise Exception("Systems have not been detected."
-                        "Use 'panorama detect' subcommand to detect systems in pangenomes.")
+        raise AttributeError("Systems have not been detected."
+                             "Use 'panorama detect' subcommand to detect systems in pangenomes.")
     else:
         for systems_source in sources:
             if systems_source not in pangenome.status["systems_sources"]:
@@ -66,7 +66,8 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
                                f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}.")
 
 
-def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_sources: List[str], projection: bool = False, association: str = None,
+def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_sources: List[str],
+                             projection: bool = False, association: str = None,
                              partition: bool = False, proksee: str = None, organisms: List[str] = None,
                              threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
@@ -89,8 +90,10 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_so
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
         for system_source in pangenome.systems_sources:
-            logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} on system source {system_source}. Based on annotation sources {annotation_sources} ")
-            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources, threads=threads,
+            logging.getLogger("PANORAMA").debug(
+                f"Begin write systems for {pangenome.name} on system source {system_source}. Based on annotation sources {annotation_sources} ")
+            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources,
+                                                                       threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
             if projection:
                 logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
@@ -105,8 +108,6 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_so
                 raise NotImplementedError("Proksee not implemented")
             pangenome_proj.insert(0, "pangenome name", pangenome.name)
             pangenomes_proj = pd.concat([pangenomes_proj, pangenome_proj])
-    if partition:
-        raise NotImplementedError("Partition system not implemented")
 
 
 def launch(args):
@@ -118,7 +119,7 @@ def launch(args):
     from panorama.format.read_binaries import load_pangenomes
     from panorama.utility.utility import check_models
 
-    # check_write_systems_args(args)
+    check_write_systems_args(args)
     models_list = []
     for models in args.models:
         models_list.append(check_models(models, disable_bar=args.disable_prog_bar))
@@ -126,15 +127,16 @@ def launch(args):
     outdir = mkdir(args.output, force=args.force)
     manager = Manager()
     lock = manager.Lock()
-    need_info = {"need_annotations": True, "need_families": True, "need_graph": True, "need_partitions": True,
+    need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
                  "need_metadata": True, "metatypes": ["families"], "sources": args.annotation_sources,
                  "need_systems": True, "systems_sources": args.sources, "models": models_list}
-                 
+
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, check_function=check_pangenome_write_systems,
                                  need_info=need_info, sources=args.sources, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar)
 
-    write_pangenomes_systems(pangenomes, outdir, args.annotation_sources, projection=args.projection, proksee=args.proksee,
+    write_pangenomes_systems(pangenomes, outdir, args.annotation_sources, projection=args.projection,
+                             proksee=args.proksee,
                              association=args.association, partition=args.partition, organisms=args.organisms,
                              threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
 
@@ -185,8 +187,8 @@ def parser_write(parser):
     optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
                           choices=["all", "base", "modules", "rgp", "spots", "annotations"],
                           help="Write a proksee file with systems. "
-                               "If you want only the systems with genes, gene families and partition, use base value."
-                               "Write rgps, spots or modules if you want them.")
+                               "If you only want the systems with genes, gene families and partition, use base value."
+                               "Write rgps, spots or modules -split by `,'- if you want them.")
     required.add_argument("--annotation_sources", required=False, type=str, nargs="+", default=None,
                           help="Name of the annotation sources if different from systems. "
                                "You can specify multiple sources. For that separate names by a space and "

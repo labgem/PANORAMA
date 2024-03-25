@@ -4,9 +4,10 @@
 
 # default libraries
 from __future__ import annotations
+
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from typing import Dict, List, Set, Tuple, Union
+from typing import Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
 
@@ -40,6 +41,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     Returns:
         The projected system on the organism and the number of each system organisation in projected organism
     """
+
     def write_projection_line(gene: Gene) -> List[str]:
         """
         Write a projection for one gene
@@ -56,7 +58,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
             gene_name = gene.local_identifier if gene.local_identifier != "" else gene.ID
 
         line_projection = [gene.family.name, gene.family.named_partition, annot, gene_name,
-                           gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product ]
+                           gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
         return list(map(str, [system.ID, system.name, organism.name] + line_projection))
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
@@ -163,15 +165,13 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
         2 Dataframe with projected system, one for the pangenome and another for the organisms
     """
     pangenome_projection, organisms_projection = [], []
-    system_orgs = set.union(*list([set(gf.organisms) for gf in system.families]))
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
-    graph = compute_gene_context_graph(families=set(system.families), transitive=t,
-                                       window_size=t + 1, disable_bar=True)
+    graph, _ = compute_gene_context_graph(families=set(system.models_families), transitive=t,
+                                          window_size=t + 1, disable_bar=True)
     _, fam2annot = dict_families_context(func_unit, annot2fam)
-    for organism in system_orgs:
-        org_graph = graph.copy()
-        org_graph.remove_nodes_from([n for n in graph.nodes if organism not in n.organisms])
+    for organism in system.models_organisms:
+        org_graph = graph.subgraph([n for n in graph.nodes if organism in n.organisms]).copy()
         edges_to_remove = [(u, v) for u, v, e in org_graph.edges(data=True) if organism not in e['genomes']]
         org_graph.remove_edges_from(edges_to_remove)
         if check_for_needed(set(org_graph.nodes), fam2annot, func_unit):
@@ -180,10 +180,12 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism, fam2annot)
             pangenome_projection.append(pan_proj + [partition, len(org_graph.nodes) / len(system)] + counter)
             organisms_projection += org_proj
+    logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
 
 
-def project_pangenome_systems(pangenome: Pangenome, system_source:str, annotation_sources: List[str], threads: int = 1, lock: Lock = None,
+def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotation_sources: List[str], threads: int = 1,
+                              lock: Lock = None,
                               disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
          Write all systems in pangenomes and project on organisms
@@ -211,6 +213,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source:str, annotatio
                   disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(system_source):
+                system.families_sources = annotation_sources
                 future = executor.submit(system_projection, system, annot2fam)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
@@ -223,18 +226,19 @@ def project_pangenome_systems(pangenome: Pangenome, system_source:str, annotatio
     pangenome_projection.columns = ["system number", "system name", "organism", "partition",
                                     "completeness", "strict", "conserved", "split"]
     pangenome_projection.sort_values(by=["system number", "system name", "system number", "organism", "completeness"],
-                                     ascending=[True, True, True, True, True], inplace=True)  # Try to order system number numericaly
+                                     ascending=[True, True, True, True, True],
+                                     inplace=True)  # TODO Try to order system number numerically
     organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
                                     "annotation",
                                     "gene", "start", "stop", "strand", "is_fragment", "genomic organization", "product"]
     organisms_projection.sort_values(by=["system name", "system number", "organism", "start", "stop"],
                                      ascending=[True, True, True, True, True], inplace=True)
-    # pangenome_projection.insert(0, "pangenome name", pangenome_name)
+    logging.getLogger("PANORAMA").debug('System projection done')
     return pangenome_projection, organisms_projection
 
 
 def write_projection_systems(pangenome_name: str, output: Path, source: str, pangenome_projection: pd.Dataframe,
-                             organisms_projection:pd.DataFrame, organisms: List[str] = None, force: bool = False):
+                             organisms_projection: pd.DataFrame, organisms: List[str] = None, force: bool = False):
     """
      Write all systems in pangenomes and project on organisms
 

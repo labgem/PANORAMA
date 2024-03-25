@@ -292,8 +292,6 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2ann
                                                        func_unit, source, jaccard_threshold,
                                                        combinations=combinations_in_cc)
             detected_systems += new_detected_systems
-        else:
-            print("Pika")
     return detected_systems
 
 
