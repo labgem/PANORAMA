@@ -15,6 +15,7 @@ from collections import defaultdict
 
 # installed libraries
 import networkx as nx
+from ppanggolin.genome import Gene
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
@@ -23,6 +24,8 @@ from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Models, Model, FuncUnit, Family
 from panorama.systems.system import System
 from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.utils import init_lock
+from panorama.format.write_binaries import write_pangenome
 
 
 def check_detection_parameters(args: argparse.Namespace) -> None:
@@ -130,18 +133,31 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         families: list of families that code for the system
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
     """
+    def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
+        if family.name not in fam2genes_in_orgs:
+            family_genes_in_orgs = {gene for gene in family.genes if gene.organism in organisms_of_interest}
+            fam2genes_in_orgs[family.name] = family_genes_in_orgs
+        else:
+            family_genes_in_orgs = fam2genes_in_orgs[family.name]
+        return family_genes_in_orgs
+
     # Compute local jaccard
+    organisms_of_interest = set()
     if len(families) > 1:
-        graph_orgs = {gene.organism for u, v, data in graph.edges(data=True) for genes in data['genes'].values()
-                      for gene in genes if u in set(families) and v in set(families)}
+        subgraph = graph.subgraph(families)
+        for _, _, data in subgraph.edges(data=True):
+            organisms_of_interest |= data['genomes']
+
     elif len(families) == 1:
-        graph_orgs = set(list(families)[0].organisms)
+        organisms_of_interest = set(list(families)[0].organisms)
     else:
         raise AssertionError("No families of interest")
 
+    fam2genes_in_orgs = {}
+    edges2remove = set()
     for f1, f2, data in graph.edges(data=True):
-        f1_genes_in_orgs = {gene for gene in f1.genes if gene.organism in graph_orgs}
-        f2_genes_in_orgs = {gene for gene in f2.genes if gene.organism in graph_orgs}
+        f1_genes_in_orgs = get_family_genes_in_organisms(f1)
+        f2_genes_in_orgs = get_family_genes_in_organisms(f2)
         f1_gene_proportion = len(data['genes'][f1]) / len(f1_genes_in_orgs) if len(f1_genes_in_orgs) > 0 else 0
         f2_gene_proportion = len(data['genes'][f2]) / len(f2_genes_in_orgs) if len(f2_genes_in_orgs) > 0 else 0
 
@@ -150,14 +166,14 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         data['f1_jaccard_gene'] = f1_gene_proportion
         data['f2_jaccard_gene'] = f2_gene_proportion
 
-        data[f'is_jaccard_gene_>_{jaccard_threshold}'] = ((f1_gene_proportion >= jaccard_threshold) and
-                                                          (f2_gene_proportion >= jaccard_threshold))
+        if not ((f1_gene_proportion >= jaccard_threshold) and (f2_gene_proportion >= jaccard_threshold)):
+            edges2remove.add((f1, f2))
 
     # Filter cc
-    filter_flag = f'is_jaccard_gene_>_{jaccard_threshold}'
-
-    edges_to_remove = [(n, v) for n, v, d in graph.edges(data=True) if not d[filter_flag]]
-    graph.remove_edges_from(edges_to_remove)
+    # filter_flag = f'is_jaccard_gene_>_{jaccard_threshold}'
+    #
+    # edges_to_remove = [(n, v) for n, v, d in graph.edges(data=True) if not d[filter_flag]]
+    graph.remove_edges_from(edges2remove)
 
 
 def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
@@ -341,8 +357,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
         lock: Global lock for multiprocessing execution (default: None)
         disable_bar: Flag to disable progress bar
     """
-    from panorama.utils import init_lock
-    from panorama.format.write_binaries import write_pangenome
 
     annot2fam = get_annotation_to_families(pangenome=pangenome, sources=annotation_sources)
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
@@ -353,10 +367,10 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
-            detected_systems = []
-            for future in futures:
-                result = future.result()
-                detected_systems += result
+                detected_systems = []
+                for future in futures:
+                    result = future.result()
+                    detected_systems += result
 
     for system in sorted(detected_systems, key=lambda x: len(x), reverse=True):
         pangenome.add_system(system)

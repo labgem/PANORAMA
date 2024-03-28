@@ -224,7 +224,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
 
     pangenome_projection.columns = ["system number", "system name", "organism", "partition",
-                                    "completeness", "strict", "conserved", "split"]
+                                    "completeness", "strict", "extended", "split"]
     pangenome_projection.sort_values(by=["system number", "system name", "system number", "organism", "completeness"],
                                      ascending=[True, True, True, True, True],
                                      inplace=True)  # TODO Try to order system number numerically
