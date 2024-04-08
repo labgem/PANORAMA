@@ -3,6 +3,7 @@
 
 # default libraries
 import os
+import sys
 import collections
 import logging
 from pathlib import Path
@@ -10,10 +11,10 @@ from typing import Dict, List, Tuple
 from tqdm import tqdm
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Lock
 
 # installed libraries
-from pyhmmer.easel import TextSequence, DigitalSequence, Alphabet, MSAFile, SequenceFile
+import psutil
+from pyhmmer.easel import TextSequence, DigitalSequence, DigitalSequenceBlock, Alphabet, MSAFile, SequenceFile
 from pyhmmer.plan7 import Builder, Background, HMM, HMMFile
 from pyhmmer import hmmsearch
 import pandas as pd
@@ -24,6 +25,8 @@ from ppanggolin.formats.writeSequences import write_gene_protein_sequences
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
+from viztracer import VizTracer
+
 res_col_names = ['families', 'Accession', 'protein_name', 'e_value',
                  'score', 'bias', 'secondary_name', 'Description']
 meta_col_names = ["name", "accession", "path", "length", "protein_name", "secondary_name", "score_threshold",
@@ -33,7 +36,7 @@ meta_dtype = {"accession": "string", "name": "string", "path": "string", "length
               "eval_threshold": "float", "hmm_cov_threshold": "float", "target_cov_threshold": "float"}
 
 def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = None, keep_tmp: bool = False,
-                         disable_bar: bool = False) -> Tuple[List[DigitalSequence], Dict[bytes, int]]:
+                         disable_bar: bool = False) -> Tuple[SequenceFile, Dict[bytes, int]]:
     """
     Digitalised pangenome genes sequences for hmmsearch
 
@@ -44,22 +47,24 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
     Returns:
         List[pyhmmer.easel.DigitalSequence]: list of digitalised gene family sequences
     """
-    sequences = []
-    sequences2length = {}
+
     write_gene_protein_sequences(pangenome, tmp, "all", threads=threads, keep_tmp=keep_tmp,
                                  tmp=tmp, disable_bar=disable_bar)
-    sequence_file = SequenceFile(tmp / "all_protein_genes.fna", digital=True)
-
-    for sequence in sequence_file:
-        sequence: DigitalSequence
-        sequences2length[sequence.name] = len(sequence)
-        sequences.append(sequence)
+    available_memory = psutil.virtual_memory().available
+    target_size = os.stat(tmp / "all_protein_genes.fna").st_size
+    seq_file = SequenceFile(tmp / "all_protein_genes.fna", digital=True)
+    if target_size < available_memory * 0.1:
+        sequences = seq_file.read_block()
+        sequences2length = {sequence.name: len(sequence) for sequence in sequences}
+    else:
+        sequences = seq_file
+        sequences2length = {sequence.name: len(sequence) for sequence in seq_file}
 
     return sequences, sequences2length
 
 
 def digit_family_sequences(pangenome: Pangenome,
-                           disable_bar: bool = False) -> Tuple[List[DigitalSequence], Dict[bytes, int]]:
+                           disable_bar: bool = False) -> tuple[DigitalSequenceBlock, dict[bytes, int]]:
     """
     Digitalised pangenome gene families sequences for hmmsearch
 
@@ -70,7 +75,7 @@ def digit_family_sequences(pangenome: Pangenome,
     Returns:
         List[pyhmmer.easel.DigitalSequence]: list of digitalised gene family sequences
     """
-    digit_gf_sequence = []
+    sequences = []
     sequences2length = {}
     logging.getLogger("PANORAMA").info("Begin to digitalized gene families sequences...")
     for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
@@ -79,8 +84,9 @@ def digit_family_sequences(pangenome: Pangenome,
         seq = TextSequence(name=bit_name,
                            sequence=family.sequence if family.HMM is None else family.HMM.consensus.upper() + '*')
         sequences2length[seq.name] = len(seq.sequence)
-        digit_gf_sequence.append(seq.digitize(Alphabet.amino()))
-    return digit_gf_sequence, sequences2length
+        sequences.append(seq.digitize(Alphabet.amino()))
+    return DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences), sequences2length
+
 
 
 def get_msa(tmpdir: Path):
@@ -321,15 +327,19 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
     """
     gene2family = None
     if mode == "fast":
-        sequences, sequences2length = digit_family_sequences(pangenome, disable_bar=disable_bar)
+        with VizTracer(output_file="digit_families.json") as tracer:
+        # Something happens here
+            sequences, sequences2length = digit_family_sequences(pangenome, disable_bar=disable_bar)
     elif mode == "profile":
         raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
     elif mode == "sensitive":
-        sequences, sequences2length = digit_gene_sequences(pangenome, threads, tmp, keep_tmp, disable_bar)
+        with VizTracer(output_file="digit_genes.json") as tracer:
+            sequences, sequences2length = digit_gene_sequences(pangenome, threads, tmp, keep_tmp, disable_bar)
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
     else:
         raise ValueError("Unrecognized mode: {}".format(mode))
     logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMsearch")
-    res = annot_with_hmmsearch(hmms, sequences, sequences2length, meta, bit_cutoffs, threads, mode, disable_bar)
+    with VizTracer(output_file="align_hmm.json") as tracer:
+        res = annot_with_hmmsearch(hmms, sequences, sequences2length, meta, bit_cutoffs, threads, mode, disable_bar)
     metadata_df = get_metadata_df(res, mode, gene2family)
     return metadata_df
