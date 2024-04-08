@@ -121,8 +121,6 @@ def parse_hmm_info(hmm: HMM, panorama_acc: Set[str], metadata: pd.DataFrame = No
     """
     hmm_dict = {"name": hmm.name.decode('UTF-8'), 'accession': "", "length": len(hmm.consensus)}
 
-    hmm.name = hmm_dict["name"].encode("UTF-8")
-
     if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
         hmm_dict["accession"] = gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
         hmm.accession = hmm_dict["accession"].encode("UTF-8")
@@ -141,7 +139,7 @@ def parse_hmm_info(hmm: HMM, panorama_acc: Set[str], metadata: pd.DataFrame = No
     return hmm_dict
 
 
-def write_hmm(hmm: HMM, output: Path, binary: bool = False, name: bool = False):
+def write_hmm(hmm: HMM, output: Path, binary: bool = False, name: bool = False) -> Path:
     """Write a HMM in text or binary
 
     Args:
@@ -149,10 +147,14 @@ def write_hmm(hmm: HMM, output: Path, binary: bool = False, name: bool = False):
         output: Path to the output directory
         binary: Flag to write the HMM in binary mode
         name: Flag to une the name of the HMM as file name rather than the accession number
+
+    Returns:
+        Path of the HMM file
     """
-    file_name = f"{hmm.name.decode('UTF-8') if name else hmm.accession.decode('UTF-8')}.{'h3m' if binary else 'hmm'}"
-    with open(output/ file_name, "wb") as file:
+    outpath = output / f"{hmm.name.decode('UTF-8') if name else hmm.accession.decode('UTF-8')}.{'h3m' if binary else 'hmm'}"
+    with open(outpath, "wb") as file:
         hmm.write(file, binary)
+    return outpath
 
 
 def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.DataFrame = None,
@@ -195,19 +197,21 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
             else:
                 raise Exception("Unexpected error")
 
-    hmm_out = mkdir(output/"hmm", force, True) if binary_hmm else None
+    hmm_out = mkdir(output / "hmm", force, True)
     for hmm_file in tqdm(hmm_path_list, unit="HMM", disable=disable_bar):
         hmm_list = read_hmm(hmm_path=hmm_file)
         for hmm in hmm_list:
             hmm_dict = parse_hmm_info(hmm, panorama_acc, metadata_df)
+            hmm_dict["path"] = write_hmm(hmm, hmm_out, binary_hmm).as_posix()
             hmm_info_list.append(hmm_dict)
-            if binary_hmm:
-                write_hmm(hmm, hmm_out, True)
+
 
     hmm_df = pd.DataFrame(hmm_info_list)
     if hmm_coverage is not None:
         hmm_df["hmm_cov_threshold"] = hmm_coverage
     if target_coverage is not None:
         hmm_df["target_cov_threshold"] = target_coverage
+    hmm_df = hmm_df[['name', 'accession', 'path', 'length', 'protein_name', 'secondary_name', 'score_threshold',
+                     'eval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     logging.getLogger("PANORAMA").info("HMM list file created.")
