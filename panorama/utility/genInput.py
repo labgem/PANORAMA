@@ -3,15 +3,21 @@
 
 # default libraries
 import logging
-from typing import Dict, List, Set, Union
+from typing import Dict, List, Set, Tuple, Union
 from pathlib import Path
 from random import choice
 from string import digits
+import functools
 
 # install libraries
 from tqdm import tqdm
 import pandas as pd
 from numpy import nan
+from pyhmmer.easel import Alphabet
+from pyhmmer.plan7 import HMM, HMMFile
+
+# local libraries
+from panorama.utils import mkdir
 
 
 def read_metadata(metadata: Path) -> pd.DataFrame:
@@ -71,34 +77,38 @@ def gen_acc(acc: str, panorama_acc: Set[str]) -> str:
         return acc
 
 
-def read_hmm(hmm_file: Path, metadata: pd.DataFrame = None) -> Dict[str, Union[str, int, float]]:
-    """
-    Reads the given HMM file and returns a dictionary containing information about the HMM.
+def read_hmm(hmm_path: Path) -> HMM:
+    try:
+        hmm_file = HMMFile(hmm_path)
+    except Exception as error:
+        logging.getLogger("PANORAMA").error(f"Problem reading HMM: {hmm_path}")
+        raise error
+    end = False
+    while not end:
+        try:
+            hmm = next(hmm_file)
+        except StopIteration:
+            end = True
+        except Exception as error:
+            raise Exception(f'Unexpected error on HMM file {hmm_path}, caused by {error}')
+        else:
+            return hmm
 
-    Args:
-        hmm_file (Path): The path to the HMM file.
-        metadata (pd.DataFrame, optional): The metadata dataframe. Defaults to None.
 
-    Returns:
-        Dict[str, Union[str, int, float]]: A dictionary containing information about the HMM.
-    """
-    hmm_dict = {"name": "", 'accession': "", 'path': hmm_file, "length": nan, "description": ""}
-    stop = False
-    with open(hmm_file, "r") as hmm:
-        hmm.readline()  # Skip first line
-        while not stop:
-            line = hmm.readline()
-            if line.startswith("HMM"):
-                stop = True
-            else:
-                if line.startswith("NAME"):
-                    hmm_dict["name"] = "_".join(line.split()[1:])
-                elif line.startswith("ACC"):
-                    hmm_dict["accession"] = line.split()[1]
-                elif line.startswith("DESC"):
-                    hmm_dict["description"] = "_".join(line.split()[1:])
-                elif line.startswith("LENG"):
-                    hmm_dict["length"] = int(line.split()[1])
+def parse_hmm_info(hmm: HMM, panorama_acc: Set[str], metadata: pd.DataFrame = None):
+    hmm_dict = {"name": hmm.name.decode('UTF-8'), 'accession': "", "length": len(hmm.consensus)}
+
+    hmm.name = hmm_dict["name"].encode("UTF-8")
+
+    if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
+        hmm_dict["accession"] = gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
+        hmm.accession = hmm_dict["accession"].encode("UTF-8")
+    else:
+        hmm_dict["accession"] = hmm.accession.decode("UTF-8")
+
+    if hmm.description is not None:
+        hmm_dict["description"] = hmm.description.decode("UTF-8")
+
     if metadata is not None and hmm_dict["accession"] in metadata.index:
         hmm_info = metadata.loc[hmm_dict["accession"]]
         hmm_dict.update(hmm_info.to_dict())
@@ -108,9 +118,14 @@ def read_hmm(hmm_file: Path, metadata: pd.DataFrame = None) -> Dict[str, Union[s
     return hmm_dict
 
 
+def write_hmm(hmm: HMM, output: Path, binary: bool = False):
+    with open(output/f"{hmm.name.decode('UTF-8')}.{'h3m' if binary else 'hmm'}", "wb") as file:
+        hmm.write(file, binary)
+
+
 def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.DataFrame = None,
-                         hmm_coverage: float = None, target_coverage: float = None,
-                         recursive: bool = False, disable_bar: bool = False) -> None:
+                         hmm_coverage: float = None, target_coverage: float = None, binary_hmm: bool = False,
+                         recursive: bool = False, force: bool = False, disable_bar: bool = False) -> None:
     """
     Creates a TSV file containing information about the given HMM files.
 
@@ -145,13 +160,15 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
                 raise FileNotFoundError(f"The given path is not found: {path}")
             else:
                 raise Exception("Unexpected error")
-    for hmm in tqdm(hmm_path_list, unit="HMM", disable=disable_bar):
-        hmm_dict = read_hmm(hmm, metadata_df)
-        if hmm_dict["accession"] == "":
-            hmm_dict["accession"] = gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
-        if hmm_dict["description"] == "":
-            hmm_dict["description"] = 'unknown'
+
+    hmm_out = mkdir(output/"hmm", force, True) if binary_hmm else None
+    for hmm_file in tqdm(hmm_path_list, unit="HMM", disable=disable_bar):
+        hmm = read_hmm(hmm_path=hmm_file)
+        hmm_dict = parse_hmm_info(hmm, panorama_acc, metadata_df)
         hmm_list.append(hmm_dict)
+        if binary_hmm:
+            write_hmm(hmm, hmm_out, True)
+
     hmm_df = pd.DataFrame(hmm_list)
     if hmm_coverage is not None:
         hmm_df["hmm_cov_threshold"] = hmm_coverage

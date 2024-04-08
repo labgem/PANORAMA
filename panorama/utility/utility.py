@@ -29,6 +29,7 @@ def check_parameters(args: argparse.Namespace) -> None:
     Raises:
         argparse.ArgumentError: If any required arguments are missing or invalid.
     """
+
     def check_coverage_parameters():
         """Check if coverage parameters to ensure that they are valid
         """
@@ -59,7 +60,7 @@ def check_parameters(args: argparse.Namespace) -> None:
     if args.hmm is not None:
         if args.output is None:
             raise argparse.ArgumentError(argument=args.output,
-                                         message="Required to give an output directory to translate")
+                                         message="Required to give an output directory to write HMM list file")
         check_coverage_parameters()
     if args.models is not None:
         if args.output is None:
@@ -150,7 +151,6 @@ def launch(args: argparse.Namespace):
         None
     """
     check_parameters(args)
-    print(args)
     if args.hmm:
         outdir = mkdir(output=args.output, force=args.force)
         if args.meta:
@@ -158,9 +158,9 @@ def launch(args: argparse.Namespace):
             metadata_df = read_metadata(args.meta)
         else:
             metadata_df = None
-        create_hmm_list_file(args.hmm, outdir, metadata_df, recursive=args.hmm_coverage,
+        create_hmm_list_file(args.hmm, outdir, metadata_df, recursive=args.recursive,
                              hmm_coverage=args.hmm_coverage, target_coverage=args.target_coverage,
-                             disable_bar=args.target_coverage)
+                             binary_hmm=args.binary, force=args.force, disable_bar=args.target_coverage)
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force, erase=True)
         launch_translate(db=args.translate, source=args.source, output=outdir,
@@ -203,15 +203,15 @@ def parser_utils(parser: argparse.ArgumentParser):
                                                description="Create some input files used by PANORAMA")
     panorama_input.add_argument("--models", required=False, type=Path, nargs="+", default=None,
                                 help="Create a models_list.tsv file from the given models and check them.")
-    panorama_input.add_argument("--meta", required=False, type=Path, default=None, nargs='?',
-                                help="Path to metadata file to add some to list file")
-    panorama_input.add_argument("--recursive", required=False, action="store_true", default=False,
-                                help="Flag to indicate if directories should be read recursively")
     hmm = parser.add_argument_group(title="HMM utils arguments",
                                     description="Arguments to create an HMM list. "
                                                 "Arguments are common with translate arguments.")
     hmm.add_argument("--hmm", required=False, type=Path, default=None, nargs='+',
                      help="Path to HMM files or directory containing HMM")
+    hmm.add_argument("--meta", required=False, type=Path, default=None, nargs='?',
+                     help="Path to metadata file to add some to list file")
+    hmm.add_argument("--binary", required=False, action="store_true",
+                     help="Flag to rewrite the HMM in binary mode. Useful to speed up annotation")
     hmm.add_argument("-c", "--coverage", required=False, type=float, default=(None, None), nargs=2,
                      help="Set the coverage threshold for the hmm and the target. "
                           "The same threshold will be used for all HMM and target. "
@@ -239,5 +239,7 @@ def parser_utils(parser: argparse.ArgumentParser):
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument('-o', '--output', required=False, type=Path, nargs='?', default=None,
                           help='Path to output directory.')
+    optional.add_argument("--recursive", required=False, action="store_true", default=False,
+                          help="Flag to indicate if directories should be read recursively")
     # optional.add_argument("--tmp", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
     #                       help="directory for storing temporary files")
