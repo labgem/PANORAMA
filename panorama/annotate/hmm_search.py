@@ -270,8 +270,8 @@ def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: Union[SequenceFile, Li
     hmmpress(hmm_list, tmp / 'hmm_db')
     with HMMFile(tmp / "hmm_db") as hmm_db:
         models = hmm_db.optimized_profiles()
-        logging.getLogger("PANORAMA").info(f"Begin alignment to HMM with HMMScan")
-        with tqdm(total=len(gf_sequences), unit="target", desc=f"Align target to HMM", disable=disable_bar) as bar:
+        logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
+        with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
             options = {"bit_cutoffs": bit_cutoffs, "Z": len(hmm_list)}
             for top_hits in hmmscan(gf_sequences, models, cpus=threads, callback=hmmscan_callback, **options):
                 for hit in top_hits:
@@ -309,8 +309,8 @@ def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: SequenceBlock, meta:
 
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    logging.getLogger("PANORAMA").info(f"Begin alignment to HMM with HMMSearch")
-    with tqdm(range(len(hmm_list)), unit="hmm", desc=f"Align target to HMM", disable=disable_bar) as bar:
+    logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMSearch")
+    with tqdm(range(len(hmm_list)), unit="hmm", desc="Align target to HMM", disable=disable_bar) as bar:
         options = {"bit_cutoffs": bit_cutoffs}
         for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
             for hit in top_hits:
