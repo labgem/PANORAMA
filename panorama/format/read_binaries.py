@@ -128,7 +128,7 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
 
     link = True if pangenome.status["genomesAnnotated"] in ["Computed", "Loaded"] else False
 
-    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene",
                     desc="Associate gene to gene families", disable=disable_bar):
         try:
             fam = pangenome.get_gene_family(name=row["geneFam"].decode())

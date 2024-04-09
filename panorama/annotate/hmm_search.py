@@ -3,19 +3,21 @@
 
 # default libraries
 import os
+import shutil
 import sys
 import collections
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Union
 from tqdm import tqdm
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 # installed libraries
 import psutil
-from pyhmmer.easel import TextSequence, DigitalSequenceBlock, Alphabet, MSAFile, SequenceFile
-from pyhmmer.plan7 import Builder, Background, HMM, HMMFile
+from pyhmmer.easel import (TextSequence, DigitalSequence, DigitalSequenceBlock,
+                           SequenceBlock, Alphabet, MSAFile, SequenceFile)
+from pyhmmer.plan7 import Builder, Background, HMM, HMMFile, Hit
 from pyhmmer import hmmsearch, hmmscan, hmmpress
 import pandas as pd
 from numpy import nan
@@ -35,7 +37,7 @@ meta_dtype = {"accession": "string", "name": "string", "path": "string", "length
 
 
 def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = None, keep_tmp: bool = False,
-                         disable_bar: bool = False) -> Tuple[SequenceFile, Dict[bytes, int], bool]:
+                         disable_bar: bool = False) -> Tuple[SequenceFile, bool]:
     """
     Digitalised pangenome genes sequences for hmmsearch
 
@@ -47,7 +49,7 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
         disable_bar: Flag to disable progress bar
 
     Returns:
-        List[pyhmmer.easel.DigitalSequence]: list of digitalised gene family sequences
+        List[pyhmmer.easel.Sequence]: list of digitalised gene family sequences
     """
 
     write_gene_protein_sequences(pangenome, tmp, "all", threads=threads, keep_tmp=keep_tmp,
@@ -55,44 +57,31 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
     available_memory = psutil.virtual_memory().available
     target_size = os.stat(tmp / "all_protein_genes.fna").st_size
     seq_file = SequenceFile(tmp / "all_protein_genes.fna", digital=True)
-    if target_size < available_memory * 0.1:
-        sequences = seq_file.read_block()
-        sequences2length = {sequence.name: len(sequence) for sequence in sequences}
-        return sequences, sequences2length, True
-    else:
-        sequences = seq_file
-        sequences2length = {sequence.name: len(sequence) for sequence in seq_file}
-        return sequences, sequences2length, False
+    return seq_file, True if target_size < available_memory * 0.1 else False
 
 
 def digit_family_sequences(pangenome: Pangenome,
-                           disable_bar: bool = False) -> tuple[DigitalSequenceBlock, dict[bytes, int], bool]:
+                           disable_bar: bool = False) -> tuple[List[DigitalSequence], bool]:
     """
-    Digitalised pangenome gene families sequences for hmmsearch
+    Digitalised pangenome gene families sequences for HMM alignment
 
     Args:
         pangenome: Pangenome object with gene families
         disable_bar: Flag to disable progress bar
 
     Returns:
-        List[pyhmmer.easel.DigitalSequence]: list of digitalised gene family sequences
+        List[pyhmmer.easel.Sequence]: list of digitalised gene family sequences
     """
     sequences = []
-    sequences2length = {}
     logging.getLogger("PANORAMA").info("Begin to digitalized gene families sequences...")
     for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
                        desc="Digitalized gene families sequences", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
         seq = TextSequence(name=bit_name,
                            sequence=family.sequence if family.HMM is None else family.HMM.consensus.upper() + '*')
-        sequences2length[seq.name] = len(seq.sequence)
         sequences.append(seq.digitize(Alphabet.amino()))
-    sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
     available_memory = psutil.virtual_memory().available
-    if sys.getsizeof(sequence_block) < available_memory:
-        return sequence_block, sequences2length, True
-    else:
-        return sequence_block, sequences2length, False
+    return sequences, True if sys.getsizeof(sequences) < available_memory else False
 
 
 def get_msa(tmpdir: Path):
@@ -214,81 +203,88 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[List[HMM], pd.Da
     return hmms, hmm_df
 
 
-def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: SequenceFile, sequences2length: Dict[bytes, int],
-                       meta: pd.DataFrame = None, bit_cutoffs: str = None, threads: int = 1, tmp: Path = None,
-                       mode: str = "fast", disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float, float, float, str, str], None]:
+    """
+    Check if a hit can be assigned to a target
+
+    Args:
+        hit: Hit object found by alignment
+        meta: metadata information to check target assignment
+
+    Returns:
+        informative values to save if alignment is checked
+    """
+    cog = hit.best_domain.alignment
+    hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
+    if cog.target_from > cog.target_to:
+        print("Pikapi")
+    if cog.hmm_from > cog.hmm_to:
+        print("Pikachu")
+    target_coverage = (cog.target_to - cog.target_from + 1) / cog.target_length
+    hmm_coverage = (cog.hmm_to - cog.hmm_from + 1) / cog.hmm_length
+    add_res = False
+    if ((target_coverage >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"]))
+            and (hmm_coverage >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
+        if pd.isna(hmm_info['score_threshold']):
+            if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
+                add_res = True
+        else:
+            if hit.score > hmm_info['score_threshold']:
+                add_res = True
+    if add_res:
+        secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
+        return (hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name, hit.evalue,
+                hit.score, hit.bias, secondary_name, hmm_info.description)
+
+
+def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: Union[SequenceFile, List[DigitalSequence]], threads: int = 1,
+                       meta: pd.DataFrame = None, bit_cutoffs: str = None,  tmp: Path = None, keep_tmp: bool = False,
+                       disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
     Args:
         hmm_list: List of HMM
         gf_sequences: List of digitalized gene families sequences
-        sequences2length: Dictionary linking sequence to their length
         meta: Metadata associate with HMM
-        bit_cutoffs: Bit cutoff type for HMM alignment
         threads: Number of available threads
+        bit_cutoffs: Bit cutoff type for HMM alignment
         tmp: Temporary directory to store pressed HMM database
-        mode: Alignment mode
+        keep_tmp: Flag to allow keeping temporary files
         disable_bar:  Disable progress bar
 
     Returns:
-         List[Tuple[str, str, str, float, float, float, str, str]]: Alignment results
+         Alignment results
     """
 
-    def hmmscan_callback(seq, total):
+    def hmmscan_callback(seq, _):
         """HMMScan callback function for debugging
         """
-        logging.getLogger('PANORAMA').debug(f"Finished annotation with gene {seq.name.decode()}")
+        logging.getLogger('PANORAMA').debug(f"Finished annotation with target {seq.name.decode()}")
         bar.update()
 
     tmp = Path(tempfile.gettempdir()) if tmp is None else tmp
     res = []
     result = collections.namedtuple("Result", res_col_names)
 
-    if mode == "fast":
-        elem = "gene_families"
-    elif mode == "profile":
-        elem = "profiles"
-        res_col_names[0] = elem
-    elif mode == "sensitive":
-        elem = "genes"
-        res_col_names[0] = elem
-    else:
-        raise ValueError("Unrecognized mode: {}".format(mode))
-
     hmmpress(hmm_list, tmp / 'hmm_db')
     with HMMFile(tmp / "hmm_db") as hmm_db:
         models = hmm_db.optimized_profiles()
-        logging.getLogger("PANORAMA").info(f"Begin alignment of {elem} to HMM with HMMScan")
-        with tqdm(total=len(gf_sequences), unit="target", desc=f"Align {elem} to HMM", disable=disable_bar) as bar:
+        logging.getLogger("PANORAMA").info(f"Begin alignment to HMM with HMMScan")
+        with tqdm(total=len(gf_sequences), unit="target", desc=f"Align target to HMM", disable=disable_bar) as bar:
             options = {"bit_cutoffs": bit_cutoffs, "Z": len(hmm_list)}
             for top_hits in hmmscan(gf_sequences, models, cpus=threads, callback=hmmscan_callback, **options):
                 for hit in top_hits:
-                    cog = hit.best_domain.alignment
-                    hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-                    target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
-                                     sequences2length[cog.target_name])
-                    hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
-                    add_res = False
-                    if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"]))
-                            and (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(
-                                hmm_info["hmm_cov_threshold"]))):
-                        if pd.isna(hmm_info['score_threshold']):
-                            if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
-                                add_res = True
-                        else:
-                            if hit.score > hmm_info['score_threshold']:
-                                add_res = True
-                    if add_res:
-                        secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
-                        res.append(
-                            result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                                   hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
+                    assign = assign_hit(hit, meta)
+                    if assign is not None:
+                        res.append(result(*assign))
+    if not keep_tmp:
+        shutil.rmtree(tmp)
     return res
 
 
-def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: DigitalSequenceBlock, sequences2length: Dict[bytes, int],
-                         meta: pd.DataFrame = None, bit_cutoffs: str = None, threads: int = 1, mode: str = "fast",
+def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
+                         threads: int = 1, bit_cutoffs: str = None,
                          disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
@@ -302,51 +298,25 @@ def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: DigitalSequenceBlock
         disable_bar:  Disable progress bar
 
     Returns:
-         List[Tuple[str, str, str, float, float, float, str, str]]: Alignment results
+         Alignment results
     """
 
-    def hmmsearch_callback(hmm, total):
+    def hmmsearch_callback(hmm, _):
         """HMMSearch callback function for debugging
         """
         logging.getLogger('PANORAMA').debug(f"Finished annotation with HMM {hmm.name.decode()}")
         bar.update()
 
-    if mode == "fast":
-        elem = "gene_families"
-    elif mode == "profile":
-        elem = "profiles"
-        res_col_names[0] = elem
-    elif mode == "sensitive":
-        elem = "genes"
-        res_col_names[0] = elem
-    else:
-        raise ValueError("Unrecognized mode: {}".format(mode))
     res = []
     result = collections.namedtuple("Result", res_col_names)
-    logging.getLogger("PANORAMA").info(f"Begin alignment of {elem} to HMM with HMMSearch")
-    with tqdm(range(len(hmm_list)), unit="hmm", desc=f"Align {elem} to HMM", disable=disable_bar) as bar:
+    logging.getLogger("PANORAMA").info(f"Begin alignment to HMM with HMMSearch")
+    with tqdm(range(len(hmm_list)), unit="hmm", desc=f"Align target to HMM", disable=disable_bar) as bar:
         options = {"bit_cutoffs": bit_cutoffs}
         for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
             for hit in top_hits:
-                cog = hit.best_domain.alignment
-                hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-                target_covery = ((max(cog.target_to, cog.target_from) - min(cog.target_to, cog.target_from)) /
-                                 sequences2length[cog.target_name])
-                hmm_covery = (max(cog.hmm_to, cog.hmm_from) - min(cog.hmm_to, cog.hmm_from)) / hmm_info["length"]
-                add_res = False
-                if ((target_covery >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])) and
-                        (hmm_covery >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
-                    if pd.isna(hmm_info['score_threshold']):
-                        if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
-                            add_res = True
-                    else:
-                        if hit.score > hmm_info['score_threshold']:
-                            add_res = True
-                if add_res:
-                    secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
-                    res.append(
-                        result(hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name,
-                               hit.evalue, hit.score, hit.bias, secondary_name, hmm_info.description))
+                assign = assign_hit(hit, meta)
+                if assign is not None:
+                    res.append(result(*assign))
     return res
 
 
@@ -396,6 +366,8 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
         mode: Specify which methods use to align families to HMM
         bit_cutoffs: Specify the model-specific thresholding
         threads: Number of available threads
+        tmp: Temporary directory to store pressed HMM database
+        keep_tmp: Flag to allow keeping temporary files
         disable_bar: bool: Disable the progress bar
 
     Returns:
@@ -410,18 +382,26 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
     """
     gene2family = None
     if mode == "fast":
-        sequences, sequences2length, fit_memory = digit_family_sequences(pangenome, disable_bar=disable_bar)
+        sequences, fit_memory = digit_family_sequences(pangenome, disable_bar=disable_bar)
+        if fit_memory:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
+            sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
+            res = annot_with_hmmsearch(hmms, sequence_block, meta, threads, bit_cutoffs, disable_bar)
+        else:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, bit_cutoffs, tmp, keep_tmp, disable_bar)
     elif mode == "profile":
         raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
     elif mode == "sensitive":
-        sequences, sequences2length, fit_memory = digit_gene_sequences(pangenome, threads, tmp, keep_tmp, disable_bar)
+        sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, keep_tmp, disable_bar)
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
+        if fit_memory:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
+            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, bit_cutoffs, disable_bar)
+        else:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, bit_cutoffs, tmp, keep_tmp, disable_bar)
     else:
         raise ValueError("Unrecognized mode: {}".format(mode))
-    if fit_memory:
-        res = annot_with_hmmsearch(hmms, sequences, sequences2length, meta, bit_cutoffs, threads, mode, disable_bar)
-    else:
-        res = annot_with_hmmscan(hmms, sequences, sequences2length, meta, bit_cutoffs, threads, tmp, disable_bar)
-    logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMsearch")
     metadata_df = get_metadata_df(res, mode, gene2family)
     return metadata_df
