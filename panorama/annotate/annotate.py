@@ -239,8 +239,8 @@ def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata:
                 future.result()
 
 
-def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: str = "fast", bit_cutoffs: str = None,
-                              threads: int = 1, disable_bar: bool = False, **hmm_kwgs) -> Dict[str, pd.DataFrame]:
+def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: str = "fast", threads: int = 1,
+                              disable_bar: bool = False, **hmm_kwgs) -> Dict[str, pd.DataFrame]:
     """
     Main function to add annotation to pangenome from tsv file
 
@@ -248,7 +248,6 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
         pangenomes: Pangenomes object containing all the pangenome to annotate
         hmm: Path to hmm list file
         mode: Which mode to use to annotate gene families with HMM
-        bit_cutoffs: Bit cutoff threshold mode for hmmsearch
         threads: Number of available threads
         disable_bar: Flag to disable progress bar
 
@@ -265,7 +264,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
-        pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, bit_cutoffs, threads=threads,
+        pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, threads=threads,
                                                          disable_bar=disable_bar, **hmm_kwgs)
 
     return pangenome2annot
@@ -369,11 +368,6 @@ def parser_annot(parser):
                                 "If not specified, all hit will be kept.")
     hmm_param.add_argument("-b", "--only_best_hit", required=False, action="store_true",
                            help="alias to keep only the best hit for each gene family.")
-    hmm_param.add_argument("--bit_cutoffs", required=False, type=str, default=None,
-                           choices=["noise", "gathering", "trusted"],
-                           help='Define the model-specific thresholding option to use for pyHMMer. '
-                                'Will be automatically set by pyHMMer if not specified. '
-                                'Look at pyHMMer and HMMer documentation for more information')
     hmm_param.add_argument("--msa", required=False, type=Path, default=None,
                            help="To create a HMM profile for families, you can give a msa of each gene in families."
                                 "This msa could be gotten from ppanggolin (See ppanggolin msa). "

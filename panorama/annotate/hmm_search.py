@@ -5,7 +5,7 @@
 import os
 import shutil
 import sys
-import collections
+from collections import defaultdict, namedtuple
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
@@ -164,7 +164,7 @@ def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "
                     future.result()
 
 
-def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[List[HMM], pd.DataFrame]:
+def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[HMM]], pd.DataFrame]:
     """
     Read HMM file to create HMM object
 
@@ -178,7 +178,7 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[List[HMM], pd.Da
     Raises:
         Exception: Unexpected error occurred while reading HMM
     """
-    hmms = []
+    hmms = defaultdict(list)
     hmm_df = pd.read_csv(hmm_db, delimiter="\t", names=meta_col_names,
                          dtype=meta_dtype, header=0).set_index('accession')
     hmm_df['description'] = hmm_df["description"].fillna('unknown')
@@ -199,7 +199,14 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[List[HMM], pd.Da
             except Exception as error:
                 raise Exception(f'Unexpected error on HMM file {hmm_path}, caused by {error}')
             else:
-                hmms.append(hmm)
+                if hmm.cutoffs.gathering_available():
+                    hmms["gathering"].append(hmm)
+                elif hmm.cutoffs.noise_available():
+                    hmms["noise"].append(hmm)
+                elif hmm.cutoffs.trusted_available():
+                    hmms["trusted"].append(hmm)
+                else:
+                    hmms["other"].append(hmm)
     return hmms, hmm_df
 
 
@@ -237,18 +244,17 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
                 hit.score, hit.bias, secondary_name, hmm_info.description)
 
 
-def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: Union[SequenceFile, List[DigitalSequence]], threads: int = 1,
-                       meta: pd.DataFrame = None, bit_cutoffs: str = None,  tmp: Path = None, keep_tmp: bool = False,
+def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
+                       threads: int = 1, meta: pd.DataFrame = None, tmp: Path = None, keep_tmp: bool = False,
                        disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
     Args:
-        hmm_list: List of HMM
+        hmms: List of HMM classified by bit_cutoffs
         gf_sequences: List of digitalized gene families sequences
         meta: Metadata associate with HMM
         threads: Number of available threads
-        bit_cutoffs: Bit cutoff type for HMM alignment
         tmp: Temporary directory to store pressed HMM database
         keep_tmp: Flag to allow keeping temporary files
         disable_bar:  Disable progress bar
@@ -265,14 +271,17 @@ def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: Union[SequenceFile, Li
 
     tmp = Path(tempfile.gettempdir()) if tmp is None else tmp
     res = []
-    result = collections.namedtuple("Result", res_col_names)
+    result = namedtuple("Result", res_col_names)
 
-    hmmpress(hmm_list, tmp / 'hmm_db')
+    hmmpress([hmm for hmm_list in hmms.values() for hmm in hmm_list], tmp / 'hmm_db')
     with HMMFile(tmp / "hmm_db") as hmm_db:
         models = hmm_db.optimized_profiles()
         logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
         with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
-            options = {"bit_cutoffs": bit_cutoffs, "Z": len(hmm_list)}
+            options = {"Z": sum(len(hmm_list) for hmm_list in hmms.values())}
+            for cutoff, hmm_list in hmms.items():
+                if cutoff != "other":
+                    options["bit_cutoffs"] = cutoff
             for top_hits in hmmscan(gf_sequences, models, cpus=threads, callback=hmmscan_callback, **options):
                 for hit in top_hits:
                     assign = assign_hit(hit, meta)
@@ -283,17 +292,15 @@ def annot_with_hmmscan(hmm_list: List[HMM], gf_sequences: Union[SequenceFile, Li
     return res
 
 
-def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         threads: int = 1, bit_cutoffs: str = None,
-                         disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
+                         threads: int = 1, disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
     Args:
-        hmm_list: List of HMM
+        hmms: List of HMM classified by bit_cutoffs
         gf_sequences: List of digitalized gene families sequences
         meta: Metadata associate with HMM
-        bit_cutoffs:
         threads: Number of available threads
         disable_bar:  Disable progress bar
 
@@ -308,15 +315,19 @@ def annot_with_hmmsearch(hmm_list: List[HMM], gf_sequences: SequenceBlock, meta:
         bar.update()
 
     res = []
-    result = collections.namedtuple("Result", res_col_names)
+    result = namedtuple("Result", res_col_names)
     logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMSearch")
-    with tqdm(range(len(hmm_list)), unit="hmm", desc="Align target to HMM", disable=disable_bar) as bar:
-        options = {"bit_cutoffs": bit_cutoffs}
-        for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
-            for hit in top_hits:
-                assign = assign_hit(hit, meta)
-                if assign is not None:
-                    res.append(result(*assign))
+    with tqdm(total=sum(len(hmm_list) for hmm_list in hmms.values()), unit="hmm",
+              desc="Align target to HMM", disable=disable_bar) as bar:
+        for cutoff, hmm_list in hmms.items():
+            options = {}
+            if cutoff != "other":
+                options["bit_cutoffs"] = cutoff
+            for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
+                for hit in top_hits:
+                    assign = assign_hit(hit, meta)
+                    if assign is not None:
+                        res.append(result(*assign))
     return res
 
 
@@ -352,10 +363,9 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
     return metadata_df
 
 
-def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = None,
-                   mode: str = "fast", bit_cutoffs: str = None, msa: Path = None,
-                   msa_format: str = "afa", threads: int = 1, keep_tmp: bool = False,
-                   tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
+def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None,
+                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", threads: int = 1,
+                   keep_tmp: bool = False, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
     Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
@@ -364,7 +374,6 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
         hmms: Specify the hmm profiles to be used for annotation
         meta: Store the metadata of the hmms
         mode: Specify which methods use to align families to HMM
-        bit_cutoffs: Specify the model-specific thresholding
         threads: Number of available threads
         tmp: Temporary directory to store pressed HMM database
         keep_tmp: Flag to allow keeping temporary files
@@ -386,10 +395,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
             sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
-            res = annot_with_hmmsearch(hmms, sequence_block, meta, threads, bit_cutoffs, disable_bar)
+            res = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, bit_cutoffs, tmp, keep_tmp, disable_bar)
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, keep_tmp, disable_bar)
     elif mode == "profile":
         raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
     elif mode == "sensitive":
@@ -397,10 +406,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: List[HMM], meta: pd.DataFrame = N
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, bit_cutoffs, disable_bar)
+            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, bit_cutoffs, tmp, keep_tmp, disable_bar)
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, keep_tmp, disable_bar)
     else:
         raise ValueError("Unrecognized mode: {}".format(mode))
     metadata_df = get_metadata_df(res, mode, gene2family)
