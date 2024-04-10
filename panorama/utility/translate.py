@@ -3,7 +3,6 @@
 
 # default libraries
 import re
-import shutil
 from random import choice
 from string import digits
 from typing import Dict, List, Set, Union
@@ -13,18 +12,16 @@ from lxml import etree as et
 import lxml.etree
 import yaml
 import json
-import tempfile
 
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
 from numpy import nan
 from pyhmmer.plan7 import HMM
-from psutil import virtual_memory
 
 # local libraries
 from panorama.utils import mkdir
-from panorama.utility.genInput import create_hmm_list_file, read_hmm, parse_hmm_info, write_hmm, gen_acc
+from panorama.utility.genInput import create_hmm_list_file, read_hmm, write_hmm, gen_acc
 
 
 def read_yaml(model: Path) -> dict:
@@ -420,11 +417,11 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
 
 def parse_dfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[str, Union[str, int, float]]:
     """
-    Read DefenseFinder HMM file and get information for PANORAMA annotation step
+    Read DefenseFinder HMM and get information for PANORAMA annotation step
 
     Args:
+        hmm: HMM object
         hmm_file: Path to the DefenseFinder HMM
-        output: Path to the output directory to save the HMM compatible with PANORAMA
         panorama_acc: Set of PANORAMA accession ID for HMM
 
     Returns:
