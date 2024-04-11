@@ -5,6 +5,7 @@
 from __future__ import annotations
 import argparse
 import logging
+import shutil
 from typing import Any, Dict, Tuple
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -62,15 +63,13 @@ def check_parameter(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         else:  # args.mode == "profile" or "sensitive"
             need_info['need_annotations'] = True
             need_info['need_gene_sequences'] = True
-            args.tmp = Path(tempfile.gettempdir()) if args.tmp is None else args.tmp
 
         if args.mode == "fast":
             if args.keep_tmp:
                 logging.warning("--keep_tmp is not working with --mode fast")
             if args.tmp:
                 logging.warning("--tmp is not working with --mode fast")
-        hmm_kwgs["keep_tmp"] = args.keep_tmp
-        hmm_kwgs["tmp"] = args.tmp
+        hmm_kwgs["tmp"] = Path(tempfile.mkdtemp(prefix="panorama_tmp", dir=args.tmp))
 
         if args.msa is not None and args.mode != "profile":
             raise argparse.ArgumentError(argument=None, message="--msa is working only with --profile")
@@ -316,6 +315,10 @@ def launch(args: argparse.Namespace) -> None:
     annot_pangenomes(pangenomes=pangenomes, source=args.source, table=args.table, hmm=args.hmm, threads=args.threads,
                      k_best_hit=args.k_best_hit, lock=lock, force=args.force, disable_bar=args.disable_prog_bar,
                      **hmm_kwgs)
+    if not args.keep_tmp:
+        shutil.rmtree(hmm_kwgs["tmp"])
+    else:
+        logging.getLogger("PANORAMA").info(f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -382,4 +385,4 @@ def parser_annot(parser):
     optional.add_argument("--keep_tmp", required=False, action='store_true',
                           help="Keep the temporary files. Useful for debugging in sensitive or profile mode.")
     optional.add_argument("--tmp", required=False, nargs='?', type=Path, default=None,
-                          help=f"Path to temporary directory, defaults path is {tempfile.gettempdir()}")
+                          help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir())/'panorama'}")

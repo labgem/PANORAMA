@@ -3,7 +3,6 @@
 
 # default libraries
 import os
-import shutil
 import sys
 from collections import defaultdict, namedtuple
 import logging
@@ -22,6 +21,7 @@ from pyhmmer import hmmsearch, hmmscan, hmmpress
 import pandas as pd
 from numpy import nan
 from ppanggolin.formats.writeSequences import write_gene_protein_sequences
+from ppanggolin.formats.writeMSA import write_msa_files
 
 # local libraries
 from panorama.pangenomes import Pangenome
@@ -84,19 +84,36 @@ def digit_family_sequences(pangenome: Pangenome,
     return sequences, True if sys.getsizeof(sequences) < available_memory else False
 
 
-def get_msa(tmpdir: Path):
+def get_msa(pangenome: Pangenome, tmpdir: Path, threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
     """
-    Get the MSA profile
+    Get the MSA for each gene families of the pangenome
 
     Args:
-        tmpdir: Path to the temporary directory
+        pangenome: pangenome object with genes
+        tmpdir: Temporary directory to save the MSA
+        threads: Number of threads to use
+        disable_bar: Flag to disable progress bar
 
-    Raises:
-        NotImplementedError: Function is not implemented yet
+    Returns:
+        A pandas dataframe containing the MSA for each gene families of the pangenome
     """
-    _ = tempfile.TemporaryDirectory(prefix="msa_panorama", dir=tmpdir)
-    logging.getLogger("PANORAMA").warning("In Dev")
-    raise NotImplementedError
+
+    if "translation_table" in pangenome.parameters["annotate"]:
+        code = pangenome.parameters["annotate"]["translation_table"]
+    else:
+        if "translation_table" in pangenome.parameters["cluster"]:
+            code = pangenome.parameters["cluster"]["translation_table"]
+        else:
+            code = "11"
+    write_msa_files(pangenome, output=tmpdir, tmpdir=tmpdir, cpu=threads, partition="all", source="protein",
+                    use_gene_id=True, translation_table=code, force=True, disable_bar=disable_bar)
+
+    family2msa = {"ID": [], "Path": []}
+    for msa_file in Path(tmpdir / 'msa_all_protein').glob(pattern="*.aln"):
+        family_name = msa_file.stem
+        family2msa["ID"].append(family_name)
+        family2msa["Path"].append(msa_file.absolute().as_posix())
+    return pd.DataFrame.from_dict(family2msa)
 
 
 def profile_gf(gf: GeneFamily, msa_path: Path, msa_format: str = "afa", ):
@@ -115,8 +132,8 @@ def profile_gf(gf: GeneFamily, msa_path: Path, msa_format: str = "afa", ):
     builder = Builder(alphabet)
     background = Background(alphabet)
     if os.stat(msa_path).st_size == 0:
-        logging.getLogger("PANORAMA").warning(
-            f"{msa_path.absolute().as_posix()} is empty, so it's not readable. Pass to next file")
+        logging.getLogger("PANORAMA").debug(f"{msa_path.absolute().as_posix()} is empty, so it's not readable."
+                                            f"Pass to next file")
     else:
         try:
             with MSAFile(msa_path.absolute().as_posix(), format=msa_format,
@@ -133,35 +150,31 @@ def profile_gf(gf: GeneFamily, msa_path: Path, msa_format: str = "afa", ):
                 raise Exception(f"The following error happened while building HMM from file {msa_path} : {error}")
 
 
-def profile_gfs(pangenome: Pangenome, msa_path: Path = None, msa_format: str = "afa",
-                tmpdir: Path = Path(tempfile.gettempdir()), threads: int = 1, disable_bar: bool = False):
+def profile_gfs(pangenome: Pangenome, msa_df: pd.DataFrame, msa_format: str = "afa",
+                threads: int = 1, disable_bar: bool = False):
     """
     Create an HMM profile for each gene families
 
     Args:
         pangenome: Pangenome containing gene families to profile
-        msa_path: Path to file containing msa
+        msa_df: Dataframe linking gene families to msa
         msa_format: format used to write msa
-        tmpdir: Temporary directory for profiling
         threads: Number of available threads
         disable_bar: Flag to disable progress bar
     """
-    if msa_path is None:
-        get_msa(tmpdir)
-    else:
-        msa_file_list = list(msa_path.iterdir())
-        with ThreadPoolExecutor(max_workers=threads) as executor:
-            logging.getLogger("PANORAMA").info("Compute gene families HMM and profile")
-            with tqdm(total=len(msa_file_list), unit='file', disable=disable_bar) as progress:
-                futures = []
-                for msa_file in msa_file_list:
-                    gf = pangenome.get_gene_family(msa_file.stem)
-                    future = executor.submit(profile_gf, gf, msa_file, msa_format)
-                    future.add_done_callback(lambda p: progress.update())
-                    futures.append(future)
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        logging.getLogger("PANORAMA").info("Compute gene families HMM and profile")
+        with tqdm(total=pangenome.number_of_gene_families, unit='family', disable=disable_bar) as progress:
+            futures = []
+            msa_df["ID"] = msa_df["ID"].apply(str)
+            for family in pangenome.gene_families:
+                msa_file = Path(msa_df.loc[msa_df["ID"] == family.name]["Path"].values[0])
+                future = executor.submit(profile_gf, family, msa_file, msa_format)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
 
-                for future in futures:
-                    future.result()
+            for future in futures:
+                future.result()
 
 
 def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[HMM]], pd.DataFrame]:
@@ -245,7 +258,7 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
-                       threads: int = 1, meta: pd.DataFrame = None, tmp: Path = None, keep_tmp: bool = False,
+                       threads: int = 1, meta: pd.DataFrame = None, tmp: Path = None,
                        disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
@@ -256,7 +269,6 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
         meta: Metadata associate with HMM
         threads: Number of available threads
         tmp: Temporary directory to store pressed HMM database
-        keep_tmp: Flag to allow keeping temporary files
         disable_bar:  Disable progress bar
 
     Returns:
@@ -287,13 +299,12 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
-    if not keep_tmp:
-        shutil.rmtree(tmp)
     return res
 
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         threads: int = 1, disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+                         threads: int = 1, disable_bar: bool = False) -> List[Tuple[str, str, str, float,
+                                                                                    float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -351,8 +362,9 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
         assert gene2family is not None, "Gene and families must be linked in a dictionary"
         gene2family_df = pd.DataFrame.from_dict(gene2family, orient="index").reset_index()
         gene2family_df.columns = ["genes", "families"]
-        merged_df = pd.merge(gene2family_df, metadata_df, on='genes', how='inner', validate="one_to_many").drop("genes",
-                                                                                                                axis=1)
+        merged_df = pd.merge(gene2family_df, metadata_df, left_on='genes', right_on='families', how='inner',
+                             validate="one_to_many").drop(["genes", "families_y"], axis=1)
+        merged_df = merged_df.rename(columns={"families_x": "families"})
         metadata_df = merged_df.drop_duplicates(subset=['families', 'Accession', 'protein_name',
                                                         'e_value', 'score', 'bias'])
         # Keep the best score, e_value, bias for each protein_name by families
@@ -365,7 +377,7 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None,
                    mode: str = "fast", msa: Path = None, msa_format: str = "afa", threads: int = 1,
-                   keep_tmp: bool = False, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
+                   tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
     Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
@@ -374,9 +386,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         hmms: Specify the hmm profiles to be used for annotation
         meta: Store the metadata of the hmms
         mode: Specify which methods use to align families to HMM
+        msa: Path to a msa file listing the gene families and their msa
+        msa_format: Specify the format of the msa file
         threads: Number of available threads
         tmp: Temporary directory to store pressed HMM database
-        keep_tmp: Flag to allow keeping temporary files
         disable_bar: bool: Disable the progress bar
 
     Returns:
@@ -389,8 +402,28 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
     Todo:
         Make the possibility to use the profile with the profile mode
     """
+    assert mode in ["sensitive", "fast", "profile"], f"Unrecognized mode: {mode}"
     gene2family = None
-    if mode == "fast":
+    if mode == "sensitive":
+        sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, disable_bar)
+        gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
+        if fit_memory:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
+            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
+        else:
+            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, disable_bar)
+    else:
+        if mode == "profile":
+            if msa is not None:
+                msa_df = pd.read_csv(msa, sep="\t", names=["ID", "Path"])
+            else:
+                msa_format = "afa"
+                msa_df = get_msa(pangenome, tmp, threads, disable_bar)
+            if msa_df.shape[0] != pangenome.number_of_gene_families:
+                raise ValueError("The number of msa files does not match the number of gene families")
+            profile_gfs(pangenome, msa_df, msa_format, threads, disable_bar)
+        # Here either we have profiled our gene family or we will use the referent sequences
         sequences, fit_memory = digit_family_sequences(pangenome, disable_bar=disable_bar)
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
@@ -398,19 +431,6 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
             res = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, keep_tmp, disable_bar)
-    elif mode == "profile":
-        raise NotImplementedError("Really sorry. It's not implemented yet, but be sure it's on schedule")
-    elif mode == "sensitive":
-        sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, keep_tmp, disable_bar)
-        gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
-        if fit_memory:
-            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
-        else:
-            logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, keep_tmp, disable_bar)
-    else:
-        raise ValueError("Unrecognized mode: {}".format(mode))
+            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, disable_bar)
     metadata_df = get_metadata_df(res, mode, gene2family)
     return metadata_df
