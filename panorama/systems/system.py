@@ -154,9 +154,18 @@ class System(MetaFeatures):
 
     def add_canonical(self, system: System):
         """Add a canonical system"""
-
-        system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
-        self.canonical.add(system)
+        already_in = False
+        for canon in self.canonical:
+            if system.is_subset(canon):
+                already_in = True
+            elif system.is_superset(canon):
+                system.ID = canon.ID
+                self.canonical.remove(canon)
+                self.canonical.add(system)
+                already_in = True
+        if not already_in:
+            system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
+            self.canonical.add(system)
 
     def add_family(self, gene_family: GeneFamily):
         assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"

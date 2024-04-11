@@ -372,7 +372,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, annotation
                     result = future.result()
                     detected_systems += result
 
-    for system in sorted(detected_systems, key=lambda x: len(x), reverse=True):
+    for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
         pangenome.add_system(system)
 
     logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")

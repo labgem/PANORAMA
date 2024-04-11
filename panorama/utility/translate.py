@@ -480,7 +480,7 @@ def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float =
         hmm_list = read_hmm(hmm_path=hmm_file)
         for hmm in hmm_list:
             hmm_dict = parse_dfinder_hmm(hmm, hmm_file, panorama_acc)
-            hmm_dict["path"] = write_hmm(hmm, hmm_dir, True).as_posix()
+            hmm_dict["path"] = write_hmm(hmm, hmm_dir, True).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
 
 
