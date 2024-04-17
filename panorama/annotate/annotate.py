@@ -183,10 +183,10 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
         Returns:
             K_best_hit per group
         """
-        return group.nlargest(k_best_hit, columns=['score', 'e_value', 'bias'])
+        return group.nlargest(k_best_hit, columns=['score', 'bias', 'e_value'])
 
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
-    return metadata.groupby(['families', "protein_name"], group_keys=False).apply(get_k_best_hit)
+    return metadata.groupby(['families'], group_keys=False).apply(get_k_best_hit)
 
 
 def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame, source: str, k_best_hit: int = None,

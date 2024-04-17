@@ -28,7 +28,7 @@ from panorama.systems.detection import get_annotation_to_families, dict_families
 
 
 def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism,
-                                fam2annot: Dict[GeneFamily, Set[Family]]) -> Tuple[List[List[str]], List[int], str]:
+                                fam2annot: Dict[str, Set[Family]], write_incomplete: bool = True) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system on a pangenome organism
 
@@ -52,14 +52,9 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         Returns:
             List of element to write projection for a gene
         """
-        if gene.name != "":
-            gene_name = gene.name
-        else:
-            gene_name = gene.local_identifier if gene.local_identifier != "" else gene.ID
-
-        line_projection = [gene.family.name, gene.family.named_partition, annot, gene_name,
+        line_projection = [gene.family.name, gene.family.named_partition, annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
-        return list(map(str, [system.ID, system.name, organism.name] + line_projection))
+        return list(map(str, [system.ID, sub_id, system.name, organism.name] + line_projection))
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
         """
@@ -87,24 +82,28 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     counter = [0, 0, 0]  # count strict, conserved and split CC
     model_family = {node for node in graph.nodes if
                     system.source in node.family.sources}  # Get all gene that have an annotation to code the system
+    sub_id = 1
     for cc in nx.connected_components(graph):
-        model_cc = {gene for gene in cc if system.source in gene.family.sources}
-        if model_cc.issuperset(model_family):  # Contain all model families in the system
-            if len(cc) == len(model_family):  # Subgraph with only model families
-                counter[0] += 1
-                sys_state_in_org = "strict"
-            else:
-                counter[1] += 1
-                sys_state_in_org = "extended"
-        else:  # system is split
-            counter[2] += 1
-            sys_state_in_org = "split"
-        for cc_gene in cc:
-            annot = list(fam2annot.get(cc_gene.family.name))[0].name if fam2annot.get(
-                cc_gene.family.name) is not None else None  # TODO look at the chosen annotation in case of multiple annotation per gene
-            if annot is not None:
-                partitions.add(cc_gene.family.named_partition)
-            projection.append(write_projection_line(cc_gene))
+        if write_incomplete or check_for_needed({node.family for node in cc}, fam2annot,
+                                                list(system.model.func_units)[0]):
+            model_cc = {gene for gene in cc if system.source in gene.family.sources}
+            if model_cc.issuperset(model_family):  # Contain all model families in the system
+                if len(cc) == len(model_family):  # Subgraph with only model families
+                    counter[0] += 1
+                    sys_state_in_org = "strict"
+                else:
+                    counter[1] += 1
+                    sys_state_in_org = "extended"
+            else:  # system is split
+                counter[2] += 1
+                sys_state_in_org = "split"
+            for cc_gene in cc:
+                annot = list(fam2annot.get(cc_gene.family.name))[0].name if fam2annot.get(
+                    cc_gene.family.name) is not None else None  # TODO look at the chosen annotation in case of multiple annotation per gene
+                if annot is not None:
+                    partitions.add(cc_gene.family.named_partition)
+                projection.append(write_projection_line(cc_gene))
+            sub_id += 1
     return projection, counter, conciliate_system_partition(partitions)
 
 
@@ -130,8 +129,8 @@ def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.G
         """
         for g in family.get_genes_per_org(organism):
             left_genes = g.contig.get_genes(begin=g.position,
-                                            end=g.position + t) if g.position < g.contig.number_of_genes else [g]
-            right_genes = g.contig.get_genes(begin=g.position - t, end=g.position)
+                                            end=g.position + t + 1) if g.position < g.contig.number_of_genes else [g]
+            right_genes = g.contig.get_genes(begin=g.position - t, end=g.position + 1)
             if node in left_genes or node in right_genes:
                 genes_graph.add_edge(node, g)
 
@@ -228,11 +227,11 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
     pangenome_projection.sort_values(by=["system number", "system name", "system number", "organism", "completeness"],
                                      ascending=[True, True, True, True, True],
                                      inplace=True)  # TODO Try to order system number numerically
-    organisms_projection.columns = ["system number", "system name", "organism", "gene family", "partition",
-                                    "annotation",
-                                    "gene", "start", "stop", "strand", "is_fragment", "genomic organization", "product"]
-    organisms_projection.sort_values(by=["system name", "system number", "organism", "start", "stop"],
-                                     ascending=[True, True, True, True, True], inplace=True)
+    organisms_projection.columns = ["system number", "subsystem number", "system name", "organism", "gene family", "partition",
+                                    "annotation", "gene.ID", "gene.name", "start", "stop", "strand", "is_fragment",
+                                    "genomic organization", "product"]
+    organisms_projection.sort_values(by=["system name", "system number", "subsystem number", "organism", "start", "stop"],
+                                     ascending=[True, True, False, True, True, True], inplace=True)
     logging.getLogger("PANORAMA").debug('System projection done')
     return pangenome_projection, organisms_projection
 
