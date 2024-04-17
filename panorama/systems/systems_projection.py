@@ -127,12 +127,16 @@ def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.G
             family: The multigenic families
             node: the gene of the other family to link with
         """
-        for g in family.get_genes_per_org(organism):
+        genes = list(family.get_genes_per_org(organism))
+        for idx, g in enumerate(genes):
             left_genes = g.contig.get_genes(begin=g.position,
                                             end=g.position + t + 1) if g.position < g.contig.number_of_genes else [g]
             right_genes = g.contig.get_genes(begin=g.position - t, end=g.position + 1)
             if node in left_genes or node in right_genes:
                 genes_graph.add_edge(node, g)
+            for other_g in genes[idx + 1:]:
+                if other_g in left_genes or other_g in right_genes:
+                    genes_graph.add_edge(other_g, g)
 
     genes_graph = nx.Graph()
     for edge in graph.edges:
