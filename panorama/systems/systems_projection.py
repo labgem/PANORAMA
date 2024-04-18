@@ -28,7 +28,7 @@ from panorama.systems.detection import get_annotation_to_families, dict_families
 
 
 def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism,
-                                fam2annot: Dict[str, Set[Family]], write_incomplete: bool = True) -> Tuple[List[List[str]], List[int], str]:
+                                fam2annot: Dict[str, Set[Family]]) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system on a pangenome organism
 
@@ -80,15 +80,15 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     projection = []
     partitions = set()
     counter = [0, 0, 0]  # count strict, conserved and split CC
-    model_family = {node for node in graph.nodes if
-                    system.source in node.family.sources}  # Get all gene that have an annotation to code the system
+
+    # Get all genes for which the family correspond to model
+    model_genes = {gene for gene in graph.nodes if gene.family in system.models_families}
     sub_id = 1
     for cc in nx.connected_components(graph):
-        if write_incomplete or check_for_needed({node.family for node in cc}, fam2annot,
-                                                list(system.model.func_units)[0]):
-            model_cc = {gene for gene in cc if system.source in gene.family.sources}
-            if model_cc.issuperset(model_family):  # Contain all model families in the system
-                if len(cc) == len(model_family):  # Subgraph with only model families
+        model_cc = {gene for gene in cc if gene.family in system.models_families}
+        if len(model_cc) > 0:
+            if model_cc == model_genes:  # Contain all model families in the system
+                if len(cc) == len(model_genes):  # Subgraph with only model families
                     counter[0] += 1
                     sys_state_in_org = "strict"
                 else:
@@ -119,26 +119,29 @@ def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.G
         A genomic context graph for the given organism
     """
 
-    def compute_for_multigenic(family: GeneFamily, node: Gene):
+    def compute_for_multigenic(family: GeneFamily, g_node: Gene):
         """
         Compute the edges in case of multigenic families
 
         Args:
             family: The multigenic families
-            node: the gene of the other family to link with
+            g_node: the gene of the other family to link with
         """
         genes = list(family.get_genes_per_org(organism))
         for idx, g in enumerate(genes):
             left_genes = g.contig.get_genes(begin=g.position,
                                             end=g.position + t + 1) if g.position < g.contig.number_of_genes else [g]
             right_genes = g.contig.get_genes(begin=g.position - t, end=g.position + 1)
-            if node in left_genes or node in right_genes:
-                genes_graph.add_edge(node, g)
+            if g_node in left_genes or g_node in right_genes:
+                genes_graph.add_edge(g_node, g)
+
             for other_g in genes[idx + 1:]:
                 if other_g in left_genes or other_g in right_genes:
                     genes_graph.add_edge(other_g, g)
 
     genes_graph = nx.Graph()
+    for node in graph.nodes:
+        genes_graph.add_nodes_from([gene for gene in node.genes if gene.organism == organism])
     for edge in graph.edges:
         if edge[0].is_multigenic_in_org(organism):
             if edge[1].is_multigenic_in_org(organism):
@@ -171,8 +174,8 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
     graph, _ = compute_gene_context_graph(families=set(system.models_families), transitive=t,
-                                          window_size=t + 1, disable_bar=True)
-    _, fam2annot = dict_families_context(func_unit, annot2fam)
+                                          window_size=t, disable_bar=True)
+    _, fam2annot = dict_families_context(system.model, annot2fam)
     for organism in system.models_organisms:
         org_graph = graph.subgraph([n for n in graph.nodes if organism in n.organisms]).copy()
         edges_to_remove = [(u, v) for u, v, e in org_graph.edges(data=True) if organism not in e['genomes']]
@@ -188,20 +191,16 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
 
 
 def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotation_sources: List[str], threads: int = 1,
-                              lock: Lock = None,
-                              disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
          Write all systems in pangenomes and project on organisms
 
         Args:
             pangenome: Pangenome to project
-            output: Path to output directory
             system_source: source of the systems to project
             annotation_sources: sources of the annotation
-            organisms: List of organisms to project (defaults to all organisms)
             threads: Number of threads available (default: 1)
             lock: Global lock for multiprocessing execution (default: None)
-            force: Force to write into the output directory (default: False)
             disable_bar: Allow to disable progress bar (default: False)
 
         Returns:
@@ -231,11 +230,12 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
     pangenome_projection.sort_values(by=["system number", "system name", "system number", "organism", "completeness"],
                                      ascending=[True, True, True, True, True],
                                      inplace=True)  # TODO Try to order system number numerically
-    organisms_projection.columns = ["system number", "subsystem number", "system name", "organism", "gene family", "partition",
-                                    "annotation", "gene.ID", "gene.name", "start", "stop", "strand", "is_fragment",
-                                    "genomic organization", "product"]
-    organisms_projection.sort_values(by=["system name", "system number", "subsystem number", "organism", "start", "stop"],
-                                     ascending=[True, True, False, True, True, True], inplace=True)
+    organisms_projection.columns = ["system number", "subsystem number", "system name", "organism", "gene family",
+                                    "partition", "annotation", "gene.ID", "gene.name", "start", "stop", "strand",
+                                    "is_fragment", "genomic organization", "product"]
+    organisms_projection.sort_values(
+        by=["system name", "system number", "subsystem number", "organism", "start", "stop"],
+        ascending=[True, True, False, True, True, True], inplace=True)
     logging.getLogger("PANORAMA").debug('System projection done')
     return pangenome_projection, organisms_projection
 
@@ -246,14 +246,13 @@ def write_projection_systems(pangenome_name: str, output: Path, source: str, pan
      Write all systems in pangenomes and project on organisms
 
     Args:
-        pangenome: Pangenome to project
+        pangenome_name: name of the current pangenome
         output: Path to output directory
         source: Annotation source
         organisms: List of organisms to project (defaults to all organisms)
-        threads: Number of threads available (default: 1)
-        lock: Global lock for multiprocessing execution (default: None)
+        pangenome_projection: Dataframe of pangenome projection
+        organisms_projection: Dataframe of organisms projection
         force: Force to write into the output directory (default: False)
-        disable_bar: Allow to disable progress bar (default: False)
 
     Returns:
         Projection in 2 dataframe, one for each organism and one for the pangenome
