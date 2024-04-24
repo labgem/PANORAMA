@@ -202,7 +202,7 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
         hmm_list = read_hmm(hmm_path=hmm_file)
         for hmm in hmm_list:
             hmm_dict = parse_hmm_info(hmm, panorama_acc, metadata_df)
-            hmm_dict["path"] = write_hmm(hmm, hmm_out, binary_hmm).as_posix()
+            hmm_dict["path"] = write_hmm(hmm, hmm_out, binary_hmm).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
 
 
