@@ -5,6 +5,7 @@
 # default libraries
 from __future__ import annotations
 import argparse
+import time
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -326,7 +327,7 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
         List[System]: List of systems detected in pangenome for the given model
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
-
+    begin = time.time()
     detected_systems = []
     families, fam2annot = dict_families_context(model, annot2fam)
     for func_unit in model.func_units:
@@ -338,6 +339,7 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
             combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
             detected_systems += search_system_in_context(context, families, fam2annot, func_unit,
                                                          source, jaccard_threshold, combinations)
+    logging.getLogger("PANORAMA").debug(f"Done search for model {model.name} in {time.time() - begin} seconds")
     return detected_systems
 
 
