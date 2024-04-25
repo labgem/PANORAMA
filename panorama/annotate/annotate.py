@@ -93,6 +93,14 @@ def check_parameter(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
         else:
             if args.only_best_hit:
                 args.k_best_hit = 1
+
+        if args.save_hits is not None:
+            if 'tblout' in args.save_hits:
+                hmm_kwgs["tblout"] = True
+            if 'domtblout' in args.save_hits:
+                hmm_kwgs["domtblout"] = True
+            if 'pfamtblout' in args.save_hits:
+                hmm_kwgs["pfamtblout"] = True
     return need_info, hmm_kwgs
 
 
@@ -379,6 +387,9 @@ def parser_annot(parser):
                            choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
                                     "clustal", "clustallike", "phylip", "phylips"],
                            help=argparse.SUPPRESS)
+    hmm_param.add_argument("--save_hits", required=False, type=str, default=None, nargs='*',
+                           choices=['tblout', 'domtblout', 'pfamtblout'],
+                           help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads.")

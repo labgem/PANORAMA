@@ -258,7 +258,8 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
-                       threads: int = 1, meta: pd.DataFrame = None, tmp: Path = None,
+                       meta: pd.DataFrame = None, tblout: bool = False, domtblout: bool = False,
+                       pfamtblout: bool = False, name: str = 'panorama', threads: int = 1, tmp: Path = None,
                        disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
@@ -288,6 +289,13 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
     hmmpress([hmm for hmm_list in hmms.values() for hmm in hmm_list], tmp / 'hmm_db')
     with HMMFile(tmp / "hmm_db") as hmm_db:
         models = hmm_db.optimized_profiles()
+        if tblout:
+            tbl = open(f"hmmscan_{name}.tbl", "wb")
+        if domtblout:
+            domtbl = open(f"hmmscan_{name}.domtbl", "wb")
+        if pfamtblout:
+            pfamtbl = open(f"hmmscan_{name}.pfamtbl", "wb")
+        header = True
         logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
         with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
             options = {"Z": sum(len(hmm_list) for hmm_list in hmms.values())}
@@ -295,16 +303,33 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
                 if cutoff != "other":
                     options["bit_cutoffs"] = cutoff
             for top_hits in hmmscan(gf_sequences, models, cpus=threads, callback=hmmscan_callback, **options):
+                if tblout:
+                    top_hits.write(tbl, format="targets", header=header)
+                if domtblout:
+                    top_hits.write(domtbl, format="domains", header=header)
+                if pfamtblout:
+                    top_hits.write(pfamtbl, format="pfam", header=header)
+                header = False
                 for hit in top_hits:
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
+        if tblout:
+            logging.getLogger("PANORAMA").info(f"Per-sequence hits save to file: {tbl.name}")
+            tbl.close()
+        if domtblout:
+            logging.getLogger("PANORAMA").info(f"Per-domain hits save to file: {domtbl.name}")
+            domtbl.close()
+        if pfamtblout:
+            logging.getLogger("PANORAMA").info(f"hits and domains save to file: {pfamtbl.name}")
+            pfamtbl.close()
     return res
 
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         threads: int = 1, disable_bar: bool = False) -> List[Tuple[str, str, str, float,
-                                                                                    float, float, str, str]]:
+                         tblout: bool = False, domtblout: bool = False, pfamtblout: bool = False,
+                         name: str = 'panorama',  threads: int = 1,
+                         disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -330,15 +355,38 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
     logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMSearch")
     with tqdm(total=sum(len(hmm_list) for hmm_list in hmms.values()), unit="hmm",
               desc="Align target to HMM", disable=disable_bar) as bar:
+        if tblout:
+            tbl = open(f"hmmsearch_{name}.tbl", "wb")
+        if domtblout:
+            domtbl = open(f"hmmsearch_{name}.domtbl", "wb")
+        if pfamtblout:
+            pfamtbl = open(f"hmmsearch_{name}.pfamtbl", "wb")
+        header = True
         for cutoff, hmm_list in hmms.items():
             options = {}
             if cutoff != "other":
                 options["bit_cutoffs"] = cutoff
             for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
+                if tblout:
+                    top_hits.write(tbl, format="targets", header=header)
+                if domtblout:
+                    top_hits.write(domtbl, format="domains", header=header)
+                if pfamtblout:
+                    top_hits.write(pfamtbl, format="pfam", header=header)
+                header = False
                 for hit in top_hits:
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
+        if tblout:
+            logging.getLogger("PANORAMA").info(f"Per-sequence hits save to file: {tbl.name}")
+            tbl.close()
+        if domtblout:
+            logging.getLogger("PANORAMA").info(f"Per-domain hits save to file: {domtbl.name}")
+            domtbl.close()
+        if pfamtblout:
+            logging.getLogger("PANORAMA").info(f"hits and domains save to file: {pfamtbl.name}")
+            pfamtbl.close()
     return res
 
 
@@ -376,8 +424,9 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None,
-                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", threads: int = 1,
-                   tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
+                   mode: str = "fast", msa: Path = None, msa_format: str = "afa",
+                   tblout: bool = False, domtblout: bool = False, pfamtblout: bool = False,
+                   threads: int = 1, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
     Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
 
@@ -409,10 +458,12 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
+            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, tblout, domtblout, pfamtblout,
+                                       pangenome.name, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, disable_bar)
+            res = annot_with_hmmscan(hmms, sequences, meta, tblout, domtblout, pfamtblout,
+                                     pangenome.name, threads, tmp, disable_bar)
     else:
         if mode == "profile":
             if msa is not None:
@@ -428,9 +479,11 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
             sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
-            res = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
+            res = annot_with_hmmsearch(hmms, sequence_block, meta, tblout, domtblout, pfamtblout,
+                                       pangenome.name, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, threads, meta, tmp, disable_bar)
+            res = annot_with_hmmscan(hmms, sequences, meta, tblout, domtblout, pfamtblout,
+                                     pangenome.name, threads, tmp, disable_bar)
     metadata_df = get_metadata_df(res, mode, gene2family)
     return metadata_df
