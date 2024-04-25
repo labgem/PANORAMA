@@ -6,6 +6,7 @@ from __future__ import annotations
 from typing import List, Set, Union, Generator
 
 # installed libraries
+import networkx as nx
 from ppanggolin.metadata import MetaFeatures
 from ppanggolin.genome import Organism
 
@@ -36,6 +37,8 @@ class System(MetaFeatures):
         if gene_families is not None:
             for family in gene_families:
                 self.add_family(family)
+        self._models_families = None
+        self._graph = None
 
     def __hash__(self) -> int:
         """Create a hash value for the region
@@ -98,6 +101,17 @@ class System(MetaFeatures):
         return self.model.name
 
     @property
+    def graph(self) -> nx.Graph:
+        if self._graph is None:
+            raise AssertionError("System has not be associated with a graph")
+        return self._graph
+
+    @graph.setter
+    def graph(self, graph: nx.Graph):
+        assert isinstance(graph, nx.Graph), f"Graph must be an instance of nx.Graph, not {type(graph)}"
+        self._graph = graph
+
+    @property
     def source(self) -> str:
         """Alias to return the source name for the system
         """
@@ -110,10 +124,8 @@ class System(MetaFeatures):
         for family in self._families_getter.values():
             yield family
 
-    @property
-    def models_families(self) -> Generator[GeneFamily, None, None]:
-        """Get the gene families that are describing in the model
-        """
+    def _get_models_families(self):
+        self._models_families = {}
         families_name = set()
         for fam in self.model.families:
             families_name.add(fam.name)
@@ -125,6 +137,14 @@ class System(MetaFeatures):
                 if metadata is not None:
                     if any(value.protein_name in families_name for value in metadata):
                         yield family
+
+    @property
+    def models_families(self) -> Generator[GeneFamily, None, None]:
+        """Get the gene families that are describing in the model
+        """
+        if self._models_families is None:
+            self._models_families = set(self._get_models_families())
+        yield from self._models_families
 
 
     @property

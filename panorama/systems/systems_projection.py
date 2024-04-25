@@ -85,7 +85,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     model_genes = {gene for gene in graph.nodes if gene.family in system.models_families}
     sub_id = 1
     for cc in nx.connected_components(graph):
-        model_cc = {gene for gene in cc if gene.family in system.models_families}
+        model_cc = cc.intersection(model_genes)
         if len(model_cc) > 0:
             if model_cc == model_genes:  # Contain all model families in the system
                 if len(cc) == len(model_genes):  # Subgraph with only model families
@@ -107,7 +107,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     return projection, counter, conciliate_system_partition(partitions)
 
 
-def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.Graph:
+def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 0, w: int = 1) -> nx.Graph:
     """Compute the genes_graph for a given genomic context in an organism
 
     Args:
@@ -119,44 +119,27 @@ def compute_genes_graph(graph: nx.Graph, organism: Organism, t: int = 0) -> nx.G
         A genomic context graph for the given organism
     """
 
-    def compute_for_multigenic(family: GeneFamily, g_node: Gene):
-        """
-        Compute the edges in case of multigenic families
-
-        Args:
-            family: The multigenic families
-            g_node: the gene of the other family to link with
-        """
-        genes = list(family.get_genes_per_org(organism))
-        for idx, g in enumerate(genes):
-            left_genes = g.contig.get_genes(begin=g.position,
-                                            end=g.position + t + 1) if g.position < g.contig.number_of_genes else [g]
-            right_genes = g.contig.get_genes(begin=g.position - t, end=g.position + 1)
-            if g_node in left_genes or g_node in right_genes:
-                genes_graph.add_edge(g_node, g)
-
-            for other_g in genes[idx + 1:]:
-                if other_g in left_genes or other_g in right_genes:
-                    genes_graph.add_edge(other_g, g)
-
     genes_graph = nx.Graph()
-    for node in graph.nodes:
-        genes_graph.add_nodes_from([gene for gene in node.genes if gene.organism == organism])
-    for edge in graph.edges:
-        if edge[0].is_multigenic_in_org(organism):
-            if edge[1].is_multigenic_in_org(organism):
-                for gene in edge[0].get_genes_per_org(organism):
-                    compute_for_multigenic(edge[1], gene)
-            else:
-                v = list(edge[1].get_genes_per_org(organism))[0]
-                compute_for_multigenic(edge[0], v)
+    for family in families:
+        a = set({gene for gene in family.genes if gene.organism == organism})
+        genes_graph.add_nodes_from(a)
+    for gene in genes_graph.nodes:
+        if gene.position < gene.contig.number_of_genes:
+            right_genes = gene.contig.get_genes(begin=gene.position, end=gene.position + w + 1)
         else:
-            u = list(edge[0].get_genes_per_org(organism))[0]
-            if edge[1].is_multigenic_in_org(organism):
-                compute_for_multigenic(edge[1], u)
-            else:
-                v = list(edge[1].get_genes_per_org(organism))[0]
-                genes_graph.add_edge(u, v)
+            right_genes = [gene]
+
+        left_genes = gene.contig.get_genes(begin=gene.position - w, end=gene.position + 1)
+        for l_idx, l_gene in enumerate(left_genes, start=1):
+            if l_gene in genes_graph.nodes:
+                for t_gene in left_genes[l_idx:t + 1]:
+                    if t_gene in genes_graph.nodes:
+                        genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+        for r_idx, r_gene in enumerate(right_genes, start=1):
+            if r_gene in genes_graph.nodes:
+                for t_gene in right_genes[r_idx:t + 1]:
+                    if t_gene in genes_graph.nodes:
+                        genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
     return genes_graph
 
 
@@ -173,18 +156,14 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
-    graph, _ = compute_gene_context_graph(families=set(system.models_families), transitive=t,
-                                          window_size=t, disable_bar=True)
     _, fam2annot = dict_families_context(system.model, annot2fam)
     for organism in system.models_organisms:
-        org_graph = graph.subgraph([n for n in graph.nodes if organism in n.organisms]).copy()
-        edges_to_remove = [(u, v) for u, v, e in org_graph.edges(data=True) if organism not in e['genomes']]
-        org_graph.remove_edges_from(edges_to_remove)
-        if check_for_needed(set(org_graph.nodes), fam2annot, func_unit):
+        org_fam = {fam for fam in system.families if organism in fam.organisms}
+        if check_for_needed(org_fam, fam2annot, func_unit):
             pan_proj = [system.ID, system.name, organism.name]
-            genes_graph = compute_genes_graph(org_graph, organism, func_unit.max_separation + 1)
+            genes_graph = compute_genes_graph(org_fam, organism, t, t+1)
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism, fam2annot)
-            pangenome_projection.append(pan_proj + [partition, len(org_graph.nodes) / len(system)] + counter)
+            pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)
             organisms_projection += org_proj
     logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
