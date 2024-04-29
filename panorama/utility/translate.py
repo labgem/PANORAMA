@@ -516,12 +516,26 @@ def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
         basename = re.split("-Type-", model_name)
         base_class = basename[0]
         base_type = basename[-1]
-        for canon_file in models.glob("*.xml"):
+        for canon_file in models.glob(f"{base_class}*.xml"):
             name_canon = canon_file.stem
             if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
+                logging.getLogger("PANORAMA").debug("")
                 canonical_sys.append(name_canon)
-    elif model_name == "CAS_Cluster" or model_name == "CBASS":
+    elif re.search("_Type_", model_name):
+        basename = re.split("_Type_", model_name)
+        base_class = basename[0]
+        base_type = basename[-1]
+        if len(base_type.split('_')) == 2:
+            base_type, subtype = base_type.split('_')
+        else:
+            subtype = ""
         for canon_file in models.glob("*.xml"):
+            name_canon = canon_file.stem
+            if re.search(f"{base_class}_Type_{base_type}_{subtype}", name_canon) and name_canon != model_name:
+                logging.getLogger("PANORAMA").debug("")
+                canonical_sys.append(name_canon)
+    elif model_name in ["CAS_Cluster", "CBASS", "Wadjet"]:
+        for canon_file in models.glob(f"{model_name}*.xml"):
             if canon_file.stem != model_name:
                 canonical_sys.append(canon_file.stem)
     return canonical_sys
