@@ -31,6 +31,9 @@ def check_write_systems_args(args: argparse.Namespace) -> None:
         argparse.ArgumentTypeError: If number of sources is not the same as models
         argparse.ArgumentTypeError: if annotation are given and their number is not the same as systems sources.
     """
+    if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
+        raise argparse.ArgumentError(argument=None, message="You should at least choose one type of systems writing "
+                                                            "between: projection, partition, association or proksee.")
     if len(args.sources) != len(args.models):
         raise argparse.ArgumentError(argument=None, message="Number of sources and models are different.")
     if args.annotation_sources is not None:
