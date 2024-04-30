@@ -143,7 +143,8 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
     return genes_graph
 
 
-def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]],
+                      association: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project system on all pangenome organisms
     Args:
@@ -157,6 +158,7 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
     _, fam2annot = dict_families_context(system.model, annot2fam)
+
     for organism in system.models_organisms:
         org_fam = {fam for fam in system.families if organism in fam.organisms}
         if check_for_needed(org_fam, fam2annot, func_unit):
@@ -169,8 +171,9 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]]) -> 
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
 
 
-def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotation_sources: List[str], threads: int = 1,
-                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotation_sources: List[str],
+                              association: List[str] = None, threads: int = 1, lock: Lock = None,
+                              disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
          Write all systems in pangenomes and project on organisms
 
@@ -195,7 +198,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
             futures = []
             for system in pangenome.get_system_by_source(system_source):
                 system.families_sources = annotation_sources
-                future = executor.submit(system_projection, system, annot2fam)
+                future = executor.submit(system_projection, system, annot2fam, association)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 

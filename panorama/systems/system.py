@@ -13,6 +13,7 @@ from ppanggolin.genome import Organism
 # local libraries
 from panorama.systems.models import Model
 from panorama.geneFamily import GeneFamily
+from panorama.region import Module
 
 
 class System(MetaFeatures):
@@ -39,6 +40,9 @@ class System(MetaFeatures):
                 self.add_family(family)
         self._models_families = None
         self._graph = None
+        self._regions_getter = {}
+        self._spots_getter = {}
+        self._modules_getter = {}
 
     def __hash__(self) -> int:
         """Create a hash value for the region
@@ -146,7 +150,6 @@ class System(MetaFeatures):
             self._models_families = set(self._get_models_families())
         yield from self._models_families
 
-
     @property
     def organisms(self) -> Generator[Organism, None, None]:
         """Get the organisms where the system belongs
@@ -227,3 +230,92 @@ class System(MetaFeatures):
         """
         assert isinstance(system, System), "System object is expected"
         return set(self.families).symmetric_difference(set(system.families))
+
+    @property
+    def modules(self) -> Generator[Module, None, None]:
+        """Get the modules associated to the system
+        """
+        if self._modules_getter == {}:
+            self._asso_modules()
+        yield from self._modules_getter
+
+    def get_module(self, identifier: int) -> Module:
+        try:
+            module = self._modules_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
+        else:
+            return module
+
+    def add_module(self, module: Module):
+        try:
+            mod_in = self.get_module(identifier=module.ID)
+        except KeyError:
+            self._modules_getter[module.ID] = module
+            module.add_system(self)
+        else:
+            if module != mod_in:
+                raise Exception(f"Another module with identifier {module.ID} is already associated to system {self.ID}."
+                                f"This is unexpected. Please report an issue on our GitHub")
+
+    def _asso_modules(self):
+        for family in self.families:
+            if family.module is not None:
+                self.add_module(family.module)
+
+    # @property
+    # def spots(self) -> Generator[Module, None, None]:
+    #     if self._spots_getter == {}:
+    #         self._asso_spots()
+    #     yield from self._spots_getter
+    #
+    # def get_spot(self, identifier: int):
+    #     try:
+    #         spot = self._spots_getter[identifier]
+    #     except KeyError:
+    #         raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
+    #     else:
+    #         return spot
+    #
+    # def add_spot(self, spot: Module):
+    #     try:
+    #         mod_in = self.get_spot(identifier=spot.ID)
+    #     except KeyError:
+    #         self._spots_getter[spot.ID] = spot
+    #     else:
+    #         if spot != mod_in:
+    #             raise Exception(f"Another spot with identifier {spot.ID} is already associated to system {self.ID}."
+    #                             f"This is unexpected. Please report an issue on our GitHub")
+    #
+    # def _asso_spots(self):
+    #     for family in self.families:
+    #         for spot in family.spots
+    #             self.add_spot(spot)
+    #
+    # @property
+    # def regions(self) -> Generator[Region, None, None]:
+    #     if self._regions_getter == {}:
+    #         self._asso_regions()
+    #     yield from self._regions_getter
+    #
+    # def get_region(self, identifier: int) -> Region:
+    #     try:
+    #         region = self._regions_getter[identifier]
+    #     except KeyError:
+    #         raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
+    #     else:
+    #         return region
+    #
+    # def add_region(self, region: Module):
+    #     try:
+    #         mod_in = self.get_region(identifier=region.ID)
+    #     except KeyError:
+    #         self._regions_getter[region.ID] = region
+    #     else:
+    #         if region != mod_in:
+    #             raise Exception(f"Another region with identifier {region.ID} is already associated to system {self.ID}."
+    #                             f"This is unexpected. Please report an issue on our GitHub")
+    #
+    # def _asso_regions(self):
+    #     for family in self.families:
+    #         self.add_region(family.region)

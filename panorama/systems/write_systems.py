@@ -6,7 +6,7 @@
 from __future__ import annotations
 import argparse
 import logging
-from typing import List
+from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
 
@@ -19,9 +19,10 @@ from panorama.utils import mkdir
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.systems.systems_projection import project_pangenome_systems, write_projection_systems
 from panorama.systems.systems_partitions import systems_partition
+from panorama.systems.system_association import association_pangenome_systems
 
 
-def check_write_systems_args(args: argparse.Namespace) -> None:
+def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
     """ Checks the provided arguments to ensure that they are valid.
 
     Args:
@@ -31,6 +32,8 @@ def check_write_systems_args(args: argparse.Namespace) -> None:
         argparse.ArgumentTypeError: If number of sources is not the same as models
         argparse.ArgumentTypeError: if annotation are given and their number is not the same as systems sources.
     """
+    need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
+                 "need_metadata": True, "metatypes": ["families"], "need_systems": True, "systems_sources": args.sources}
     if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
         raise argparse.ArgumentError(argument=None, message="You should at least choose one type of systems writing "
                                                             "between: projection, partition, association or proksee.")
@@ -42,6 +45,19 @@ def check_write_systems_args(args: argparse.Namespace) -> None:
                                                                 "number of systems sources.")
     else:
         args.annotation_sources = args.sources
+
+    need_info["sources"] = args.annotation_sources
+
+    if args.association is not None:
+        for asso in args.association:
+            if asso == "modules":
+                need_info["need_modules"] = True
+            if asso == "rgps":
+                need_info["need_regions"] = True
+            if asso == "spots":
+                need_info["need_regions"] = True
+                need_info["need_spots"] = True
+    return need_info
 
 
 def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> None:
@@ -70,7 +86,7 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
 
 
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_sources: List[str],
-                             projection: bool = False, association: str = None,
+                             projection: bool = False, association: List[str] = None,
                              partition: bool = False, proksee: str = None, organisms: List[str] = None,
                              threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
@@ -98,17 +114,18 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_so
             pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources,
                                                                        threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
-            if projection:
-                logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-                write_projection_systems(pangenome.name, output, system_source, pangenome_proj, organisms_proj,
-                                         organisms, force)
             if partition:
                 logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
                 systems_partition(pangenome.name, pangenome_proj, output)
             if association:
-                raise NotImplementedError("Association not implemented")
+                logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
+                association_pangenome_systems(pangenome, association, output)
             if proksee:
                 raise NotImplementedError("Proksee not implemented")
+            if projection:
+                logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
+                write_projection_systems(pangenome.name, output, system_source, pangenome_proj, organisms_proj,
+                                         organisms, force)
             pangenome_proj.insert(0, "pangenome name", pangenome.name)
             pangenomes_proj = pd.concat([pangenomes_proj, pangenome_proj])
 
@@ -122,17 +139,16 @@ def launch(args):
     from panorama.format.read_binaries import load_pangenomes
     from panorama.utility.utility import check_models
 
-    check_write_systems_args(args)
+    need_info = check_write_systems_args(args)
     models_list = []
     for models in args.models:
         models_list.append(check_models(models, disable_bar=args.disable_prog_bar))
 
+    need_info["models"] = models_list
+
     outdir = mkdir(args.output, force=args.force)
     manager = Manager()
     lock = manager.Lock()
-    need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
-                 "need_metadata": True, "metatypes": ["families"], "sources": args.annotation_sources,
-                 "need_systems": True, "systems_sources": args.sources, "models": models_list}
 
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, check_function=check_pangenome_write_systems,
                                  need_info=need_info, sources=args.sources, max_workers=args.threads, lock=lock,
@@ -184,8 +200,8 @@ def parser_write(parser):
     optional.add_argument("--partition", required=False, action="store_true",
                           help="Write a heatmap file with for each organism, partition of the systems. "
                                "If organisms are specified, heatmap will be write only for them.")
-    optional.add_argument("--association", required=False, type=str, default=None,
-                          choices=["all", "rgp-modules", "rgp-spots", "modules-spots", "modules", "rgp"],
+    optional.add_argument("--association", required=False, type=str, default=None, nargs='+',
+                          choices=["all", "modules", "rgps", "spots"],
                           help="Write association between systems and others pangenomes elements")
     optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
                           choices=["all", "base", "modules", "rgp", "spots", "annotations"],

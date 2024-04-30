@@ -10,7 +10,7 @@ from ppanggolin.region import Module as Mod
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.systems.system import System
+# from panorama.systems.system import System
 
 
 class Spot(Hotspot):
@@ -125,10 +125,15 @@ class Module(Mod):
         for system in self._systemsGetter.values():
             yield system
 
-    def get_system(self, ID: int):
-        return self._systemsGetter[ID]
+    def get_system(self, identifier: int):
+        try:
+            system = self._systemsGetter[identifier]
+        except KeyError:
+            raise KeyError(f"System {identifier} is not associated to module {self.ID}")
+        else:
+            return system
 
-    def add_system(self, system: System):
+    def add_system(self, system):
         try:
             self.get_system(system.ID)
         except KeyError:

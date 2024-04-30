@@ -4,16 +4,12 @@ import logging
 
 import numpy as np
 from typing import List, Set
-from bokeh.models import BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter, \
-    ColumnDataSource
+from bokeh.models import BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter
 from bokeh.palettes import Magma256
 import pandas as pd
 from bokeh.io import output_file, export_png
 from bokeh.plotting import figure, save
-from bokeh.layouts import gridplot
-from bokeh.palettes import turbo
 from pathlib import Path
-from bokeh.models import FactorRange, CustomJS, Button
 
 
 def systems_partition(name: str, system_projection: pd.DataFrame, output: Path):
@@ -133,7 +129,7 @@ def figure_count_heatmap(name: str, data: np.ndarray, list_system: List, list_or
     :param list_organism: List of organisms in the pangenome
     :param output: Path to output directory
     """
-    output_path = Path.cwd() / output / name / f"{name}_count.png"
+    output_path = Path.cwd() / output / name / f"{name}_count.html"
     output_file(output_path)
     df_gcount = pd.DataFrame(data, index=list_organism, columns=list_system)
     df_stack_gcount = pd.DataFrame(df_gcount.stack(), columns=['number']).reset_index()

@@ -12,7 +12,7 @@ from multiprocessing import Lock
 
 # installed libraries
 import tables
-from ppanggolin.formats import (read_chunks, read_annotation, read_graph, read_rgp, read_modules,
+from ppanggolin.formats import (read_chunks, read_annotation, read_graph, read_rgp,
                                 read_gene_sequences, read_metadata, get_need_info)
 from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
@@ -22,7 +22,7 @@ from panorama.systems.system import System
 from panorama.systems.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
-from panorama.region import Spot
+from panorama.region import Spot, Module
 from panorama.utils import check_tsv_sanity, init_lock
 
 
@@ -164,6 +164,30 @@ def read_spots(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False
     for spot in spots.values():
         pangenome.add_spot(spot)
     pangenome.status["spots"] = "Loaded"
+
+
+def read_modules(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
+    """
+    Read modules in pangenome hdf5 file to add in pangenome object
+
+    :param pangenome: Pangenome object without modules
+    :param h5f: Pangenome HDF5 file with modules computed
+    :param disable_bar: Disable the progress bar
+    """
+    if pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
+        raise Exception("It's not possible to read the modules if the gene families have not been loaded.")
+    table = h5f.root.modules
+    modules = {}  # id2mod
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="module", disable=disable_bar):
+        curr_module = modules.get(int(row['module']))
+        if curr_module is None:
+            curr_module = Module(int(row['module']))
+            modules[row["module"]] = curr_module
+        family = pangenome.get_gene_family(row['geneFam'].decode())
+        curr_module.add(family)
+    for module in modules.values():
+        pangenome.add_module(module)
+    pangenome.status["modules"] = "Loaded"
 
 
 def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families: bool = False, graph: bool = False,
