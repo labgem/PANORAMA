@@ -9,6 +9,7 @@ from typing import List, Set, Union, Generator
 import networkx as nx
 from ppanggolin.metadata import MetaFeatures
 from ppanggolin.genome import Organism
+from ppanggolin.region import Region
 
 # local libraries
 from panorama.systems.models import Model
@@ -292,30 +293,24 @@ class System(MetaFeatures):
     #         for spot in family.spots
     #             self.add_spot(spot)
     #
-    # @property
-    # def regions(self) -> Generator[Region, None, None]:
-    #     if self._regions_getter == {}:
-    #         self._asso_regions()
-    #     yield from self._regions_getter
-    #
-    # def get_region(self, identifier: int) -> Region:
-    #     try:
-    #         region = self._regions_getter[identifier]
-    #     except KeyError:
-    #         raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
-    #     else:
-    #         return region
-    #
-    # def add_region(self, region: Module):
-    #     try:
-    #         mod_in = self.get_region(identifier=region.ID)
-    #     except KeyError:
-    #         self._regions_getter[region.ID] = region
-    #     else:
-    #         if region != mod_in:
-    #             raise Exception(f"Another region with identifier {region.ID} is already associated to system {self.ID}."
-    #                             f"This is unexpected. Please report an issue on our GitHub")
-    #
-    # def _asso_regions(self):
-    #     for family in self.families:
-    #         self.add_region(family.region)
+    @property
+    def regions(self) -> Generator[Region, None, None]:
+        yield from self._regions_getter.values()
+
+    def get_region(self, name: str) -> Region:
+        try:
+            region = self._regions_getter[name]
+        except KeyError:
+            raise KeyError(f"RGP with identifier {name} is not associated to system {self.ID}")
+        else:
+            return region
+
+    def add_region(self, region: Region):
+        try:
+            region_in = self.get_region(name=region.name)
+        except KeyError:
+            self._regions_getter[region.name] = region
+        else:
+            if region != region_in:
+                raise Exception(f"Another region with identifier {region.name} is already associated to system {self.ID}."
+                                f"This is unexpected. Please report an issue on our GitHub")

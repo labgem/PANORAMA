@@ -53,7 +53,7 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
             if asso == "modules":
                 need_info["need_modules"] = True
             if asso == "rgps":
-                need_info["need_regions"] = True
+                need_info["need_rgp"] = True
             if asso == "spots":
                 need_info["need_regions"] = True
                 need_info["need_spots"] = True
@@ -112,7 +112,7 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_so
             logging.getLogger("PANORAMA").debug(
                 f"Begin write systems for {pangenome.name} on system source {system_source}. Based on annotation sources {annotation_sources} ")
             pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources,
-                                                                       threads=threads,
+                                                                       association=association, threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
             if partition:
                 logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
@@ -155,9 +155,9 @@ def launch(args):
                                  disable_bar=args.disable_prog_bar)
 
     write_pangenomes_systems(pangenomes, outdir, args.annotation_sources, projection=args.projection,
-                             proksee=args.proksee,
-                             association=args.association, partition=args.partition, organisms=args.organisms,
-                             threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
+                             proksee=args.proksee, association=args.association, partition=args.partition,
+                             organisms=args.organisms, threads=args.threads, lock=lock, force=args.force,
+                             disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

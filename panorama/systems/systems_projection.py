@@ -5,9 +5,10 @@
 # default libraries
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from typing import Dict, List, Set, Tuple
+from typing import Any, Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
 
@@ -16,7 +17,6 @@ from tqdm import tqdm
 import pandas as pd
 import networkx as nx
 from ppanggolin.genome import Organism, Gene
-from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.utils import mkdir, init_lock
@@ -27,8 +27,8 @@ from panorama.systems.models import Family
 from panorama.systems.detection import get_annotation_to_families, dict_families_context, check_for_needed
 
 
-def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism,
-                                fam2annot: Dict[str, Set[Family]]) -> Tuple[List[List[str]], List[int], str]:
+def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism, fam2annot: Dict[str, Set[Family]],
+                                association: List[str] = None) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system on a pangenome organism
 
@@ -54,6 +54,10 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         """
         line_projection = [gene.family.name, gene.family.named_partition, annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
+        if 'rgps' in association and gene.RGP is not None:
+            line_projection.append(gene.RGP.name)
+            system.add_region(gene.RGP)
+
         return list(map(str, [system.ID, sub_id, system.name, organism.name] + line_projection))
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
@@ -121,8 +125,8 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
 
     genes_graph = nx.Graph()
     for family in families:
-        a = set({gene for gene in family.genes if gene.organism == organism})
-        genes_graph.add_nodes_from(a)
+        # a = set({gene for gene in family.genes if gene.organism == organism})
+        genes_graph.add_nodes_from({gene for gene in family.genes if gene.organism == organism})
     for gene in genes_graph.nodes:
         if gene.position < gene.contig.number_of_genes:
             right_genes = gene.contig.get_genes(begin=gene.position, end=gene.position + w + 1)
@@ -143,7 +147,7 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
     return genes_graph
 
 
-def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]],
+def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam_index: Dict[GeneFamily, int],
                       association: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project system on all pangenome organisms
@@ -154,18 +158,27 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]],
     Returns:
         2 Dataframe with projected system, one for the pangenome and another for the organisms
     """
+    asso_dict = {key: set() for key in association}
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
     _, fam2annot = dict_families_context(system.model, annot2fam)
 
     for organism in system.models_organisms:
-        org_fam = {fam for fam in system.families if organism in fam.organisms}
+        org_fam = {fam for fam in system.families if organism.bitarray[fam_index[fam]] == 1}
         if check_for_needed(org_fam, fam2annot, func_unit):
             pan_proj = [system.ID, system.name, organism.name]
-            genes_graph = compute_genes_graph(org_fam, organism, t, t+1)
-            org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism, fam2annot)
+            genes_graph = compute_genes_graph(org_fam, organism, t, t + 1)
+            org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism,
+                                                                       fam2annot, association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)
+            if 'rgps' in association:
+                rgps = {rgp.name for rgp in system.regions if rgp.organism == organism}
+                if len(rgps) == 1:
+                    pangenome_projection[-1].extend(rgps)
+                elif len(rgps) > 1:
+                    join_rgps = [','.join([rgp.name for rgp in system.regions if rgp.organism == organism])]
+                    pangenome_projection[-1].extend(join_rgps)
             organisms_projection += org_proj
     logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
@@ -191,6 +204,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
     annot2fam = get_annotation_to_families(pangenome, annotation_sources)
+    fam_index = pangenome.compute_org_bitarrays()
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
         with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=False), unit='system',
@@ -198,26 +212,32 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
             futures = []
             for system in pangenome.get_system_by_source(system_source):
                 system.families_sources = annotation_sources
-                future = executor.submit(system_projection, system, annot2fam, association)
+                future = executor.submit(system_projection, system, annot2fam, fam_index, association)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
             for future in futures:
                 result = future.result()
+                # print(pangenome_projection, result[0])
                 pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
-
-    pangenome_projection.columns = ["system number", "system name", "organism", "partition",
-                                    "completeness", "strict", "extended", "split"]
-    pangenome_projection.sort_values(by=["system number", "system name", "system number", "organism", "completeness"],
-                                     ascending=[True, True, True, True, True],
+    pan_cols_name = ["system number", "system name", "organism", "partition",
+                     "completeness", "strict", "extended", "split"]
+    org_cols_name = ["system number", "subsystem number", "system name", "organism", "gene family",
+                     "partition", "annotation", "gene.ID", "gene.name", "start", "stop", "strand",
+                     "is_fragment", "genomic organization", "product"]
+    if 'rgps' in association:
+        pan_cols_name += ['RGPs']
+        org_cols_name += ['RGPs']
+    pangenome_projection.columns = pan_cols_name
+    pangenome_projection.sort_values(by=["system number", "system name", "organism", "completeness"],
+                                     ascending=[True, True, True, True],
                                      inplace=True)  # TODO Try to order system number numerically
-    organisms_projection.columns = ["system number", "subsystem number", "system name", "organism", "gene family",
-                                    "partition", "annotation", "gene.ID", "gene.name", "start", "stop", "strand",
-                                    "is_fragment", "genomic organization", "product"]
-    organisms_projection.sort_values(
-        by=["system name", "system number", "subsystem number", "organism", "start", "stop"],
-        ascending=[True, True, False, True, True, True], inplace=True)
+    organisms_projection.columns = org_cols_name
+    organisms_projection.sort_values(by=["system name", "system number", "subsystem number",
+                                         "organism", "start", "stop"],
+                                     ascending=[True, True, False, True, True, True],
+                                     inplace=True)
     logging.getLogger("PANORAMA").debug('System projection done')
     return pangenome_projection, organisms_projection
 

@@ -22,7 +22,11 @@ from panorama.pangenomes import Pangenome
 # def associate_systems_to_modules():
 
 def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataFrame:
-    columns = ['system number', 'system name', 'families'] + ['modules'] if 'modules' in association else []
+    columns = ['system number', 'system name', 'families']
+    if 'modules' in association:
+        columns.append('modules')
+    if 'rgps' in association:
+        columns.append('RGPs')
     association_list = {}
     for system in pangenome.systems:
         if 'modules' in association:
@@ -104,4 +108,5 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
 
     association_df = get_association_df(pangenome, association)
     association_df.to_csv(output / 'association.csv', sep='\t')
-    write_correlation_matrix(association_df, output, pangenome.name, out_format)
+    if 'modules' in association:
+        write_correlation_matrix(association_df, output, pangenome.name, out_format)
