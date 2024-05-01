@@ -23,35 +23,38 @@ from panorama.pangenomes import Pangenome
 
 def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataFrame:
     columns = ['system number', 'system name', 'families']
+    if 'RGPs' in association:
+        columns.append('RGPs')
     if 'modules' in association:
         columns.append('modules')
-    if 'rgps' in association:
-        columns.append('RGPs')
     association_list = {}
     for system in pangenome.systems:
+        association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families])]
+        if 'RGPs' in association:
+            association_list[system.ID].append(",".join(map(str, system.regions)))
         if 'modules' in association:
-            association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families]),
-                                           ",".join(map(str, system.modules))]
+            association_list[system.ID].append(",".join(map(str, system.modules)))
 
     association_df = pd.DataFrame.from_dict(association_list, orient='index', columns=columns[1:])
     association_df.index.name = columns[0]
     return association_df
 
 
-def write_correlation_matrix(association_df: pd.DataFrame, output: Path, name: str, out_format: List[str] = None):
+def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, name: str, out_format: List[str] = None):
     out_format = out_format if out_format is not None else ['html']
 
-    association_split = association_df.drop(columns=['families']).join(
-        association_df['modules'].str.get_dummies(sep=',')).drop(columns=['modules'])
+    association_split = df.drop(columns=['families']).join(df[association].str.get_dummies(sep=','))
+    association_split = association_split.drop(columns=[association])
 
     correlation_matrix = association_split.groupby('system name').sum()
     correlation_matrix.sort_index(key=lambda x: x.str.lower(), ascending=False, inplace=True)
-    correlation_matrix = correlation_matrix[sorted(correlation_matrix.columns.tolist(), key=lambda x: int(x))]
-    source = ColumnDataSource(data=dict(
-        modules=list(correlation_matrix.columns) * len(correlation_matrix.index),
-        systems=list(correlation_matrix.index) * len(correlation_matrix.columns),
-        corr=correlation_matrix.to_numpy().flatten(),
-    ))
+    correlation_matrix.columns.name = association
+    if association == 'RGPs':
+        correlation_matrix = correlation_matrix[sorted(correlation_matrix.columns.tolist())]
+        xlabel = "RGP name"
+    else:
+        correlation_matrix = correlation_matrix[sorted(correlation_matrix.columns.tolist(), key=lambda x: int(x))]
+        xlabel = f"{association} ID"
 
     high_corr = correlation_matrix.values.max()
     if high_corr == 1:
@@ -66,7 +69,8 @@ def write_correlation_matrix(association_df: pd.DataFrame, output: Path, name: s
 
     tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
     p = figure(x_range=list(correlation_matrix.columns), y_range=list(correlation_matrix.index),
-               width=1920, height=1080, tools=tools, toolbar_location='below')
+               width=1720, height=960, tools=tools, toolbar_location='below',
+               tooltips=[(association, '@association'), ('system', '@systems')])
     p.title.align = "center"
     p.title.text_font_size = "20pt"
     p.axis.axis_label_text_font_size = "16pt"
@@ -75,27 +79,30 @@ def write_correlation_matrix(association_df: pd.DataFrame, output: Path, name: s
     p.grid.grid_line_color = None
     p.axis.major_tick_line_color = None
     p.axis.major_label_standoff = 1
-    p.xaxis.axis_label = 'Module ID'
+    p.xaxis.axis_label = xlabel
     p.xaxis.major_label_orientation = 1
     p.yaxis.axis_label = 'System name'
     p.yaxis.major_label_orientation = 1 / 3
 
-    r = p.rect('modules', 'systems', 1, 1, source=source, line_color="white",
-               fill_color=linear_cmap('corr', palette=color_palette, low=0, high=high_corr))
+    source = pd.DataFrame(correlation_matrix.stack(), columns=['corr']).reset_index()
 
+    color_mapper = LinearColorMapper(palette=color_palette, low=0, high=high_corr + 1)
+    r = p.rect(association, 'system name', 1, 1, source=source, line_color="white",
+               # fill_color=linear_cmap('corr', palette=color_palette, low=0, high=high_corr + 1))
+               fill_color=transform('corr', color_mapper))
     p.add_layout(r.construct_color_bar(label_standoff=12,
-                                       ticker=BasicTicker(desired_num_ticks=len(color_palette)-1),
+                                       ticker=BasicTicker(desired_num_ticks=len(color_palette)),
                                        border_line_color=None,
                                        location=(0, 0)),
                  'right')
 
     if "html" in out_format:
-        output_path = Path.cwd() / output / name / f"{name}_correlation_module.html"
+        output_path = Path.cwd() / output / name / f"{name}_correlation_{association}.html"
         output_file(output_path)
         save(p)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in HTML format to {output_path}")
     if "png" in out_format:
-        output_path = Path.cwd() / output / name / f"{name}_correlation_module.png"
+        output_path = Path.cwd() / output / name / f"{name}_correlation_{association}.png"
         export_png(p, width=1920, height=1080)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in PNG format to {output_path}")
 
@@ -108,5 +115,6 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
 
     association_df = get_association_df(pangenome, association)
     association_df.to_csv(output / 'association.csv', sep='\t')
-    if 'modules' in association:
-        write_correlation_matrix(association_df, output, pangenome.name, out_format)
+    for asso in association:
+        write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
+                                 asso, output, pangenome.name, out_format)

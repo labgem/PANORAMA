@@ -52,7 +52,7 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
         for asso in args.association:
             if asso == "modules":
                 need_info["need_modules"] = True
-            if asso == "rgps":
+            if asso == "RGPs":
                 need_info["need_rgp"] = True
             if asso == "spots":
                 need_info["need_regions"] = True
@@ -201,13 +201,13 @@ def parser_write(parser):
                           help="Write a heatmap file with for each organism, partition of the systems. "
                                "If organisms are specified, heatmap will be write only for them.")
     optional.add_argument("--association", required=False, type=str, default=None, nargs='+',
-                          choices=["all", "modules", "rgps", "spots"],
+                          choices=["all", "modules", "RGPs", "spots"],
                           help="Write association between systems and others pangenomes elements")
     optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                          choices=["all", "base", "modules", "rgp", "spots", "annotations"],
+                          choices=["all", "base", "modules", "RGP", "spots", "annotations"],
                           help="Write a proksee file with systems. "
                                "If you only want the systems with genes, gene families and partition, use base value."
-                               "Write rgps, spots or modules -split by `,'- if you want them.")
+                               "Write RGPs, spots or modules -split by `,'- if you want them.")
     required.add_argument("--annotation_sources", required=False, type=str, nargs="+", default=None,
                           help="Name of the annotation sources if different from systems. "
                                "You can specify multiple sources. For that separate names by a space and "

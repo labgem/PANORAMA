@@ -54,7 +54,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         """
         line_projection = [gene.family.name, gene.family.named_partition, annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
-        if 'rgps' in association and gene.RGP is not None:
+        if 'RGPs' in association and gene.RGP is not None:
             line_projection.append(gene.RGP.name)
             system.add_region(gene.RGP)
 
@@ -172,7 +172,7 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism,
                                                                        fam2annot, association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)
-            if 'rgps' in association:
+            if 'RGPs' in association:
                 rgps = {rgp.name for rgp in system.regions if rgp.organism == organism}
                 if len(rgps) == 1:
                     pangenome_projection[-1].extend(rgps)
@@ -226,7 +226,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
     org_cols_name = ["system number", "subsystem number", "system name", "organism", "gene family",
                      "partition", "annotation", "gene.ID", "gene.name", "start", "stop", "strand",
                      "is_fragment", "genomic organization", "product"]
-    if 'rgps' in association:
+    if 'RGPs' in association:
         pan_cols_name += ['RGPs']
         org_cols_name += ['RGPs']
     pangenome_projection.columns = pan_cols_name
