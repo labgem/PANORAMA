@@ -54,9 +54,12 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         """
         line_projection = [gene.family.name, gene.family.named_partition, annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
-        if 'RGPs' in association and gene.RGP is not None:
-            line_projection.append(gene.RGP.name)
+        if any(asso in association for asso in ['RGPs', 'spots']) and gene.RGP is not None:
             system.add_region(gene.RGP)
+            if 'RGPs' in association:
+                line_projection.append(gene.RGP.name)
+            if 'spots' in association:
+                line_projection.append(gene.spot)
 
         return list(map(str, [system.ID, sub_id, system.name, organism.name] + line_projection))
 
@@ -158,7 +161,6 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam
     Returns:
         2 Dataframe with projected system, one for the pangenome and another for the organisms
     """
-    asso_dict = {key: set() for key in association}
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
@@ -177,8 +179,15 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam
                 if len(rgps) == 1:
                     pangenome_projection[-1].extend(rgps)
                 elif len(rgps) > 1:
-                    join_rgps = [','.join([rgp.name for rgp in system.regions if rgp.organism == organism])]
+                    join_rgps = [','.join(rgps)]
                     pangenome_projection[-1].extend(join_rgps)
+            if 'spots' in association:
+                spots = {str(spot) for spot in system.spots if organism in spot.organisms}
+                if len(spots) == 1:
+                    pangenome_projection[-1].extend(spots)
+                elif len(spots) > 1:
+                    join_spots = [','.join(spots)]
+                    pangenome_projection[-1].extend(join_spots)
             organisms_projection += org_proj
     logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
@@ -218,7 +227,6 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
 
             for future in futures:
                 result = future.result()
-                # print(pangenome_projection, result[0])
                 pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
     pan_cols_name = ["system number", "system name", "organism", "partition",
@@ -229,6 +237,9 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
     if 'RGPs' in association:
         pan_cols_name += ['RGPs']
         org_cols_name += ['RGPs']
+    if 'spots' in association:
+        pan_cols_name += ['spots']
+        org_cols_name += ['spots']
     pangenome_projection.columns = pan_cols_name
     pangenome_projection.sort_values(by=["system number", "system name", "organism", "completeness"],
                                      ascending=[True, True, True, True],

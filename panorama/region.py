@@ -5,8 +5,8 @@
 from typing import Generator, List, Tuple
 
 # installed libraries
-from ppanggolin.region import Spot as Hotspot
-from ppanggolin.region import Module as Mod
+from ppanggolin.genome import Organism
+from ppanggolin.region import Spot as Hotspot, Module as Mod
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -22,11 +22,23 @@ class Spot(Hotspot):
         super().__init__(spot_id)
         self.pangenome = None
         self.conserved_id = None
+        self._organisms_getter = None
 
     @property
     def conserved(self) -> True:
         """Return True if the spot is conserved between pangenomes, False otherwise."""
         return True if self.conserved_id is not None else False
+
+    def _get_organisms(self):
+        self._organisms_getter = {}
+        for region in self.regions:
+            self._organisms_getter[region.organism.name] = region.organism
+
+    @property
+    def organisms(self) -> Generator[Organism, None, None]:
+        if self._organisms_getter is None:
+            self._get_organisms()
+        yield from self._organisms_getter.values()
 
 
 class ConservedSpots:

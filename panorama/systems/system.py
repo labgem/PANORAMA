@@ -14,7 +14,7 @@ from ppanggolin.region import Region
 # local libraries
 from panorama.systems.models import Model
 from panorama.geneFamily import GeneFamily
-from panorama.region import Module
+from panorama.region import Module, Spot
 
 
 class System(MetaFeatures):
@@ -238,7 +238,7 @@ class System(MetaFeatures):
         """
         if self._modules_getter == {}:
             self._asso_modules()
-        yield from self._modules_getter
+        yield from self._modules_getter.values()
 
     def get_module(self, identifier: int) -> Module:
         try:
@@ -264,35 +264,36 @@ class System(MetaFeatures):
             if family.module is not None:
                 self.add_module(family.module)
 
-    # @property
-    # def spots(self) -> Generator[Module, None, None]:
-    #     if self._spots_getter == {}:
-    #         self._asso_spots()
-    #     yield from self._spots_getter
-    #
-    # def get_spot(self, identifier: int):
-    #     try:
-    #         spot = self._spots_getter[identifier]
-    #     except KeyError:
-    #         raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
-    #     else:
-    #         return spot
-    #
-    # def add_spot(self, spot: Module):
-    #     try:
-    #         mod_in = self.get_spot(identifier=spot.ID)
-    #     except KeyError:
-    #         self._spots_getter[spot.ID] = spot
-    #     else:
-    #         if spot != mod_in:
-    #             raise Exception(f"Another spot with identifier {spot.ID} is already associated to system {self.ID}."
-    #                             f"This is unexpected. Please report an issue on our GitHub")
-    #
-    # def _asso_spots(self):
-    #     for family in self.families:
-    #         for spot in family.spots
-    #             self.add_spot(spot)
-    #
+    @property
+    def spots(self) -> Generator[Spot, None, None]:
+        if len(self._spots_getter) == 0:
+            self._make_spot_getter()
+        yield from self._spots_getter.values()
+
+    def _make_spot_getter(self):
+        spots = set()
+        for region in self.regions:
+            if region.spot is not None:
+                self.add_spot(region.spot)
+
+    def get_spot(self, identifier: int):
+        try:
+            spot = self._spots_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Module with identifier {identifier} is not associated to system {self.ID}")
+        else:
+            return spot
+
+    def add_spot(self, spot: Spot):
+        try:
+            spot_in = self.get_spot(identifier=spot.ID)
+        except KeyError:
+            self._spots_getter[spot.ID] = spot
+        else:
+            if spot != spot_in:
+                raise Exception(f"Another spot with identifier {spot.ID} is already associated to system {self.ID}."
+                                f"This is unexpected. Please report an issue on our GitHub")
+
     @property
     def regions(self) -> Generator[Region, None, None]:
         yield from self._regions_getter.values()

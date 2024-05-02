@@ -11,20 +11,19 @@ from typing import List
 import pandas as pd
 from bokeh.io import output_file, save, export_png
 from bokeh.plotting import figure
-from bokeh.transform import transform, linear_cmap
+from bokeh.transform import linear_cmap
 from bokeh.palettes import Colorblind, Reds256, linear_palette
-from bokeh.models import ColumnDataSource, LinearColorMapper, BasicTicker
+from bokeh.models import BasicTicker
 
 # local libraries
 from panorama.pangenomes import Pangenome
 
-
-# def associate_systems_to_modules():
-
 def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataFrame:
-    columns = ['system number', 'system name', 'families']
+    columns = ['system number', 'system_name', 'families']
     if 'RGPs' in association:
         columns.append('RGPs')
+    if 'spots' in association:
+        columns.append('spots')
     if 'modules' in association:
         columns.append('modules')
     association_list = {}
@@ -32,8 +31,10 @@ def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataF
         association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families])]
         if 'RGPs' in association:
             association_list[system.ID].append(",".join(map(str, system.regions)))
+        if 'spots' in association:
+            association_list[system.ID].append(",".join(map(lambda x: str(x.ID), system.spots)))
         if 'modules' in association:
-            association_list[system.ID].append(",".join(map(str, system.modules)))
+            association_list[system.ID].append(",".join(map(lambda x:str(x.ID), system.modules)))
 
     association_df = pd.DataFrame.from_dict(association_list, orient='index', columns=columns[1:])
     association_df.index.name = columns[0]
@@ -46,7 +47,7 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
     association_split = df.drop(columns=['families']).join(df[association].str.get_dummies(sep=','))
     association_split = association_split.drop(columns=[association])
 
-    correlation_matrix = association_split.groupby('system name').sum()
+    correlation_matrix = association_split.groupby('system_name').sum()
     correlation_matrix.sort_index(key=lambda x: x.str.lower(), ascending=False, inplace=True)
     correlation_matrix.columns.name = association
     if association == 'RGPs':
@@ -64,13 +65,12 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
     elif high_corr <= 8:
         color_palette = ["#ffffff"] + list(Colorblind[high_corr])
     else:
-        color_palette = ["#ffffff"] + list(reversed(linear_palette(Reds256, high_corr)))
-    # color_mapper = LinearColorMapper(palette=color_palette, low=0, high=high_corr)
+        color_palette = list(reversed(linear_palette(Reds256, high_corr + 1)))
 
     tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
     p = figure(x_range=list(correlation_matrix.columns), y_range=list(correlation_matrix.index),
                width=1720, height=960, tools=tools, toolbar_location='below',
-               tooltips=[(association, '@association'), ('system', '@systems')])
+               tooltips=[(association, f'@{association}'), ('system', '@system_name')])
     p.title.align = "center"
     p.title.text_font_size = "20pt"
     p.axis.axis_label_text_font_size = "16pt"
@@ -86,10 +86,9 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
 
     source = pd.DataFrame(correlation_matrix.stack(), columns=['corr']).reset_index()
 
-    color_mapper = LinearColorMapper(palette=color_palette, low=0, high=high_corr + 1)
-    r = p.rect(association, 'system name', 1, 1, source=source, line_color="white",
-               # fill_color=linear_cmap('corr', palette=color_palette, low=0, high=high_corr + 1))
-               fill_color=transform('corr', color_mapper))
+    r = p.rect(association, 'system_name', 1, 1, source=source, line_color="white",
+               fill_color=linear_cmap('corr', palette=color_palette, low=0, high=high_corr + 1))
+
     p.add_layout(r.construct_color_bar(label_standoff=12,
                                        ticker=BasicTicker(desired_num_ticks=len(color_palette)),
                                        border_line_color=None,

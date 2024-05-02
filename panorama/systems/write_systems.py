@@ -52,10 +52,9 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
         for asso in args.association:
             if asso == "modules":
                 need_info["need_modules"] = True
-            if asso == "RGPs":
+            if asso in ["RGPs", "spots"]:
                 need_info["need_rgp"] = True
             if asso == "spots":
-                need_info["need_regions"] = True
                 need_info["need_spots"] = True
     return need_info
 
