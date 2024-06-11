@@ -8,6 +8,7 @@ from collections import defaultdict, namedtuple
 import logging
 from pathlib import Path
 from typing import Dict, List, Tuple, Union
+
 from tqdm import tqdm
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
@@ -16,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 import psutil
 from pyhmmer.easel import (TextSequence, DigitalSequence, DigitalSequenceBlock,
                            SequenceBlock, Alphabet, MSAFile, SequenceFile)
-from pyhmmer.plan7 import Builder, Background, HMM, HMMFile, Hit
+from pyhmmer.plan7 import Builder, Background, HMM, HMMFile, Hit, TopHits
 from pyhmmer import hmmsearch, hmmscan, hmmpress
 import pandas as pd
 from numpy import nan
@@ -258,9 +259,8 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
-                       meta: pd.DataFrame = None, tblout: bool = False, domtblout: bool = False,
-                       pfamtblout: bool = False, name: str = 'panorama', threads: int = 1, tmp: Path = None,
-                       disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+                       meta: pd.DataFrame = None, threads: int = 1, tmp: Path = None, disable_bar: bool = False
+                       ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -285,17 +285,10 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
     tmp = Path(tempfile.gettempdir()) if tmp is None else tmp
     res = []
     result = namedtuple("Result", res_col_names)
-
+    all_top_hits = []
     hmmpress([hmm for hmm_list in hmms.values() for hmm in hmm_list], tmp / 'hmm_db')
     with HMMFile(tmp / "hmm_db") as hmm_db:
         models = hmm_db.optimized_profiles()
-        if tblout:
-            tbl = open(f"hmmscan_{name}.tbl", "wb")
-        if domtblout:
-            domtbl = open(f"hmmscan_{name}.domtbl", "wb")
-        if pfamtblout:
-            pfamtbl = open(f"hmmscan_{name}.pfamtbl", "wb")
-        header = True
         logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
         with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
             options = {"Z": sum(len(hmm_list) for hmm_list in hmms.values())}
@@ -303,33 +296,17 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
                 if cutoff != "other":
                     options["bit_cutoffs"] = cutoff
             for top_hits in hmmscan(gf_sequences, models, cpus=threads, callback=hmmscan_callback, **options):
-                if tblout:
-                    top_hits.write(tbl, format="targets", header=header)
-                if domtblout:
-                    top_hits.write(domtbl, format="domains", header=header)
-                if pfamtblout:
-                    top_hits.write(pfamtbl, format="pfam", header=header)
-                header = False
+                all_top_hits.append(top_hits)
                 for hit in top_hits:
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
-        if tblout:
-            logging.getLogger("PANORAMA").info(f"Per-sequence hits save to file: {tbl.name}")
-            tbl.close()
-        if domtblout:
-            logging.getLogger("PANORAMA").info(f"Per-domain hits save to file: {domtbl.name}")
-            domtbl.close()
-        if pfamtblout:
-            logging.getLogger("PANORAMA").info(f"hits and domains save to file: {pfamtbl.name}")
-            pfamtbl.close()
-    return res
+    return res, all_top_hits
 
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         tblout: bool = False, domtblout: bool = False, pfamtblout: bool = False,
-                         name: str = 'panorama',  threads: int = 1,
-                         disable_bar: bool = False) -> List[Tuple[str, str, str, float, float, float, str, str]]:
+                         threads: int = 1, disable_bar: bool = False
+                         ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -355,39 +332,61 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
     logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMSearch")
     with tqdm(total=sum(len(hmm_list) for hmm_list in hmms.values()), unit="hmm",
               desc="Align target to HMM", disable=disable_bar) as bar:
-        if tblout:
-            tbl = open(f"hmmsearch_{name}.tbl", "wb")
-        if domtblout:
-            domtbl = open(f"hmmsearch_{name}.domtbl", "wb")
-        if pfamtblout:
-            pfamtbl = open(f"hmmsearch_{name}.pfamtbl", "wb")
-        header = True
+        all_top_hits = []
         for cutoff, hmm_list in hmms.items():
             options = {}
             if cutoff != "other":
                 options["bit_cutoffs"] = cutoff
             for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
-                if tblout:
-                    top_hits.write(tbl, format="targets", header=header)
-                if domtblout:
-                    top_hits.write(domtbl, format="domains", header=header)
-                if pfamtblout:
-                    top_hits.write(pfamtbl, format="pfam", header=header)
-                header = False
+                all_top_hits.append(top_hits)
                 for hit in top_hits:
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
+    return res, all_top_hits
+
+
+def write_top_hits(all_top_hits: List[TopHits], output: Path, source: str, tblout: bool = False,
+                   domtblout: bool = False, pfamtblout: bool = False, name: str = 'panorama', mode: str = "fast"):
+    """
+    Write the pyhmmer hits in the designated format
+
+    Args:
+        all_top_hits: List of all pyhmmer hits
+        output: Path to the output directory to write hits results
+        source: name of the annotation source
+        mode: Specify which methods use to align families to HMM
+        tblout: Flag to write pyhmmer results in tabular format
+        pfamtblout: Flag to write pyhmmer results in Pfam tabular format
+        domtblout: Flag to write pyhmmer results with domain tabular format
+        name: Name of the pangenome
+    """
+
+    header = True
+    tbl, domtbl, pfamtbl = None, None, None
+    if tblout:
+        tbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.tbl", "wb")
+    if domtblout:
+        domtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.domtbl", "wb")
+    if pfamtblout:
+        pfamtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.pfamtbl", "wb")
+    for top_hits in all_top_hits:
         if tblout:
-            logging.getLogger("PANORAMA").info(f"Per-sequence hits save to file: {tbl.name}")
-            tbl.close()
+            top_hits.write(tbl, format="targets", header=header)
         if domtblout:
-            logging.getLogger("PANORAMA").info(f"Per-domain hits save to file: {domtbl.name}")
-            domtbl.close()
+            top_hits.write(domtbl, format="domains", header=header)
         if pfamtblout:
-            logging.getLogger("PANORAMA").info(f"hits and domains save to file: {pfamtbl.name}")
-            pfamtbl.close()
-    return res
+            top_hits.write(pfamtbl, format="pfam", header=header)
+        header = False
+    if tblout:
+        logging.getLogger("PANORAMA").info(f"Per-sequence hits save to file: {tbl.name}")
+        tbl.close()
+    if domtblout:
+        logging.getLogger("PANORAMA").info(f"Per-domain hits save to file: {domtbl.name}")
+        domtbl.close()
+    if pfamtblout:
+        logging.getLogger("PANORAMA").info(f"hits and domains save to file: {pfamtbl.name}")
+        pfamtbl.close()
 
 
 def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, str]], mode: str = "fast",
@@ -423,9 +422,9 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
     return metadata_df
 
 
-def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None,
-                   mode: str = "fast", msa: Path = None, msa_format: str = "afa",
-                   tblout: bool = False, domtblout: bool = False, pfamtblout: bool = False,
+def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None, source: str = "",
+                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", tblout: bool = False,
+                   domtblout: bool = False, pfamtblout: bool = False, output: Path = None,
                    threads: int = 1, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
     Takes a pangenome and a list of HMMs as input, and returns the best hit for each gene family in the pangenome.
@@ -434,9 +433,14 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         pangenome: Pangenome with gene families
         hmms: Specify the hmm profiles to be used for annotation
         meta: Store the metadata of the hmms
+        source: name of the annotation source
         mode: Specify which methods use to align families to HMM
         msa: Path to a msa file listing the gene families and their msa
         msa_format: Specify the format of the msa file
+        tblout: Flag to write pyhmmer results in tabular format
+        pfamtblout: Flag to write pyhmmer results in Pfam tabular format
+        domtblout: Flag to write pyhmmer results with domain tabular format
+        output: Path to the output directory to write hits results
         threads: Number of available threads
         tmp: Temporary directory to store pressed HMM database
         disable_bar: bool: Disable the progress bar
@@ -452,18 +456,19 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         Make the possibility to use the profile with the profile mode
     """
     assert mode in ["sensitive", "fast", "profile"], f"Unrecognized mode: {mode}"
+    if (tblout or domtblout or pfamtblout) and output is None:
+        raise AssertionError("Output path must be specified to save hits")
     gene2family = None
     if mode == "sensitive":
         sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, disable_bar)
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res = annot_with_hmmsearch(hmms, sequences.read_block(), meta, tblout, domtblout, pfamtblout,
-                                       pangenome.name, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, meta, tblout, domtblout, pfamtblout,
-                                     pangenome.name, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+
     else:
         if mode == "profile":
             if msa is not None:
@@ -474,16 +479,18 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
             if msa_df.shape[0] != pangenome.number_of_gene_families:
                 raise ValueError("The number of msa files does not match the number of gene families")
             profile_gfs(pangenome, msa_df, msa_format, threads, disable_bar)
+
         # Here either we have profiled our gene family or we will use the referent sequences
         sequences, fit_memory = digit_family_sequences(pangenome, disable_bar=disable_bar)
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
             sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
-            res = annot_with_hmmsearch(hmms, sequence_block, meta, tblout, domtblout, pfamtblout,
-                                       pangenome.name, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res = annot_with_hmmscan(hmms, sequences, meta, tblout, domtblout, pfamtblout,
-                                     pangenome.name, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+
+    if tblout or domtblout or pfamtblout:
+        write_top_hits(all_top_hits, output, source, tblout, domtblout, pfamtblout, pangenome.name, mode)
     metadata_df = get_metadata_df(res, mode, gene2family)
     return metadata_df

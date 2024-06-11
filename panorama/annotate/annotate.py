@@ -18,7 +18,7 @@ import pandas as pd
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries
-from panorama.utils import init_lock
+from panorama.utils import init_lock, mkdir
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
 from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
@@ -95,6 +95,10 @@ def check_parameter(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
                 args.k_best_hit = 1
 
         if args.save_hits is not None:
+            if args.output is None:
+                raise argparse.ArgumentError(argument=None, message="--output is required to save hits results.")
+            else:
+                hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
             if 'tblout' in args.save_hits:
                 hmm_kwgs["tblout"] = True
             if 'domtblout' in args.save_hits:
@@ -246,14 +250,15 @@ def write_annotations_to_pangenomes(pangenomes: Pangenomes, pangenomes2metadata:
                 future.result()
 
 
-def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: str = "fast", threads: int = 1,
-                              disable_bar: bool = False, **hmm_kwgs) -> Dict[str, pd.DataFrame]:
+def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, source: str = "", mode: str = "fast",
+                              threads: int = 1, disable_bar: bool = False, **hmm_kwgs) -> Dict[str, pd.DataFrame]:
     """
     Main function to add annotation to pangenome from tsv file
 
     Args:
         pangenomes: Pangenomes object containing all the pangenome to annotate
         hmm: Path to hmm list file
+        source: Name of the annotation source
         mode: Which mode to use to annotate gene families with HMM
         threads: Number of available threads
         disable_bar: Flag to disable progress bar
@@ -271,7 +276,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, mode: st
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
-        pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, mode, threads=threads,
+        pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, source, mode, threads=threads,
                                                          disable_bar=disable_bar, **hmm_kwgs)
 
     return pangenome2annot
@@ -289,6 +294,7 @@ def annot_pangenomes(pangenomes: Pangenomes, source: str = None, table: Path = N
         table: Path to metadata file for gene families annotation
         hmm: Path to hmm list file
         threads: Number of available threads
+        k_best_hit: Number of best hits to keep
         lock: Lock for multiprocessing
         force: Flag to allow force overwrite in pangenomes
         disable_bar: Flag to disable progress bar
@@ -301,7 +307,7 @@ def annot_pangenomes(pangenomes: Pangenomes, source: str = None, table: Path = N
     if table is not None:
         pangenomes2metadata = read_families_metadata_mp(pangenomes, table, threads, disable_bar)
     else:  # hmm is not None:
-        pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, threads=threads,
+        pangenomes2metadata = annot_pangenomes_with_hmm(pangenomes, hmm, source, threads=threads,
                                                         disable_bar=disable_bar, **hmm_kwgs)
     write_annotations_to_pangenomes(pangenomes, pangenomes2metadata, source, k_best_hit,
                                     threads, lock, force, disable_bar)
@@ -390,6 +396,8 @@ def parser_annot(parser):
     hmm_param.add_argument("--save_hits", required=False, type=str, default=None, nargs='*',
                            choices=['tblout', 'domtblout', 'pfamtblout'],
                            help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
+    hmm_param.add_argument("-o", "--output", required=False, type=Path, nargs='?',
+                           help="Output directory to write HMM results")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads.")
