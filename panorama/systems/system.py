@@ -3,7 +3,7 @@
 
 # default libraries
 from __future__ import annotations
-from typing import List, Set, Union, Generator
+from typing import Dict, List, Set, Union, Generator
 
 # installed libraries
 import networkx as nx
@@ -26,8 +26,8 @@ class System(MetaFeatures):
     :param gene_families: source accesion identifier
     """
 
-    def __init__(self, system_id: Union[str, int], model: Model, source: str,
-                 gene_families: Set[GeneFamily] = None, families_source: List[str] = None):
+    def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None,
+                 families_source: List[str] = None, families_to_metadata_id: Dict[GeneFamily, int] = None):
         """Constructor Method
         """
         self.ID = system_id if isinstance(system_id, str) else str(system_id)
@@ -35,15 +35,19 @@ class System(MetaFeatures):
         self.system_source = source
         self.families_sources = families_source if families_source is not None else [source]
         self._families_getter = {}
-        self.canonical = set()
-        if gene_families is not None:
-            for family in gene_families:
-                self.add_family(family)
+        self._families2metadata_id = {}
         self._models_families = None
         self._graph = None
         self._regions_getter = {}
         self._spots_getter = {}
         self._modules_getter = {}
+        self.canonical = set()
+        if gene_families is not None:
+            for family in gene_families:
+                meta_id = 0
+                if families_to_metadata_id is not None:
+                    meta_id = families_to_metadata_id[family] if family in families_to_metadata_id else 0
+                self.add_family(family, meta_id)
 
     def __hash__(self) -> int:
         """Create a hash value for the region
@@ -191,9 +195,13 @@ class System(MetaFeatures):
             system.ID = f"{self.ID}.{chr(97 + len(self.canonical))}"
             self.canonical.add(system)
 
-    def add_family(self, gene_family: GeneFamily):
+    def add_family(self, gene_family: GeneFamily, metadata_id: int = 0):
         assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"
         self._families_getter[gene_family.name] = gene_family
+        self._families2metadata_id[gene_family] = metadata_id
+
+    def get_metadata_id(self, gene_family: GeneFamily):
+        return self._families2metadata_id[gene_family]
 
     def is_subset(self, system: System):
         """Check if another system is subset of this one

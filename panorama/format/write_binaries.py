@@ -32,7 +32,8 @@ def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_canonical_len: i
         "ID": tables.StringCol(itemsize=max_id_len),
         "name": tables.StringCol(itemsize=max_name_len),
         "canonical": tables.StringCol(itemsize=max_canonical_len),
-        "geneFam": tables.StringCol(itemsize=max_gf_name_len)
+        "geneFam": tables.StringCol(itemsize=max_gf_name_len),
+        "metadata_id": tables.Int64Col()
     }
 
 
@@ -93,6 +94,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                 source_row["ID"] = system.ID
                 source_row["name"] = system.name
                 source_row["geneFam"] = gf.name
+                source_row["metadata_id"] = system.get_metadata_id(gf)
                 source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
                 source_row.append()
             progress.update()
@@ -101,6 +103,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                     source_row["geneFam"] = gf.name
                     source_row["ID"] = canonical.ID
                     source_row["name"] = canonical.name
+                    source_row["metadata_id"] = system.get_metadata_id(gf)
                     source_row.append()
                 progress.update()
     source_table.flush()

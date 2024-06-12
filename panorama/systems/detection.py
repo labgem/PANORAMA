@@ -92,7 +92,7 @@ def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict
         for gf in pangenome.gene_families:
             metadata = gf.get_metadata_by_source(source)
             if metadata is not None:
-                for meta in metadata:
+                for meta in metadata.values():
                     annot2fam[meta.protein_name].add(gf)
     return annot2fam
 
@@ -135,6 +135,15 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
     """
     def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
+        """
+        Get the set of genes of the gene family that are in organisms of interest
+
+        Args:
+            family: The gene family to search genes
+
+        Returns:
+            The set of genes of the gene family that are in organisms of interest
+        """
         if family.name not in fam2genes_in_orgs:
             family_genes_in_orgs = {gene for gene in family.genes if gene.organism in organisms_of_interest}
             fam2genes_in_orgs[family.name] = family_genes_in_orgs
@@ -205,7 +214,7 @@ def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Set[Fami
 
 
 def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
-                     func_unit: FuncUnit) -> bool:
+                     func_unit: FuncUnit, source: str) -> Tuple[bool, Dict[GeneFamily, int]]:
     """
     Check if presence/absence rules for needed families are respected
 
@@ -213,6 +222,7 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
         families: set of families
         fam2annot: link between gene family and annotation
         func_unit: functional unit
+        source: Name of the source to search system
 
     Returns:
         Boolean true if parameter respected
@@ -220,27 +230,36 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
     count_mandatory, count_total = (0, 0)
     mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
                                       list(map(lambda x: x.name, func_unit.accessory)))
+
+    families2metadata_id = {}
     for node in sorted(families, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
         annots = fam2annot.get(node.name, [])
         for annot in annots:
             if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                for meta_id, metadata in node.get_metadata_by_source(source).items():
+                    if metadata.protein_name == annot.name:
+                        families2metadata_id[node] = meta_id
                 count_mandatory += 1
                 count_total += 1
                 mandatory_list.remove(annot.name)
                 break
             elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                for meta_id, metadata in node.get_metadata_by_source(source).items():
+                    if metadata.protein_name == annot.name:
+                        families2metadata_id[node] = meta_id
                 count_total += 1
                 accessory_list.remove(annot.name)
                 break
+
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
         if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
                 (func_unit.max_total >= count_total or func_unit.max_total == -1):
-            return True
+            return True, families2metadata_id
         else:
-            return False
+            return False, families2metadata_id
     else:
-        return False
+        return False, families2metadata_id
 
 
 def get_subcombinations(combi: Set[GeneFamily],
@@ -269,6 +288,7 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
         func_unit: One functional unit corresponding to the model
         source: Name of the source
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
+        combinations: List of families combination known to exist in genomes.
 
     Returns:
         A set of all detected systems in the graph
@@ -276,16 +296,18 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
     detected_systems = []
     while len(combinations) > 0:
         families_combination = set(combinations.pop(0))
-        if check_for_needed(families_combination, fam2annot, func_unit):
+        check_needed, _ = check_for_needed(families_combination, fam2annot, func_unit, source)
+        if check_needed:
             if not check_for_forbidden(families_combination, fam2annot, func_unit):
                 local_graph = graph.copy()
                 local_graph.remove_nodes_from(families.difference(families_combination))
                 filter_local_context(local_graph, families_combination, jaccard_threshold)
                 for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
                     cc: Set[GeneFamily]
-                    if check_for_needed(cc, fam2annot, func_unit) and not check_for_forbidden(cc, fam2annot, func_unit):
-                        detected_systems.append(System(system_id=0, model=func_unit.model,
-                                                       gene_families=cc, source=source))
+                    check_needed, fam2meta_id = check_for_needed(cc, fam2annot, func_unit, source)
+                    if check_needed and not check_for_forbidden(cc, fam2annot, func_unit):
+                        detected_systems.append(System(system_id=0, model=func_unit.model, gene_families=cc,
+                                                       source=source, families_to_metadata_id=fam2meta_id))
                         get_subcombinations(cc.intersection(families_combination), combinations)
         else:
             # We can remove all sub combinations because the bigger one does not have the needed
@@ -297,6 +319,21 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
 def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
                              func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
                              combinations: List[FrozenSet[GeneFamily]] = None) -> List[System]:
+    """
+    Search systems corresponding to model in a pangenomic context
+
+    Args:
+        graph: A graph with families in a pangenomic context
+        families: A set of families that code for the searched model
+        fam2annot: A dictionary to link gene families to their annotation
+        func_unit: One functional unit corresponding to the model
+        source: Name of the source
+        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
+        combinations: Known existing combination of families that code for the searched model
+
+    Returns:
+        List of detected systems in the pangenomic context
+    """
     detected_systems = []
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
@@ -332,7 +369,8 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
     families, fam2annot = dict_families_context(model, annot2fam)
     for func_unit in model.func_units:
         fu_families = {fam for fam in families if any(annot in func_unit.families for annot in fam2annot[fam.name])}
-        if check_for_needed(fu_families, fam2annot, func_unit):
+        check_needed, _ = check_for_needed(fu_families, fam2annot, func_unit, source)
+        if check_needed:
             t = func_unit.max_separation + 1
             context, combinations2orgs = compute_gene_context_graph(families=families, transitive=t,
                                                                     window_size=t + 1, disable_bar=True)
