@@ -15,13 +15,14 @@ import tempfile
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
+from numpy import nan
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries
 from panorama.utils import init_lock, mkdir
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
-from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
+from panorama.annotate.hmm_search import read_hmms, annot_with_hmm, res_col_names
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
@@ -174,6 +175,27 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
                 results[res[1]] = res[0]
     return results
 
+def get_k_best_hit(group, k_best_hit: int):
+    """Get the K_best_hit for a given group in dataframe
+
+    Args:
+        group: Dataframe group
+        k_best_hit: number of best hits to keep
+
+    Returns:
+        K_best_hit per group
+    """
+    return group.nlargest(k_best_hit, columns=['score', 'bias', 'e_value'])
+
+
+def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
+    logging.getLogger("PANORAMA").debug("Remove duplicate hits and keep the best score")
+    metadata_df = metadata.sort_values(by=['score', 'e_value', 'bias'], ascending=[False, True, False])
+    group = metadata_df.groupby(["families", "protein_name"])
+    metadata_df = group.first().assign(secondary_name=group.agg({"secondary_name": lambda x: ",".join(set(x.dropna()))}).replace("", nan))
+    metadata_df = metadata_df.reset_index()
+    return metadata_df
+
 
 def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
     """
@@ -186,19 +208,8 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Filtered metadata dataframe with only the k best hit
     """
-    def get_k_best_hit(group):
-        """Get the K_best_hit for a given group in dataframe
-
-        Args:
-            group: Dataframe group
-
-        Returns:
-            K_best_hit per group
-        """
-        return group.nlargest(k_best_hit, columns=['score', 'bias', 'e_value'])
-
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
-    return metadata.groupby(['families'], group_keys=False).apply(get_k_best_hit)
+    return metadata.groupby(['families'], group_keys=False).apply(get_k_best_hit, k_best_hit)
 
 
 def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame, source: str, k_best_hit: int = None,
@@ -214,7 +225,12 @@ def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame,
         force: Boolean to allow force write in pangenomes
         disable_bar: Allow to disable progress bar
     """
-    meta_df = keep_best_hit(metadata, k_best_hit) if k_best_hit is not None else metadata
+
+    logging.getLogger("PANORAMA").debug(f"Remove duplicate hits and keep the best score")
+    meta_df = remove_redundant_annotation(metadata)
+    if k_best_hit is not None:
+        meta_df = keep_best_hit(meta_df, k_best_hit)
+    meta_df = meta_df.sort_values(by=['score', 'e_value', 'bias'], ascending=[False, True, False])
     assign_metadata(meta_df, pangenome, source, "families", omit=True, disable_bar=disable_bar)
     write_pangenome(pangenome, pangenome.file, force=force, disable_bar=disable_bar)
 

@@ -418,7 +418,7 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
         metadata_df = metadata_df.sort_values(by=['score', 'e_value', 'bias'], ascending=[False, True, False])
         group = metadata_df.groupby(["families", "protein_name"])
         metadata_df = group.first().assign(
-            protection=group.agg({"secondary_name": lambda x: ",".join(x.dropna())}).replace("", nan)).reset_index()
+            secondary_name=group.agg({"secondary_name": lambda x: ",".join(x.dropna())}).replace("", nan)).reset_index()
     return metadata_df
 
 
