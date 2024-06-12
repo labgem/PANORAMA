@@ -94,6 +94,9 @@ def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict
             if metadata is not None:
                 for meta in metadata.values():
                     annot2fam[meta.protein_name].add(gf)
+                    if "secondary_name" in meta.fields:
+                        for secondary_name in meta.secondary_name.split(','):
+                            annot2fam[secondary_name].add(gf)
     return annot2fam
 
 
@@ -237,7 +240,8 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
         for annot in annots:
             if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
                 for meta_id, metadata in node.get_metadata_by_source(source).items():
-                    if metadata.protein_name == annot.name:
+                    if metadata.protein_name == annot.name or \
+                            ("secondary_name" in metadata.fields and annot.name in metadata.secondary_name.split(",")):
                         families2metadata_id[node] = meta_id
                 count_mandatory += 1
                 count_total += 1

@@ -175,6 +175,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
                 results[res[1]] = res[0]
     return results
 
+
 def get_k_best_hit(group, k_best_hit: int):
     """Get the K_best_hit for a given group in dataframe
 
@@ -189,10 +190,12 @@ def get_k_best_hit(group, k_best_hit: int):
 
 
 def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
+    """Remove redundant annotation based on """
     logging.getLogger("PANORAMA").debug("Remove duplicate hits and keep the best score")
     metadata_df = metadata.sort_values(by=['score', 'e_value', 'bias'], ascending=[False, True, False])
     group = metadata_df.groupby(["families", "protein_name"])
-    metadata_df = group.first().assign(secondary_name=group.agg({"secondary_name": lambda x: ",".join(set(x.dropna()))}).replace("", nan))
+    metadata_df = group.first().assign(
+        secondary_name=group.agg({"secondary_name": lambda x: ",".join(set(x.dropna()))}).replace("", nan))
     metadata_df = metadata_df.reset_index()
     return metadata_df
 
@@ -226,7 +229,7 @@ def write_annotations_to_pangenome(pangenome: Pangenome, metadata: pd.DataFrame,
         disable_bar: Allow to disable progress bar
     """
 
-    logging.getLogger("PANORAMA").debug(f"Remove duplicate hits and keep the best score")
+    logging.getLogger("PANORAMA").debug("Remove duplicate hits and keep the best score")
     meta_df = remove_redundant_annotation(metadata)
     if k_best_hit is not None:
         meta_df = keep_best_hit(meta_df, k_best_hit)
@@ -420,4 +423,4 @@ def parser_annot(parser):
     optional.add_argument("--keep_tmp", required=False, action='store_true',
                           help="Keep the temporary files. Useful for debugging in sensitive or profile mode.")
     optional.add_argument("--tmp", required=False, nargs='?', type=Path, default=None,
-                          help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir())/'panorama'}")
+                          help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir()) / 'panorama'}")

@@ -88,25 +88,30 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     source_table = h5f.create_table(systems_group, source, description=system_desc(*system_len[:-1]),
                                     expectedrows=system_len[-1])
     source_row = source_table.row
-    with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
-        for system in pangenome.systems:
-            for gf in system.families:
-                source_row["ID"] = system.ID
-                source_row["name"] = system.name
-                source_row["geneFam"] = gf.name
-                source_row["metadata_id"] = system.get_metadata_id(gf)
-                source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
-                source_row.append()
-            progress.update()
-            for canonical in system.canonical:
-                for gf in canonical.families:
+    try:
+        with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
+            for system in pangenome.systems:
+                for gf in system.families:
+                    source_row["ID"] = system.ID
+                    source_row["name"] = system.name
                     source_row["geneFam"] = gf.name
-                    source_row["ID"] = canonical.ID
-                    source_row["name"] = canonical.name
                     source_row["metadata_id"] = system.get_metadata_id(gf)
+                    source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
                     source_row.append()
                 progress.update()
-    source_table.flush()
+                for canonical in system.canonical:
+                    for gf in canonical.families:
+                        source_row["geneFam"] = gf.name
+                        source_row["ID"] = canonical.ID
+                        source_row["name"] = canonical.name
+                        source_row["metadata_id"] = canonical.get_metadata_id(gf)
+                        source_row.append()
+                    progress.update()
+    except Exception as exc:
+        h5f.remove_node(systems_group, source)
+        raise exc
+    else:
+        source_table.flush()
 
 
 def write_status(pangenome: Pangenome, h5f: tables.File):
