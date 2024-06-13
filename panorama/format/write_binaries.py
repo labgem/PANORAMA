@@ -3,7 +3,7 @@
 
 # default libraries
 import logging
-
+from typing import Tuple
 # installed libraries
 import tables
 from tqdm import tqdm
@@ -12,73 +12,96 @@ from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pang
 from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pangenome
 
 # local libraries
-from panorama.systems.system import System
 from panorama.pangenomes import Pangenome
 
 
-def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_canonical_len: int = 1,
-                max_gf_name_len: int = 1) -> dict:
+def system_desc(max_id_len: int = 1, max_name_len: int = 1,  max_gf_name_len: int = 1,
+                max_metadata_source: int = 1, max_canonical_len: int = 1,) -> dict:
     """
-    Create a formated table for detected systems in pangenome
-    :param max_name_len:
-    :param max_accession_len:
-    :param max_secondary_names_len:
-    :param max_description_len:
-    :param max_gf_name_len:
 
-    :return: Formated table
+    Args:
+        max_id_len: Maximum size of system name
+        max_name_len: Maximum size of gene family name
+        max_gf_name_len: Maximum size of gene family name
+        max_metadata_source: Maximum size of annotation source name
+        max_canonical_len: Maximum size of canonicals name
+
+    Returns:
+        Formated table
     """
     return {
         "ID": tables.StringCol(itemsize=max_id_len),
         "name": tables.StringCol(itemsize=max_name_len),
         "canonical": tables.StringCol(itemsize=max_canonical_len),
         "geneFam": tables.StringCol(itemsize=max_gf_name_len),
-        "metadata_id": tables.Int64Col()
+        "metadata_id": tables.Int64Col(),
+        "metadata_source": tables.StringCol(itemsize=max_metadata_source),
     }
 
 
-def get_system_len(pangenome: Pangenome, source: str) -> (int, int):
+def get_system_len(pangenome: Pangenome, source: str) -> Tuple[int, int, int, int, int, int]:
     """
     Get maximum size of gene families information
-    :param select_gf: selected gene families from source
-    :param source: Name of the annotation source
-    :return: Maximum size of each element
-    """
+    Args:
+        pangenome: Pangenome filled with systems
+        source: Name of the system source
 
-    def compare_len(system: System, max_id_len, max_name_len, max_gf_name_len):
+    Returns:
+        Maximum size of each element
+    """
+    def compare_len(max_id_len, max_name_len, max_gf_name_len, max_annot_source_len) -> Tuple[int, int, int, int]:
+        """
+        Compare the length of elements to known maximum
+
+        Args:
+            max_id_len: Maximum size of the system identifier
+            max_name_len: Maximum size of system name
+            max_gf_name_len: Maximum size of gene family name
+            max_annot_source_len: Maximum size of annotation source name
+
+        Returns:
+            Maximum length of each element
+        """
+
         if len(system.ID) > max_id_len:
             max_id_len = len(system.name)
         if len(system.name) > max_name_len:
             max_name_len = len(system.name)
+        for annot_source in system.annotation_sources():
+            if len(annot_source) > max_annot_source_len:
+                max_annot_source_len = len(annot_source)
         for gf in system.families:
             if len(gf.name) > max_gf_name_len:
                 max_gf_name_len = len(gf.name)
-        return max_id_len, max_name_len, max_gf_name_len
+        return max_id_len, max_name_len, max_gf_name_len, max_annot_source_len
 
-    max_id_len, max_name_len, max_canonical_len, max_gf_name_len, expected_rows = (1, 1, 1, 1, 0)
+    max_len = (1, 1, 1, 1)
+    max_canonical_len = 1
+    expected_rows = 0
 
     for system in pangenome.get_system_by_source(source):
-        max_id_len, max_name_len, max_gf_name_len = compare_len(system, max_id_len, max_name_len, max_gf_name_len)
+        max_len = compare_len(system, *max_len)
         canonical_name_len = 0
         for canonical in system.canonical:
             canonical_name_len += len(canonical.name)
-            max_id_len, max_name_len, max_gf_name_len = compare_len(canonical, max_id_len,
-                                                                    max_name_len, max_gf_name_len)
+            max_len = compare_len(canonical, *max_len)
             expected_rows += len(canonical)
         if canonical_name_len > max_canonical_len:
             max_canonical_len = canonical_name_len + len(system.canonical) - 1
         expected_rows += len(system)
 
-    return max_id_len, max_name_len, max_canonical_len, max_gf_name_len, expected_rows
+    return *max_len, max_canonical_len, expected_rows
 
 
 def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_bar: bool = False):
     """
     Writing a table containing all systems detected in pangenome
 
-    :param pangenome: Pangenome with gene families computed
-    :param h5f: HDF5 file to write gene families
-    :param disable_bar: Disable progress bar
+   Args:
+        pangenome: Pangenome with systems detected
+        h5f: HDF5 file to write systems
+        source: source of the systems
+        disable_bar: Flag to disable progress bar
     """
     if '/systems' not in h5f:
         systems_group = h5f.create_group("/", "systems", "Detected systems")
@@ -95,7 +118,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                     source_row["ID"] = system.ID
                     source_row["name"] = system.name
                     source_row["geneFam"] = gf.name
-                    source_row["metadata_id"] = system.get_metadata_id(gf)
+                    source_row["metadata_source"], source_row["metadata_id"] = system.get_metainfo(gf)
                     source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
                     source_row.append()
                 progress.update()
@@ -104,7 +127,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                         source_row["geneFam"] = gf.name
                         source_row["ID"] = canonical.ID
                         source_row["name"] = canonical.name
-                        source_row["metadata_id"] = canonical.get_metadata_id(gf)
+                        source_row["metadata_source"], source_row["metadata_id"] = canonical.get_metainfo(gf)
                         source_row.append()
                     progress.update()
     except Exception as exc:
@@ -135,17 +158,20 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
                     rgp: bool = False, spots: bool = False, modules: bool = False, metadata: bool = False,
                     systems: bool = False, source: str = None):
     """
-        Erases tables from a pangenome .h5 file
-        :param pangenome: Pangenome
-        :param graph: remove graph information
-        :param gene_families: remove gene families information
-        :param partition: remove partition information
-        :param rgp: remove rgp information
-        :param spots: remove spots information
-        :param modules: remove modules information
-        :param annotations: remove annotation
-        :param source: annotation source
-        """
+    Erases tables from a pangenome .h5 file
+
+    Args:
+        pangenome: Pangenome to erase information
+        graph: remove graph information
+        gene_families: remove gene families information
+        partition: remove partition information
+        rgp: remove rgp information
+        spots: remove spots information
+        modules: remove modules information
+        metadata: remove metadata
+        systems: remove systems
+        source: source of system or metadata
+    """
 
     h5f = tables.open_file(pangenome.file, "a")
     status_group = h5f.root.status
@@ -173,10 +199,12 @@ def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
     """
     Writes or updates a pangenome file
 
-    :param pangenome: pangenome object
-    :param file_path: HDF5 file to save pangenome if not given the original file is used
-    :param disable_bar: Allow to disable progress bar
-    :param source: annotation source
+    Args:
+        pangenome: Pangenome object to write in file
+        file_path: HDF5 file to save pangenome if not given the original file is used
+        source: source of systems or metadata
+        force: Flag to force overwrite
+        disable_bar: Flag to disable progress bar
     """
     super_write_pangenome(pangenome, file_path, force, disable_bar)
 

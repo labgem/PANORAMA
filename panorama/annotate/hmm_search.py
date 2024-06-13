@@ -195,7 +195,7 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[H
     hmms = defaultdict(list)
     hmm_df = pd.read_csv(hmm_db, delimiter="\t", names=meta_col_names,
                          dtype=meta_dtype, header=0).set_index('accession')
-    hmm_df['description'] = hmm_df["description"].fillna('unknown')
+    hmm_df['description'] = hmm_df["description"].fillna('')
     logging.getLogger("PANORAMA").info("Begin to read HMM...")
     for hmm_path in tqdm(map(lambda x: Path(x), hmm_df["path"]), total=hmm_df.shape[0],
                          desc="Reading HMM", unit='HMM', disable=disable_bar):

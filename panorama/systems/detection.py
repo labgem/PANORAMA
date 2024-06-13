@@ -76,7 +76,7 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_sources: List[str
                              "Please see the command annotation before to detect systems")
 
 
-def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict[str, Set[GeneFamily]]:
+def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
     """
     Get for each annotation a set of families with this annotation
 
@@ -87,21 +87,21 @@ def get_annotation_to_families(pangenome: Pangenome, sources: List[str]) -> Dict
     Returns:
         Dictionary with for each annotation a set of gene families
     """
-    annot2fam = defaultdict(set)
+    annot2fam = {source: defaultdict(set) for source in sources}
     for source in sources:
         for gf in pangenome.gene_families:
             metadata = gf.get_metadata_by_source(source)
             if metadata is not None:
                 for meta in metadata.values():
-                    annot2fam[meta.protein_name].add(gf)
+                    annot2fam[source][meta.protein_name].add(gf)
                     if "secondary_name" in meta.fields:
                         for secondary_name in meta.secondary_name.split(','):
-                            annot2fam[secondary_name].add(gf)
+                            annot2fam[source][secondary_name].add(gf)
     return annot2fam
 
 
-def dict_families_context(model: Model, annot2fam: Dict[str, Set[GeneFamily]]) \
-        -> Tuple[Set[GeneFamily], Dict[str, Set[Family]]]:
+def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
+        -> Tuple[Set[GeneFamily], Dict[str, Dict[str, Set[Family]]]]:
     """
     Recover all families in the function unit
 
@@ -114,17 +114,19 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Set[GeneFamily]]) \
         a dictionary which link families to their annotation for the functional unit
     """
     families = set()
-    fam2annot = defaultdict(set)
+    fam2annot = {source: defaultdict(set) for source in annot2fam.keys()}
     for fam_model in model.families:
-        if fam_model.name in annot2fam:
-            for gf in annot2fam[fam_model.name]:
-                families.add(gf)
-                fam2annot[gf.name].add(fam_model)
-        for exchangeable in fam_model.exchangeable:
-            if exchangeable in annot2fam:
-                for gf in annot2fam[exchangeable]:
+        for source, annotation2families in annot2fam.items():
+            if fam_model.name in annotation2families:
+                for gf in annotation2families[fam_model.name]:
                     families.add(gf)
-                    fam2annot[gf.name].add(fam_model)
+                    fam2annot[source][gf.name].add(fam_model)
+        for exchangeable in fam_model.exchangeable:
+            for source, annotation2families in annot2fam.items():
+                if exchangeable in annotation2families:
+                    for gf in annotation2families[exchangeable]:
+                        families.add(gf)
+                        fam2annot[source][gf.name].add(fam_model)
     return families, fam2annot
 
 
@@ -137,6 +139,7 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         families: list of families that code for the system
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
     """
+
     def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
         """
         Get the set of genes of the gene family that are in organisms of interest
@@ -189,7 +192,24 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
     graph.remove_edges_from(edges2remove)
 
 
-def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
+def get_number_of_annotation(family: GeneFamily, fam2annot: Dict[str, Dict[str, Set[Family]]]) -> int:
+    """
+    Get the cumulative number of annotation from all annotation sources
+
+    Args:
+        family: the family to search annotation
+        fam2annot: link between gene family and annotation
+
+    Returns: number of annotation from all annotation sources
+    """
+    annotation_len = 0
+    for annot_source in fam2annot.keys():
+        if family.name in fam2annot[annot_source]:
+            annotation_len += len(fam2annot[annot_source])
+    return annotation_len
+
+
+def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Dict[str, Set[Family]]],
                         func_unit: FuncUnit) -> bool:
     """
     Check if there is forbidden in families.
@@ -204,20 +224,25 @@ def check_for_forbidden(families: Set[GeneFamily], fam2annot: Dict[str, Set[Fami
     """
     count_forbidden = 0
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
-    for node in sorted(families, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
-        annots = fam2annot.get(node.name, [])
-        for annot in annots:
-            if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
-                count_forbidden += 1
-                forbidden_list.remove(annot.name)
-                if count_forbidden > func_unit.max_forbidden:
-                    return True
+    for node in sorted(families, key=lambda n: get_number_of_annotation(n, fam2annot)):
+        source2annots = {annot_source: fam2annot[annot_source].get(node.name, []) for annot_source in fam2annot.keys()}
+        for annot_source, annots in source2annots.items():
+            assign = False
+            for annot in annots:
+                if annot.presence == 'forbidden' and annot.name in forbidden_list:  # if node is forbidden
+                    count_forbidden += 1
+                    forbidden_list.remove(annot.name)
+                    assign = True
+                    if count_forbidden > func_unit.max_forbidden:
+                        return True
+                    break
+            if assign:
                 break
     return False
 
 
-def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
-                     func_unit: FuncUnit, source: str) -> Tuple[bool, Dict[GeneFamily, int]]:
+def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Dict[str, Set[Family]]],
+                     func_unit: FuncUnit) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
     Check if presence/absence rules for needed families are respected
 
@@ -225,7 +250,6 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
         families: set of families
         fam2annot: link between gene family and annotation
         func_unit: functional unit
-        source: Name of the source to search system
 
     Returns:
         Boolean true if parameter respected
@@ -234,36 +258,47 @@ def check_for_needed(families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]
     mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
                                       list(map(lambda x: x.name, func_unit.accessory)))
 
-    families2metadata_id = {}
-    for node in sorted(families, key=lambda n: len(fam2annot.get(n.name)) if fam2annot.get(n.name) is not None else 0):
-        annots = fam2annot.get(node.name, [])
-        for annot in annots:
-            if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
-                for meta_id, metadata in node.get_metadata_by_source(source).items():
-                    if metadata.protein_name == annot.name or \
-                            ("secondary_name" in metadata.fields and annot.name in metadata.secondary_name.split(",")):
-                        families2metadata_id[node] = meta_id
-                count_mandatory += 1
-                count_total += 1
-                mandatory_list.remove(annot.name)
-                break
-            elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
-                for meta_id, metadata in node.get_metadata_by_source(source).items():
-                    if metadata.protein_name == annot.name:
-                        families2metadata_id[node] = meta_id
-                count_total += 1
-                accessory_list.remove(annot.name)
+    families2metainfo = {}
+    for node in sorted(families, key=lambda n: get_number_of_annotation(n, fam2annot)):
+        source2annots = {annot_source: fam2annot[annot_source].get(node.name, []) for annot_source in fam2annot.keys()}
+        for annot_source, annots in source2annots.items():
+            assign = False
+            for annot in annots:
+                if annot.presence == 'mandatory' and annot.name in mandatory_list:  # if node is mandatory
+                    for meta_id, metadata in node.get_metadata_by_source(annot_source).items():
+                        if metadata.protein_name == annot.name:
+                            families2metainfo[node] = (annot_source, meta_id)
+                        elif "secondary_name" in metadata.fields:
+                            if annot.name in metadata.secondary_name.split(","):
+                                families2metainfo[node] = (annot_source, meta_id)
+                    count_mandatory += 1
+                    count_total += 1
+                    mandatory_list.remove(annot.name)
+                    assign = True
+                    break
+                elif annot.presence == 'accessory' and annot.name in accessory_list:  # if node is accessory
+                    for meta_id, metadata in node.get_metadata_by_source(annot_source).items():
+                        if metadata.protein_name == annot.name:
+                            families2metainfo[node] = (annot_source, meta_id)
+                        elif "secondary_name" in metadata.fields:
+                            if annot.name in metadata.secondary_name.split(","):
+                                families2metainfo[node] = (annot_source, meta_id)
+                    count_total += 1
+                    accessory_list.remove(annot.name)
+                    assign = True
+                    break
+            if assign:
                 break
 
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
         if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
                 (func_unit.max_total >= count_total or func_unit.max_total == -1):
-            return True, families2metadata_id
+            return True, families2metainfo
         else:
-            return False, families2metadata_id
+            return False, families2metainfo
     else:
-        return False, families2metadata_id
+        return False, families2metainfo
 
 
 def get_subcombinations(combi: Set[GeneFamily],
@@ -280,7 +315,7 @@ def get_subcombinations(combi: Set[GeneFamily],
     return remove_combinations
 
 
-def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
+def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Dict[str, Set[Family]]],
                         func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
                         combinations: List[FrozenSet[GeneFamily]] = None) -> List[System]:
     """Search systems corresponding to model in a graph
@@ -300,7 +335,7 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
     detected_systems = []
     while len(combinations) > 0:
         families_combination = set(combinations.pop(0))
-        check_needed, _ = check_for_needed(families_combination, fam2annot, func_unit, source)
+        check_needed, _ = check_for_needed(families_combination, fam2annot, func_unit)
         if check_needed:
             if not check_for_forbidden(families_combination, fam2annot, func_unit):
                 local_graph = graph.copy()
@@ -308,10 +343,11 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
                 filter_local_context(local_graph, families_combination, jaccard_threshold)
                 for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
                     cc: Set[GeneFamily]
-                    check_needed, fam2meta_id = check_for_needed(cc, fam2annot, func_unit, source)
+                    check_needed, fam2metainfo = check_for_needed(cc, fam2annot, func_unit)
                     if check_needed and not check_for_forbidden(cc, fam2annot, func_unit):
-                        detected_systems.append(System(system_id=0, model=func_unit.model, gene_families=cc,
-                                                       source=source, families_to_metadata_id=fam2meta_id))
+                        detected_systems.append(System(system_id=0, model=func_unit.model, source=source,
+                                                       gene_families=cc, families_to_metainfo=fam2metainfo)
+                                                )
                         get_subcombinations(cc.intersection(families_combination), combinations)
         else:
             # We can remove all sub combinations because the bigger one does not have the needed
@@ -320,7 +356,7 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], fam2annot: D
     return detected_systems
 
 
-def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Set[Family]],
+def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2annot: Dict[str, Dict[str, Set[Family]]],
                              func_unit: FuncUnit, source: str, jaccard_threshold: float = 0.8,
                              combinations: List[FrozenSet[GeneFamily]] = None) -> List[System]:
     """
@@ -341,11 +377,12 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2ann
     detected_systems = []
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
-        families_in_cc = ({fam for fam in families
-                           if fam2annot[fam.name] not in list(map(lambda x: x.name, func_unit.neutral))}
-                          & cc_graph.nodes)
+        families_in_cc, neutral_families = get_functional_unit_families(func_unit, families, fam2annot)
+        families_in_cc &= cc_graph.nodes
+
         if len(families_in_cc) > 0:
             combinations_in_cc = get_subcombinations(families_in_cc, combinations)
+            families_in_cc |= neutral_families
             new_detected_systems = search_system_in_cc(cc_graph, families_in_cc, fam2annot,
                                                        func_unit, source, jaccard_threshold,
                                                        combinations=combinations_in_cc)
@@ -353,7 +390,36 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], fam2ann
     return detected_systems
 
 
-def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: str,
+def get_functional_unit_families(func_unit: FuncUnit, families: Set[GeneFamily],
+                                 fam2annot:  Dict[str, Dict[str, Set[Family]]]
+                                 ) -> Tuple[Set[GeneFamily], Set[GeneFamily]]:
+    """
+    Get the gene families that might be in the functional unit
+
+    Args:
+        func_unit: The functional unit to consider
+        families: Set of gene families that might be in the system
+        fam2annot: link between gene family and annotation
+
+    Returns:
+        gene families that code for the functional unit, the neutral families.
+    """
+    fu_families = set()
+    neutral_families = set()
+    for fam in families:
+        for source in fam2annot.keys():
+            if fam.has_source(source):
+                for annotation in fam2annot[source][fam.name]:
+                    if annotation in func_unit.neutral:
+                        neutral_families.add(fam)
+                        break
+                    elif annotation in func_unit.families:
+                        fu_families.add(fam)
+                        break
+    return fu_families, neutral_families
+
+
+def search_system(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]], source: str,
                   jaccard_threshold: float = 0.8) -> List[System]:
     """
     Search if model system is in pangenome
@@ -371,15 +437,17 @@ def search_system(model: Model, annot2fam: Dict[str, Set[GeneFamily]], source: s
     begin = time.time()
     detected_systems = []
     families, fam2annot = dict_families_context(model, annot2fam)
+
     for func_unit in model.func_units:
-        fu_families = {fam for fam in families if any(annot in func_unit.families for annot in fam2annot[fam.name])}
-        check_needed, _ = check_for_needed(fu_families, fam2annot, func_unit, source)
+        fu_families = set()
+        fu_families.update(*get_functional_unit_families(func_unit, families, fam2annot))
+        check_needed, _ = check_for_needed(fu_families, fam2annot, func_unit)
         if check_needed:
             t = func_unit.max_separation + 1
-            context, combinations2orgs = compute_gene_context_graph(families=families, transitive=t,
+            context, combinations2orgs = compute_gene_context_graph(families=fu_families, transitive=t,
                                                                     window_size=t + 1, disable_bar=True)
             combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
-            detected_systems += search_system_in_context(context, families, fam2annot, func_unit,
+            detected_systems += search_system_in_context(context, fu_families, fam2annot, func_unit,
                                                          source, jaccard_threshold, combinations)
     logging.getLogger("PANORAMA").debug(f"Done search for model {model.name} in {time.time() - begin} seconds")
     return detected_systems
