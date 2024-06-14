@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to write, update and erase a pangenome data from HDF5 files.
+"""
+
 # default libraries
 import logging
 from typing import Tuple
@@ -49,11 +53,12 @@ def get_system_len(pangenome: Pangenome, source: str) -> Tuple[int, int, int, in
     Returns:
         Maximum size of each element
     """
-    def compare_len(max_id_len, max_name_len, max_gf_name_len, max_annot_source_len) -> Tuple[int, int, int, int]:
+    def compare_len(sys, max_id_len, max_name_len, max_gf_name_len, max_annot_source_len) -> Tuple[int, int, int, int]:
         """
         Compare the length of elements to known maximum
 
         Args:
+            sys: system to get info from
             max_id_len: Maximum size of the system identifier
             max_name_len: Maximum size of system name
             max_gf_name_len: Maximum size of gene family name
@@ -63,14 +68,14 @@ def get_system_len(pangenome: Pangenome, source: str) -> Tuple[int, int, int, in
             Maximum length of each element
         """
 
-        if len(system.ID) > max_id_len:
-            max_id_len = len(system.name)
-        if len(system.name) > max_name_len:
-            max_name_len = len(system.name)
-        for annot_source in system.annotation_sources():
+        if len(sys.ID) > max_id_len:
+            max_id_len = len(sys.name)
+        if len(sys.name) > max_name_len:
+            max_name_len = len(sys.name)
+        for annot_source in sys.annotation_sources():
             if len(annot_source) > max_annot_source_len:
                 max_annot_source_len = len(annot_source)
-        for gf in system.families:
+        for gf in sys.families:
             if len(gf.name) > max_gf_name_len:
                 max_gf_name_len = len(gf.name)
         return max_id_len, max_name_len, max_gf_name_len, max_annot_source_len
@@ -108,40 +113,39 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     else:
         systems_group = h5f.root.systems
     system_len = get_system_len(pangenome, source)
-    source_table = h5f.create_table(systems_group, source, description=system_desc(*system_len[:-1]),
+    source_group = h5f.create_group(systems_group, source, f"Detected systems from source: {source}")
+    source_group._v_attrs.metadata_sources = pangenome.systems_sources_to_metadata_source()[source]
+    source_table = h5f.create_table(source_group, source, description=system_desc(*system_len[:-1]),
                                     expectedrows=system_len[-1])
     source_row = source_table.row
-    try:
-        with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
-            for system in pangenome.systems:
-                for gf in system.families:
-                    source_row["ID"] = system.ID
-                    source_row["name"] = system.name
+    with tqdm(total=pangenome.number_of_systems(), unit="system", disable=disable_bar) as progress:
+        for system in pangenome.systems:
+            for gf in system.families:
+                source_row["ID"] = system.ID
+                source_row["name"] = system.name
+                source_row["geneFam"] = gf.name
+                source_row["metadata_source"], source_row["metadata_id"] = system.get_metainfo(gf)
+                source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
+                source_row.append()
+            progress.update()
+            for canonical in system.canonical:
+                for gf in canonical.families:
                     source_row["geneFam"] = gf.name
-                    source_row["metadata_source"], source_row["metadata_id"] = system.get_metainfo(gf)
-                    source_row["canonical"] = ",".join([canonical.name for canonical in system.canonical])
+                    source_row["ID"] = canonical.ID
+                    source_row["name"] = canonical.name
+                    source_row["metadata_source"], source_row["metadata_id"] = canonical.get_metainfo(gf)
                     source_row.append()
                 progress.update()
-                for canonical in system.canonical:
-                    for gf in canonical.families:
-                        source_row["geneFam"] = gf.name
-                        source_row["ID"] = canonical.ID
-                        source_row["name"] = canonical.name
-                        source_row["metadata_source"], source_row["metadata_id"] = canonical.get_metainfo(gf)
-                        source_row.append()
-                    progress.update()
-    except Exception as exc:
-        h5f.remove_node(systems_group, source)
-        raise exc
-    else:
         source_table.flush()
 
 
 def write_status(pangenome: Pangenome, h5f: tables.File):
     """
     Write pangenome status in HDF5 file
-    :param pangenome: Pangenome object
-    :param h5f: Pangenome file
+
+    Args:
+        pangenome: Pangenome object
+        h5f: Pangenome file
     """
     super_write_status(pangenome, h5f)  # call write_status from ppanggolin
     status_group = h5f.root.status
@@ -184,7 +188,7 @@ def erase_pangenome(pangenome: Pangenome, graph: bool = False, gene_families: bo
         systems_group = h5f.root.systems
         if source in systems_group:
             logging.getLogger("PANORAMA").info(f"Erasing the formerly computed systems from source {source}")
-            h5f.remove_node("/systems", source)
+            h5f.remove_node("/systems", source, recursive=True)
             status_group._v_attrs.systems_sources.remove(source)
             pangenome.status["systems_sources"].remove(f"{source}")
         if len(status_group._v_attrs.systems_sources) == 0:

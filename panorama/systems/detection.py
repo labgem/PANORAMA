@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to detect in pangenomes biological systems
+"""
 
 # default libraries
 from __future__ import annotations
@@ -26,7 +29,7 @@ from panorama.systems.models import Models, Model, FuncUnit, Family
 from panorama.systems.system import System
 from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.utils import init_lock
-from panorama.format.write_binaries import write_pangenome
+from panorama.format.write_binaries import write_pangenome, erase_pangenome
 
 
 def check_detection_parameters(args: argparse.Namespace) -> None:
@@ -59,7 +62,6 @@ def check_pangenome_detection(pangenome: Pangenome, annotation_sources: List[str
         Exception: If System already exists in the Pangenome
         AttributeError: If there is no metadata associated to families
     """
-    from panorama.format.write_binaries import erase_pangenome
     if pangenome.status["systems"] == "inFile" and systems_source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=systems_source)

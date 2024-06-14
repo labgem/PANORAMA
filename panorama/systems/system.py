@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding: utf8
 
+"""
+This module provides System class which represent a biological system
+"""
+
 # default libraries
 from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Union, Generator
@@ -299,7 +303,7 @@ class System(MetaFeatures):
         Returns:
             Set[str]: Set of annotation sources.
         """
-        return {metainfo[0] for metainfo in self._families2metainfo.values()}
+        return {metainfo[0] for metainfo in self._families2metainfo.values() if metainfo[0] != ''}
 
     def is_subset(self, system: System) -> bool:
         """

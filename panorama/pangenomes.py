@@ -4,7 +4,8 @@
 # default libraries
 import logging
 from pathlib import Path
-from typing import Generator, List, Set, Union
+from typing import Dict, Generator, List, Set, Union
+from collections import defaultdict
 
 # install libraries
 import pandas as pd
@@ -35,6 +36,8 @@ class Pangenome(Pan):
         self._system_getter = {}
         self._name2system = {}
         self._max_id_system = 0
+        self._systems_sources = None
+        self._systems_sources2metada_sources = None
         self.name = name
         self.taxid = taxid
         self.status.update({"systems": 'No', "systems_sources": set()})
@@ -129,6 +132,15 @@ class Pangenome(Pan):
         for system in self._system_getter.values():
             yield system
 
+    def _get_systems_sources_and_related_metadata_sources(self):
+        sources = set()
+        sys_sources2meta_sources = defaultdict(set)
+        for system in self.systems:
+            sources.add(system.source)
+            sys_sources2meta_sources[system.source] |= system.annotation_sources()
+        self._systems_sources = sources
+        self._systems_sources2metada_sources = sys_sources2meta_sources
+
     @property
     def systems_sources(self) -> Set[str]:
         """Get sources of all systems in the pangenome
@@ -136,10 +148,23 @@ class Pangenome(Pan):
         Returns:
             Set[str]: Set of system sources
         """
-        sources = set()
-        for system in self.systems:
-            sources.add(system.source)
-        return sources
+        if self._systems_sources is not None:
+            return self._systems_sources
+        else:
+            self._get_systems_sources_and_related_metadata_sources()
+            return self.systems_sources
+
+    def systems_sources_to_metadata_source(self) -> Dict[str, Set[str]]:
+        """Get metadata sources related to system sources
+
+        Returns:
+            Dict[str, Set[str]]: System source as key linked to their metadata sources as value
+        """
+        if self._systems_sources2metada_sources is not None:
+            return self._systems_sources2metada_sources
+        else:
+            self._get_systems_sources_and_related_metadata_sources()
+            return self.systems_sources_to_metadata_source()
 
     def get_system(self, system_id: str) -> System:
         """Get a system by its ID in the pangenome
