@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to write information into the pangenome file
+"""
 
 # default libraries
 from __future__ import annotations
@@ -39,14 +42,6 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
                                                             "between: projection, partition, association or proksee.")
     if len(args.sources) != len(args.models):
         raise argparse.ArgumentError(argument=None, message="Number of sources and models are different.")
-    if args.annotation_sources is not None:
-        if len(args.annotation_sources) != len(args.sources):
-            raise argparse.ArgumentError(argument=None, message="Number of annotation sources is different from "
-                                                                "number of systems sources.")
-    else:
-        args.annotation_sources = args.sources
-
-    need_info["sources"] = args.annotation_sources
 
     if args.association is not None:
         for asso in args.association:
@@ -84,10 +79,10 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
                                f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}.")
 
 
-def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_sources: List[str],
-                             projection: bool = False, association: List[str] = None,
-                             partition: bool = False, proksee: str = None, organisms: List[str] = None,
-                             threads: int = 1, lock: Lock = None, force: bool = False, disable_bar: bool = False):
+def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,
+                             association: List[str] = None, partition: bool = False, proksee: str = None,
+                             organisms: List[str] = None, threads: int = 1, lock: Lock = None, force: bool = False,
+                             disable_bar: bool = False):
     """
     Write flat files about systems for all pangenomes
 
@@ -108,9 +103,9 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, annotation_so
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
         for system_source in pangenome.systems_sources:
-            logging.getLogger("PANORAMA").debug(
-                f"Begin write systems for {pangenome.name} on system source {system_source}. Based on annotation sources {annotation_sources} ")
-            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, annotation_sources,
+            logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
+                                                f"on system source: {system_source}")
+            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
                                                                        association=association, threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
             if partition:
@@ -153,10 +148,9 @@ def launch(args):
                                  need_info=need_info, sources=args.sources, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar)
 
-    write_pangenomes_systems(pangenomes, outdir, args.annotation_sources, projection=args.projection,
-                             proksee=args.proksee, association=args.association, partition=args.partition,
-                             organisms=args.organisms, threads=args.threads, lock=lock, force=args.force,
-                             disable_bar=args.disable_prog_bar)
+    write_pangenomes_systems(pangenomes, outdir, projection=args.projection, proksee=args.proksee,
+                             association=args.association, partition=args.partition, organisms=args.organisms,
+                             threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -207,9 +201,5 @@ def parser_write(parser):
                           help="Write a proksee file with systems. "
                                "If you only want the systems with genes, gene families and partition, use base value."
                                "Write RGPs, spots or modules -split by `,'- if you want them.")
-    required.add_argument("--annotation_sources", required=False, type=str, nargs="+", default=None,
-                          help="Name of the annotation sources if different from systems. "
-                               "You can specify multiple sources. For that separate names by a space and "
-                               "make sure you give them in the same order as the sources.")
     optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
     optional.add_argument("--threads", required=False, type=int, default=1)

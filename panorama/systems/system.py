@@ -33,8 +33,8 @@ class System(MetaFeatures):
         canonical (set): Set of canonical systems.
     """
 
-    def __init__(self, system_id: Union[str, int], model: Model, source: str, gene_families: Set[GeneFamily] = None,
-                 families_source: List[str] = None, families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
+    def __init__(self, system_id: Union[str, int], model: Model, source: str,
+                 gene_families: Set[GeneFamily] = None, families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
         """
         Initializes the system with given parameters.
 
@@ -43,14 +43,12 @@ class System(MetaFeatures):
             model: Model associated with the system.
             source: Source of the annotation.
             gene_families: Set of gene families in the system.
-            families_source: List of sources for gene families.
             families_to_metainfo: Mapping of gene families to their metadata.
         """
         super().__init__()
         self.ID = str(system_id)
         self.model = model
         self.system_source = source
-        self.families_sources = families_source if families_source else [source]
         self._families_getter = {}
         self._families2metainfo = {}
         self._models_families = None
