@@ -237,10 +237,6 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
     """
     cog = hit.best_domain.alignment
     hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-    if cog.target_from > cog.target_to:
-        print("Pikapi")
-    if cog.hmm_from > cog.hmm_to:
-        print("Pikachu")
     target_coverage = (cog.target_to - cog.target_from + 1) / cog.target_length
     hmm_coverage = (cog.hmm_to - cog.hmm_from + 1) / cog.hmm_length
     add_res = False
