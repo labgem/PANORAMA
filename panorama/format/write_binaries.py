@@ -127,7 +127,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     canonical_row = canonical_table.row
     sys2canonical_row = sys2canonical_table.row
     canonic_seen = set()
-    with tqdm(total=pangenome.number_of_systems(source=source), unit="system", disable=disable_bar) as progress:
+    with tqdm(total=pangenome.number_of_systems(source=source, with_canonical=False), unit="system", disable=disable_bar) as progress:
         for system in pangenome.systems:
             for gf in system.families:
                 system_row["ID"] = system.ID
@@ -149,10 +149,11 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                 sys2canonical_row["system"] = system.ID
                 sys2canonical_row["canonic"] = canonical.ID
                 sys2canonical_row.append()
-                progress.update()
         system_table.flush()
         canonical_table.flush()
         sys2canonical_table.flush()
+    logging.getLogger("PANORAMA").debug(f"Write {pangenome.number_of_systems(source=source, with_canonical=False)} "
+                                        f"systems, with {len(canonic_seen)} canonical systems.")
 
 
 def write_status(pangenome: Pangenome, h5f: tables.File):
