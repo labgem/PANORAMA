@@ -53,7 +53,7 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
         List[pyhmmer.easel.Sequence]: list of digitalised gene family sequences
     """
 
-    write_gene_protein_sequences(pangenome, tmp, "all", threads=threads, keep_tmp=keep_tmp,
+    write_gene_protein_sequences(pangenome, tmp, "all", cpu=threads, keep_tmp=keep_tmp,
                                  tmp=tmp, disable_bar=disable_bar)
     available_memory = psutil.virtual_memory().available
     target_size = os.stat(tmp / "all_protein_genes.fna").st_size
