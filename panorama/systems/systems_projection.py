@@ -24,10 +24,11 @@ from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 from panorama.systems.system import System
 from panorama.systems.models import Family
-from panorama.systems.detection import get_annotation_to_families, dict_families_context, check_for_needed
+from panorama.systems.detection import get_metadata_to_families, dict_families_context, check_for_needed
 
 
-def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism, fam2annot: Dict[str, Set[Family]],
+def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism,
+                                gene_fam2mod_fam: Dict[str, Set[Family]], mod_fam2meta_source: Dict[str, str],
                                 association: List[str] = None) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system on a pangenome organism
@@ -36,7 +37,8 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         graph: Genomic context graph of the system for the given organism
         system: The system to be projected
         organism: The organism on which the system is to be projected
-        fam2annot: Dictionary mapping gene family to annotation
+        gene_fam2mod_fam: A dictionary to link gene families to model families
+        mod_fam2meta_source: link between model families and metadata source
 
     Returns:
         The projected system on the organism and the number of each system organisation in projected organism
@@ -52,7 +54,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         Returns:
             List of element to write projection for a gene
         """
-        line_projection = [gene.family.name, gene.family.named_partition, annot, gene.ID, gene.local_identifier,
+        line_projection = [gene.family.name, gene.family.named_partition, fam_annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
         if any(asso in association for asso in ['RGPs', 'spots']) and gene.RGP is not None:
             system.add_region(gene.RGP)
@@ -105,10 +107,30 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
                 counter[2] += 1
                 sys_state_in_org = "split"
             for cc_gene in cc:
-                annot = list(fam2annot.get(cc_gene.family.name))[0].name if fam2annot.get(
-                    cc_gene.family.name) is not None else None  # TODO look at the chosen annotation in case of multiple annotation per gene
-                if annot is not None:
-                    partitions.add(cc_gene.family.named_partition)
+                if cc_gene.family.name in gene_fam2mod_fam:
+                    metasource, metaid = system.get_metainfo(cc_gene.family)
+                    if metaid != 0:
+                        for mod_family in gene_fam2mod_fam[cc_gene.family.name]:
+                            avail_name = {mod_family.name}.union(mod_family.exchangeable)
+                            metadata = cc_gene.family.get_metadata(metasource, metaid)
+                            if metadata.protein_name in avail_name:
+                                fam_annot = metadata.protein_name
+                                break
+                            elif "secondary_name" in metadata.fields:
+                                found = False
+                                fam_annot = []
+                                for name in metadata.secondary_name.split(","):
+                                    if name in avail_name:
+                                        found = True
+                                        fam_annot.append(name)
+                                fam_annot = ",".join(fam_annot)
+                                if found:
+                                    break
+                        partitions.add(cc_gene.family.named_partition)
+                    else:  # => gene family has a function related to system but was not detected has part of it
+                        fam_annot = ""
+                else:
+                    fam_annot = ""
                 projection.append(write_projection_line(cc_gene))
             sub_id += 1
     return projection, counter, conciliate_system_partition(partitions)
@@ -128,15 +150,14 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
 
     genes_graph = nx.Graph()
     for family in families:
-        # a = set({gene for gene in family.genes if gene.organism == organism})
         genes_graph.add_nodes_from({gene for gene in family.genes if gene.organism == organism})
     for gene in genes_graph.nodes:
         if gene.position < gene.contig.number_of_genes:
-            right_genes = gene.contig.get_genes(begin=gene.position, end=gene.position + w + 1)
+            right_genes = gene.contig.get_genes(begin=gene.position, end=gene.position + w + 1, outrange_ok=True)
         else:
             right_genes = [gene]
 
-        left_genes = gene.contig.get_genes(begin=gene.position - w, end=gene.position + 1)
+        left_genes = gene.contig.get_genes(begin=gene.position - w, end=gene.position + 1, outrange_ok=True)
         for l_idx, l_gene in enumerate(left_genes, start=1):
             if l_gene in genes_graph.nodes:
                 for t_gene in left_genes[l_idx:t + 1]:
@@ -150,8 +171,9 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
     return genes_graph
 
 
-def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam_index: Dict[GeneFamily, int],
-                      association: List[str] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]],
+                      fam_index: Dict[GeneFamily, int], association: List[str] = None
+                      ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project system on all pangenome organisms
     Args:
@@ -164,15 +186,17 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
-    _, fam2annot = dict_families_context(system.model, annot2fam)
+    _, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
 
     for organism in system.models_organisms:
         org_fam = {fam for fam in system.families if organism.bitarray[fam_index[fam]] == 1}
-        if check_for_needed(org_fam, fam2annot, func_unit):
+        org_mod_fam = org_fam & set(system.models_families)
+        check_needed, _ = check_for_needed(org_mod_fam, gf2fam, fam2source, func_unit)
+        if check_needed:
             pan_proj = [system.ID, system.name, organism.name]
             genes_graph = compute_genes_graph(org_fam, organism, t, t + 1)
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism,
-                                                                       fam2annot, association)
+                                                                       gf2fam, fam2source, association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)
             if 'RGPs' in association:
                 rgps = {rgp.name for rgp in system.regions if rgp.organism == organism}
@@ -193,26 +217,24 @@ def system_projection(system: System, annot2fam: Dict[str, Set[GeneFamily]], fam
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
 
 
-def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotation_sources: List[str],
-                              association: List[str] = None, threads: int = 1, lock: Lock = None,
-                              disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def project_pangenome_systems(pangenome: Pangenome, system_source: str, association: List[str] = None, threads: int = 1,
+                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-         Write all systems in pangenomes and project on organisms
+    Write all systems in pangenomes and project on organisms
 
-        Args:
-            pangenome: Pangenome to project
-            system_source: source of the systems to project
-            annotation_sources: sources of the annotation
-            threads: Number of threads available (default: 1)
-            lock: Global lock for multiprocessing execution (default: None)
-            disable_bar: Allow to disable progress bar (default: False)
+    Args:
+        pangenome: Pangenome to project
+        system_source: source of the systems to project
+        threads: Number of threads available (default: 1)
+        lock: Global lock for multiprocessing execution (default: None)
+        disable_bar: Allow to disable progress bar (default: False)
 
-        Returns:
-            Projection in 2 dataframe, one for each organism and one for the pangenome
-        """
+    Returns:
+        Projection in 2 dataframe, one for each organism and one for the pangenome
+    """
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    annot2fam = get_annotation_to_families(pangenome, annotation_sources)
+    meta2fam = get_metadata_to_families(pangenome, pangenome.systems_sources_to_metadata_source()[system_source])
     fam_index = pangenome.compute_org_bitarrays()
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
@@ -220,8 +242,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, annotati
                   disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(system_source):
-                system.families_sources = annotation_sources
-                future = executor.submit(system_projection, system, annot2fam, fam_index, association)
+                future = executor.submit(system_projection, system, meta2fam, fam_index, association)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
