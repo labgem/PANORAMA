@@ -455,9 +455,8 @@ def parse_dfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[
     return hmm_dict
 
 
-
 def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                      force: bool = False, disable_bar: bool = False) -> pd.DataFrame:
+                            force: bool = False, disable_bar: bool = False) -> pd.DataFrame:
     """
     Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
 
@@ -482,7 +481,6 @@ def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float =
             hmm_dict = parse_dfinder_hmm(hmm, hmm_file, panorama_acc)
             hmm_dict["path"] = write_hmm(hmm, hmm_dir, True).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
-
 
     hmm_df = pd.DataFrame(hmm_info_list)
     hmm_df = hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=[True, True, True])

@@ -199,6 +199,11 @@ class System(MetaFeatures):
         """
         yield from self._families_getter.values()
 
+    def _get_models_families(self):
+        for family, metainfo in self._families2metainfo.items():
+            if metainfo[1] != 0:
+                yield family
+
     @property
     def models_families(self) -> Generator[GeneFamily, None, None]:
         """
