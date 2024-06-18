@@ -287,12 +287,13 @@ def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str,
     families2meta_info = {}
     for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
         for family in gene_fam2mod_fam[node.name]:
+            avail_name = {family.name}.union(family.exchangeable)
             if family.presence == 'mandatory' and family.name in mandatory_list:  # if node is mandatory
                 for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                    if metadata.protein_name == family.name:
+                    if metadata.protein_name in avail_name:
                         families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
                     elif "secondary_name" in metadata.fields:
-                        if family.name in metadata.secondary_name.split(","):
+                        if any(name in avail_name for name in metadata.secondary_name.split(",")):
                             families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
                 count_mandatory += 1
                 count_total += 1
@@ -300,10 +301,10 @@ def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str,
                 break
             elif family.presence == 'accessory' and family.name in accessory_list:  # if node is accessory
                 for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                    if metadata.protein_name == family.name:
+                    if metadata.protein_name in avail_name:
                         families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
                     elif "secondary_name" in metadata.fields:
-                        if family.name in metadata.secondary_name.split(","):
+                        if any(name in avail_name for name in metadata.secondary_name.split(",")):
                             families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
                 count_total += 1
                 accessory_list.remove(family.name)
@@ -337,7 +338,7 @@ def get_subcombinations(combi: Set[GeneFamily],
 def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
                         mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
                         jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                        ) -> List[System]:
+                        ) -> Set[System]:
     """Search systems corresponding to model in a graph
 
     Args:
@@ -351,9 +352,9 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
         combinations: List of families combination known to exist in genomes.
 
     Returns:
-        A set of all detected systems in the graph
+        Set[System]: A set of all detected systems in the graph
     """
-    detected_systems = []
+    detected_systems = set()
     while len(combinations) > 0:
         families_combination = set(combinations.pop(0))
         check_needed, _ = check_for_needed(families_combination, gene_fam2mod_fam, mod_fam2meta_source, func_unit)
@@ -366,9 +367,8 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
                     cc: Set[GeneFamily]
                     check_needed, fam2metainfo = check_for_needed(cc, gene_fam2mod_fam, mod_fam2meta_source, func_unit)
                     if check_needed and not check_for_forbidden(cc, gene_fam2mod_fam, func_unit):
-                        detected_systems.append(System(system_id=0, model=func_unit.model, source=source,
-                                                       gene_families=cc, families_to_metainfo=fam2metainfo)
-                                                )
+                        detected_systems.add(System(system_id=0, model=func_unit.model, source=source,
+                                                    gene_families=cc, families_to_metainfo=fam2metainfo))
                         get_subcombinations(cc.intersection(families_combination), combinations)
         else:
             # We can remove all sub combinations because the bigger one does not have the needed
@@ -380,7 +380,7 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
 def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
                              mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
                              jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                             ) -> List[System]:
+                             ) -> Set[System]:
     """
     Search systems corresponding to model in a pangenomic context
 
@@ -395,9 +395,9 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
         combinations: Known existing combination of families that code for the searched model
 
     Returns:
-        List of detected systems in the pangenomic context
+        Set[System]: Set of detected systems in the pangenomic context
     """
-    detected_systems = []
+    detected_systems = set()
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
         families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
@@ -408,7 +408,7 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
             families_in_cc |= neutral_families
             new_detected_systems = search_system_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
                                                        func_unit, source, jaccard_threshold, combinations_in_cc)
-            detected_systems += new_detected_systems
+            detected_systems |= new_detected_systems
     return detected_systems
 
 
@@ -440,7 +440,7 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
 
 
 def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]], source: str,
-                  jaccard_threshold: float = 0.8) -> List[System]:
+                  jaccard_threshold: float = 0.8) -> Set[System]:
     """
     Search if model system is in pangenome
 
@@ -451,11 +451,11 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
         jaccard_threshold: minimum jaccard similarity used to filter edges between gene gene_families (default: 0.8)
 
     Returns:
-        List[System]: List of systems detected in pangenome for the given model
+        Set[System]: Set of systems detected in pangenome for the given model
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     begin = time.time()
-    detected_systems = []
+    detected_systems = set()
     gene_families, gf2fam, fam2source = dict_families_context(model, meta2fam)
 
     for func_unit in model.func_units:
@@ -467,7 +467,7 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
             context, combinations2orgs = compute_gene_context_graph(families=fu_families, transitive=t,
                                                                     window_size=t + 1, disable_bar=True)
             combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
-            detected_systems += search_system_in_context(context, fu_families, gf2fam, fam2source, func_unit, source,
+            detected_systems |= search_system_in_context(context, fu_families, gf2fam, fam2source, func_unit, source,
                                                          jaccard_threshold, combinations)
     logging.getLogger("PANORAMA").debug(f"Done search for model {model.name} in {time.time() - begin} seconds")
     return detected_systems
@@ -489,8 +489,8 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
         lock: Global lock for multiprocessing execution (default: None)
         disable_bar: Flag to disable progress bar
     """
-
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
+
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
@@ -499,10 +499,10 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
-                detected_systems = []
+                detected_systems = set()
                 for future in futures:
                     result = future.result()
-                    detected_systems += result
+                    detected_systems |= result
 
     for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
         pangenome.add_system(system)

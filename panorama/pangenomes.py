@@ -242,13 +242,13 @@ class Pangenome(Pan):
             elif system_in.name in system.canonical_models():
                 # New system is a canonical system for a system in pangenome
                 if len(system.intersection(system_in)) > 0:
-                    nb_canon = len(system_in.canonical)
                     system_in.add_canonical(system)
+                    self._max_id_system += 1
+                    system.ID = str(self._max_id_system)
                     same_sys = True
-                    if nb_canon != len(system_in.canonical):
-                        for family in system.families:
-                            family.add_system(system)
-                            family.add_system(system_in)
+                    for family in system.families:
+                        family.add_system(system)
+
         if not same_sys:
             self._max_id_system += 1
             system.ID = str(self._max_id_system)
