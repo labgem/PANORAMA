@@ -18,6 +18,7 @@ from bokeh.models import BasicTicker
 # local libraries
 from panorama.pangenomes import Pangenome
 
+
 def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataFrame:
     columns = ['system number', 'system_name', 'families']
     if 'RGPs' in association:
@@ -34,7 +35,7 @@ def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataF
         if 'spots' in association:
             association_list[system.ID].append(",".join(map(lambda x: str(x.ID), system.spots)))
         if 'modules' in association:
-            association_list[system.ID].append(",".join(map(lambda x:str(x.ID), system.modules)))
+            association_list[system.ID].append(",".join(map(lambda x: str(x.ID), system.modules)))
 
     association_df = pd.DataFrame.from_dict(association_list, orient='index', columns=columns[1:])
     association_df.index.name = columns[0]
@@ -65,7 +66,7 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
     elif high_corr <= 8:
         color_palette = ["#ffffff"] + list(Colorblind[high_corr])
     else:
-        color_palette = list(reversed(linear_palette(Reds256, high_corr + 1)))
+        color_palette = ["#ffffff"] + list(reversed(linear_palette(Reds256, high_corr + 4)))[4:]
 
     tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
     p = figure(x_range=list(correlation_matrix.columns), y_range=list(correlation_matrix.index),
