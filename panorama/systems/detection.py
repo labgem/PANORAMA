@@ -402,6 +402,7 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
                                                               key=len, reverse=True)]:
         families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
         families_in_cc &= cc_graph.nodes
+        neutral_families &= cc_graph.nodes
 
         if len(families_in_cc) > 0:
             combinations_in_cc = get_subcombinations(families_in_cc, combinations)

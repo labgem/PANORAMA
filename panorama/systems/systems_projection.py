@@ -186,7 +186,10 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
     t = func_unit.max_separation + 1
-    _, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
+    gene_families, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
+    gene_families &= set(system.families)
+    gene_families_name = {gf.name for gf in gene_families}
+    gf2fam = {gf: fam for gf, fam in gf2fam.items() if gf in gene_families_name}
 
     for organism in system.models_organisms:
         org_fam = {fam for fam in system.families if organism.bitarray[fam_index[fam]] == 1}
