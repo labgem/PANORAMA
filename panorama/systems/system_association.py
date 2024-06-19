@@ -97,13 +97,13 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
                  'right')
 
     if "html" in out_format:
-        output_path = Path.cwd() / output / name / f"{name}_correlation_{association}.html"
+        output_path = output / f"correlation_{association}.html"
         output_file(output_path)
         save(p)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in HTML format to {output_path}")
     if "png" in out_format:
-        output_path = Path.cwd() / output / name / f"{name}_correlation_{association}.png"
-        export_png(p, width=1920, height=1080)
+        output_path = output / f"correlation_{association}.png"
+        export_png(p, filename=output_path, width=1920, height=1080)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in PNG format to {output_path}")
 
 

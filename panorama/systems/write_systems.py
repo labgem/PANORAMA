@@ -104,23 +104,25 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
     pangenomes_proj = pd.DataFrame()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
+        pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
         for system_source in pangenome.systems_sources:
             logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
                                                 f"on system source: {system_source}")
             pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
                                                                        association=association, threads=threads,
                                                                        lock=lock, disable_bar=disable_bar)
+            source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
             if partition:
                 logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
-                systems_partition(pangenome.name, pangenome_proj, output)
+                systems_partition(pangenome.name, pangenome_proj, source_res_output)
             if association:
                 logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-                association_pangenome_systems(pangenome, association, output)
+                association_pangenome_systems(pangenome, association, source_res_output)
             if proksee:
                 raise NotImplementedError("Proksee not implemented")
             if projection:
                 logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-                write_projection_systems(pangenome.name, output, system_source, pangenome_proj, organisms_proj,
+                write_projection_systems(pangenome.name, source_res_output, system_source, pangenome_proj, organisms_proj,
                                          organisms, force)
             pangenome_proj.insert(0, "pangenome name", pangenome.name)
             pangenomes_proj = pd.concat([pangenomes_proj, pangenome_proj])

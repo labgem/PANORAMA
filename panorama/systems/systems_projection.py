@@ -295,7 +295,7 @@ def write_projection_systems(pangenome_name: str, output: Path, source: str, pan
         Projection in 2 dataframe, one for each organism and one for the pangenome
     """
 
-    mkdir(output / f"{pangenome_name}/projection_{source}", force=force)
+    proj_dir = mkdir(output / "projection", force=force)
     if organisms is not None:
         pangenome_projection.drop(pangenome_projection["organism" in organisms].index)
         organisms_projection.drop(organisms_projection["organism" in organisms].index)
@@ -305,5 +305,5 @@ def write_projection_systems(pangenome_name: str, output: Path, source: str, pan
         org_df = org_df.drop(columns=["organism"])
         org_df.sort_values(by=["system number", "system name", "start", "stop"],
                            ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(f"{output}/{pangenome_name}/projection_{source}/{organism_name}.tsv", sep="\t", index=False)
-    pangenome_projection.to_csv(f"{output}/{pangenome_name}/systems_{source}.tsv", sep="\t", index=False)
+        org_df.to_csv(proj_dir/f"{organism_name}.tsv", sep="\t", index=False)
+    pangenome_projection.to_csv(output/'systems.tsv', sep="\t", index=False)

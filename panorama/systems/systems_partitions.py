@@ -110,12 +110,13 @@ def figure_partition_heatmap(name: str, data: pd.DataFrame, list_systems: List[s
                          border_line_width=0.2)
     p.add_layout(color_bar, 'right')
     if "html" in format:
-        output_path = Path.cwd() / output / name / f"{name}_partition.html"
+        output_path = output / "partition.html"
         output_file(output_path)
         save(p)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in HTML format to {output_path}")
     if "png" in format:
-        output_file(Path.cwd() / output / name / f"{name}_partition.png")
+        output_path = output / "partition.png"
+        output_file(output_path)
         export_png(p, width=1920, height=1080)
         logging.getLogger("PANORAMA").debug(f"Saved partition heatmap in PNG format to {output_path}")
 
@@ -129,7 +130,7 @@ def figure_count_heatmap(name: str, data: np.ndarray, list_system: List, list_or
     :param list_organism: List of organisms in the pangenome
     :param output: Path to output directory
     """
-    output_path = Path.cwd() / output / name / f"{name}_count.html"
+    output_path = output / "count.html"
     output_file(output_path)
     df_gcount = pd.DataFrame(data, index=list_organism, columns=list_system)
     df_stack_gcount = pd.DataFrame(df_gcount.stack(), columns=['number']).reset_index()
