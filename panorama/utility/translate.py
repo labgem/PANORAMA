@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides function to translate models from different databases
+"""
+
 # default libraries
 import re
 from random import choice
@@ -22,6 +26,9 @@ from pyhmmer.plan7 import HMM
 # local libraries
 from panorama.utils import mkdir
 from panorama.utility.genInput import create_hmm_list_file, read_hmm, write_hmm, gen_acc
+
+
+known_sources = ["padloc", "defense-finder", "CONJScan", "TXSScan", "TFFscan"]
 
 
 def read_yaml(model: Path) -> dict:
@@ -367,7 +374,7 @@ def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
 def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.DataFrame,
                                 canonical: List[str]) -> dict:
     """
-    Translate macsyfinder model (or DefenseFinder) into PANORAMA model
+    Translate macsyfinder model into PANORAMA model
 
     Args:
         root: Model root information
@@ -415,7 +422,7 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     return data_json
 
 
-def parse_dfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[str, Union[str, int, float]]:
+def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[str, Union[str, int, float]]:
     """
     Read DefenseFinder HMM and get information for PANORAMA annotation step
 
@@ -427,8 +434,9 @@ def parse_dfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[
     Returns:
         List[Dict[str, Union[str, int, float]]]: List of dictionaries with all necessary information to write HMM metadata
     """
-    hmm_dict = {"name": "", 'accession': "", "length": len(hmm.consensus), 'protein_name': "", 'secondary_name': "",
-                "score_threshold": nan, "eval_threshold": nan, "hmm_cov_threshold": 0.4, "target_cov_threshold": nan}
+    hmm_dict = {"name": "", 'accession': "", "length": len(hmm.consensus), 'protein_name': "",
+                'secondary_name': "", "score_threshold": nan, "eval_threshold": nan, "hmm_cov_threshold": 0.4,
+                "target_cov_threshold": nan, "description": ""}
 
     name = hmm.name.decode('UTF-8').split()
     if len(name) > 1:
@@ -455,8 +463,9 @@ def parse_dfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[
     return hmm_dict
 
 
-def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                            force: bool = False, disable_bar: bool = False) -> pd.DataFrame:
+def create_macsyfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float = None,
+                                target_coverage: float = None, force: bool = False,
+                                disable_bar: bool = False) -> pd.DataFrame:
     """
     Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
 
@@ -478,7 +487,7 @@ def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float =
     for hmm_file in tqdm(list(hmms_path.glob('*.hmm')), unit="HMM", desc='Translate HMM', disable=disable_bar):
         hmm_list = read_hmm(hmm_path=hmm_file)
         for hmm in hmm_list:
-            hmm_dict = parse_dfinder_hmm(hmm, hmm_file, panorama_acc)
+            hmm_dict = parse_macsyfinder_hmm(hmm, hmm_file, panorama_acc)
             hmm_dict["path"] = write_hmm(hmm, hmm_dir, True).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
 
@@ -498,9 +507,9 @@ def create_dfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float =
     return hmm_df
 
 
-def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
+def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
     """
-    Search Canonical models for defense finder
+    Search Canonical models for MacSyFinder models
 
     Args:
         model_name: Name of the model
@@ -539,110 +548,65 @@ def search_canonical_dfinder(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_defense_finder(df_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                             force: bool = False, disable_bar: bool = False) -> List[dict]:
+def get_models_path(macsy_db: Path, source: str) -> Dict[str, Path]:
     """
-    Translate DefenseFinder models into PANORAMA models and write all necessary file for PANORAMA steps
+    Associate a unique name for the model to its path in function of the source
 
     Args:
-        df_db: DefenseFinder models database path
+        macsy_db: Models database path
+        source: Name of the source.
+
+    Returns:
+        Dict[str, Path]: A dictionary with model name for PANORAMA as key and the model path as value
+    """
+    model2path = {}
+
+    for model in macsy_db.joinpath("definitions").rglob("*.xml"):
+        if source == "defense-finder":
+            model2path[model.stem] = model
+        elif source == "CONJScan":
+            model2path[f"{model.parent.stem}_{model.stem}"] = model
+        elif source == "TXSScan":
+            model2path[model.stem] = model
+        elif source == "TFFscan":
+            model2path[model.stem] = model
+        else:
+            raise ValueError(f"Unknown source: {source}")
+
+    return model2path
+
+
+def translate_macsyfinder(macsy_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
+                          source: str = "", force: bool = False, disable_bar: bool = False) -> List[dict]:
+    """
+    Translate MacSyFinder models into PANORAMA models and write all necessary file for PANORAMA steps
+
+    Args:
+        macsy_db: Models database path
         output: Path to output directory for PANORAMA files
         hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
         target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
+        source: Name of the source. Defaults to ""
         force: Flag to force overwrite files
         disable_bar: Flag to disable progress bar
 
     Returns:
          List[dict]: List of dictionaries containing translated models
     """
-    hmm_df = create_dfinder_hmm_list(df_db / "profiles", output, hmm_coverage, target_coverage, force, disable_bar)
+    hmm_df = create_macsyfinder_hmm_list(macsy_db / "profiles", output, hmm_coverage, target_coverage, force,
+                                         disable_bar)
     list_data = []
-    logging.getLogger('PANORAMA').info("Begin to translate DefenseFinder models")
-    for model in tqdm(list(Path(df_db / "definitions").rglob("*.xml")), unit='file',
-                      desc='Translate models', disable=disable_bar):
+    logging.getLogger('PANORAMA').info(f"Begin to translate {source} models")
+
+    for name, path in tqdm(get_models_path(macsy_db, source).items(), unit='file',
+                           desc='Translate models', disable=disable_bar):
         try:
-            canonical_sys = search_canonical_dfinder(model.stem, model.parent)
-            root = read_xml(model)
-            list_data.append(translate_macsyfinder_model(root, model.stem, hmm_df, canonical_sys))
+            canonical_sys = search_canonical_macsyfinder(name, path)
+            root = read_xml(path)
+            list_data.append(translate_macsyfinder_model(root, name, hmm_df, canonical_sys))
         except Exception as error:
-            logging.getLogger('PANORAMA').error(f"Error translating {model.stem}")
-            raise Exception(f"Error translating {model} due to error: {error}")
-    return list_data
-
-
-def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
-    """
-    Search Canonical models for MacSyFinder
-
-    Args:
-        model_name: Name of the model
-        models: Path to all other models
-
-    Returns:
-        List[str]: List with name of canonical model
-    """
-    canonical_sys = []
-    if re.search("-Type-", model_name):
-        basename = re.split("-Type-", model_name)
-        base_class = basename[0]
-        base_type = basename[-1]
-        for canon_file in models.glob("*.xml"):
-            name_canon = canon_file.stem
-            if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
-                canonical_sys.append(name_canon)
-    elif model_name == "CAS_Cluster" or model_name == "CBASS":
-        for canon_file in models.glob("*.xml"):
-            if canon_file.stem != model_name:
-                canonical_sys.append(canon_file.stem)
-    return canonical_sys
-
-
-def parse_macsyfinder_hmm(hmms_path: Path):
-    """
-    Read and parse all DefenseFinder HMM files and write a HMM list file for PANORAMA annotation step
-
-    Args:
-
-    Returns:
-        List[str]: List with name of canonical model
-    """
-    hmm_dict = {}
-    for hmm_path in tqdm(list(hmms_path.glob('*.hmm')), unit="HMM"):
-        hmm_names = []
-        with open(hmm_path, 'r') as hmm_file:
-            for line in hmm_file.readlines():
-                if re.search('NAME', line):
-                    hmm_names.append(re.split(' +', line.replace("\n", ""))[1])
-        if len(hmm_names) > 1:
-            hmm_dict[hmm_path.stem.split('_')[-1]] = hmm_names
-        else:
-            split_name = hmm_path.stem.split('_')
-            if len(split_name) == 2:
-                if hmm_names[0] != hmm_path.stem.split('_')[-1]:
-                    hmm_dict[hmm_path.stem.split('_')[-1]] = hmm_names
-            elif len(split_name) > 2:
-                if hmm_names[0] != "_".join(split_name[1:]):
-                    hmm_dict["_".join(split_name[1:])] = hmm_names
-    return hmm_dict
-
-
-def translate_macsyfinder(models: Path, hmms_path: Path, tmpdir: Path, disable_bar: bool = False):
-    """
-    Translate MacSyFinder models into PANORAMA models and write all necessary file for PANORAMA steps
-
-    Args:
-        tmpdir: Path to temporary directory
-        disable_bar: Flag to disable progress bar
-
-    Returns:
-         List[dict]: List of dictionaries containing translated models
-    """
-    assert tmpdir is not None and isinstance(tmpdir, Path)
-    hmm_dict = parse_macsyfinder_hmm(hmms_path)
-    list_data = []
-    for model in tqdm(list(models.rglob("*.xml")), unit='file', disable=disable_bar):
-        root = read_xml(model)
-        list_data.append(translate_macsyfinder_model(root, model.stem, hmm_dict, []))
+            logging.getLogger('PANORAMA').error(f"Error translating {path.as_posix()}")
+            raise Exception(f"Error translating {name} due to error: {error}")
     return list_data
 
 
@@ -660,16 +624,14 @@ def launch_translate(db: Path, source: str, output: Path, hmm_coverage: float = 
         force: Flag to force overwrite existing files
         disable_bar: Flag to disable progress bar
     """
+
     if source == "padloc":
         list_data = translate_padloc(padloc_db=db, output=output, hmm_coverage=hmm_coverage,
                                      target_coverage=target_coverage, force=force, disable_bar=disable_bar)
-    elif source == "defense-finder":
-        list_data = translate_defense_finder(df_db=db, output=output, hmm_coverage=hmm_coverage,
-                                             target_coverage=target_coverage, force=force, disable_bar=disable_bar)
-    elif source == "macsy-finder":
-        raise NotImplementedError
-        # logging.getLogger("PANORAMA").info("Begin to translate macsy finder models...")
-        # list_data = translate_macsyfinder(models=db, tmpdir=tmpdir, disable_bar=disable_bar)
+    elif source in ["defense-finder", "CONJScan", "TXSScan", "TFFscan"]:
+        list_data = translate_macsyfinder(macsy_db=db, output=output, hmm_coverage=hmm_coverage,
+                                          target_coverage=target_coverage, source=source,
+                                          force=force, disable_bar=disable_bar)
     else:
         raise ValueError(f"The given source: {source} is not recognize. "
                          f"Please choose between padloc, defense-finder or macsy-finder")
@@ -681,4 +643,9 @@ def launch_translate(db: Path, source: str, output: Path, hmm_coverage: float = 
         model_list.append([data['name'], output.resolve() / f"models/{data['name']}.json"])
     model_df = pd.DataFrame(model_list, columns=['name', 'path'])
     model_df = model_df.sort_values('name')
+    if source == "CONJScan":
+        plasmid_mask = model_df['name'].str.contains('Plasmids_')
+        chromosome_mask = model_df['name'].str.contains('Chromosome_')
+        model_df[plasmid_mask].to_csv(output / 'models_plasmids_list.tsv', sep="\t", header=False, index=False)
+        model_df[chromosome_mask].to_csv(output / 'models_chromosome_list.tsv', sep="\t", header=False, index=False)
     model_df.to_csv(output / "models_list.tsv", sep="\t", header=False, index=False)

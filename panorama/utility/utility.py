@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides some utilities function
+"""
+
 # default libraries
 import argparse
 import logging
@@ -15,7 +19,7 @@ from ppanggolin.utils import restricted_float
 # local libraries
 from panorama.utils import mkdir
 from panorama.utility.genInput import create_hmm_list_file, read_metadata
-from panorama.utility.translate import launch_translate
+from panorama.utility.translate import launch_translate, known_sources
 from panorama.systems.models import Models
 
 
@@ -75,6 +79,10 @@ def check_parameters(args: argparse.Namespace) -> None:
                                          message="Required to give an output directory to translate")
         if args.source is None:
             raise argparse.ArgumentError(argument=args.source, message="Required to know how to translate models")
+        else:
+            if args.source not in known_sources:
+                raise argparse.ArgumentError(argument=args.source, message="Unknown source. choose one of this source: "
+                                                                           f"{', '.join(known_sources)}")
         check_coverage_parameters()
 
 
@@ -232,9 +240,9 @@ def parser_utils(parser: argparse.ArgumentParser):
     translate.add_argument("--translate", required=False, type=Path, default=None,
                            help="Path to models to be translated. Give the directory with models, hmms and other files."
                                 "PANORAMA will take care of everything it needs to translate.")
-    translate.add_argument("--source", required=False, type=str, choices=["padloc", "defense-finder", "macsy-finder"],
+    translate.add_argument("--source", required=False, type=str, choices=known_sources,
                            nargs='?',
-                           help="Available sources that we know how to translate. "
+                           help="Available sources that we know how to translate."
                                 "The directory will be read recursively to catch all models.")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument('-o', '--output', required=False, type=Path, nargs='?', default=None,

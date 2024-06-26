@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to project systems onto genomes.
+"""
 
 # default libraries
 from __future__ import annotations
 
-import time
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from typing import Any, Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
 
@@ -28,55 +30,65 @@ from panorama.systems.detection import get_metadata_to_families, dict_families_c
 
 
 def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organism,
-                                gene_fam2mod_fam: Dict[str, Set[Family]], mod_fam2meta_source: Dict[str, str],
+                                gene_fam2mod_fam: Dict[str, Set[Family]],
                                 association: List[str] = None) -> Tuple[List[List[str]], List[int], str]:
     """
-    Project a system on a pangenome organism
+    Project a system onto an organism's pangenome.
 
     Args:
-        graph: Genomic context graph of the system for the given organism
-        system: The system to be projected
-        organism: The organism on which the system is to be projected
-        gene_fam2mod_fam: A dictionary to link gene families to model families
-        mod_fam2meta_source: link between model families and metadata source
+        graph (nx.Graph): Genomic context graph of the system for the given organism.
+        system (System): The system to be projected.
+        organism (Organism): The organism on which the system is to be projected.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): A dictionary mapping gene families to model families.
+        association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
-        The projected system on the organism and the number of each system organisation in projected organism
+        Tuple[List[List[str]], List[int], str]: A tuple containing:
+            - A list of projected system information for the organism.
+            - A list with counts of each system organization type (strict, extended, split).
+            - The reconciled system partition.
     """
 
     def write_projection_line(gene: Gene) -> List[str]:
         """
-        Write a projection for one gene
+        Write the projection information for a single gene.
 
         Args:
-            gene: Gene to write projection
+            gene (Gene): Gene to write projection for.
 
         Returns:
-            List of element to write projection for a gene
+            List[str]: List of elements representing the projection for the gene.
         """
         line_projection = [gene.family.name, gene.family.named_partition, fam_annot, gene.ID, gene.local_identifier,
                            gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
-        if any(asso in association for asso in ['RGPs', 'spots']) and gene.RGP is not None:
-            system.add_region(gene.RGP)
-            if 'RGPs' in association:
-                line_projection.append(gene.RGP.name)
-            if 'spots' in association:
-                line_projection.append(gene.spot)
-
+        if 'RGPs' in association:
+            rgp = gene.RGP
+            if rgp is not None:
+                system.add_region(rgp)
+                line_projection.append(str(rgp))
+            else:
+                line_projection.append('')
+        if 'spots' in association:
+            spot = gene.spot
+            if spot is not None:
+                system.add_spot(gene.spot)
+                line_projection.append(str(spot))
+            else:
+                line_projection.append('')
         return list(map(str, [system.ID, sub_id, system.name, organism.name] + line_projection))
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
         """
-        Conciliate the partition of the system
+        Conciliate the partition of the system.
 
         Args:
-            system_partition: All found partitions for gene that code the system
+            system_partition (Set[str]): All found partitions for genes coding the system.
 
         Returns:
-            Reconciled system partition
+            str: The reconciled system partition.
 
         Raises:
-            Exception if not any partition are found. Could happen if partition are not loaded or computed
+            Exception: If no partition is found. This may happen if partitions are not loaded or computed.
         """
         if len(system_partition) == 1:
             return system_partition.pop()
@@ -88,22 +100,21 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
 
     projection = []
     partitions = set()
-    counter = [0, 0, 0]  # count strict, conserved and split CC
+    counter = [0, 0, 0]  # count strict, extended, and split CC
 
-    # Get all genes for which the family correspond to model
     model_genes = {gene for gene in graph.nodes if gene.family in system.models_families}
     sub_id = 1
     for cc in nx.connected_components(graph):
         model_cc = cc.intersection(model_genes)
         if len(model_cc) > 0:
-            if model_cc == model_genes:  # Contain all model families in the system
-                if len(cc) == len(model_genes):  # Subgraph with only model families
+            if model_cc == model_genes:
+                if len(cc) == len(model_genes):
                     counter[0] += 1
                     sys_state_in_org = "strict"
                 else:
                     counter[1] += 1
                     sys_state_in_org = "extended"
-            else:  # system is split
+            else:
                 counter[2] += 1
                 sys_state_in_org = "split"
             for cc_gene in cc:
@@ -127,7 +138,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
                                 if found:
                                     break
                         partitions.add(cc_gene.family.named_partition)
-                    else:  # => gene family has a function related to system but was not detected has part of it
+                    else:
                         fam_annot = ""
                 else:
                     fam_annot = ""
@@ -137,17 +148,18 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
 
 
 def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 0, w: int = 1) -> nx.Graph:
-    """Compute the genes_graph for a given genomic context in an organism
+    """
+    Compute the genes graph for a given genomic context in an organism.
 
     Args:
-        graph: the genomic context graph
-        organism: the organism of interest
-        t: the transitive value
+        families (Set[GeneFamily]): Set of gene families.
+        organism (Organism): The organism of interest.
+        t (int, optional): The transitive value (default is 0).
+        w (int, optional): The window size for gene connection (default is 1).
 
     Returns:
-        A genomic context graph for the given organism
+        nx.Graph: A genomic context graph for the given organism.
     """
-
     genes_graph = nx.Graph()
     for family in families:
         genes_graph.add_nodes_from({gene for gene in family.genes if gene.organism == organism})
@@ -175,13 +187,16 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
                       fam_index: Dict[GeneFamily, int], association: List[str] = None
                       ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Project system on all pangenome organisms
+    Project a system onto all organisms in a pangenome.
+
     Args:
-        system: system to project
-        annot2fam: Dictionary with for each annotation a set of gene families
+        system (System): The system to project.
+        annot2fam (Dict[str, Dict[str, Set[GeneFamily]]]): Dictionary mapping annotations to gene families.
+        fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
+        association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
-        2 Dataframe with projected system, one for the pangenome and another for the organisms
+        Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
@@ -199,7 +214,7 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
             pan_proj = [system.ID, system.name, organism.name]
             genes_graph = compute_genes_graph(org_fam, organism, t, t + 1)
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism,
-                                                                       gf2fam, fam2source, association)
+                                                                       gf2fam, association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)
             if 'RGPs' in association:
                 rgps = {rgp.name for rgp in system.regions if rgp.organism == organism}
@@ -223,17 +238,18 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
 def project_pangenome_systems(pangenome: Pangenome, system_source: str, association: List[str] = None, threads: int = 1,
                               lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
-    Write all systems in pangenomes and project on organisms
+    Project systems onto all organisms in a pangenome.
 
     Args:
-        pangenome: Pangenome to project
-        system_source: source of the systems to project
-        threads: Number of threads available (default: 1)
-        lock: Global lock for multiprocessing execution (default: None)
-        disable_bar: Allow to disable progress bar (default: False)
+        pangenome (Pangenome): The pangenome to project.
+        system_source (str): Source of the systems to project.
+        association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
+        threads (int, optional): Number of threads available (default is 1).
+        lock (Lock, optional): Global lock for multiprocessing execution (default is None).
+        disable_bar (bool, optional): Disable progress bar (default is False).
 
     Returns:
-        Projection in 2 dataframe, one for each organism and one for the pangenome
+        Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projections for each organism and the pangenome.
     """
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
@@ -277,28 +293,25 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, associat
     return pangenome_projection, organisms_projection
 
 
-def write_projection_systems(pangenome_name: str, output: Path, source: str, pangenome_projection: pd.Dataframe,
-                             organisms_projection: pd.DataFrame, organisms: List[str] = None, force: bool = False):
+def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, organisms_projection: pd.DataFrame,
+                             organisms: List[str] = None, force: bool = False):
     """
-     Write all systems in pangenomes and project on organisms
+    Write the projected systems to output files.
 
     Args:
-        pangenome_name: name of the current pangenome
-        output: Path to output directory
-        source: Annotation source
-        organisms: List of organisms to project (defaults to all organisms)
-        pangenome_projection: Dataframe of pangenome projection
-        organisms_projection: Dataframe of organisms projection
-        force: Force to write into the output directory (default: False)
+        output (Path): Path to the output directory.
+        pangenome_projection (pd.DataFrame): DataFrame containing the pangenome projection.
+        organisms_projection (pd.DataFrame): DataFrame containing the organism projections.
+        organisms (List[str], optional): List of organisms to project (default is all organisms).
+        force (bool, optional): Force write to the output directory (default is False).
 
     Returns:
-        Projection in 2 dataframe, one for each organism and one for the pangenome
+        None
     """
-
     proj_dir = mkdir(output / "projection", force=force)
     if organisms is not None:
-        pangenome_projection.drop(pangenome_projection["organism" in organisms].index)
-        organisms_projection.drop(organisms_projection["organism" in organisms].index)
+        pangenome_projection = pangenome_projection[~pangenome_projection["organism"].isin(organisms)]
+        organisms_projection = organisms_projection[~organisms_projection["organism"].isin(organisms)]
 
     for organism_name in pangenome_projection["organism"].unique():
         org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]

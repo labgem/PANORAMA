@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module allows the association of systems to other pangenome elements.
+"""
+
 # default libraries
 from __future__ import annotations
 import logging
@@ -20,6 +24,16 @@ from panorama.pangenomes import Pangenome
 
 
 def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataFrame:
+    """
+    Get the dataframe corresponding to the system-pangenome object association.
+
+    Args:
+        pangenome (Pangenome): Pangenome containing systems.
+        association (List[str]): List of pangenome elements to associate.
+
+    Returns:
+        pd.DataFrame: DataFrame corresponding to the system-pangenome element association.
+    """
     columns = ['system number', 'system_name', 'families']
     if 'RGPs' in association:
         columns.append('RGPs')
@@ -27,6 +41,7 @@ def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataF
         columns.append('spots')
     if 'modules' in association:
         columns.append('modules')
+
     association_list = {}
     for system in pangenome.systems:
         association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families])]
@@ -42,7 +57,16 @@ def get_association_df(pangenome: Pangenome, association: List[str]) -> pd.DataF
     return association_df
 
 
-def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, name: str, out_format: List[str] = None):
+def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, out_format: List[str] = None):
+    """
+    Write the correlation matrix.
+
+    Args:
+        df (pd.DataFrame): Association dataframe between systems and pangenome objects.
+        association (str): Pangenome object to associate systems with.
+        output (Path): Path to the output directory.
+        out_format (List[str], optional): Formats of the output file (default is ['html']).
+    """
     out_format = out_format if out_format is not None else ['html']
 
     association_split = df.drop(columns=['families']).join(df[association].str.get_dummies(sep=','))
@@ -109,7 +133,17 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, output: Path, n
 
 def association_pangenome_systems(pangenome: Pangenome, association: List[str], output: Path,
                                   out_format: List[str] = None):
-    """Write association between systems and pangenome object
+    """
+    Write the association between systems and pangenome objects.
+
+    Args:
+        pangenome (Pangenome): The pangenome containing systems and other elements.
+        association (List[str]): List of pangenome elements to associate.
+        output (Path): Path to the output directory.
+        out_format (List[str], optional): Formats of the output files (default is ['html']).
+
+    Returns:
+        None
     """
     out_format = out_format if out_format is not None else ['html']
 
@@ -117,4 +151,4 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
     association_df.to_csv(output / 'association.csv', sep='\t')
     for asso in association:
         write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
-                                 asso, output, pangenome.name, out_format)
+                                 asso, output, out_format)
