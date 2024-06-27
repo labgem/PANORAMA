@@ -20,7 +20,9 @@ import panorama.annotate
 import panorama.systems
 import panorama.alignment
 import panorama.compare
+import panorama.workflow
 import panorama.format.write_flat
+
 
 version = distribution("panorama").version
 epilog = f"""
@@ -110,6 +112,7 @@ def cmd_line():
     desc += "       write           Writes 'flat' files representing pangenomes some can be used with other software\n"
     desc += "       write_systems   Writes 'flat' files about systems detected in pangenomes\n"
     desc += "       utils           Some utility command to run analyses more easily\n"
+    desc += "       pansystems      A workflow to annotate gene families, detect systems and write flat files associated\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
@@ -134,6 +137,7 @@ def cmd_line():
             panorama.compare.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.systems.write_systems.subparser(subparsers),
+            panorama.workflow.subparser(subparsers),
             panorama.utility.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
@@ -180,6 +184,8 @@ def main():
         panorama.systems.write_systems.launch(args)
     elif args.subcommand == "utils":
         panorama.utility.launch(args)
+    elif args.subcommand == "pansystems":
+        panorama.workflow.launch(args)
 
 
 if __name__ == '__main__':

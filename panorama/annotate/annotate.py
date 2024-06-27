@@ -26,7 +26,7 @@ from panorama.annotate.hmm_search import read_hmms, annot_with_hmm, res_col_name
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_parameter(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def check_annotate_args(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Checks the provided arguments to ensure that they are valid.
 
@@ -341,7 +341,7 @@ def launch(args: argparse.Namespace) -> None:
     """
     manager = Manager()
     lock = manager.Lock()
-    need_info, hmm_kwgs = check_parameter(args)
+    need_info, hmm_kwgs = check_annotate_args(args)
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_annotation, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)

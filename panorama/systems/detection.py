@@ -13,7 +13,7 @@ from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
-from typing import Dict, Iterable, List, Set, Tuple, FrozenSet
+from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
 from collections import defaultdict
 
@@ -32,7 +32,7 @@ from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 
 
-def check_detection_parameters(args: argparse.Namespace) -> None:
+def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str, List[str]]]:
     """
     Checks the provided arguments to ensure that they are valid.
 
@@ -44,6 +44,8 @@ def check_detection_parameters(args: argparse.Namespace) -> None:
     """
     args.jaccard = restricted_float(args.jaccard)
     args.annotation_sources = [args.source] if args.annotation_sources is None else args.annotation_sources
+    return {"need_annotations": True, "need_families": True, "need_metadata": True,
+            "metatypes": ["families"], "sources": args.annotation_sources}
 
 
 def check_pangenome_detection(pangenome: Pangenome, metadata_sources: List[str], systems_source: str,
@@ -414,7 +416,7 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
 
 
 def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[GeneFamily],
-                                      gene_fam2mod_fam:  Dict[str, Set[Family]]
+                                      gene_fam2mod_fam: Dict[str, Set[Family]]
                                       ) -> Tuple[Set[GeneFamily], Set[GeneFamily]]:
     """
     Get the gene families that might be in the functional unit
@@ -507,17 +509,8 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
 
     for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
         pangenome.add_system(system)
-
+    logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
     logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
-
-    if len(detected_systems) > 0:
-        # print(len(detected_systems))
-        pangenome.status["systems"] = "Computed"
-        logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")
-        write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
-        logging.getLogger("PANORAMA").info(f"Systems written in pangenome {pangenome.name}")
-    else:
-        logging.getLogger("PANORAMA").info("No system detected")
 
 
 def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, metadata_sources: List[str],
@@ -542,6 +535,42 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
                        threads, lock, disable_bar)
 
 
+def write_systems_to_pangenome(pangenome: Pangenome, source: str, disable_bar: bool = False):
+    if pangenome.number_of_systems(source) > 0:
+        pangenome.status["systems"] = "Computed"
+        logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")
+        write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
+        logging.getLogger("PANORAMA").info(f"Systems written in pangenome {pangenome.name}")
+    else:
+        logging.getLogger("PANORAMA").info("No system detected")
+
+
+def write_systems_to_pangenomes(pangenomes: Pangenomes, source: str, threads: int = 1, lock: Lock = None,
+                                disable_bar: bool = False):
+    """
+    Write detected systems into pangenomes
+
+    Args:
+        pangenomes:  Pangenomes object containing all the pangenome with systems
+        source: Metadata source
+        threads: Number of available threads
+        lock: Lock for multiprocessing execution
+        disable_bar: Allow to disable progress bar
+    """
+
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
+            futures = []
+            for pangenome in tqdm(pangenomes, unit='pangenome', disable=disable_bar):
+                logging.getLogger("PANORAMA").debug(f"Write systems for pangenome {pangenome.name}")
+                future = executor.submit(write_systems_to_pangenome, pangenome, source, disable_bar)
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+
+            for future in futures:
+                future.result()
+
+
 def launch(args):
     """
     Launch functions to detect systems in pangenomes
@@ -552,12 +581,10 @@ def launch(args):
     from panorama.utility.utility import check_models
     from panorama.format.read_binaries import load_pangenomes
 
-    check_detection_parameters(args)
+    need_info = check_detection_args(args)
     models = check_models(args.models, disable_bar=args.disable_prog_bar)
     manager = Manager()
     lock = manager.Lock()
-    need_info = {"need_annotations": True, "need_families": True, "need_metadata": True,
-                 "metatypes": ["families"], "sources": args.annotation_sources}
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_detection, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, metadata_sources=args.annotation_sources,
@@ -565,6 +592,7 @@ def launch(args):
     search_systems_in_pangenomes(models=models, pangenomes=pangenomes, source=args.source,
                                  metadata_sources=args.annotation_sources, jaccard_threshold=args.jaccard,
                                  threads=args.threads, lock=lock, disable_bar=args.disable_prog_bar)
+    write_systems_to_pangenomes(pangenomes, args.source, args.threads, lock, disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

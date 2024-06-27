@@ -39,12 +39,16 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
         their number is not the same as systems sources.
     """
     need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
-                 "need_metadata": True, "metatypes": ["families"], "need_systems": True, "systems_sources": args.sources}
+                 "need_metadata": True, "metatypes": ["families"], "need_systems": True,
+                 "systems_sources": args.sources}
     if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
         raise argparse.ArgumentError(argument=None, message="You should at least choose one type of systems writing "
                                                             "between: projection, partition, association or proksee.")
     if len(args.sources) != len(args.models):
         raise argparse.ArgumentError(argument=None, message="Number of sources and models are different.")
+
+    if "all" in args.association:
+        args.association = ["RGPs", "spots", "modules"]
 
     for asso in args.association:
         if asso == "modules":
@@ -81,6 +85,32 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
                                f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}.")
 
 
+def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projection: bool = False,
+                                    association: List[str] = None, partition: bool = False, proksee: str = None,
+                                    organisms: List[str] = None, threads: int = 1, lock: Lock = None,
+                                    force: bool = False, disable_bar: bool = False):
+    logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
+    pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
+    for system_source in pangenome.systems_sources:
+        logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
+                                            f"on system source: {system_source}")
+        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
+                                                                   association=association, threads=threads,
+                                                                   lock=lock, disable_bar=disable_bar)
+        source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
+        if projection:
+            logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
+            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms, force)
+        if partition:
+            logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
+            systems_partition(pangenome.name, pangenome_proj, source_res_output)
+        if association:
+            logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
+            association_pangenome_systems(pangenome, association, source_res_output)
+        if proksee:
+            raise NotImplementedError("Proksee not implemented")
+
+
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,
                              association: List[str] = None, partition: bool = False, proksee: str = None,
                              organisms: List[str] = None, threads: int = 1, lock: Lock = None, force: bool = False,
@@ -101,30 +131,9 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
         force (bool, optional): Flag to allow overwriting files. Defaults to False.
         disable_bar (bool, optional): Flag to disable the progress bar. Defaults to False.
     """
-    pangenomes_proj = pd.DataFrame()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
-        pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
-        for system_source in pangenome.systems_sources:
-            logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
-                                                f"on system source: {system_source}")
-            pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
-                                                                       association=association, threads=threads,
-                                                                       lock=lock, disable_bar=disable_bar)
-            source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
-            if projection:
-                logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-                write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms, force)
-            if partition:
-                logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
-                systems_partition(pangenome.name, pangenome_proj, source_res_output)
-            if association:
-                logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-                association_pangenome_systems(pangenome, association, source_res_output)
-            if proksee:
-                raise NotImplementedError("Proksee not implemented")
-            pangenome_proj.insert(0, "pangenome name", pangenome.name)
-            pangenomes_proj = pd.concat([pangenomes_proj, pangenome_proj])
+        write_flat_systems_to_pangenome(pangenome, output, projection, association, partition, proksee, organisms,
+                                        threads, lock, force, disable_bar)
 
 
 def launch(args):

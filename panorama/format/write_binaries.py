@@ -167,9 +167,10 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     super_write_status(pangenome, h5f)  # call write_status from ppanggolin
     status_group = h5f.root.status
 
-    if "systems" in pangenome.status and pangenome.status["systems"] in ["Computed", "Loaded", "inFile"]:
-        status_group._v_attrs.systems = True
-        status_group._v_attrs.systems_sources |= pangenome.systems_sources
+    if "systems" in pangenome.status:
+        if pangenome.status["systems"] in ["Computed", "Loaded"]:
+            status_group._v_attrs.systems = True
+            status_group._v_attrs.systems_sources |= pangenome.systems_sources
     else:
         status_group._v_attrs.systems = False
         status_group._v_attrs.systems_sources = set()
@@ -238,4 +239,5 @@ def write_pangenome(pangenome: Pangenome, file_path: str, source: str = None,
         pangenome.status["systems"] = "Loaded"
 
     write_status(pangenome, h5f)
+
     h5f.close()
