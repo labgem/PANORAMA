@@ -29,11 +29,13 @@ from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.systems.models import Models
 from panorama.systems.detection import check_detection_args, search_systems, write_systems_to_pangenome
 from panorama.systems.write_systems import write_flat_systems_to_pangenome
-from panorama.utility.utility import check_models
+from panorama.utility.utility import check_models, mkdir
 
 
 def check_pansystems_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     need_info, hmm_kwgs = check_annotate_args(args)
+    if 'output' not in hmm_kwgs:
+        hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
     args.annotation_sources = None
     need_info.update(check_detection_args(args))
     need_info["need_metadata"] = False

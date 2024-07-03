@@ -6,11 +6,19 @@ from typing import Generator, List, Tuple
 
 # installed libraries
 from ppanggolin.genome import Organism
-from ppanggolin.region import Spot as Hotspot, Module as Mod
+from ppanggolin.region import Region as RGP, Spot as Hotspot, Module as Mod
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-# from panorama.systems.system import System
+
+
+class Region(RGP):
+    def __init__(self, name: str):
+        """Constructor method
+
+        :param name: Name of the region
+        """
+        super().__init__(name)
 
 
 class Spot(Hotspot):
@@ -39,6 +47,12 @@ class Spot(Hotspot):
         if self._organisms_getter is None:
             self._get_organisms()
         yield from self._organisms_getter.values()
+
+    @property
+    def number_of_organisms(self):
+        if self._organisms_getter is None:
+            self._get_organisms()
+        return len(self._organisms_getter)
 
 
 class ConservedSpots:
@@ -125,8 +139,14 @@ class Module(Mod):
     def organisms(self):
         organisms = set()
         for family in self.families:
-            organisms |= family.organisms
+            organisms |= set(family.organisms)
         return organisms
+
+    @property
+    def number_of_organisms(self):
+        return len(set(self.organisms))
+
+
 
     @property
     def gene_families(self) -> GeneFamily:

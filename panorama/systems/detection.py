@@ -11,7 +11,8 @@ import argparse
 import time
 from pathlib import Path
 import logging
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
+from multiprocessing import get_context
 from tqdm import tqdm
 from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
@@ -476,6 +477,10 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
     return detected_systems
 
 
+def run_detect(args):
+    return search_system(*args)
+
+
 def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_sources: List[str],
                    jaccard_threshold: float = 0.8, threads: int = 1, lock: Lock = None,
                    disable_bar: bool = False):
@@ -494,6 +499,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
     """
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
 
+    logging.getLogger("PANORAMA").debug(f"Begin systems detection with {threads} threads in {pangenome.name}")
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
@@ -506,6 +512,18 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                 for future in futures:
                     result = future.result()
                     detected_systems |= result
+    # args_detect = []
+    # for model in models:
+    #     args_detect.append((model, meta2fam, source, jaccard_threshold))
+    # detected_systems = set()
+    #
+    # with get_context("fork").Pool(threads) as pool:
+    #     with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
+    #         for res in pool.imap_unordered(run_detect, args_detect):
+    #             detected_systems |= res
+    #             progress.update()
+
+
 
     for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
         pangenome.add_system(system)
