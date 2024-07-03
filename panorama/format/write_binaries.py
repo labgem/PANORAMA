@@ -168,6 +168,8 @@ def write_status(pangenome: Pangenome, h5f: tables.File):
     status_group = h5f.root.status
 
     if "systems" in pangenome.status:
+        if not hasattr(status_group._v_attrs, 'systems_sources'):
+            status_group._v_attrs.systems_sources = set()
         if pangenome.status["systems"] in ["Computed", "Loaded"]:
             status_group._v_attrs.systems = True
             status_group._v_attrs.systems_sources |= pangenome.systems_sources

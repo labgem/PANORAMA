@@ -46,7 +46,10 @@ def get_status(pangenome, pangenome_file: Path):
     status_group = h5f.root.status
     if hasattr(status_group._v_attrs, "systems") and status_group._v_attrs.systems:
         pangenome.status["systems"] = "inFile"
-        pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
+        if hasattr(status_group._v_attrs, 'systems_sources'):
+            pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
+        else:
+            pangenome.status["systems_sources"] = set()
     h5f.close()
 
 
