@@ -33,6 +33,18 @@ top_height, middle_height, below_height = [int(y * total_height) for y in [0.15,
 
 def get_coverage_df(asso2sys: Dict[Union[Region, Spot, Module], Set[System]],
                     pangenome: Pangenome = None) -> pd.DataFrame:
+    """
+    Create a DataFrame that describes the coverage of systems by pangenome elements.
+
+    Args:
+        asso2sys (Dict[Union[Region, Spot, Module], Set[System]]):
+            A dictionary mapping pangenome elements (Region, Spot, Module) to sets of Systems.
+        pangenome (Pangenome, optional):
+            The pangenome to consider for frequency calculation. Defaults to None.
+
+    Returns:
+        pd.DataFrame: DataFrame describing the coverage and, if applicable, frequency of systems by pangenome elements.
+    """
     field = ["name", "systems_ID", "systems_name", "coverage"]
     if pangenome is not None:
         field.append("frequency")
@@ -59,14 +71,15 @@ def get_coverage_df(asso2sys: Dict[Union[Region, Spot, Module], Set[System]],
 def get_association_df(pangenome: Pangenome, association: List[str]
                        ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
-    Get the dataframe corresponding to the system-pangenome object association.
+    Get the DataFrame corresponding to the system-pangenome object association.
 
     Args:
         pangenome (Pangenome): Pangenome containing systems.
         association (List[str]): List of pangenome elements to associate.
 
     Returns:
-        pd.DataFrame: DataFrame corresponding to the system-pangenome element association.
+        Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+            Tuple containing DataFrames for system-pangenome element associations and coverage for RGPs, spots, and modules.
     """
     columns = ['system number', 'system_name', 'families']
     if 'RGPs' in association:
@@ -113,7 +126,7 @@ def preprocess_data(df: pd.DataFrame, association: str) -> pd.DataFrame:
     Preprocess the data for the correlation matrix.
 
     Args:
-        df (pd.DataFrame): Association dataframe between systems and pangenome objects.
+        df (pd.DataFrame): Association DataFrame between systems and pangenome objects.
         association (str): Pangenome object to associate systems with.
 
     Returns:
@@ -137,11 +150,11 @@ def create_figure(correlation_matrix: pd.DataFrame, association: str,
     Args:
         correlation_matrix (pd.DataFrame): Preprocessed correlation matrix.
         association (str): Pangenome object to associate systems with.
-        x_range: Range of x abscissa
-        y_range: Range of y abscissa
+        x_range (FactorRange): Range of x-axis values.
+        y_range (FactorRange): Range of y-axis values.
 
     Returns:
-        figure: Bokeh figure object.
+        Tuple[figure, GlyphRenderer]: Bokeh figure object and GlyphRenderer for the correlation matrix.
     """
     high_corr = correlation_matrix.values.max()
     if high_corr == 1:
@@ -182,7 +195,7 @@ def create_color_bar(r: GlyphRenderer) -> figure:
     Create the color bar for the correlation matrix.
 
     Args:
-        r (figure): Rectangle glyph object.
+        r (GlyphRenderer): Rectangle glyph object.
 
     Returns:
         figure: Bokeh figure object for the color bar.
@@ -210,11 +223,11 @@ def create_coverage_plot(coverage: pd.DataFrame, association: str, x_range: Fact
 
     Args:
         association (str): Pangenome object to associate systems with.
-        coverage (pd.DataFrame): Coverage dataframe.
-        x_range: order of x elements
+        coverage (pd.DataFrame): Coverage DataFrame.
+        x_range (FactorRange): Order of x elements.
 
     Returns:
-        figure: Bokeh figure object for the coverage plot.
+        Tuple[figure, figure]: Bokeh figure objects for the coverage plot and its color bar.
     """
     coverage_mapper = LinearColorMapper(palette=Reds256, low=1, high=0)
     coverage_color_bar = ColorBar(color_mapper=coverage_mapper, label_standoff=12,
@@ -254,12 +267,11 @@ def create_frequency_plot(frequency: pd.DataFrame, association: str, x_range: Fa
 
     Args:
         association (str): Pangenome object to associate systems with.
-        frequency (pd.DataFrame): Coverage dataframe.
-        x_range: order of x elements
-
+        frequency (pd.DataFrame): Frequency DataFrame.
+        x_range (FactorRange): Order of x elements.
 
     Returns:
-        figure: Bokeh figure object for the coverage plot.
+        Tuple[figure, figure]: Bokeh figure objects for the frequency plot and its color bar.
     """
     frequency_mapper = LinearColorMapper(palette=Blues256, low=1, high=0)
     frequency_color_bar = ColorBar(color_mapper=frequency_mapper, label_standoff=12,
@@ -294,7 +306,7 @@ def create_frequency_plot(frequency: pd.DataFrame, association: str, x_range: Fa
     return frequency_p, frequency_color_bar_plot
 
 
-def create_bar_plots(correlation_matrix: pd.DataFrame, association: str) -> Tuple[figure, figure, List[str]]:
+def create_bar_plots(correlation_matrix: pd.DataFrame, association: str) -> Tuple[figure, figure]:
     """
     Create the bar plots for the correlation matrix.
 
@@ -303,7 +315,7 @@ def create_bar_plots(correlation_matrix: pd.DataFrame, association: str) -> Tupl
         association (str): Pangenome object to associate systems with.
 
     Returns:
-        figure: Bokeh figure objects for the bar plots.
+        Tuple[figure, figure, List[str]]: Bokeh figure objects for the bar plots and list of sorted x-axis elements.
     """
     system_counts = correlation_matrix.sum(axis=1)
     left_bar_source = ColumnDataSource(pd.DataFrame({
@@ -336,7 +348,7 @@ def create_bar_plots(correlation_matrix: pd.DataFrame, association: str) -> Tupl
     top_bar.grid.grid_line_color = None
     top_bar.outline_line_color = None
 
-    return left_bar, top_bar, x_ord
+    return left_bar, top_bar
 
 
 def write_correlation_matrix(df: pd.DataFrame, association: str, coverage: pd.DataFrame, output: Path,
@@ -345,16 +357,20 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, coverage: pd.Da
     Write the correlation matrix.
 
     Args:
-        df (pd.DataFrame): Association dataframe between systems and pangenome objects.
+        df (pd.DataFrame): Association DataFrame between systems and pangenome objects.
         association (str): Pangenome object to associate systems with.
-        coverage (pd.DataFrame): Coverage dataframe between systems and pangenome objects.
+        coverage (pd.DataFrame): Coverage DataFrame between systems and pangenome objects.
         output (Path): Path to the output directory.
-        out_format (List[str], optional): Formats of the output file (default is ['html']).
+        frequency (pd.DataFrame, optional): Frequency DataFrame. Defaults to None.
+        out_format (List[str], optional): Formats of the output files (default is ['html']).
+
+    Returns:
+        None
     """
     out_format = out_format if out_format is not None else ['html']
 
     correlation_matrix = preprocess_data(df, association)
-    left_bar, top_bar, xord = create_bar_plots(correlation_matrix, association)
+    left_bar, top_bar = create_bar_plots(correlation_matrix, association)
     p, r = create_figure(correlation_matrix, association, top_bar.x_range, left_bar.y_range)
     color_bar_plot = create_color_bar(r)
     coverage_p, coverage_color_bar_plot = create_coverage_plot(coverage, association, top_bar.x_range)
