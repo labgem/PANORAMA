@@ -8,12 +8,11 @@ import logging
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
-from ppanggolin.edge import Edge
 from ppanggolin.genome import Organism
 from pyhmmer.plan7 import HMM
 
-# local libraries
 
+# local libraries
 
 
 class GeneFamily(Fam):
@@ -30,6 +29,7 @@ class GeneFamily(Fam):
         self.profile = None
         self.optimized_profile = None
         self._systems_getter = {}
+        self._akin = None
 
     def __repr__(self):
         return f"GF {self.ID}: {self.name}"
@@ -48,7 +48,8 @@ class GeneFamily(Fam):
         :raises TypeError: Try to compare a systems with another type object
         """
         if not isinstance(other, GeneFamily):
-            raise TypeError(f"Another gene family is expected to be compared to the first one. You give a {type(other)}")
+            raise TypeError(f"Another gene family is expected to be compared to the first one. "
+                            f"You give a {type(other)}")
         return set(self.genes) == set(other.genes)
 
     def __ne__(self, other: GeneFamily) -> bool:
@@ -85,6 +86,7 @@ class GeneFamily(Fam):
     def recast(family: Fam) -> GeneFamily:
         """Recast a family from PPanGGOLiN into PANORAMA Gene Family
 
+        Todo look at this function is still needed
         """
         assert isinstance(family, Fam), "family must be a Gene Family object from PPanGGOLiN"
         panorama_fam = GeneFamily(family_id=family.ID, name=family.name)
@@ -97,8 +99,9 @@ class GeneFamily(Fam):
         :type system: System
         """
         if system.ID in self._systems_getter and self.get_system(system.ID) != system:
-            print(self.get_system(system.ID), system)
-            raise KeyError("A different system with the same name already exist in the gene family")
+            logging.getLogger("PANORAMA").error(f"System {system.ID}: {system.name} can't be added to family "
+                                                f"because same ID is known for {self.get_system(system.ID).name} ")
+            raise KeyError(f"A different system with the same name already exist in the gene family {self}")
         self._systems_getter[system.ID] = system
 
     def get_system(self, identifier: int):
@@ -128,3 +131,79 @@ class GeneFamily(Fam):
             return True
         else:
             return False
+
+    @property
+    def akin(self) -> Akin:
+        """Get the akin families with other pangenomes
+
+        Returns:
+            Similar families
+        """
+        if self._akin is None:
+            logging.getLogger('PANORAMA').debug(f"Not any akin families has been assigned to {self.name}")
+        return self._akin
+
+    @akin.setter
+    def akin(self, akin: Akin):
+        """Set the akin families with other pangenomes
+
+        Args:
+            akin: Similar families
+
+        Raises:
+            KeyError: if akin is not instance Akin
+        """
+        if not isinstance(akin, Akin):
+            raise TypeError(f"{akin} is not an instance of Akin.")
+        if self._akin is not None and self._akin != akin:
+            logging.getLogger("PANORAMA").debug(f"Akin families is already set for {self.name} and "
+                                                "a different one is given. Could be an error")
+        self._akin = akin
+
+
+class Akin:
+    """
+    This class represents a group of gene families that are similar between multiple pangenomes
+    """
+
+    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily) -> None:
+        self.ID = identifier
+        self._families = {}
+        self.reference = reference.name
+        self.add(reference)
+        for gene_family in gene_families:
+            self.add(gene_family)
+
+    def __setitem__(self, name: str, family: GeneFamily):
+        try:
+            _ = self._families[name]
+        except KeyError:
+            self._families[name] = family
+        else:
+            raise KeyError(f"Gene family: {name} already exists in the cluster")
+
+    def __getitem__(self, name: str):
+        try:
+            return self._families[name]
+        except KeyError:
+            raise KeyError(f"There is no gene family: {name} in the cluster")
+
+    def add(self, family: GeneFamily):
+        """
+        Add a gene family to the set of akin families
+
+        Args:
+            family: the akin gene families
+        """
+        assert isinstance(family, GeneFamily), "A GeneFamily object is expected to be added to cluster"
+        self._families[family.name] = family
+        family.akin = self
+
+    def get(self, name: str) -> GeneFamily:
+        """
+        Get a gene family from the set of akin families
+
+        Args:
+            name: the gene family name to get
+        """
+        return self._families[name]

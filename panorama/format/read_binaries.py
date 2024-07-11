@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to read and load pangenome data from HDF5 files.
+"""
+
 # default libraries
 import logging
+from collections import defaultdict
 
 from tqdm import tqdm
-from typing import Any, Callable, Dict, List, Set, Union
+from typing import Callable, Dict, List
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
 
 # installed libraries
 import tables
-from ppanggolin.formats import (read_chunks, read_annotation, read_graph, read_rgp, read_spots, read_modules,
-                                read_gene_families_info, read_gene_sequences, read_metadata, get_need_info)
+from ppanggolin.formats import (
+    read_chunks, read_annotation, read_graph, read_rgp,
+    read_gene_sequences, read_metadata, get_need_info
+)
 from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
@@ -22,82 +29,169 @@ from panorama.systems.system import System
 from panorama.systems.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
+from panorama.region import Spot, Module
 from panorama.utils import check_tsv_sanity, init_lock
 
 
 def get_status(pangenome, pangenome_file: Path):
     """
-        Checks which elements are already present in the file.
-    """
+    Check which elements are already present in the file and update the pangenome status.
 
+    Args:
+        pangenome (Pangenome): The pangenome object to update.
+        pangenome_file (Path): The path to the pangenome HDF5 file.
+    """
     super_get_status(pangenome, pangenome_file)
     h5f = tables.open_file(pangenome_file.absolute().as_posix(), "r")
     status_group = h5f.root.status
     if hasattr(status_group._v_attrs, "systems") and status_group._v_attrs.systems:
         pangenome.status["systems"] = "inFile"
-        pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
+        if hasattr(status_group._v_attrs, 'systems_sources'):
+            pangenome.status["systems_sources"] = status_group._v_attrs.systems_sources
+        else:
+            pangenome.status["systems_sources"] = set()
     h5f.close()
 
 
-def read_systems_by_source(pangenome: Pangenome, system_table, models: Models, disable_bar: bool = False):
-    """read sytem for one source
+def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, models: Models, disable_bar: bool = False):
+    """
+    Read systems for one source and add them to the pangenome.
 
-    :param pangenome: pangenome containing systems
-    :param system_table: Table of systems corresponding to one source
-    :param models: Models associated with systems
-    :param disable_bar: Allow to disable progress bar
+    Args:
+        pangenome (Pangenome): Pangenome containing systems.
+        source_group: Source group with 3 tables to read systems.
+        models (Models): Models associated with systems.
+        disable_bar (bool): Whether to disable the progress bar.
     """
     systems = {}
-    for row in tqdm(read_chunks(system_table), total=system_table.nrows, unit="line", disable=disable_bar):
-        sys_id = row["ID"].decode()
-        if sys_id not in systems:
-            model = models.get_model(row["name"].decode())
-            system = System(system_id=row["ID"].decode(), model=model,
-                            source=system_table.name)
-            systems[row["ID"].decode()] = system
+    canonic = {}
+    system2canon = defaultdict(set)
+    source = source_group._v_name
+
+    def read_system_line(line, sys_dict) -> System:
+        """
+        Global function to read a line in system table
+
+        Args:
+            line: The line to read.
+            sys_dict: System dictionary
+
+        Returns:
+            A system object
+        """
+        identifier = line["ID"].decode()
+        if identifier not in sys_dict:
+            model = models.get_model(line["name"].decode())
+            sys = System(system_id=identifier, model=model, source=source)
+            sys_dict[identifier] = sys
         else:
-            system = systems[sys_id]
-        system.add_family(pangenome.get_gene_family(row["geneFam"].decode()))
-    logging.getLogger("PANORAMA").info(f"Add system from {system_table.name} to pangenome...")
-    logging.getLogger("PANORAMA").debug(f"Number of systems found: {len(systems)}")
-    for system in tqdm(sorted(systems.values(), key=lambda x: len(x), reverse=True), unit="system",
-                       disable=False if logging.getLogger().level == logging.DEBUG else True):
+            sys = sys_dict[identifier]
+        sys.add_family(pangenome.get_gene_family(line["geneFam"].decode()),
+                       line["metadata_source"].decode(), int(line["metadata_id"]))
+        return sys
+
+    system_table = source_group.system
+    canonical_table = source_group.canonic
+    sys2canonical_table = source_group.system_to_canonical
+    with tqdm(total=system_table.nrows + canonical_table.nrows + sys2canonical_table.nrows,
+              unit="line", desc="Read pangenome systems", disable=disable_bar) as progress:
+        for row in read_chunks(sys2canonical_table):
+            system2canon[row["system"].decode()].add(row["canonic"].decode())
+            progress.update()
+
+        for row in read_chunks(canonical_table):
+            read_system_line(row, canonic)
+            progress.update()
+
+        for row in read_chunks(system_table):
+            system = read_system_line(row, systems)
+            for canon_id in system2canon.pop(system.ID, []):
+                system.add_canonical(canonic[canon_id])
+            progress.update()
+
+    logging.getLogger("PANORAMA").info(f"Add system from {source} to pangenome...")
+    logging.getLogger("PANORAMA").debug(f"Number of systems found: {len(systems)} "
+                                        f"with {len(canonic)} canonical system")
+    for system in tqdm(sorted(systems.values(), key=lambda x: (len(x.model.canonical), -len(x))),
+                       disable=False if logging.getLogger().level == logging.DEBUG else True,
+                       desc="Add system to pangenome"):
         pangenome.add_system(system)
+    logging.getLogger("PANORAMA").info(f"Add {pangenome.number_of_systems(source=source, with_canonical=False)} "
+                                       f"systems from {source} to pangenome...")
 
 
 def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], sources: List[str],
                  disable_bar: bool = False):
-    """Read information about systems in pangenome hdf5 file to add in pangenome object
+    """
+    Read information about systems in the pangenome HDF5 file and add them to the pangenome object.
 
-    :param pangenome: Pangenome object without gene families information
-    :param h5f: Pangenome HDF5 file with gene families information
-    :param models: list of models for each source
-    :param sources: list of different source
-    :param disable_bar: Disable the progress bar
+    Args:
+        pangenome (Pangenome): Pangenome object.
+        h5f (tables.File): Pangenome HDF5 file with gene families information.
+        models (List[Models]): List of models for each source.
+        sources (List[str]): List of different sources.
+        disable_bar (bool): Whether to disable the progress bar.
     """
     systems_group = h5f.root.systems
-
+    metadata_sources = set()
     for index, source in enumerate(sources):
-        systems_table = h5f.get_node(systems_group, source)
+        source_group = h5f.get_node(systems_group, source)
+        metadata_sources |= source_group._v_attrs.metadata_sources
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, systems_table, models[index], disable_bar)
+        read_systems_by_source(pangenome, source_group, models[index], disable_bar)
         logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
+    return metadata_sources
+
+
+def read_gene_families_info(pangenome: Pangenome, h5f: tables.File, information: bool = False,
+                            sequences: bool = False, disable_bar: bool = False):
+    """
+    Read information about gene families in the pangenome HDF5 file and add them to the pangenome object.
+
+    Args:
+        pangenome (Pangenome): Pangenome object.
+        h5f (tables.File): Pangenome HDF5 file with gene families information.
+        information (bool): Whether to read information.
+        sequences (bool): Whether to read sequences.
+        disable_bar (bool): Whether to disable the progress bar.
+    """
+    table = h5f.root.geneFamiliesInfo
+    description = "Reading gene families "
+    if information:
+        description += f"information {'and sequences' if sequences else ''}"
+    else:
+        description += f"{'sequences' if sequences else ''}"
+
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family",
+                    desc=description, disable=disable_bar):
+        fam = pangenome.get_gene_family(row["name"].decode())
+        if information:
+            fam.partition = row["partition"].decode()
+        if sequences:
+            fam.add_sequence(row["protein"].decode())
+
+    if information and h5f.root.status._v_attrs.Partitioned:
+        pangenome.status["partitioned"] = "Loaded"
+    if sequences and h5f.root.status._v_attrs.geneFamilySequences:
+        pangenome.status["geneFamilySequences"] = "Loaded"
 
 
 def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
     """
-    Read gene families in pangenome hdf5 file to add in pangenome object
+    Read gene families in the pangenome HDF5 file and add them to the pangenome object.
 
-    :param pangenome: Pangenome object without gene families
-    :param h5f: Pangenome HDF5 file with gene families information
-    :param disable_bar: Disable the progress bar
+    Args:
+        pangenome (Pangenome): Pangenome object.
+        h5f (tables.File): Pangenome HDF5 file with gene families information.
+        disable_bar (bool): Whether to disable the progress bar.
     """
     table = h5f.root.geneFamilies
 
     link = True if pangenome.status["genomesAnnotated"] in ["Computed", "Loaded"] else False
 
-    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene family", disable=disable_bar):
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="gene",
+                    desc="Associate gene to gene families", disable=disable_bar):
         try:
             fam = pangenome.get_gene_family(name=row["geneFam"].decode())
         except KeyError:
@@ -111,27 +205,84 @@ def read_gene_families(pangenome: Pangenome, h5f: tables.File, disable_bar: bool
     pangenome.status["genesClustered"] = "Loaded"
 
 
+def read_spots(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
+    """
+    Read hotspots in the pangenome HDF5 file and add them to the pangenome object.
+
+    Args:
+        pangenome (Pangenome): Pangenome object.
+        h5f (tables.File): Pangenome HDF5 file with spots computed.
+        disable_bar (bool): Whether to disable the progress bar.
+    """
+    table = h5f.root.spots
+    spots = {}
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="spot", disable=disable_bar):
+        curr_spot = spots.get(int(row["spot"]))
+        if curr_spot is None:
+            curr_spot = Spot(int(row["spot"]))
+            spots[row["spot"]] = curr_spot
+        region = pangenome.get_region(row["RGP"].decode())
+        curr_spot.add(region)
+        curr_spot.spot_2_families()
+    for spot in spots.values():
+        pangenome.add_spot(spot)
+    pangenome.status["spots"] = "Loaded"
+
+
+def read_modules(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False):
+    """
+    Read modules in the pangenome HDF5 file and add them to the pangenome object.
+
+    Args:
+        pangenome (Pangenome): Pangenome object.
+        h5f (tables.File): Pangenome HDF5 file with modules computed.
+        disable_bar (bool): Whether to disable the progress bar.
+
+    Raises:
+        Exception: If gene families have not been loaded.
+    """
+    if pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
+        raise Exception("It's not possible to read the modules if the gene families have not been loaded.")
+    table = h5f.root.modules
+    modules = {}  # id2mod
+    for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="module", disable=disable_bar):
+        curr_module = modules.get(int(row["module"]))
+        if curr_module is None:
+            curr_module = Module(int(row["module"]))
+            modules[row["module"]] = curr_module
+        family = pangenome.get_gene_family(row["geneFam"].decode())
+        curr_module.add(family)
+    for module in modules.values():
+        pangenome.add_module(module)
+    pangenome.status["modules"] = "Loaded"
+
+
 def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families: bool = False, graph: bool = False,
                    rgp: bool = False, spots: bool = False, gene_sequences: bool = False, modules: bool = False,
-                   metadata: bool = False, metatypes: Set[str] = None, meta_sources: List[str] = None,
-                   systems: bool = False, models: List[Models] = None, systems_sources: List[str] = None,
-                   disable_bar: bool = False):
+                   metadata: bool = False, systems: bool = False, disable_bar: bool = False, **kwargs):
     """
-    Reads a previously written pangenome, with all of its parts, depending on what is asked,
-    with regard to what is filled in the 'status' field of the hdf5 file.
+    Read a previously written pangenome with all of its parts, depending on what is asked,
+    and what is filled in the 'status' field of the HDF5 file.
 
-    :param pangenome: Pangenome object without some information
-    :param annotation: get annotation
-    :param gene_families: get gene families
-    :param graph: get graph
-    :param rgp: get RGP
-    :param spots: get hotspot
-    :param gene_sequences: get gene sequences
-    :param modules: get modules
-    :param metadata: get metadata
-    :param metatypes: metatypes of the metadata to get
-    :param sources: sources of the metadata to get (None means all sources)
-    :param disable_bar: Allow to disable the progress bar
+    Args:
+        pangenome (Pangenome): Pangenome object without some information.
+        annotation (bool): Whether to read the annotation.
+        gene_families (bool): Whether to read gene families.
+        graph (bool): Whether to read the graph.
+        rgp (bool): Whether to read RGP.
+        spots (bool): Whether to read hotspots.
+        gene_sequences (bool): Whether to read gene sequences.
+        modules (bool): Whether to read modules.
+        metadata (bool): Whether to read metadata.
+        systems (bool): Whether to read systems.
+        disable_bar (bool): Whether to disable the progress bar.
+        **kwargs: Additional parameters to get attributes.
+
+    Raises:
+        FileNotFoundError: If the provided pangenome does not have an associated .h5 file.
+        ValueError: If the required annotation, gene families, gene sequences, or RGP information is not present in the file.
+        AttributeError: If the required graph, spots, or modules information is not present in the file.
+        KeyError: If the required metadata information is not present in the file.
     """
     if pangenome.file is None:
         raise FileNotFoundError("The provided pangenome does not have an associated .h5 file")
@@ -143,67 +294,83 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
             logging.getLogger("PPanGGOLiN").info("Reading pangenome annotations...")
             read_annotation(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(
-                f"The pangenome in file '{pangenome.file}' has not been annotated, or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' has not been annotated, "
+                             "or has been improperly filled")
 
     if gene_sequences:
         if h5f.root.status._v_attrs.geneSequences:
             logging.getLogger("PPanGGOLiN").info("Reading pangenome gene dna sequences...")
             read_gene_sequences(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have gene sequences, "
-                            f"or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' does not have gene sequences, "
+                             "or has been improperly filled")
 
     if gene_families:
         if h5f.root.status._v_attrs.genesClustered:
             logging.getLogger("PPanGGOLiN").info("Reading pangenome gene families...")
             read_gene_families(pangenome, h5f, disable_bar=disable_bar)
-            logging.getLogger("PPanGGOLiN").debug("Reading pangenome gene families info...")
-            read_gene_families_info(pangenome, h5f, disable_bar=disable_bar)
+            if kwargs["gene_families_info"] or kwargs["gene_families_sequences"]:
+                debug_msg = "Reading pangenome gene families "
+                if kwargs["gene_families_info"]:
+                    debug_msg += f"info{' and sequences...' if kwargs['gene_families_sequences'] else '...'}"
+                elif kwargs["gene_families_sequences"]:
+                    debug_msg += "sequences..."
+                logging.getLogger("PPanGGOLiN").debug(debug_msg)
+                read_gene_families_info(pangenome, h5f, kwargs["gene_families_info"],
+                                        kwargs["gene_families_sequences"], disable_bar)
         else:
-            raise Exception(
-                f"The pangenome in file '{pangenome.file}' does not have gene families, or has been improperly filled")
+            raise ValueError(f"The pangenome in file '{pangenome.file}' does not have gene families, "
+                             "or has been improperly filled")
 
     if graph:
         if h5f.root.status._v_attrs.NeighborsGraph:
             logging.getLogger("PPanGGOLiN").info("Reading the neighbors graph edges...")
             read_graph(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have graph information, "
-                            f"or has been improperly filled")
+            raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have graph information, "
+                                 f"or has been improperly filled")
 
     if rgp:
         if h5f.root.status._v_attrs.predictedRGP:
             logging.getLogger("PPanGGOLiN").info("Reading the RGP...")
             read_rgp(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have RGP information, "
-                            f"or has been improperly filled")
+            raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have RGP information, "
+                                 f"or has been improperly filled")
 
     if spots:
         if h5f.root.status._v_attrs.spots:
             logging.getLogger("PPanGGOLiN").info("Reading the spots...")
             read_spots(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have spots information, "
-                            f"or has been improperly filled")
+            raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have spots information, "
+                                 f"or has been improperly filled")
 
     if modules:
         if h5f.root.status._v_attrs.modules:
             logging.getLogger("PPanGGOLiN").info("Reading the modules...")
             read_modules(pangenome, h5f, disable_bar=disable_bar)
         else:
-            raise Exception(f"The pangenome in file '{pangenome.file}' does not have modules information, "
-                            f"or has been improperly filled")
+            raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have modules information, "
+                                 f"or has been improperly filled")
+
+    if systems:
+        metadata = True
+        metadata_sources = read_systems(pangenome, h5f, kwargs["models"], kwargs["systems_sources"], disable_bar)
+        if "meta_sources" in kwargs:
+            kwargs["metatypes"].add("families")
+            kwargs["meta_sources"] |= metadata_sources
+        else:
+            kwargs["metatypes"] = {"families"}
+            kwargs["meta_sources"] = metadata_sources
 
     if metadata:
-        for metatype in metatypes:
-
+        for metatype in kwargs["metatypes"]:
             if h5f.root.status._v_attrs.metadata:
                 metastatus = h5f.root.status._f_get_child("metastatus")
                 metasources = h5f.root.status._f_get_child("metasources")
 
-                metatype_sources = set(metasources._v_attrs[metatype]) & set(meta_sources)
+                metatype_sources = set(metasources._v_attrs[metatype]) & set(kwargs["sources"])
                 if metastatus._v_attrs[metatype] and len(metatype_sources) > 0:
                     logging.getLogger("PPanGGOLiN").info(
                         f"Reading the {metatype} metadata from sources {metatype_sources}...")
@@ -211,24 +378,36 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
             else:
                 raise KeyError(
                     f"The pangenome in file '{pangenome.file}' does not have metadata associated to {metatype}, ")
-
-    if systems:
-        read_systems(pangenome, h5f, models, systems_sources, disable_bar)
     h5f.close()
 
 
-def check_pangenome_info(pangenome, need_systems: bool = False, models: List[Models] = None,
+def check_pangenome_info(pangenome, need_families_info: bool = False, need_families_sequences: bool = False,
+                         need_systems: bool = False, models: List[Models] = None,
                          systems_sources: List[str] = None, disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
-    have been computed with regard to the `pangenome.status`
+    have been computed with regard to the `pangenome.status`.
 
-    :param pangenome: Pangenome object without some information
-    :param disable_bar: Allow to disable the progress bar
+    Args:
+        pangenome (Pangenome): Pangenome object without some information.
+        need_families_info (bool): Whether gene families info is needed.
+        need_families_sequences (bool): Whether gene families sequences are needed.
+        need_systems (bool): Whether systems are needed.
+        models (List[Models]): List of models.
+        systems_sources (List[str]): List of systems sources.
+        disable_bar (bool): Whether to disable the progress bar.
+        **kwargs: Additional parameters to get attributes.
+
+    Raises:
+        AssertionError: If gene families need to be loaded to load either information or sequences.
     """
-
     need_info = get_need_info(pangenome, **kwargs)
-    need_info["meta_sources"] = need_info.pop("sources")
+
+    if need_families_info or need_families_sequences:
+        if kwargs.get('gene_families'):
+            raise AssertionError("Gene families need to be loaded to load either information or sequences.")
+    need_info["gene_families_info"] = need_families_info
+    need_info["gene_families_sequences"] = need_families_sequences
 
     if need_systems:
         assert models is not None and systems_sources is not None
@@ -236,12 +415,14 @@ def check_pangenome_info(pangenome, need_systems: bool = False, models: List[Mod
         need_info["models"] = models
         need_info["systems_sources"] = systems_sources
 
+    logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
+
     if any(need_info.values()):
         # if no flag is true, then nothing is needed.
         read_pangenome(pangenome, disable_bar=disable_bar, **need_info)
 
 
-def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
+def load_pangenome(name: str, path: Path, taxid: int, need_info: Dict[str, bool],
                    check_function: Callable[[Pangenome, ...], None] = None,
                    disable_bar: bool = False, **kwargs) -> Pangenome:
     """
@@ -251,13 +432,20 @@ def load_pangenome(name: str, path: str, taxid: int, need_info: Dict[str, bool],
     The pangenome file is added to the pangenome object. The function then checks that the required information
     are present in the pangenome and if they are, it loads them.
 
-    :param name: The name of the pangenome.
-    :param path: The path to the pangenome file.
-    :param taxid: The taxonomic ID associated with the pangenome.
-    :param need_info: A dictionary containing information required to load in the Pangenome object.
-    :param check_function:
-    :param disable_bar:
-    :return: The pangenome object with the loaded information.
+    Args:
+        name (str): The name of the pangenome.
+        path (Path): The path to the pangenome file.
+        taxid (int): The taxonomic ID associated with the pangenome.
+        need_info (Dict[str, bool]): A dictionary containing information required to load in the Pangenome object.
+        check_function (Callable[[Pangenome, ...], None], optional): Function to check the pangenome before loading information.
+        disable_bar (bool): Whether to disable the progress bar.
+        **kwargs: Additional parameters to get attributes.
+
+    Returns:
+        Pangenome: The pangenome object with the loaded information.
+
+    Raises:
+        Exception: If an error occurs during the pangenome check.
     """
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
@@ -281,14 +469,17 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
     information. The pangenomes are loaded using the `load_pangenome` function. The loading progress is
     displayed using a tqdm progress bar.
 
-    :param pangenome_list: Path to the pangenomes list files.
-    :param need_info: A flag indicating what information is needed during pangenome loading.
-    :param check_function: Function which check the pangenome before to load information
-    :param max_workers: The maximum number of worker processes to use in the process pool executor.
-    :param lock: A multiprocessing lock used for synchronization.
+    Args:
+        pangenome_list (Path): Path to the pangenomes list files.
+        need_info (dict): A flag indicating what information is needed during pangenome loading.
+        check_function (callable, optional): Function to check the pangenome before loading information.
+        max_workers (int): The maximum number of worker processes to use in the process pool executor.
+        lock (Lock, optional): A multiprocessing lock used for synchronization.
+        disable_bar (bool): Whether to disable the tqdm progress bar.
+        **kwargs: Additional parameters to get attributes.
 
-    :param disable_bar: A flag indicating whether to disable the tqdm progress bar.
-    :return pangenomes: List of loaded pangenomes with required information
+    Returns:
+        Pangenomes: List of loaded pangenomes with required information.
     """
     pangenomes = Pangenomes()
     pan_to_path = check_tsv_sanity(pangenome_list)
@@ -304,5 +495,5 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
 
             for future in futures:
                 with lock:
-                    pangenomes.add_pangenome(future.result())
+                    pangenomes.add(future.result())
     return pangenomes

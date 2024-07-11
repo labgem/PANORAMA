@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module provides functions to describe rules used to detect biological systems
+"""
+
 # default libraries
 from __future__ import annotations
-import logging
 from pathlib import Path
 from typing import Dict, List, Generator, Set, Tuple, Union
-from tqdm import tqdm
 import json
 
 # TODO Try to add those variable in class
@@ -18,31 +20,39 @@ accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
 
 def check_key(parameter_data: Dict, need_key: List):
     """
-    Global function to check if all the keys are present in the dict.
-    This function is applied to check model, functional unit and family consistency
+    Check if all the keys are present in the dictionary.
 
-    :param parameter_data: Dictionary which define model, functional unit or family
-    :param need_key: List of all the key needed
+    This function is applied to check model, functional unit and family consistency.
+
+    Args:
+        parameter_data (Dict): Dictionary which defines model, functional unit or family.
+        need_key (List): List of all the keys needed.
+
+    Raises:
+        KeyError: If all the following keys are not present.
     """
     if not all([key in parameter_data for key in need_key]):
-        raise KeyError(f"All the following key are necessary : {need_key}")
+        raise KeyError(f"All the following keys are necessary: {need_key}")
 
 
 def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
-    """Check if all parameters are inside and with the good presence
+    """
+    Check if all parameters are inside and with the correct presence.
 
-    :param param_dict: Dictionary with all the parameters for the rule
-    :param mandatory_keys: list of the mandatory keys
+    Args:
+        param_dict (Dict[str, int]): Dictionary with all the parameters for the rule.
+        mandatory_keys (List[str]): List of the mandatory keys.
 
-    :raise KeyError: One or more mandatory parameters are missing
-    :raise TypeError: One or more parameters are with a non-acceptable presence
-    :raise ValueError: One or more parameters are with a non-acceptable value
-    :raise Exception: Manage an unexpected error
+    Raises:
+        KeyError: If one or more mandatory parameters are missing.
+        TypeError: If one or more parameters are with an incorrect presence.
+        ValueError: If one or more parameters are with an incorrect value.
+        Exception: If an unexpected error occurs.
     """
     try:
         check_key(param_dict, mandatory_keys)
     except KeyError:
-        raise KeyError("One or more attribute are missing in parameters")
+        raise KeyError("One or more attributes are missing in parameters")
     except Exception as error:
         raise Exception(f"Unexpected Error: {error} to get parameters")
     else:
@@ -67,16 +77,19 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
 
 def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mandatory_keys: List[str],
                param_keys: List[str] = None):
-    """Check if all keys and values are present and with good presence before to add in model
+    """
+    Check if all keys and values are present and with the correct presence before adding to the model.
 
-    :param data_dict: Dictionary with all model information
-    :param mandatory_keys: list of the mandatory keys
-    :param param_keys: list of the mandatory keys for parameters
+    Args:
+        data_dict (Dict[str, Union[str, int, list, Dict[str, int]]]): Dictionary with all model information.
+        mandatory_keys (List[str]): List of the mandatory keys.
+        param_keys (List[str], optional): List of the mandatory keys for parameters. Defaults to None.
 
-    :raise KeyError: One or more keys are missing or non-acceptable
-    :raise TypeError: One or more value are not with good presence
-    :raise ValueError: One or more value are not non-acceptable
-    :raise Exception: Manage unexpected error
+    Raises:
+        KeyError: If one or more keys are missing or not acceptable.
+        TypeError: If one or more values are not with the correct presence.
+        ValueError: If one or more values are not acceptable.
+        Exception: If an unexpected error occurs.
     """
     param_keys = [] if param_keys is None else param_keys
 
@@ -90,7 +103,7 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
         for key, value in data_dict.items():
             if key == 'name':
                 if not isinstance(value, str):
-                    raise TypeError("The name value must be str presence")
+                    raise TypeError("The name value must be a string")
             elif key == 'presence':
                 if not isinstance(value, str):
                     raise TypeError("The presence attribute must be a string")
@@ -103,12 +116,12 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
                 if not isinstance(value, list):
                     raise TypeError("func_unit value in json must be an array")
                 if len(value) < 1:
-                    raise ValueError("Model need at least one functional unit")
+                    raise ValueError("Model needs at least one functional unit")
             elif key == 'families':
                 if not isinstance(value, list):
                     raise TypeError("families value in json must be an array")
                 if len(value) < 1:
-                    raise ValueError("Functional unit need at least one families")
+                    raise ValueError("Functional unit needs at least one family")
             elif key == 'canonical':
                 if not isinstance(value, list):
                     raise TypeError("canonical value in json must be an array")
@@ -126,36 +139,58 @@ def check_dict(data_dict: Dict[str, Union[str, int, list, Dict[str, int]]], mand
 
 class Models:
     """
-    :param models: A set of model defining system
+    A set of models defining a system.
+
+    Args:
+        models (Set[Model], optional): A set of models defining a system. Defaults to None.
     """
 
     def __init__(self, models: Set[Model] = None):
-        """Constructor Method
+        """
+        Constructor method to create Models object.
+
+        Args:
+            models (Set[Model], optional): A set of models defining a system. Defaults to None.
         """
         self._model_getter = models if models is not None else {}
 
     def __iter__(self) -> Generator[Model, None, None]:
+        """
+        Iterate over the models.
+
+        Yields:
+            Model: A model in the set.
+        """
         for _model in self._model_getter.values():
             yield _model
 
     @property
     def value(self) -> List[Model]:
-        """Return all models added. Useful if you need a list ang not a generator"""
+        """
+        Return all models added. Useful if you need a list and not a generator.
+
+        Returns:
+            List[Model]: A list of all models added.
+        """
         return list(self)
 
     @property
     def size(self) -> int:
-        """Get the number of model added
+        """
+        Get the number of models added.
 
-        :return: number of model inside
+        Returns:
+            int: The number of models inside.
         """
         return len(self.value)
 
     @property
     def func_units(self) -> Generator[FuncUnit, None, None]:
-        """Get all functional units in models
+        """
+        Get all functional units in models.
 
-        :return: All functional unit
+        Yields:
+            FuncUnit: All functional units.
         """
         func_units = set()
         for model in self:
@@ -164,9 +199,11 @@ class Models:
         yield from func_units
 
     def func_units_to_model(self) -> Dict[FuncUnit, Model]:
-        """Get all functional units in models and link them to the corresponding model
+        """
+        Get all functional units in models and link them to the corresponding model.
 
-        :return: All functional unit link to their model
+        Returns:
+            Dict[FuncUnit, Model]: All functional units linked to their model.
         """
         fu2model = {}
         for fu in self.func_units:
@@ -175,9 +212,11 @@ class Models:
 
     @property
     def families(self) -> Generator[Family, None, None]:
-        """Get all families in models
+        """
+        Get all families in models.
 
-        :return: All families in models
+        Yields:
+            Family: All families in models.
         """
         families = set()
         for model in self:
@@ -186,9 +225,11 @@ class Models:
         yield from families
 
     def families_to_model(self) -> Dict[Family, Model]:
-        """Get all families in models and link them to the corresponding model
+        """
+        Get all families in models and link them to the corresponding model.
 
-        :return: All families in models and link to their corresponding model
+        Returns:
+            Dict[Family, Model]: All families in models linked to their corresponding model.
         """
         fam2model = {}
         for family in self.families:
@@ -196,37 +237,45 @@ class Models:
         return fam2model
 
     def read(self, model_path: Path):
-        """Read all json files models in the directory
+        """
+        Read all JSON files models in the directory.
 
-        :param model_path: path to model
+        Args:
+            model_path (Path): Path to model.
 
-        :raise KeyError: One or more keys are missing or non-acceptable
-        :raise TypeError: One or more value are not with good presence
-        :raise ValueError: One or more value are not non-acceptable
-        :raise Exception: Manage unexpected error
+        Raises:
+            KeyError: If one or more keys are missing or not acceptable.
+            TypeError: If one or more attributes are not with the correct presence.
+            ValueError: If one or more attributes are not with an acceptable value.
+            Exception: If an unexpected problem occurs to read JSON.
         """
         with open(model_path.resolve().as_posix()) as json_file:
             data = json.load(json_file)
             try:
                 model = Model.read_model(data)
             except KeyError:
-                raise KeyError(f"Problem with one or more key in {model_path} are missing.")
+                raise KeyError(f"Problem with one or more keys in {model_path} are missing.")
             except TypeError:
-                raise TypeError(f"One or more attribute are not with the good presence in {model_path}.")
+                raise TypeError(f"One or more attributes are not with the correct presence in {model_path}.")
             except ValueError:
-                raise ValueError(f"One or more attribute are not with an acceptable value in {model_path}.")
+                raise ValueError(f"One or more attributes are not with an acceptable value in {model_path}.")
             except Exception:
-                raise Exception(f"Unexpected problem to read json {model_path}")
+                raise Exception(f"Unexpected problem to read JSON {model_path}")
             else:
                 self.add_model(model)
 
     def get_model(self, name: str) -> Model:
         """
-        Get a model by his name
+        Get a model by its name.
 
-        :param name: name to find
+        Args:
+            name (str): Name to find.
 
-        :raise KeyError: Model not present
+        Raises:
+            KeyError: If the model is not present.
+
+        Returns:
+            Model: The model with the given name.
         """
         try:
             model = self._model_getter[name]
@@ -237,11 +286,13 @@ class Models:
 
     def add_model(self, model: Model):
         """
-        Add model
+        Add a model.
 
-        :param model: Complete model object
+        Args:
+            model (Model): Complete model object.
 
-        :raise Exception: A model with the same name is already present in system
+        Raises:
+            Exception: If a model with the same name is already present in the system.
         """
         try:
             self.get_model(model.name)
@@ -253,23 +304,37 @@ class Models:
 
 
 class _BasicFeatures:
+    """
+    Basic features for Model, FuncUnit, and Family classes.
+
+    Args:
+        name (str, optional): Name of the element. Defaults to "".
+        max_separation (int, optional): Maximum separation. Defaults to 0.
+    """
 
     def __init__(self, name: str = "", max_separation: int = 0):
-        """Constructor Method
+        """
+        Constructor method to create a Basic features object
+
+        Args:
+            name (str, optional): Name of the element. Defaults to "".
+            max_separation (int, optional): Maximum separation. Defaults to 0.
         """
         self.name = name
         self.max_separation = max_separation
 
     def __repr__(self):
-        return f"{self.__class__} name : {self.name}"
+        return f"{self.__class__.__name__} name: {self.name}"
 
     def __str__(self):
-        return f"{self.__class__} name : {self.name}"
+        return f"{self.__class__.__name__} name: {self.name}"
 
     def read_parameters(self, parameters: Dict[str, Union[str, int, bool]], param_keys: List[str]):
-        """Check parameters consistency
+        """
+        Check parameters' consistency.
 
-        :raise Exception: Model is not consistent
+        Raises:
+            Exception: If the model is not consistent.
         """
         for param in param_keys:
             if param in parameters:
@@ -282,11 +347,32 @@ class _BasicFeatures:
 
 
 class _FuFamFeatures:
+    """
+    Features for FuncUnit and Family classes.
+
+    Args:
+        presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+        parent (Union[FuncUnit, Model], optional): Functional unit or model in which is the family. Defaults to None.
+        duplicate (int, optional): Number of duplicates. Defaults to 0.
+        exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+        multi_system (bool, optional): If the family can be present in multiple systems. Defaults to False.
+        multi_model (bool, optional): If the family can be present in multiple models. Defaults to True.
+    """
 
     def __init__(self, presence: str = "", parent: Union[FuncUnit, Model] = None, duplicate: int = 0,
                  exchangeable: Set[str] = None, multi_system: bool = False, multi_model: bool = True):
-        """Constructor Method
         """
+        Constructor method to create a FuFamfeature object
+
+        Args:
+            presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+            parent (Union[FuncUnit, Model], optional): Functional unit or model in which is the family. Defaults to None.
+            duplicate (int, optional): Number of duplicates. Defaults to 0.
+            exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+            multi_system (bool, optional): If the family can be present in multiple systems. Defaults to False.
+            multi_model (bool, optional): If the family can be present in multiple models. Defaults to True.
+        """
+
         self.presence = presence
         self.duplicate = duplicate
         self.exchangeable = exchangeable if exchangeable is not None else set()
@@ -297,11 +383,40 @@ class _FuFamFeatures:
 
 
 class _ModFuFeatures:
+    """
+    Features for Model and FuncUnit classes.
+
+    Args:
+        mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
+        min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+        max_mandatory (int, optional): Maximum number of mandatory sub-elements. Defaults to None.
+        accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
+        min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+        max_total (int, optional): Maximum number of total sub-elements. Defaults to None.
+        forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+        neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+        same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
+    """
+
     def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
                  accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
                  forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0,
                  neutral: Set[FuncUnit, Family] = None, same_strand: bool = False):
-        """Constructor Method
+        """
+        Constructor method to create a ModFuFeatures object.
+
+        Args:
+            mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
+            min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+            max_mandatory (int, optional): Maximum number of mandatory sub-elements. Defaults to None.
+            accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
+            min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+            max_total (int, optional): Maximum number of total sub-elements. Defaults to None.
+            forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+            neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+            same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
         """
         self.mandatory = mandatory if mandatory is not None else set()
         self.min_mandatory = min_mandatory
@@ -317,19 +432,39 @@ class _ModFuFeatures:
 
     @property
     def _children(self):
+        """
+        Get all child elements.
+
+        Yields:
+            Union[FuncUnit, Family]: All child elements.
+        """
         for child in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield child
 
     def _child_names(self, presence: str):
+        """
+        Get all child elements names.
+
+        Args:
+            presence (str): Type of the rule (mandatory, accessory, forbidden or neutral).
+
+        Returns:
+            Set[str]: All child elements names.
+        """
         if presence is None:
             return {child.name for child in self._children}
         else:
             return {child.name for child in self._children if child.presence == presence}
 
     def _duplicate(self, filter_type: str = None):
-        """Access to all families that are duplicated in functional unit
+        """
+        Access to all families that are duplicated in functional unit.
 
-        :return: A generator with all families
+        Args:
+            filter_type (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to None.
+
+        Yields:
+            Union[FuncUnit, Family]: All families that are duplicated in functional unit.
         """
         assert filter_type in [None, 'mandatory', 'accessory', 'forbidden', 'neutral']
         if filter_type is None:
@@ -349,26 +484,30 @@ class _ModFuFeatures:
                 yield child
 
     def _check(self):
-        """Check model consistency
+        """
+        Check model consistency.
 
-        :raise Exception: Model is not consistent
+        Raises:
+            Exception: If the model is not consistent.
         """
         if self.min_mandatory > len(self.mandatory) + sum([child.duplicate for child in self._duplicate("mandatory")]):
-            raise Exception(f"There is less mandatory {self._child_type} than the minimum mandatory")
+            raise Exception(f"There are less mandatory {self._child_type} than the minimum mandatory")
         if self.max_forbidden > len(self.forbidden) + sum([child.duplicate for child in self._duplicate("forbidden")]):
-            raise Exception(f"There is less forbidden {self._child_type} than the maximum forbidden accepted")
+            raise Exception(f"There are less forbidden {self._child_type} than the maximum forbidden accepted")
         if self.min_total > len(list(self._children)) + sum([child.duplicate for child in self._duplicate()]):
-            raise Exception(f"There is less {self._child_type} than the minimum total")
+            raise Exception(f"There are less {self._child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
             raise Exception(f"Minimum mandatory {self._child_type} value is greater than minimum total.")
         if len(self.mandatory) == 0:
-            raise Exception(f"There is not mandatory {self._child_type}."
-                            f"You should have at least one mandatory {self._child_type} mandatory presence.")
+            raise Exception(f"There are no mandatory {self._child_type}. "
+                            f"You should have at least one mandatory {self._child_type} with mandatory presence.")
 
     def add(self, child: Union[FuncUnit, Family]):
-        """Add a function unit in model
+        """
+        Add a functional unit to the model.
 
-        :param child: function unit
+        Args:
+            child (Union[FuncUnit, Family]): Functional unit or family.
         """
         if isinstance(child, FuncUnit):
             child.check_func_unit()
@@ -383,20 +522,39 @@ class _ModFuFeatures:
 
 
 class Model(_BasicFeatures, _ModFuFeatures):
-    """Represent Model rules which describe biological system
+    """
+    Represents Model rules which describe a biological system.
 
-     :param name: Name of the element
-     :param mandatory: Set of mandatory sub element
-     :param accessory: Set of accessory sub element
-     :param forbidden: Set of forbidden sub element
-     :param neutral: Set of neutral sub element
-     :param canonical: List of canonical models
-     """
+    Args:
+        name (str, optional): Name of the element. Defaults to "".
+        mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+        min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+        accessory (set, optional): Set of accessory sub-elements. Defaults to None.
+        neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+        min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+        forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
+        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+        canonical (list, optional): List of canonical models. Defaults to None.
+    """
 
     def __init__(self, name: str = "", mandatory: set = None, min_mandatory: int = 1, accessory: set = None,
                  neutral: set = None, min_total: int = 1, forbidden: set = None, max_forbidden: int = 0,
                  max_separation: int = 0, canonical: list = None):
-        """Constructor Method
+        """
+        Constructor method to create a Model rules which describe a biological system.
+
+        Args:
+            name (str, optional): Name of the element. Defaults to "".
+            mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+            min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+            accessory (set, optional): Set of accessory sub-elements. Defaults to None.
+            neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+            min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+            forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
+            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+            canonical (list, optional): List of canonical models. Defaults to None.
         """
 
         super().__init__(name=name, max_separation=max_separation)
@@ -407,50 +565,78 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
     @property
     def func_units(self) -> Generator[FuncUnit, None, None]:
-        """ Access to all functional units in models
+        """
+        Access to all functional units in models.
 
-        :return: A generator with all functional units
+        Yields:
+            FuncUnit: All functional units.
         """
         yield from self._children
 
     def func_units_names(self, presence: str):
+        """
+        Get all functional units names.
+
+        Args:
+            presence (str): Type of the rule (mandatory, accessory, forbidden or neutral).
+
+        Returns:
+            Set[str]: All functional units names.
+        """
         return self._child_names(presence)
 
     @property
     def families(self) -> Generator[Family, None, None]:
-        """Access to all families in models
+        """
+        Access to all families in models.
 
-        :return: A generator with all families
+        Yields:
+            Family: All families.
         """
         for func_unit in self.func_units:
             yield from func_unit.families
 
     @property
     def size(self) -> Tuple[int, int]:
-        """Get number of elements in model
+        """
+        Get the number of elements in the model.
 
-        :return: number of functional unit and number of families
+        Returns:
+            Tuple[int, int]: Number of functional units and number of families.
         """
         return len(list(self.func_units)), len(list(self.families))
 
     def duplicate_fu(self, filter_type: str = None):
-        """Access to all families that are duplicated in functional unit
+        """
+        Access to all families that are duplicated in functional unit.
 
-        :return: A generator with all families
+        Args:
+            filter_type (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to None.
+
+        Yields:
+            Family: All families that are duplicated in functional unit.
         """
         yield from self._duplicate(filter_type)
 
     def check_model(self):
-        """Check model consistency
+        """
+        Check model consistency.
 
-        :raise Exception: Model is not consistent
+        Raises:
+            Exception: If the model is not consistent.
         """
         try:
             self._check()
-        except Exception:
-            raise Exception(f"Consistency not respected  in {self.name}")
+        except Exception as err:
+            raise Exception(f"Consistency not respected in {self.name}. {err}")
 
     def read(self, data_model: dict):
+        """
+        Read model to parse into self attributes.
+
+        Args:
+            data_model (dict): JSON data dictionary.
+        """
         mandatory_key = ['name', 'parameters', 'func_units']
         param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory",
                            "max_total"]
@@ -469,9 +655,14 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
     @staticmethod
     def read_model(data_model: dict) -> Model:
-        """Read model to parse in self attributes
+        """
+        Read model to parse into self attributes.
 
-        :param data_model: json data dictionary
+        Args:
+            data_model (dict): JSON data dictionary.
+
+        Returns:
+            Model: Model object.
         """
         model = Model()
         model.read(data_model)
@@ -479,14 +670,25 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
 
 class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
-    """Represent functional unit definition rule
+    """
+    Represents functional unit definition rule.
 
-    :param name: Name of the element
-    :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
-    :param mandatory: Set of mandatory sub element
-    :param accessory: Set of accessory sub element
-    :param forbidden: Set of forbidden sub element
-    :param neutral: Set of neutral sub element
+    Args:
+        name (str, optional): Name of the element. Defaults to "".
+        presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+        mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+        min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+        accessory (set, optional): Set of accessory sub-elements. Defaults to None.
+        neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+        min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+        forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
+        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+        duplicate (int, optional): Number of duplicates. Defaults to 0.
+        model (Model, optional): Model in which is the functional unit. Defaults to None.
+        exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+        multi_system (bool, optional): If the functional unit can be present in multiple systems. Defaults to False.
+        multi_model (bool, optional): If the functional unit can be present in multiple models. Defaults to False.
     """
 
     def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
@@ -494,7 +696,25 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
                  forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None,
                  exchangeable: Set[str] = None, multi_system: bool = False, multi_model: bool = False
                  ):
-        """Constructor Method
+        """
+        Constructor method to create a functional unit definition rule.
+
+        Args:
+            name (str, optional): Name of the element. Defaults to "".
+            presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+            mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+            min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
+            accessory (set, optional): Set of accessory sub-elements. Defaults to None.
+            neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+            min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+            forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
+            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+            duplicate (int, optional): Number of duplicates. Defaults to 0.
+            model (Model, optional): Model in which is the functional unit. Defaults to None.
+            exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+            multi_system (bool, optional): If the functional unit can be present in multiple systems. Defaults to False.
+            multi_model (bool, optional): If the functional unit can be present in multiple models. Defaults to False.
         """
         super().__init__(name=name, max_separation=max_separation)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model,
@@ -506,56 +726,93 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
 
     @property
     def model(self) -> Model:
+        """
+        Get the model in which is the functional unit.
+
+        Returns:
+            Model: Model in which is the functional unit.
+        """
         return self._parent
 
     @model.setter
     def model(self, model: Model):
+        """
+        Set the model in which is the functional unit.
+
+        Args:
+            model (Model): Model in which is the functional unit.
+        """
         self._parent = model
 
     @model.deleter
     def model(self):
+        """
+        Delete the model in which is the functional unit.
+        """
         del self._parent
 
     @property
     def families(self) -> Generator[Family, None, None]:
-        """Access to all families in functional unit
+        """
+        Access to all families in functional unit.
 
-        :return: A generator with all families
+        Yields:
+            Family: All families.
         """
         yield from self._children
 
     def families_names(self, presence: str = None):
+        """
+        Get all families names.
+
+        Args:
+            presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to None.
+
+        Returns:
+            Set[str]: All families names.
+        """
         return self._child_names(presence)
 
     @property
     def size(self) -> int:
-        """Get number of families in model
+        """
+        Get the number of families in the model.
 
-        :return: Number of families
+        Returns:
+            int: Number of families.
         """
         return len(list(self.families))
 
     def duplicate_fam(self, filter_type: str = None):
-        """Access to all families that are duplicated in functional unit
+        """
+        Access to all families that are duplicated in functional unit.
 
-        :return: A generator with all families
+        Args:
+            filter_type (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to None.
+
+        Yields:
+            Family: All families that are duplicated in functional unit.
         """
         yield from self._duplicate(filter_type)
 
     def check_func_unit(self):
-        """Check functional unit consistency
+        """
+        Check functional unit consistency.
 
-        :raise Exception: Model is not consistent
+        Raises:
+            Exception: If the functional unit is not consistent.
         """
         try:
             self._check()
         except Exception:
-            raise Exception(f"Consistency not respected  in model {self.model.name} at functional unit {self.name}")
+            raise Exception(f"Consistency not respected in model {self.model.name} at functional unit {self.name}")
 
     def read(self, data_fu: dict):
-        """Read functional unit
+        """
+        Read functional unit.
 
-        :param data_fu: data json file of all function units
+        Args:
+            data_fu (dict): Data JSON file of all functional units.
         """
         mandatory_key = ['name', 'families', 'presence']
         fu_params = ['duplicate', 'min_total', 'min_mandatory', "max_forbidden", 'max_separation',
@@ -573,25 +830,50 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
 
     @staticmethod
     def read_func_unit(data_fu: dict) -> FuncUnit:
+        """
+        Read functional unit.
+
+        Args:
+            data_fu (dict): Data JSON file of all functional units.
+
+        Returns:
+            FuncUnit: Functional unit object.
+        """
         func_unit = FuncUnit()
         func_unit.read(data_fu)
         return func_unit
 
 
 class Family(_BasicFeatures, _FuFamFeatures):
-    """Represent family model definition rule
+    """
+    Represents family model definition rule.
 
-    :param name: Name of the element
-    :param max_separation: maximum intergene distance
-    :param presence: Type of the rule (mandatory, accessory, forbidden or neutral)
-    :param func_unit: Functional unit in which is the family
-    :param exchangeable: List of exchangeable families
+    Args:
+        name (str, optional): Name of the element. Defaults to "".
+        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+        presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+        func_unit (FuncUnit, optional): Functional unit in which is the family. Defaults to None.
+        duplicate (int, optional): Number of duplicates. Defaults to 0.
+        exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+        multi_system (bool, optional): If the family can be present in multiple systems. Defaults to False.
+        multi_model (bool, optional): If the family can be present in multiple models. Defaults to False.
     """
 
     def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
                  duplicate: int = 0, exchangeable: Set[str] = None, multi_system: bool = False,
                  multi_model: bool = False):
-        """Constructor Method
+        """
+        Constructor method to create a family model definition rule.
+
+        Args:
+            name (str, optional): Name of the element. Defaults to "".
+            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+            presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
+            func_unit (FuncUnit, optional): Functional unit in which is the family. Defaults to None.
+            duplicate (int, optional): Number of duplicates. Defaults to 0.
+            exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
+            multi_system (bool, optional): If the family can be present in multiple systems. Defaults to False.
+            multi_model (bool, optional): If the family can be present in multiple models. Defaults to False.
         """
         super().__init__(name=name, max_separation=max_separation)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit,
@@ -600,22 +882,48 @@ class Family(_BasicFeatures, _FuFamFeatures):
 
     @property
     def func_unit(self) -> FuncUnit:
+        """
+        Get the functional unit in which is the family.
+
+        Returns:
+            FuncUnit: Functional unit in which is the family.
+        """
         return self._parent
 
     @func_unit.setter
     def func_unit(self, model: FuncUnit):
+        """
+        Set the functional unit in which is the family.
+
+        Args:
+            model (FuncUnit): Functional unit in which is the family.
+        """
         self._parent = model
 
     @func_unit.deleter
     def func_unit(self):
+        """
+        Delete the functional unit in which is the family.
+        """
         del self._parent
 
     @property
     def model(self) -> Model:
-        """Get the model in which is family"""
+        """
+        Get the model in which is the family.
+
+        Returns:
+            Model: Model in which is the family.
+        """
         return self.func_unit.model
 
     def read(self, data_fam: dict):
+        """
+        Read family.
+
+        Args:
+            data_fam (dict): Data JSON file with families.
+        """
         fam_param = ['max_separation', "duplicate", "multi_system", "multi_model"]
 
         check_dict(data_fam, mandatory_keys=['name', 'presence'])
@@ -627,9 +935,14 @@ class Family(_BasicFeatures, _FuFamFeatures):
 
     @staticmethod
     def read_family(data_fam: dict) -> Family:
-        """Read family
+        """
+        Read family.
 
-        :param data_fam: data json file with families
+        Args:
+            data_fam (dict): Data JSON file with families.
+
+        Returns:
+            Family: Family object.
         """
         fam = Family()
         fam.read(data_fam)

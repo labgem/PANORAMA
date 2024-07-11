@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module contains functions for managing files and directories, and checking the sanity of a TSV file.
+"""
+
 # default libraries
 import logging
 import shutil
@@ -13,15 +17,20 @@ from multiprocessing import Manager, Lock
 
 # File managing system
 def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
-    """Create a directory at the given path
+    """
+    Create a directory at the given path.
 
-    :param output: Path to output directory
-    :param force: Pass exception if directory already exist
+    Args:
+        output (Path): The path to the output directory.
+        force (bool, optional): Whether to raise an exception if the directory already exists. Defaults to False.
+        erase (bool, optional): Whether to erase the directory if it already exists and force is True. Defaults to False.
 
-    :raise FileExistError: If the given directory already exist and no force is used
-    :raise Exception: Handle all others exception
+    Returns:
+        Path: The path to the output directory.
 
-    :return: Path object to output directory
+    Raises:
+        FileExistsError: If the directory already exists and force is False.
+        Exception: If an unexpected error occurs.
     """
     try:
         output.mkdir(parents=True, exist_ok=False)
@@ -47,15 +56,20 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         return Path(output)
 
 
-def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
-    """ Check if the given tsv is readable for the next PANORAMA step
+def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
+    """
+    Check if the given TSV file is readable for the next PANORAMA step.
 
-    :param tsv_path: Path to tsv file with list of pangenome
+    Args:
+        tsv_path (Path): The path to the TSV file with the list of pangenomes.
 
-    :raise IOError: If tsv or a pangenome not exist raise IOError
-    :raise Exception: Handle all others exception
+    Returns:
+        Dict[str, Dict[str, Union[int, str, Path]]]: A dictionary with pangenome name as key and a dictionary with path and taxid as values.
 
-    :return: Dictionary with pangenome name as key and path to hdf5 file as value
+    Raises:
+        SyntaxError: If the TSV file has less than 2 columns.
+        ValueError: If there is a line with no value in pangenome name or if the pangenome names contain spaces.
+        FileNotFoundError: If unable to locate one or more pangenomes in the TSV file.
     """
     tsv = pd.read_csv(tsv_path, sep='\t', header=None)
     if tsv.shape[1] < 2:
@@ -96,11 +110,11 @@ def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
-    This function initializes the `loading_lock` variable as a global variable,
-    assigning it the value of the `lock` parameter.
-    If the `loading_lock` is already initialized, the function does nothing.
+    Args:
+        lock (Lock, optional): The lock object to be assigned to `loading_lock`. Defaults to None.
 
-    :param lock: The lock object to be assigned to `loading_lock`.
+    Returns:
+        Lock: The lock object assigned to `loading_lock`.
     """
     if lock is None:
         manager = Manager()

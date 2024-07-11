@@ -9,34 +9,60 @@ from pathlib import Path
 import tempfile
 from typing import Dict, List, Tuple
 from itertools import combinations
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager, Lock
+from shutil import rmtree
+from multiprocessing import Manager
 import subprocess
 from time import time
 
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
-from pandas import DataFrame
 
 # local libraries
-from panorama.utils import init_lock, mkdir
-from panorama.pangenomes import Pangenomes
+from panorama.utils import mkdir
+from panorama.pangenomes import Pangenome
 from panorama.format.read_binaries import load_pangenomes
-from panorama.alignment.common import get_gf_pangenomes, createdb
+from panorama.alignment.common import createdb, write_pangenomes_families_sequences
 
 align_format = ["query", "target", "fident", "qlen", "tlen", "alnlen", "evalue", "bits"]
 align_column = ["query", "target", "identity", "qlength", "tlength", "alnlength", "e_value", "bits"]  # noqa: E501
 
 
-def write_alignment(query_db: Path, target_db: Path, aln_db: Path, outfile: Path, threads: int = 1):
-    """ Write alignment result provide by MMSeqs2
+def check_align_parameters(args: argparse.Namespace):
+    """
+    Checks if given command argument are legit if so return a dictionary with information needed to load pangenomes.
 
-    :param query_db: MMSeqs2 database for the query sequences
-    :param target_db: MMSeqs2 database for the target sequences
-    :param aln_db: MMSeqs2 database for the alignment results
-    :param outfile: Path to the output file
-    :param threads: Number of available threads
+    Args:
+        args: Argument in the command line
+    """
+    if not args.tmpdir.exists() or not args.tmpdir.is_dir():
+        raise NotADirectoryError("The given path for temporary directory is not found or not a directory."
+                                 "Please check your path and try again.")
+
+
+def check_pangenome_align(pangenome: Pangenome) -> None:
+    """
+    Function to check and load one pangenome in the loading process
+    Args:
+        pangenome: Pangenome object
+    """
+    if pangenome.status["genesClustered"] == "No":
+        raise AttributeError("You did not cluster the genes. "
+                             "See the 'ppanggolin cluster' command if you want to do that.")
+    if pangenome.status["geneFamilySequences"] == "No":
+        raise AttributeError("There is no sequences associated to the gene families.")
+
+
+def write_alignment(query_db: Path, target_db: Path, aln_db: Path, outfile: Path, threads: int = 1):
+    """
+    Write alignment result provide by MMSeqs2
+
+    Args:
+        query_db: MMSeqs2 database for the query sequences
+        target_db: MMSeqs2 database for the target sequences
+        aln_db: MMSeqs2 database for the alignment results
+        outfile: Path to the output file
+        threads: Number of available threads
     """
     cmd = ["mmseqs", "convertalis", query_db.as_posix(), target_db.as_posix(), aln_db.as_posix(),
            outfile.as_posix(), "--format-output", ",".join(align_format), "--threads", str(threads)]
@@ -45,21 +71,25 @@ def write_alignment(query_db: Path, target_db: Path, aln_db: Path, outfile: Path
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
 
 
-def align_db(query_db: Path, target_db: Path, tmpdir: tempfile.TemporaryDirectory, aln_db: Path = None,
-             identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0, threads: int = 1):
-    """Align with MMSeqs2 query and target sequences
-
-    :param query_db: MMSeqs2 database for the query sequences
-    :param target_db: MMSeqs2 database for the target sequences
-    :param tmpdir: Temporary directory for MMSeqs2 subprocess
-    :param aln_db: MMSeqs2 database for the alignment results
-    :param identity: Set the identity use to construct clustering [0-1]
-    :param coverage: Coverage used to construct clustering [0-1]
-    :param cov_mode: Coverage mode used by MMSeqs2 to cluster
-    :param threads: Number of available threads
+def align_db(query_db: Path, target_db: Path, aln_db: Path = None, tmpdir: Path = None,
+             identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0, threads: int = 1,
+             keep_tmp: bool = False) -> Path:
     """
-    if aln_db is None:
-        aln_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
+    Align with MMSeqs2 query and target sequences
+
+    Args:
+        query_db: MMSeqs2 database for the query sequences
+        target_db: MMSeqs2 database for the target sequences
+        aln_db: MMSeqs2 alignment database results
+        identity: Set the identity use to construct clustering [0-1]. (Defaults 0.8).
+        coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8).
+        cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 0).
+        tmpdir: Temporary directory for MMSeqs2. (Defaults tmp user directory).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+        threads: Number of available threads. (Defaults 1).
+    """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
+    aln_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name) if aln_db is None else aln_db
     cmd = ["mmseqs", "search", query_db.absolute().as_posix(), target_db.absolute().as_posix(),
            aln_db.absolute().as_posix(), tmpdir.name, "-a", "--min-seq-id", str(identity), "-c", str(coverage),
            "--cov-mode", str(cov_mode), "--threads", str(threads)]
@@ -71,176 +101,195 @@ def align_db(query_db: Path, target_db: Path, tmpdir: tempfile.TemporaryDirector
     return aln_db
 
 
-def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path, Path],
-                          tmpdir: tempfile.TemporaryDirectory, identity: float = 0.8,
-                          coverage: float = 0.8, cov_mode: int = 0, threads: int = 1) -> Path:
-    """Align with MMSeqs2 gene families from 2 different pangenomes
-
-    :param pangenomes_pair: Pangenomes pair to align pangenomes in multiprocessing
-    :param db_pair: MMSeqs2 database for the pangenomes pair
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param identity: Set the identity use to construct clustering [0-1]
-    :param coverage: Coverage used to construct clustering [0-1]
-    :param cov_mode: Coverage mode used by MMSeqs2 to cluster
-    :param threads: Number of available threads
-
-    :return: Path to the alignment results
+def align_pangenomes_pair(pangenomes_pair: Tuple[str, str], db_pair: Tuple[Path, Path], identity: float = 0.8,
+                          coverage: float = 0.8, cov_mode: int = 0, tmpdir: Path = None,
+                          keep_tmp: bool = False, threads: int = 1) -> Path:
     """
+    Align with MMSeqs2 gene families from 2 different pangenomes
+
+    Args:
+        pangenomes_pair: Pangenomes pair to align pangenomes in multiprocessing
+        db_pair: MMSeqs2 database for the pangenomes pair
+        identity: Set the identity use to construct clustering [0-1]. (Defaults 0.8).
+        coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8).
+        cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 0).
+        tmpdir: Temporary directory for MMSeqs2. (Defaults tmp user directory).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+        threads: Number of available threads. (Defaults 1).
+
+    Returns:
+        Path to the alignment results
+    """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     logging.getLogger("PANORAMA").debug(f"Aligning gene families between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
     aln_db = align_db(query_db=db_pair[0], target_db=db_pair[1], tmpdir=tmpdir, identity=identity,
                       coverage=coverage, cov_mode=cov_mode, threads=threads)
-    logging.getLogger("PANORAMA").debug(f"Write alignment results between {pangenomes_pair[0]} and {pangenomes_pair[1]}")
-    aln_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
-    write_alignment(db_pair[0], db_pair[1], Path(aln_db.name), Path(aln_res.name), threads)
+    logging.getLogger("PANORAMA").debug(f"Write alignment results between {pangenomes_pair[0]} "
+                                        f"and {pangenomes_pair[1]}")
+    aln_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, suffix=".tsv", delete=keep_tmp).name)
+    write_alignment(db_pair[0], db_pair[1], aln_db, aln_res, threads)
     logging.getLogger("PANORAMA").debug("Write alignment done")
-    return Path(aln_res.name)
+    return aln_res
 
 
-def align_pangenomes(pangenomes_to_db: Dict[str, Path], lock: Lock, tmpdir: tempfile.TemporaryDirectory,
-                     identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                     task: int = 1, threads_per_task: int = 1, disable_bar: bool = False) -> List[Path]:
-    """Align all gene families between pangenomes
-
-    :param pangenomes_to_db: Dictionary with for each pangenome (key) a MMSeqs2 database of his gene families
-    :param lock: Global lock for multiprocessing execution
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param identity: Set the identity use to construct clustering [0-1]
-    :param coverage: Coverage used to construct clustering [0-1]
-    :param cov_mode: Coverage mode used by MMSeqs2 to cluster
-    :param task: number of parallel workers
-    :param threads_per_task: Number of available threads for each worker
-    :param disable_bar: Disable progressive bar
-
-    :return: List of alignment results between pangenomes
+def align_pangenomes(pangenome2db: Dict[str, Path], identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
+                     tmpdir: Path = None, keep_tmp: bool = False,
+                     threads: int = 1, disable_bar: bool = False) -> List[Path]:
     """
-    with ProcessPoolExecutor(max_workers=task, initializer=init_lock, initargs=(lock,)) as executor:
-        pangenomes_pairs = list(combinations(pangenomes_to_db.keys(), 2))
-        with tqdm(total=len(pangenomes_pairs), unit='pangenomes pair', disable=disable_bar) as progress:
-            futures = []
-            logging.getLogger("PANORAMA").info("Aligning gene families between pangenomes...")
-            for pangenomes_pair in pangenomes_pairs:
-                db_pair = (pangenomes_to_db[pangenomes_pair[0]], pangenomes_to_db[pangenomes_pair[1]])
-                future = executor.submit(align_pangenomes_pair, pangenomes_pair, db_pair, tmpdir,
-                                         identity, coverage, cov_mode, threads_per_task)
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-            results = []
-            for future in futures:
-                results.append(future.result())
+    Align all gene families between pangenomes
+
+    Args:
+        pangenome2db: Dictionary with for each pangenome (key) a MMSeqs2 database of his gene families
+        identity: Set the identity use to construct clustering [0-1]. (Defaults 0.8).
+        coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8).
+        cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 0).
+        tmpdir: Temporary directory for MMSeqs2. (Defaults tmp user directory).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+        threads: Number of available threads. (Defaults 1).
+        disable_bar: Disable progressive bar. (Defaults False).
+
+    Returns:
+        List of alignment results between pangenomes
+    """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
+    pangenomes_pairs = list(combinations(pangenome2db.keys(), 2))
+    with tqdm(total=len(pangenomes_pairs), unit='pangenomes pair', disable=disable_bar) as progress:
+        logging.getLogger("PANORAMA").info("Aligning gene families between pangenomes...")
+        results = []
+        for pangenomes_pair in pangenomes_pairs:
+            db_pair = (pangenome2db[pangenomes_pair[0]], pangenome2db[pangenomes_pair[1]])
+            res = align_pangenomes_pair(pangenomes_pair, db_pair, identity, coverage, cov_mode,
+                                        tmpdir, keep_tmp, threads)
+            results.append(res)
+            progress.update()
     return results
 
 
 def merge_aln_res(align_results: List[Path], outfile: Path):
-    """Merge pangenome pair alignments in one file
+    """
+    Merge pangenome pair alignments in one file
 
-    :param align_results: list of pair alignments files
-    :param outfile: Path to the final output file
+    Args:
+        align_results: list of pair alignments files
+        outfile: Path to the final output file
     """
     merge_res = pd.read_csv(align_results[0], sep="\t", names=align_column)
     for aln_res in align_results[1:]:
         merge_res = pd.concat([merge_res, pd.read_csv(aln_res, sep="\t", names=align_column)],
                               ignore_index=True, copy=False)
     merge_res.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here:"
+                                       f"{outfile.absolute().as_posix()}")
 
 
-def inter_pangenome_align(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
+def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
                           identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                          task: int = 1, threads_per_task: int = 1, disable_bar: bool = False):
-    """Main function to align gene families between pangenomes without inside pangenome alignment
-
-    :param pangenomes: Pangenomes obejct containing all the pangenome to align
-    :param output: Path to the output directory with the alignment results
-    :param lock: Global lock for multiprocessing execution
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param identity: Set the identity use to construct clustering [0-1]
-    :param coverage: Coverage used to construct clustering [0-1]
-    :param cov_mode: Coverage mode used by MMSeqs2 to cluster
-    :param task: number of parallel workers
-    :param threads_per_task: Number of available threads for each worker
-    :param disable_bar: Disable progressive bar
+                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1,
+                          disable_bar: bool = False):
     """
-    pangenomes_db = get_gf_pangenomes(pangenomes=pangenomes, create_db=True, lock=lock, tmpdir=tmpdir,
-                                      threads=task * threads_per_task, disable_bar=disable_bar)
-    align_results = align_pangenomes(pangenomes_db, lock, tmpdir=tmpdir, identity=identity, coverage=coverage,
-                                     cov_mode=cov_mode, task=task, threads_per_task=threads_per_task,
-                                     disable_bar=disable_bar)
-    logging.getLogger("PANORAMA").info("Merging pangenomes gene families aligment...")
+    Main function to align gene families between pangenomes without inside pangenome alignment
+
+    Args:
+        pangenome2families_seq: Dictionary mapping pangenome names to their respective sequence files
+        output: Path to the output directory with the alignment results
+        identity: Set the identity use to construct clustering [0-1]. (Defaults 0.8).
+        coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8).
+        cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 0).
+        tmpdir: Temporary directory for MMSeqs2. (Defaults tmp user directory).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+        threads: Number of available threads. (Defaults 1).
+        disable_bar: Disable progressive bar. (Defaults False).
+    """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
+    pangenome2db = {}
+    for name, sequences in pangenome2families_seq.items():
+        logging.getLogger("PANORAMA").debug(f"Constructing sequences database for pangenome {name}")
+        pangenome2db[name] = createdb([sequences], tmpdir, keep_tmp=keep_tmp)
+    align_results = align_pangenomes(pangenome2db, tmpdir=tmpdir, identity=identity, coverage=coverage,
+                                     cov_mode=cov_mode, threads=threads, disable_bar=disable_bar)
+    logging.getLogger("PANORAMA").info("Merging pangenomes gene families alignment...")
     outfile = output / "pangenome_gf_similarities.tsv"
     merge_aln_res(align_results, outfile)
 
 
-def all_against_all(pangenomes: Pangenomes, output: Path, lock: Lock, tmpdir: tempfile.TemporaryDirectory,
-                    identity: float = 0.8, coverage: float = 0.8, cov_mode: int = 0,
-                    task: int = 1, threads_per_task: int = 1, disable_bar: bool = False) -> DataFrame:
-    """Main function to align all gene families from all pangenomes with inside alignment
-
-    :param pangenomes: Pangenomes object containing all the pangenome to align
-    :param output: Path to the output directory with the alignment results
-    :param lock: Global lock for multiprocessing execution
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param identity: Set the identity use to construct clustering [0-1]
-    :param coverage: Coverage used to construct clustering [0-1]
-    :param cov_mode: Coverage mode used by MMSeqs2 to cluster
-    :param task: number of parallel workers
-    :param threads_per_task: Number of available threads for each worker
-    :param disable_bar: Disable progressive bar
-
-    :return: Dataframe with alignment results
+def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.8, coverage: float = 0.8,
+                    cov_mode: int = 0, tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> pd.DataFrame:
     """
-    gf_seqs = get_gf_pangenomes(pangenomes=pangenomes, create_db=False, lock=lock, tmpdir=tmpdir,
-                                threads=task * threads_per_task, disable_bar=disable_bar)
-    merge_db = createdb(list(gf_seqs.values()), tmpdir)
-    aln_db = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False)
+    Main function to align all gene families from all pangenomes with inside alignment
+
+    Args:
+        families_seq: List of path to gene families sequences
+        output: Path to the output directory with the alignment results
+        tmpdir: Temporary directory for MMSeqs2
+        identity: Set the identity use to construct clustering [0-1]. (Defaults 0.9)
+        coverage: Coverage used to construct clustering [0-1]. (Defaults 0.8)
+        cov_mode: Coverage mode used by MMSeqs2 to cluster. (Defaults 1).
+        threads: Number of available threads. (Defaults 1).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+
+    Returns:
+        Dataframe with alignment results
+    """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
+    merge_db = createdb(families_seq, tmpdir)
+    aln_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
     logging.getLogger("PANORAMA").debug("Aligning all gene families...")
-    align_db(query_db=merge_db, target_db=merge_db, aln_db=Path(aln_db.name), tmpdir=tmpdir,
-             identity=identity, coverage=coverage, cov_mode=cov_mode, threads=task * threads_per_task)
-    aln_res = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False)
-    write_alignment(merge_db, merge_db, Path(aln_db.name),
-                    Path(aln_res.name), task * threads_per_task)
+    align_db(query_db=merge_db, target_db=merge_db, aln_db=aln_db, tmpdir=tmpdir,
+             identity=identity, coverage=coverage, cov_mode=cov_mode, threads=threads)
+    aln_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, suffix=".tsv", delete=keep_tmp).name)
+    write_alignment(query_db=merge_db, target_db=merge_db, aln_db=aln_db, outfile=aln_res, threads=threads)
     logging.getLogger("PANORAMA").debug("Write alignment done")
-    align_df = pd.read_csv(Path(aln_res.name), sep="\t", names=align_column)
+    align_df = pd.read_csv(aln_res, sep="\t", names=align_column)
     outfile = output / "pangenome_gf_similarities.tsv"
     align_df.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
-
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: "
+                                       f"{outfile.absolute().as_posix()}")
     return align_df
 
 
 def launch(args):
     """
-    Launch functions to annotate pangenomes
+    Launch functions to align gene families from pangenomes
 
-    :param args: Argument given
+    Args:
+        args: argument given in CLI
     """
-    # check_parameter(args)
+    check_align_parameters(args)
     mkdir(args.output, args.force)
-
     manager = Manager()
     lock = manager.Lock()
-    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True},
-                                 max_workers=args.task * args.threads_per_task, lock=lock,
-                                 disable_bar=args.disable_prog_bar)
-    tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
+    need_info = {"need_families": True, 'need_families_sequences': True}
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
+                                 check_function=check_pangenome_align, max_workers=args.threads,
+                                 lock=lock, disable_bar=args.disable_prog_bar)
+    tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
+    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, lock=lock,
+                                                                 threads=args.threads,
+                                                                 disable_bar=args.disable_prog_bar)
     if args.inter_pangenomes:
-        inter_pangenome_align(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
-                              args.task, args.threads_per_task, args.disable_prog_bar)
+        inter_pangenome_align(pangenome2families_seq=pangenome2families_seq, output=args.output, identity=args.identity,
+                              coverage=args.coverage, cov_mode=args.cov_mode, tmpdir=tmpdir, keep_tmp=args.keep_tmp,
+                              threads=args.threads, disable_bar=args.disable_prog_bar)
     elif args.all_against_all:
-        all_against_all(pangenomes, args.output, lock, tmpdir, args.identity, args.coverage, args.cov_mode,
-                        args.task, args.threads_per_task, args.disable_prog_bar)
+        all_against_all(families_seq=list(pangenome2families_seq.values()), output=args.output,
+                        identity=args.identity, coverage=args.coverage, cov_mode=args.cov_mode,
+                        tmpdir=tmpdir, threads=args.threads, keep_tmp=args.keep_tmp)
     else:
         raise argparse.ArgumentError(argument=args, message="You must choose between inter_pangenome alignment or "
                                                             "all_against_all alignment")
-    # tmpdir.cleanup()
+    if not args.keep_tmp:
+        rmtree(tmpdir, ignore_errors=True)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
     Subparser to launch PANORAMA in Command line
 
-    :param sub_parser : sub_parser for align command
+    Args:
+        sub_parser: sub_parser for align command
 
-    :return : parser arguments for align command
+    Returns:
+        argparse.ArgumentParser: parser arguments for align command
     """
     parser = sub_parser.add_parser("align", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_align(parser)
@@ -249,9 +298,10 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
 def parser_align(parser):
     """
-    Parser for specific argument of annot command
+    Add argument to parser for align command
 
-    :param parser: parser for annot argument
+    Args:
+        parser: parser for align argument
     """
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
@@ -259,11 +309,13 @@ def parser_align(parser):
                           help='A list of pangenome .h5 files in .tsv file')
     required.add_argument('-o', '--output', required=True, type=Path,
                           help="Output directory where the file(s) will be written")
-    exclusive = parser.add_mutually_exclusive_group(required=True)
+    exclusive = required.add_mutually_exclusive_group(required=True)
     exclusive.add_argument("--inter_pangenomes", action="store_true",
-                           help="Align only gene families between pangenomes and not inside pangenome")
+                           help="Align only gene families between pangenomes and not inside pangenome. "
+                                "Not compatible with --all_against_all option")
     exclusive.add_argument("--all_against_all", action="store_true",
-                           help="Align gene families between pangenomes and intra-pangenome")
+                           help="Align gene families between pangenomes and intra-pangenome."
+                                "Not compatible with --inter_pangenome option")
     mmseqs = parser.add_argument_group(title="MMSeqs2 arguments",
                                        description="The following arguments are optional."
                                                    "Look at MMSeqs2 documentation for more information.")
@@ -274,9 +326,9 @@ def parser_align(parser):
     mmseqs.add_argument('--cov_mode', required=False, type=int, default=0,
                         help="covery_mode")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
+    optional.add_argument("--tmpdir", required=False, type=Path, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
-    optional.add_argument("--task", required=False, nargs='?', type=int, default=1,
-                          help="Number of simultaneous task.")
-    optional.add_argument("--threads_per_task", required=False, nargs='?', type=int, default=1,
-                          help="Number of available threads per task.")
+    optional.add_argument("--keep_tmp", required=False, default=False, action="store_true",
+                          help="Keeping temporary files (useful for debugging).")
+    optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
+                          help="Number of available threads.")

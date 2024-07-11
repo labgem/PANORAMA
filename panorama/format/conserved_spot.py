@@ -3,290 +3,163 @@
 
 # default libraries
 from __future__ import annotations
-import os.path
-import ast
+import logging
+from itertools import combinations
 from pathlib import Path
-from typing import List
+from typing import Dict, Set, Tuple
+from multiprocessing import Lock
+from concurrent.futures import ThreadPoolExecutor
 
 # installed libraries
+from tqdm import tqdm
 import pandas as pd
-from pandas import DataFrame
-from collections import Counter
+import networkx as nx
+from ppanggolin.region import Spot
+from ppanggolin.RGP.rgp_cluster import compute_grr
+
 # local libraries
-from panorama.pangenomes import Pangenome
+from panorama.utils import mkdir, init_lock
+from panorama.geneFamily import GeneFamily
+from panorama.region import ConservedSpots
+from panorama.pangenomes import Pangenomes, Pangenome
 
 
-def write_borders_spot(name: str, pangenome : Pangenome) -> Tuple[DataFrame, DataFrame]:
-    """ Extract borders of pangenome spots and number of organism having the spot
+def create_pangenome_spots_graph(pangenome: Pangenome,
+                                 dup_margin: float = 0.05) -> Tuple[nx.Graph, Dict[Spot, Set[GeneFamily]]]:
+    """
+    Create a graph of spots belonging to one pangenome
 
-         :param name: Name of the pangenome
-         :param pangenome: pangenome object
+    Args:
+        pangenome: Pangenome associated with spots
+        dup_margin: minimum ratio of organisms in which family must have multiple genes to be considered duplicated (default = 0.05)
 
-         :return: Dataframe with spots borders and dataframe with number of organism per spot
-         """
+    Returns:
+        The spot graph without edges and a dictionary of spots links to their bordering gene families
+    """
+    def get_borders_families() -> Set[GeneFamily]:
+        """
+        Get all bordering gene families from a spot
+        Returns:
+            Set of bordering gene families
+        """
+        borders_families = set()
+        borders = spot.borders(pangenome.parameters["spot"]["set_size"], multigenic)
+        for _, border in borders:
+            borders_families |= set(border[0])
+            borders_families |= set(border[1])
+        return borders_families
 
-    df_borders = pd.DataFrame(columns=['pangenome_name', 'Spot', 'number_org', 'borders'])
+    graph = nx.Graph()
+    spots2borders = {}
+    multigenic = pangenome.get_multigenics(dup_margin=dup_margin)
     for spot in pangenome.spots:
-        borders = spot.borders(set_size=pangenome.parameters["spots"]["set_size"], multigenics=pangenome.get_multigenics(dup_margin=0.05))
-        for c, border in borders:
-            famstring = ",".join([fam.name for fam in border[0]]) + "," + ",".join([fam.name for fam in border[1]])
-            new_row = {'pangenome_name': name, 'Spot': spot.ID, 'number_org': c, 'borders': famstring}
-            df_borders.loc[len(df_borders)] = new_row
-    number_org_per_spot = df_borders.groupby('Spot', as_index=False)['number_org'].sum() # get number of org per spot
-    number_org_per_spot = number_org_per_spot.reset_index(drop=True)
-    number_org_per_spot.insert(0, 'pangenome_name', name)
-    idx = df_borders.groupby('Spot')['number_org'].idxmax() # keep spot and border with highest number of genomes having the border
-    df_borders = df_borders.loc[idx]
-    df_borders = df_borders.reset_index(drop=True)
-
-    return df_borders, number_org_per_spot
+        graph.add_node(spot)
+        spots2borders[spot] = get_borders_families()
+    return graph, spots2borders
 
 
-def identical_spot(df_borders_global: DataFrame, number_org_per_spot_global: DataFrame, df_spot_global: DataFrame,
-                   df_align: DataFrame, output: Path, threshold: int = 4):
-    """ Detect identical spots between pangenomes
+def create_spots_graph(pangenomes: Pangenomes, dup_margin: float = 0.05, threads: int = 1, lock: Lock = None,
+                       disable_bar: bool = False) -> Tuple[nx.Graph, Dict[Spot, Set[GeneFamily]]]:
+    """
+    Create a graph with the spots from all pangenomes as nodes. There are no edges computed.
 
-         :param df_borders_global: Spot borders for all pangenomes
-         :param number_org_per_spot_global: Number of organisms per spot for all pangenomes
-         :param df_spot_global: Systems in each spot for all pangenomes
-         :param df_align: Alignment results of families from pangenomes
-         :param output: Path to output directory
-         :param threshold: Number of families conserved between pangenomes
-         """
+    Args:
+        pangenomes: Pangenomes object containing all pangenomes
+        dup_margin: minimum ratio of organisms in which family must have multiple genes to be considered duplicated (default = 0.05)
+        threads: Available threads (default = 1)
+        lock: Lock object (default = None)
+        disable_bar: Flag to disable progress bar (default = False)
 
-    names = df_borders_global['pangenome_name'].unique().tolist()
-
-# get a dict where keys are families and values are similar families in others pangenomes
-    dict_similar_fam = {}
-    for key, value in zip(df_align['query'], df_align['target']):
-        if key in dict_similar_fam:
-            dict_similar_fam[key].append(value)
-        else:
-            dict_similar_fam[key] = [value]
-
-    list_dup_trip_fam = []
-    conserved_spot_global = pd.DataFrame(columns=names)
-    for index, name in enumerate(names):
-        df_borders = df_borders_global[df_borders_global['pangenome_name'] == name]
-        definition_spot = df_borders.set_index('Spot')['borders'].to_dict() # create dict with spot as key and border as value
-        for key, value in definition_spot.items():
-            borders = value.split(',')
-            border_count_q = Counter(borders) # count number of duplicates and triplicates families in borders (Query)
-            dupli_borders_q = [item for item, count in border_count_q.items() if count == 2]
-            tripli_borders_q = [item for item, count in border_count_q.items() if count == 3]
-            if dupli_borders_q != [] or tripli_borders_q != []:
-                # list with all duplicatas and triplicatas fams
-                list_dup_trip_fam.append(f"pangenome:{name} spot:{key} dupli:{dupli_borders_q} tripli:{tripli_borders_q} borders:{borders}")
-            score_df = df_borders_global.drop(['number_org', 'borders'], axis=1) # create dataframe to assign a score if similar families are found
-            score_df['score'] = 0
-            for fam in borders:
-                similar = dict_similar_fam[fam]
-                similar_df = df_borders_global[df_borders_global['borders'].str.contains('|'.join(similar), case=False)]
-                for i, row in similar_df.iterrows():
-                    string_name = row['pangenome_name']
-                    string_spot = row['Spot']
-                    string_borders = row['borders']
-                    string_borders = string_borders.split(',')
-                    border_count_t = Counter(string_borders) # count number of duplicates and triplicates families in borders (Target)
-                    dupli_borders_t = [item for item, count in border_count_t.items() if count == 2]
-                    tripli_borders_t = [item for item, count in border_count_t.items() if count == 3]
-
-                    point = 1 #add 1 to score by default
-
-                    # if a duplicate in query and no duplicate in target
-                    if fam in dupli_borders_q and all(elem not in dupli_borders_t for elem in similar) :
-                        point = 0.5		# add 1 point rather than 2 (0.5 by duplicate value)
-
-                    # if a triplicate in query and no duplicate or triplicate in target
-                    if fam in tripli_borders_q and all(elem not in dupli_borders_t for elem in similar) and all(elem not in tripli_borders_t for elem in similar):
-                        point = 0.34		# add 1.02 point rather than 3 (0.34 by duplicate value)
-
-                    # if a triplicate in query and a duplicate in target
-                    if fam in tripli_borders_q and any(elem in dupli_borders_t for elem in similar):
-                        point = 0.67		# add 2.01 point rather than three (0.67 by duplicate value)
-
-                    score_df.loc[(score_df['pangenome_name'] == string_name) & (score_df['Spot'] == string_spot), 'score'] += point
-
-            good_score_df = score_df[score_df['score'] > threshold-1] # Keep spots passing threshold requirement (Default : 4)
-            good_score_df['Spot'] = good_score_df['Spot'].astype(str)
-            good_score_df['score'] = good_score_df['score'].astype(str)
-            fused_score_df = good_score_df.groupby('pangenome_name')['Spot'].apply(lambda x: list(map(str, x))).reset_index() # join spot_id column values of each pangenome as one list
-
-            indicators = good_score_df['pangenome_name'].unique()
-            conserved_spot = pd.DataFrame(columns=names)
-            for indicator in indicators:
-                fused_score_df_f = fused_score_df[fused_score_df['pangenome_name'] == indicator]
-                conserved_spot[indicator] = fused_score_df_f['Spot'].to_list()
-            conserved_spot_global = pd.concat([conserved_spot_global, conserved_spot], ignore_index=True)
-
-    df_dupli_tripli = pd.DataFrame(list_dup_trip_fam, columns=['duplicatas_or_triplicatas'])
-    df_dupli_tripli.to_csv(output / f"duplicatas_or_triplicatas_fams_in_borders.tsv", sep='\t', index=False)
-
-    df_spot_filter = filter_spot(names=names, conserved_spot_global=conserved_spot_global, df_spot_global=df_spot_global)
-    df_link_system = regroup_spot(names=names, df=df_spot_filter)
-    df_link_system.to_csv(output/f"conserved_spot_link_systems.tsv", sep='\t', index=False)
-
-    df_all = regroup_spot(names=names, df=conserved_spot_global)
-    df_all.to_csv(output/"all_conserved_spot.tsv", sep='\t', index=False)
-
-    asso_conserved_spot_system(conserved_spot_regroup=df_link_system, df_spot_global=df_spot_global,
-                               number_org_per_spot_global=number_org_per_spot_global, df_borders_global=df_borders_global, output=output)
+    Returns:
+        The spot graph without edges and a dictionary of spots links to their bordering gene families
+    """
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="Pangenome", disable=disable_bar) as pbar:
+            futures = []
+            for pangenome in pangenomes:
+                logging.getLogger("PANORAMA").debug(f"Add spots for pangenome {pangenome.name}")
+                future = executor.submit(create_pangenome_spots_graph, pangenome, dup_margin)
+                future.add_done_callback(lambda p: pbar.update())
+                futures.append(future)
+            spots_graph = nx.Graph()
+            spots2borders = {}
+            for future in futures:
+                res = future.result()
+                spots_graph.add_nodes_from(res[0])
+                spots2borders.update(res[1])
+    return spots_graph, spots2borders
 
 
-def filter_spot(names: List[str], conserved_spot_global: DataFrame, df_spot_global: DataFrame) -> DataFrame:
-    """ Remove spots not associated with a system
+def compute_grr_edges(graph: nx.Graph, spots2borders: Dict[Spot, Set[GeneFamily]],
+                      spots2pangenome: Dict[Spot, str], grr_cutoff: float = 0.8,
+                      disable_bar: bool = False):
+    """
+    Compute spots graph edges with grr score
 
-         :param names: Names of all pangenomes
-         :param conserved_spot_global: Similar spots in pangenomes not filtered
-         :param df_spot_global: Systems in each spots for all pangenomes
+    Args:
+        graph: Spots graph with node only
+        spots2borders: Dictionary of spot link to their bordering families
+        spots2pangenome: Dictionary of spot to pangenome from which they belong
+        grr_cutoff: Grr cutoff for grr score (default: 0.8)
+        disable_bar: Flag to disable progress bar (default: False)
+    """
+    spots_pair = [(spot1, spot2) for spot1, spot2 in combinations(graph.nodes, 2)
+                  if spots2pangenome[spot1] != spots2pangenome[spot2]]
+    with tqdm(total=len(spots_pair), unit='spots pair', desc="Compute GRR", disable=disable_bar) as pbar:
+        for spot1, spot2 in spots_pair:
+            border1_refs = {fam.akin.reference for fam in spots2borders[spot1]}
+            border2_refs = {fam.akin.reference for fam in spots2borders[spot2]}
 
-         :return: Dataframe with spots linked to a system
-         """
-
-    dict_pan_spot = {}
-    for index, name in enumerate(names):
-        df_spot = df_spot_global[df_spot_global['pangenome_name'] == name]
-        spot = df_spot["Spot"].tolist()
-        dict_pan_spot[name] = spot #dict with spots associated with system in each pangenome
-
-    df_spot_involved = pd.DataFrame(columns=names)
-    for i, row in conserved_spot_global.iterrows():
-        boolean_system = False
-        for name in names:
-            if boolean_system is False:
-                if isinstance(row[name], list):
-                    spot_check = dict_pan_spot[name] #spots associated with system
-                    spot_check2 = [str(elem) for elem in spot_check]
-                    if any(elem in row[name] for elem in spot_check2): #spots to check if associated with system
-                        boolean_system = True
-                        df_spot_involved = df_spot_involved.append(row, ignore_index=True)
-
-    return df_spot_involved
-
-def regroup_spot(names: List[str], df: DataFrame) -> DataFrame:
-    """ Regroup similar spots together
-
-         :param names: Names of all pangenomes
-         :param df: Dataframe with either all conserved spots or spots link to systems
-
-         :return: Dataframe with similar spots in pangenomes regrouped
-         """
-
-    df = df.applymap(lambda x: x if isinstance(x, list) else [])  # empty list for NaN values
-
-    # First loop to reunite conserved spots
-    df2 = pd.DataFrame(columns=names)
-    for i, row in df.iterrows():
-        row_list = row.tolist()
-        dict_1 = {key: [] for key in names}
-        for name1, element in zip(names, row_list):
-            filter_spot_inv = df[df[name1].apply(lambda x: any(item in x for item in element))]
-            for name2 in names:
-                liste = filter_spot_inv[name2].tolist()
-                flat_list = [item for sublist in liste for item in sublist]
-                flat_list = list(set(flat_list))
-                flat_list = sorted(flat_list, key=int)
-                dict_1[name2] += flat_list
-            dict_1 = {key: list(set(values)) for key, values in dict_1.items()}
-        df2 = df2.append(dict_1, ignore_index=True)
-
-    # Second loop to reunite conserved spots
-    df3 = pd.DataFrame(columns=names)
-    for i, row in df2.iterrows():
-        row_list = row.tolist()
-        dict_2 = {key: [] for key in names}
-        for name1, element in zip(names, row_list):
-            filter_spot_inv = df2[df2[name1].apply(lambda x: any(item in x for item in element))]
-            for name2 in names:
-                liste = filter_spot_inv[name2].tolist()
-                flat_list = [item for sublist in liste for item in sublist]
-                flat_list = list(set(flat_list))
-                flat_list = sorted(flat_list, key=int)
-                dict_2[name2] += flat_list
-            dict_2 = {key: list(set(values)) for key, values in dict_2.items()}
-        df3 = df3.append(dict_2, ignore_index=True)
-
-    df_str = df3.astype(str)
-    df_str = df_str.drop_duplicates()
-
-    return df_str
+            grr = compute_grr(border1_refs, border2_refs, min)
+            if grr > grr_cutoff:
+                graph.add_edge(spot1, spot2, GRR=grr)
+            pbar.update()
 
 
-def asso_conserved_spot_system(conserved_spot_regroup: DataFrame, df_spot_global: DataFrame,
-                               df_borders_global: DataFrame, number_org_per_spot_global: DataFrame, output: Path):
-    """ Write conserved spot and systems associated for each conserved spots detected
+def write_conserved_spots(pangenomes, output: Path, force: bool = False, disable_bar: bool = False):
+    """
+    Write conserved spots into files
 
-         :param conserved_spot_regroup: Similar spots in pangenomes regrouped
-         :param df_spot_global: Systems in each spots for all pangenomes
-         :param df_borders_global: Spot borders for all pangenomes
-         :param number_org_per_spot_global: Number of organisms per spot for all pangenomes
-         :param output: Path to output directory
-         """
+    Args:
+        pangenomes: Pangenomes associated to conserved spots
+        output: Path to the output directory
+        force: Flag to overwrite existing files (default: False)
+        disable_bar: Flag to disable progress bar (default: False)
+    """
+    all_cs = []
+    cs_dir = mkdir(output/"conserved_spots", force=force, erase=force)
+    for conserved_spot in tqdm(pangenomes.conserved_spots, total=pangenomes.number_of_conserved_spots,
+                               disable=disable_bar):
+        by_cs = []
+        for spot in conserved_spot.spots:
+            all_cs.append([conserved_spot.ID, spot.ID, spot.pangenome.name, len(spot), spot.number_of_families])
+            for rgp in spot.regions:
+                by_cs.append([spot.ID, spot.pangenome.name, rgp.name, ",".join([fam.name for fam in rgp.families])])
+            by_cs_df = pd.DataFrame(by_cs, columns=['Spot', 'Pangenome', "RGP", "Families"])
+            by_cs_df = by_cs_df.sort_values(by=['Spot', 'Pangenome', 'RGP'])
+            by_cs_df.to_csv(cs_dir/f"conserved_spots_{conserved_spot.ID}.tsv", sep="\t", header=True, index=False)
+    conserved_df = pd.DataFrame(all_cs, columns=['Conserved ID', 'Spot ID', 'Pangenome', "#RGP", "#Families"])
+    conserved_df = conserved_df.sort_values(by=['Conserved ID', 'Spot ID', 'Pangenome', '#RGP', "#Families"])
+    conserved_df.to_csv(output/"all_conserved_spots.tsv", sep="\t", header=True, index=False)
 
-    conserved_spot_regroup = conserved_spot_regroup.reset_index(drop=True)
 
-    if not os.path.exists(f"{output}/projection/"):
-        os.mkdir(f"{output}/projection/")
+def identify_conserved_spot(pangenomes: Pangenomes, dup_margin: float = 0.05, threads: int = 1,
+                            lock: Lock = None, disable_bar: bool = False):
+    """
+    Main function to identify conserved spots between pangenomes and add them into pangenomes.
 
-    df_spot_global["system_name"] = df_spot_global["system_name"].apply(repr)
-    df_spot_global["organism"] = df_spot_global["organism"].apply(repr)
-    df_spot_global["system_name"] = df_spot_global["system_name"].str.replace('"Counter', '')
-    df_spot_global["system_name"] = df_spot_global["system_name"].str.replace(r'\(|\)', '')
-    df_spot_global["system_name"] = df_spot_global["system_name"].str.replace(r'{|}', '')
-    df_spot_global["system_name"] = df_spot_global["system_name"].str.replace('"', '')
-    df_spot_global["organism"] = df_spot_global["organism"].str.replace('"Counter', '')
-    df_spot_global["organism"] = df_spot_global["organism"].str.replace(r'\(|\)', '')
-    df_spot_global["organism"] = df_spot_global["organism"].str.replace(r'{|}', '')
-    df_spot_global["organism"] = df_spot_global["organism"].str.replace('"', '')
-
-    list_ID = []
-    list_pan = []
-    list_spot = []
-    list_sys = []
-    list_org = []
-
-    sum_spot = pd.DataFrame(columns=["ID", "Number_species", "Number_spots", "Number_systems", "Number_organisms"])
-    for i, row1 in conserved_spot_regroup.iterrows():
-        save_spot = pd.DataFrame()
-        for col, row2 in row1.items():
-            row2 = ast.literal_eval(row2)
-            if row2:
-                filter_global_spot = df_spot_global[df_spot_global['pangenome_name'] == col]
-                df_borders_global_filter = df_borders_global[df_borders_global['pangenome_name'] == col]
-                number_org_per_spot_global_f = number_org_per_spot_global[number_org_per_spot_global['pangenome_name'] == col]
-                for row3 in row2:
-                    df_borders_global_filter2 = df_borders_global_filter[df_borders_global_filter['Spot'] == int(row3)]
-                    number_org_per_spot_global_f2 = number_org_per_spot_global_f[number_org_per_spot_global_f['Spot'] == int(row3)]
-                    nb_total_org = number_org_per_spot_global_f2['number_org'].values[0]
-                    filter_global_spot["Spot"] = filter_global_spot["Spot"].astype(str)
-                    filter_global_spot_2 = filter_global_spot[filter_global_spot['Spot'] == row3]
-                    filter_global_spot_2.insert(7, 'nb_total_organism', nb_total_org)
-                    check_spot_present = ~filter_global_spot_2['Spot'].str.contains(row3).any() #check if spot is not present in spot list
-                    if check_spot_present:
-                        new_row = {'pangenome_name': col, 'Spot': row3, 'system_name': '-', 'organism': '-',
-                                   'borders': df_borders_global_filter2['borders'].values[0],
-                                   'nb_system': 0, 'nb_organism': 0, 'nb_total_organism': nb_total_org, 'mean_nb_genes': '-',
-                                   'max_nb_genes': '-', 'min_nb_genes': '-'}
-                        save_spot = save_spot.append(new_row, ignore_index=True)
-                    save_spot = pd.concat([save_spot, filter_global_spot_2], ignore_index=True)
-
-        save_spot.to_csv(f"{output}/projection/conserved_spot_{i}.tsv", sep='\t', index=False)
-
-        save_global_spot = save_spot.drop(columns=['system_name', 'organism'], axis=1)
-        list_ID.append(f"conserved_spot_{i}")
-        nb_pan = save_global_spot['pangenome_name'].nunique()
-        list_pan.append(nb_pan)
-        nb_spot = save_global_spot.shape[0]
-        list_spot.append(nb_spot)
-        system_sum = save_global_spot['nb_system'].sum()
-        list_sys.append(system_sum)
-        org_sum = save_global_spot['nb_organism'].sum()
-        list_org.append(org_sum)
-
-    sum_spot['ID'] = list_ID
-    sum_spot['Number_species'] = list_pan
-    sum_spot['Number_spots'] = list_spot
-    sum_spot['Number_systems'] = list_sys
-    sum_spot['Number_organisms'] = list_org
-
-    sum_spot.to_csv(f"{output}/summary_conserved_spot.tsv", sep='\t', index=False)
+    Args:
+        pangenomes: Pangenomes object containing pangenome
+        dup_margin: minimum ratio of organisms in which family must have multiple genes to be considered duplicated (default = 0.05)
+        threads: Available threads (default = 1)
+        lock: Lock object (default = None)
+        disable_bar: Flag to disable progress bar (default = False)
+    """
+    spots_graph, spots2borders = create_spots_graph(pangenomes, dup_margin, threads, lock, disable_bar)
+    spots2pangenome = {spot: pangenome.name for pangenome in pangenomes for spot in pangenome.spots}
+    compute_grr_edges(spots_graph, spots2borders, spots2pangenome, disable_bar)
+    cs_id = 0
+    for cc_graph in [spots_graph.subgraph(cc).copy() for cc in nx.connected_components(spots_graph)]:
+        if len(cc_graph.nodes()) > 1:
+            cs_id += 1
+            pangenomes.add_conserved_spots(ConservedSpots(cs_id, *cc_graph.nodes()))
