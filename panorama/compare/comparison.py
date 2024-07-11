@@ -47,7 +47,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     if '--context' in sys.argv:
         context_comparison_parser(parser)
     # if "--modules" in sys.argv:
-    #     raise NotImplementedError("Functionnality still in progress")
+    #     raise NotImplementedError("Functionality still in progress")
     return parser
 
 

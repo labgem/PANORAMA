@@ -22,7 +22,7 @@ from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 from panorama.utils import init_lock, mkdir
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
-from panorama.annotate.hmm_search import read_hmms, annot_with_hmm, res_col_names
+from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
@@ -383,7 +383,7 @@ def parser_annot(parser):
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
                           help='Name of the annotation source.')
     exclusive_mode = required.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--table', type=Path, default=None,  # nargs='+',
+    exclusive_mode.add_argument('--table', type=Path, default=None,
                                 help='A list of tab-separated file, containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
                                      'and path to the TSV with annotation in second column.')

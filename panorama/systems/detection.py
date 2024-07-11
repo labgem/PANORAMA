@@ -2,7 +2,7 @@
 # coding:utf-8
 
 """
-This module provides functions to detect biological systems in pangenomes
+This module provides functions to detect biological systems in pangenomes.
 """
 
 # default libraries
@@ -11,8 +11,7 @@ import argparse
 import time
 from pathlib import Path
 import logging
-from concurrent.futures import ThreadPoolExecutor, ProcessPoolExecutor
-from multiprocessing import get_context
+from concurrent.futures import ThreadPoolExecutor
 from tqdm import tqdm
 from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
@@ -35,13 +34,16 @@ from panorama.format.write_binaries import write_pangenome, erase_pangenome
 
 def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str, List[str]]]:
     """
-    Checks the provided arguments to ensure that they are valid.
+    Checks and processes the provided arguments to ensure they are valid.
 
     Args:
-        args: The parsed arguments.
+        args (argparse.Namespace): The parsed command-line arguments.
 
     Raises:
-        argparse.ArgumentTypeError: If jaccard is not with the correct type
+        argparse.ArgumentTypeError: If 'jaccard' is not a restricted float.
+
+    Returns:
+        dict: A dictionary indicating the required annotations and sources.
     """
     args.jaccard = restricted_float(args.jaccard)
     args.annotation_sources = [args.source] if args.annotation_sources is None else args.annotation_sources
@@ -52,45 +54,45 @@ def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str,
 def check_pangenome_detection(pangenome: Pangenome, metadata_sources: List[str], systems_source: str,
                               force: bool = False) -> None:
     """
-     Check and load pangenome information before adding annotation
+    Checks and loads pangenome information before adding annotations.
 
     Args:
-        pangenome:  Pangenome object
-        metadata_sources: Sources used to associate annotation to gene famillies
-        systems_source: Source used to detect system
-        force: Force to erase pangenome systems from source
+        pangenome (Pangenome): Pangenome object to be checked.
+        metadata_sources (list of str): Sources used to associate annotations to gene families.
+        systems_source (str): Source used to detect systems.
+        force (bool, optional): If True, forces the erasure of pangenome systems from the source.
 
     Raises:
-        KeyError: Provided annotation source is not in the pangenome
-        Exception: If System already exists in the Pangenome
-        AttributeError: If there is no metadata associated to families
+        KeyError: If the provided annotation source is not in the pangenome.
+        ValueError: If systems are already detected based on the source and 'force' is not used.
+        AttributeError: If there is no metadata associated with families.
     """
     if pangenome.status["systems"] == "inFile" and systems_source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=systems_source)
         else:
-            raise ValueError(f"Systems are already detected based on the source : {systems_source}. "
+            raise ValueError(f"Systems are already detected based on the source: {systems_source}. "
                              f"Use the --force option to erase the already computed systems.")
     if pangenome.status["metadata"]["families"] == "inFile":
         for annotation_source in metadata_sources:
             if annotation_source not in pangenome.status["metasources"]["families"]:
-                raise KeyError(f"There is no metadata associate to families "
+                raise KeyError(f"There is no metadata associated with families "
                                f"from source {annotation_source} in pangenome {pangenome.name}.")
     elif pangenome.status["metadata"]["families"] not in ["Computed", "Loaded"]:
-        raise AttributeError(f"There is no metadata associate to families in your pangenome {pangenome.name}. "
-                             "Please see the command annotation before to detect systems")
+        raise AttributeError(f"There is no metadata associated with families in your pangenome {pangenome.name}. "
+                             "Please see the command annotation before detecting systems")
 
 
 def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
     """
-    Get for each metadata a set of families with the same protein_name value in the metadata
+    Retrieves a mapping of metadata to sets of gene families for each metadata source.
 
     Args:
-        pangenome: Pangenome with gene families
-        sources: list of metadata source name
+        pangenome (Pangenome): Pangenome object containing gene families.
+        sources (iterable of str): List of metadata source names.
 
     Returns:
-        Dictionary with for each metadata source a dictionary with for each metadata a set of gene families
+        dict: A dictionary where each metadata source maps to another dictionary of metadata to sets of gene families.
     """
     meta2fam = {source: defaultdict(set) for source in sources}
     for source in sources:
@@ -108,15 +110,17 @@ def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Di
 def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
         -> Tuple[Set[GeneFamily], Dict[str, Set[Family]], Dict[str, str]]:
     """
-    Retrieve all families that code for a family in the model
+    Retrieves all gene families associated with the families in the model.
 
     Args:
-        model: model containing the families
-        annot2fam: dictionary of annotated families
+        model (Model): Model containing the families.
+        annot2fam (dict): Dictionary of annotated families.
 
     Returns:
-        The set of gene families of interest in the functional unit and
-        a dictionary which link families to their annotation for the functional unit
+        tuple: A tuple containing:
+            - set: Gene families of interest in the functional unit.
+            - dict: Dictionary linking gene families to their annotations.
+            - dict: Dictionary linking families to their sources.
     """
     gene_families = set()
     gf2fam = defaultdict(set)
@@ -128,7 +132,7 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                     gene_families.add(gf)
                     gf2fam[gf.name].add(fam_model)
                     if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning("2 annotation have the same protein name for different "
+                        logging.getLogger("PANORAMA").warning("Two annotations have the same protein name for different "
                                                               "sources. First source encountered will be used.")
                     else:
                         fam2source[fam_model.name] = source
@@ -141,7 +145,7 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                         gf2fam[gf.name].add(fam_model)
                         if fam_model.name in fam2source and fam2source[fam_model.name] != source:
                             logging.getLogger("PANORAMA").warning(
-                                "2 annotation have the same protein name for different "
+                                "Two annotations have the same protein name for different "
                                 "sources. First source encountered will be used.")
                         else:
                             fam2source[fam_model.name] = source
@@ -150,23 +154,22 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
 
 def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_threshold: float = 0.8) -> None:
     """
-    Filtered a graph based on a local jaccard index
+    Filters a graph based on a local Jaccard index.
 
     Args:
-        graph: A sub pangenome graph
-        families: list of families that code for the system
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
+        graph (nx.Graph): A sub-pangenome graph.
+        families (set of GeneFamily): List of families that code for the system.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
-
     def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
         """
-        Get the set of genes of the gene family that are in organisms of interest
+        Retrieves the set of genes in the gene family that are in organisms of interest.
 
         Args:
-            family: The gene family to search genes
+            family (GeneFamily): The gene family to search genes for.
 
         Returns:
-            The set of genes of the gene family that are in organisms of interest
+            set: The set of genes in the gene family that are in organisms of interest.
         """
         if family.name not in fam2genes_in_orgs:
             family_genes_in_orgs = {gene for gene in family.genes if gene.organism in organisms_of_interest}
@@ -175,7 +178,7 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
             family_genes_in_orgs = fam2genes_in_orgs[family.name]
         return family_genes_in_orgs
 
-    # Compute local jaccard
+    # Compute local Jaccard
     organisms_of_interest = set()
     if len(families) > 1:
         subgraph = graph.subgraph(families)
@@ -203,38 +206,33 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         if not ((f1_gene_proportion >= jaccard_threshold) and (f2_gene_proportion >= jaccard_threshold)):
             edges2remove.add((f1, f2))
 
-    # Filter cc
-    # filter_flag = f'is_jaccard_gene_>_{jaccard_threshold}'
-    #
-    # edges_to_remove = [(n, v) for n, v, d in graph.edges(data=True) if not d[filter_flag]]
     graph.remove_edges_from(edges2remove)
 
 
 def check_for_forbidden(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
                         func_unit: FuncUnit) -> bool:
     """
-    Check if there is forbidden in families.
+    Checks if there are forbidden conditions in the families.
 
     Args:
-        gene_families: set of families
-        gene_fam2mod_fam: link between gene family and annotation
-        func_unit: functional unit
+        gene_families (set of GeneFamily): Set of gene families.
+        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
+        func_unit (FuncUnit): Functional unit to check against.
 
     Returns:
-        Boolean true if forbidden condition are encountered in families
+        bool: True if forbidden conditions are encountered, False otherwise.
     """
-
     count_forbidden = 0
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
 
     def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Get the number of model family associated to the gene family.
+        """Gets the number of model families associated with the gene family.
 
         Args:
-            gene_family: The gene family of interest
+            gene_family (GeneFamily): The gene family of interest.
 
         Returns:
-            The number of model family associated to the gene family.
+            int: The number of model families associated with the gene family.
         """
         model_families = gene_fam2mod_fam.get(gene_family.name)
         if model_families is not None:
@@ -257,29 +255,31 @@ def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str,
                      mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
                      ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
-    Check if presence/absence rules for needed families are respected
+    Checks if the presence/absence rules for needed families are respected.
 
     Args:
-        gene_families: set of families
-        gene_fam2mod_fam: link between gene family and model families
-        mod_fam2meta_source: link between model families and metadata source
-        func_unit: functional unit
+        gene_families (set of GeneFamily): Set of gene families.
+        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
+        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        func_unit (FuncUnit): Functional unit to check against.
 
     Returns:
-        Boolean true if parameter respected
+        tuple: A tuple containing:
+            - bool: True if the needed conditions are met, False otherwise.
+            - dict: Dictionary linking gene families to their metadata information.
     """
     count_mandatory, count_total = (0, 0)
     mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
                                       list(map(lambda x: x.name, func_unit.accessory)))
 
     def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Get the number of model family associated to the gene family.
+        """Gets the number of model families associated with the gene family.
 
         Args:
-            gene_family: The gene family of interest
+            gene_family (GeneFamily): The gene family of interest.
 
         Returns:
-            The number of model family associated to the gene family.
+            int: The number of model families associated with the gene family.
         """
         model_families = gene_fam2mod_fam.get(gene_family.name)
         if model_families is not None:
@@ -326,7 +326,15 @@ def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str,
 
 def get_subcombinations(combi: Set[GeneFamily],
                         combinations: List[FrozenSet[GeneFamily]]) -> List[FrozenSet[GeneFamily]]:
-    """Remove combinations from combinations and all subcombination
+    """
+    Removes a combination and all its sub-combinations from a list of combinations.
+
+    Args:
+        combi (set of GeneFamily): Combination to be removed.
+        combinations (list of FrozenSet[GeneFamily]): List of combinations to be filtered.
+
+    Returns:
+        list: List of removed combinations.
     """
     index = 0
     remove_combinations = []
@@ -342,20 +350,21 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
                         mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
                         jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
                         ) -> Set[System]:
-    """Search systems corresponding to model in a graph
+    """
+    Searches for systems corresponding to a model in a graph.
 
     Args:
-        graph: A graph with families in one connected component
-        families: A set of families that code for the searched model
-        gene_fam2mod_fam: A dictionary to link gene families to their annotation
-        mod_fam2meta_source: link between model families and metadata source
-        func_unit: One functional unit corresponding to the model
-        source: Name of the source
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        combinations: List of families combination known to exist in genomes.
+        graph (nx.Graph): A graph with families in one connected component.
+        families (set of GeneFamily): A set of families that code for the searched model.
+        gene_fam2mod_fam (dict): Dictionary linking gene families to their annotations.
+        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        func_unit (FuncUnit): One functional unit corresponding to the model.
+        source (str): Name of the source.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        combinations (list of FrozenSet[GeneFamily], optional): List of family combinations known to exist in genomes.
 
     Returns:
-        Set[System]: A set of all detected systems in the graph
+        set: Set of all detected systems in the graph.
     """
     detected_systems = set()
     while len(combinations) > 0:
@@ -374,7 +383,7 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
                                                     gene_families=cc, families_to_metainfo=fam2metainfo))
                         get_subcombinations(cc.intersection(families_combination), combinations)
         else:
-            # We can remove all sub combinations because the bigger one does not have the needed
+            # We can remove all sub-combinations because the bigger one does not have the needed
             get_subcombinations(families_combination, combinations)
 
     return detected_systems
@@ -385,20 +394,20 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
                              jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
                              ) -> Set[System]:
     """
-    Search systems corresponding to model in a pangenomic context
+    Searches for systems corresponding to a model in a pangenomic context.
 
     Args:
-        graph: A graph with families in a pangenomic context
-        families: A set of families that code for the searched model
-        gene_fam2mod_fam: A dictionary to link gene families to model families
-        mod_fam2meta_source: link between model families and metadata source
-        func_unit: One functional unit corresponding to the model
-        source: Name of the source
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        combinations: Known existing combination of families that code for the searched model
+        graph (nx.Graph): A graph with families in a pangenomic context.
+        families (set of GeneFamily): A set of families that code for the searched model.
+        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
+        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        func_unit (FuncUnit): One functional unit corresponding to the model.
+        source (str): Name of the source.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        combinations (list of FrozenSet[GeneFamily], optional): Known existing combination of families that code for the searched model.
 
     Returns:
-        Set[System]: Set of detected systems in the pangenomic context
+        set: Set of detected systems in the pangenomic context.
     """
     detected_systems = set()
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
@@ -420,15 +429,17 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
                                       gene_fam2mod_fam: Dict[str, Set[Family]]
                                       ) -> Tuple[Set[GeneFamily], Set[GeneFamily]]:
     """
-    Get the gene families that might be in the functional unit
+    Retrieves the gene families that might be in the functional unit.
 
     Args:
-        func_unit: The functional unit to consider
-        gene_families: Set of gene families that might be in the system
-        gene_fam2mod_fam: link between gene family and model family
+        func_unit (FuncUnit): The functional unit to consider.
+        gene_families (set of GeneFamily): Set of gene families that might be in the system.
+        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
 
     Returns:
-        gene families that code for the functional unit, the neutral families.
+        tuple: A tuple containing:
+            - set: Gene families that code for the functional unit.
+            - set: The neutral families.
     """
     fu_families = set()
     neutral_families = set()
@@ -446,16 +457,16 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
 def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]], source: str,
                   jaccard_threshold: float = 0.8) -> Set[System]:
     """
-    Search if model system is in pangenome
+    Searches for a model system in a pangenome.
 
     Args:
-        model: Model to search in pangenome
-        meta2fam: Dictionary with for each metadata source a dictionary with a metadate linked to a set of gene_families
-        source: Name of the annotation source
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene gene_families (default: 0.8)
+        model (Model): Model to search in the pangenome.
+        meta2fam (dict): Dictionary with each metadata source mapping to a dictionary of metadata linked to sets of gene families.
+        source (str): Name of the annotation source.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
 
     Returns:
-        Set[System]: Set of systems detected in pangenome for the given model
+        set: Set of systems detected in the pangenome for the given model.
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     begin = time.time()
@@ -477,25 +488,21 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
     return detected_systems
 
 
-def run_detect(args):
-    return search_system(*args)
-
-
 def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_sources: List[str],
                    jaccard_threshold: float = 0.8, threads: int = 1, lock: Lock = None,
                    disable_bar: bool = False):
     """
-    Search systems present in the pangenome for all models
+    Searches for systems present in the pangenome for all models.
 
     Args:
-        models: Models to search in pangenomes
-        pangenome: Pangenome with gene families
-        source: name of the source for the system
-        metadata_sources: list of the metadata source for the families
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        threads: number of available threads (default: 1)
-        lock: Global lock for multiprocessing execution (default: None)
-        disable_bar: Flag to disable progress bar
+        models (Models): Models to search in pangenomes.
+        pangenome (Pangenome): Pangenome object containing gene families.
+        source (str): Name of the source for the system.
+        metadata_sources (list of str): List of the metadata sources for the families.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        threads (int, optional): Number of available threads. Default is 1.
+        lock (Lock, optional): Global lock for multiprocessing execution. Default is None.
+        disable_bar (bool, optional): If True, disables the progress bar. Default is False.
     """
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
 
@@ -512,18 +519,6 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                 for future in futures:
                     result = future.result()
                     detected_systems |= result
-    # args_detect = []
-    # for model in models:
-    #     args_detect.append((model, meta2fam, source, jaccard_threshold))
-    # detected_systems = set()
-    #
-    # with get_context("fork").Pool(threads) as pool:
-    #     with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
-    #         for res in pool.imap_unordered(run_detect, args_detect):
-    #             detected_systems |= res
-    #             progress.update()
-
-
 
     for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
         pangenome.add_system(system)
@@ -535,17 +530,17 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
                                  jaccard_threshold: float = 0.8, threads: int = 1,
                                  lock: Lock = None, disable_bar: bool = False):
     """
-    Search systems in pangenomes by multithreading on pangenomes
+    Searches for systems in pangenomes by multithreading on pangenomes.
 
     Args:
-        models: Models to search in pangenomes
-        pangenomes: Getter object with Pangenome
-        source: name of the source for the system
-        metadata_sources: list of the metadata source for the families
-        jaccard_threshold: minimum jaccard similarity used to filter edges between gene families (default: 0.8)
-        threads: number of available threads (default: 1)
-        lock: Global lock for multiprocessing execution (default: None)
-        disable_bar: Disable progress bar (default: False)
+        models (Models): Models to search in pangenomes.
+        pangenomes (Pangenomes): Getter object with Pangenome.
+        source (str): Name of the source for the system.
+        metadata_sources (list of str): List of the metadata sources for the families.
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        threads (int, optional): Number of available threads. Default is 1.
+        lock (Lock, optional): Global lock for multiprocessing execution. Default is None.
+        disable_bar (bool, optional): If True, disables the progress bar. Default is False.
     """
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
@@ -554,6 +549,14 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
 
 
 def write_systems_to_pangenome(pangenome: Pangenome, source: str, disable_bar: bool = False):
+    """
+    Writes detected systems to the pangenome.
+
+    Args:
+        pangenome (Pangenome): Pangenome object containing detected systems.
+        source (str): Name of the annotation source.
+        disable_bar (bool, optional): If True, disables the progress bar. Default is False.
+    """
     if pangenome.number_of_systems(source) > 0:
         pangenome.status["systems"] = "Computed"
         logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")
@@ -566,16 +569,15 @@ def write_systems_to_pangenome(pangenome: Pangenome, source: str, disable_bar: b
 def write_systems_to_pangenomes(pangenomes: Pangenomes, source: str, threads: int = 1, lock: Lock = None,
                                 disable_bar: bool = False):
     """
-    Write detected systems into pangenomes
+    Writes detected systems into pangenomes.
 
     Args:
-        pangenomes:  Pangenomes object containing all the pangenome with systems
-        source: Metadata source
-        threads: Number of available threads
-        lock: Lock for multiprocessing execution
-        disable_bar: Allow to disable progress bar
+        pangenomes (Pangenomes): Pangenomes object containing all the pangenomes with systems.
+        source (str): Metadata source.
+        threads (int, optional): Number of available threads. Default is 1.
+        lock (Lock, optional): Lock for multiprocessing execution. Default is None.
+        disable_bar (bool, optional): If True, disables the progress bar. Default is False.
     """
-
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
@@ -591,10 +593,10 @@ def write_systems_to_pangenomes(pangenomes: Pangenomes, source: str, threads: in
 
 def launch(args):
     """
-    Launch functions to detect systems in pangenomes
+    Launches functions to detect systems in pangenomes.
 
     Args:
-        args: argument given in CLI
+        args (Namespace): Argument given in CLI.
     """
     from panorama.utility.utility import check_models
     from panorama.format.read_binaries import load_pangenomes
@@ -615,13 +617,13 @@ def launch(args):
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
-    Subparser to launch PANORAMA in Command line
+    Creates a subparser to launch PANORAMA from the command line.
 
     Args:
-        sub_parser: sub_parser for systems command
+        sub_parser (argparse.ArgumentParser): Sub-parser for the 'systems' command.
 
     Returns:
-        argparse.ArgumentParser: parser arguments for align command
+        argparse.ArgumentParser: Parser with arguments for the 'systems' command.
     """
     parser = sub_parser.add_parser("systems", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_detection(parser)
@@ -630,29 +632,28 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
 def parser_detection(parser):
     """
-    Add argument to parser for systems command
+    Adds arguments to the parser for the 'systems' command.
 
     Args:
-        parser: parser for systems argument
+        parser (argparse.ArgumentParser): Parser for the 'systems' command.
 
     TODO:
-        - add an option to write projection
+        - Add an option to write projection.
     """
     required = parser.add_argument_group(title="Required arguments",
-                                         description="All of the following arguments are required :")
+                                         description="All of the following arguments are required:")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
-                          help='A list of pangenome .h5 files in .tsv file')
+                          help='A list of pangenome .h5 files in a .tsv file.')
     required.add_argument('-m', '--models', required=True, type=Path, nargs='?',
-                          help="Path to model list file."
-                               "Note: Use panorama utils --models to create the models list file")
+                          help="Path to model list file. Note: Use 'panorama utils --models' to create the models list file.")
     required.add_argument("-s", "--source", required=True, type=str, nargs="?",
-                          help='Name of the annotation source where panorama as to select in pangenomes')
+                          help='Name of the annotation source to select in pangenomes.')
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument('--annotation_sources', required=False, type=str, default=None, nargs='+',
-                          help="Name of the annotation sources to load if different from system source. "
-                               "Could be more than one, separated by space.")
+                          help="Name of the annotation sources to load if different from the system source. "
+                               "Can specify more than one, separated by space.")
     optional.add_argument('--jaccard', required=False, type=float, default=0.8,
-                          help="minimum jaccard similarity used to filter edges between gene families. "
-                               "Increasing it will improve precision but lower sensitivity a lot.")
+                          help="Minimum Jaccard similarity used to filter edges between gene families. "
+                               "Increasing this value improves precision but significantly lowers sensitivity.")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
-                          help="Number of available threads")
+                          help="Number of available threads.")

@@ -205,7 +205,6 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
             hmm_dict["path"] = write_hmm(hmm, hmm_out, binary_hmm).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
 
-
     hmm_df = pd.DataFrame(hmm_info_list)
     if hmm_coverage is not None:
         hmm_df["hmm_cov_threshold"] = hmm_coverage

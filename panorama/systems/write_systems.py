@@ -12,7 +12,6 @@ import logging
 from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
-import pandas as pd
 
 # installed libraries
 from tqdm import tqdm
@@ -89,6 +88,26 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
                                     association: List[str] = None, partition: bool = False, proksee: str = None,
                                     organisms: List[str] = None, threads: int = 1, lock: Lock = None,
                                     force: bool = False, disable_bar: bool = False):
+    """
+    Write detected systems from a pangenome to an output directory in a flat format.
+
+    Args:
+        pangenome (Pangenome): The pangenome object containing the detected systems.
+        output (Path): The directory where the systems will be written.
+        projection (bool, optional): If True, write projection systems. Defaults to False.
+        association (List[str], optional): List of associations to be considered. Defaults to None.
+        partition (bool, optional): If True, write partition systems. Defaults to False.
+        proksee (str, optional): A placeholder for future Proksee integration. Defaults to None.
+        organisms (List[str], optional): List of organisms to be considered for projection. Defaults to None.
+        threads (int, optional): Number of threads to use for parallel processing. Defaults to 1.
+        lock (Lock, optional): A multiprocessing lock to synchronize access. Defaults to None.
+        force (bool, optional): If True, overwrite existing files. Defaults to False.
+        disable_bar (bool, optional): If True, disable progress bar. Defaults to False.
+
+    Raises:
+        NotImplementedError: If Proksee integration is requested but not implemented.
+
+    """
     logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
     for system_source in pangenome.systems_sources:

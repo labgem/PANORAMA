@@ -2,13 +2,12 @@
 # coding:utf-8
 
 """
-This module provides functions to detect biological systems in pangenomes
+This module provides functions to detect biological systems in pangenomes all in one workflow command
 """
 
 # default libraries
 from __future__ import annotations
 import argparse
-import logging
 from typing import List
 from pathlib import Path
 from multiprocessing import Manager
@@ -33,6 +32,18 @@ from panorama.utility.utility import check_models, mkdir
 
 
 def check_pansystems_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Checks and validates the parameters for the pansystems function.
+
+    Args:
+        args (argparse.Namespace): The arguments passed to the function.
+
+    Returns:
+        Tuple[Dict[str, Any], Dict[str, Any]]: A tuple containing the necessary information and HMM keyword arguments.
+
+    Raises:
+        argparse.ArgumentError: If no type of systems writing is chosen.
+    """
     need_info, hmm_kwgs = check_annotate_args(args)
     if 'output' not in hmm_kwgs:
         hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
@@ -58,6 +69,17 @@ def check_pansystems_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Any
 
 
 def check_pangenome_pansystems(pangenome: Pangenome, source: str, force: bool = False) -> None:
+    """
+    Checks the annotation of a pangenome and its systems.
+
+    Args:
+        pangenome (Pangenome): The pangenome to check.
+        source (str): The source of the annotation.
+        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+
+    Raises:
+        ValueError: If systems are already detected based on the source and force is False.
+    """
     check_pangenome_annotation(pangenome, source, force=force)
     if pangenome.status["systems"] == "inFile" and source in pangenome.status["systems_sources"]:
         if force:
@@ -72,6 +94,26 @@ def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, tabl
                          projection: bool = False, association: List[str] = None, partition: bool = False,
                          proksee: str = None, threads: int = 1, force: bool = False, disable_bar: bool = False,
                          **hmm_kwgs: Any) -> None:
+    """
+    Detects systems in a single pangenome.
+
+    Args:
+        pangenome (Pangenome): The pangenome to analyze.
+        source (str): The source of the annotation.
+        models (Models): The models to use for systems detection.
+        table (Path, optional): The path to a table with annotation information. Defaults to None.
+        hmms (Dict[str, List[HMM]], optional): The HMMs to use for annotation. Defaults to None.
+        k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
+        jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
+        association (List[str], optional): The type of association to write between systems and other pangenome elements. Defaults to None.
+        partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
+        proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
+        threads (int, optional): The number of available threads. Defaults to 1.
+        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
+        **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
+    """
     if table is not None:
         metadata_df, _ = read_families_metadata(pangenome, table)
     else:
@@ -88,6 +130,29 @@ def pansystems(pangenomes: Pangenomes, source: str, models_path: Path, table: Pa
                k_best_hit: int = None, jaccard_threshold: float = 0.8, projection: bool = False,
                association: List[str] = None, partition: bool = False, proksee: str = None, threads: int = 1,
                force: bool = False, disable_bar: bool = False, **hmm_kwgs: Any) -> None:
+    """
+    Detects systems in multiple pangenomes.
+
+    Args:
+        pangenomes (Pangenomes): The pangenomes to analyze.
+        source (str): The source of the annotation.
+        models_path (Path): The path to the models list file.
+        table (Path, optional): The path to a table with annotation information. Defaults to None.
+        hmm (Path, optional): The path to a tab-separated file with HMM information and path. Defaults to None.
+        k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
+        jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
+        association (List[str], optional): The type of association to write between systems and other pangenome elements. Defaults to None.
+        partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
+        proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
+        threads (int, optional): The number of available threads. Defaults to 1.
+        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
+        **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
+
+    Raises:
+        AssertionError: If neither table nor hmm is provided.
+    """
     assert table is not None or hmm is not None, 'Must provide either table or hmm'
     if table is not None:
         path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])

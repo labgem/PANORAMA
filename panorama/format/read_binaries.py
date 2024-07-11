@@ -59,7 +59,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
 
     Args:
         pangenome (Pangenome): Pangenome containing systems.
-        system_table: Table of systems corresponding to one source.
+        source_group: Source group with 3 tables to read systems.
         models (Models): Models associated with systems.
         disable_bar (bool): Whether to disable the progress bar.
     """
@@ -69,6 +69,16 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
     source = source_group._v_name
 
     def read_system_line(line, sys_dict) -> System:
+        """
+        Global function to read a line in system table
+
+        Args:
+            line: The line to read.
+            sys_dict: System dictionary
+
+        Returns:
+            A system object
+        """
         identifier = line["ID"].decode()
         if identifier not in sys_dict:
             model = models.get_model(line["name"].decode())

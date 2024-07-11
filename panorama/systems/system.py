@@ -29,7 +29,6 @@ class System(MetaFeatures):
         ID (str): Identifier for the system.
         model (Model): Model associated with the system.
         system_source (str): Source of the annotation.
-        families_sources (List[str]): List of sources for gene families.
         canonical (set): Set of canonical systems.
     """
 

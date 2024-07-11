@@ -11,7 +11,6 @@ from __future__ import annotations
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import logging
-from itertools import combinations
 from typing import Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
@@ -56,7 +55,6 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         connecting any two nodes in the given list of nodes in the graph.
 
         Args:
-            G (networkx.Graph): The input graph.
             node_list (list): List of nodes to check for paths.
             n (int): The maximum length of the path to consider.
 
