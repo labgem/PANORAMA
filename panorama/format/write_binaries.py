@@ -7,8 +7,7 @@ This module provides functions to write, update and erase a pangenome data from 
 
 # default libraries
 import logging
-from collections import defaultdict
-from typing import Tuple, Dict
+from typing import Tuple
 # installed libraries
 import tables
 from tqdm import tqdm
@@ -20,7 +19,7 @@ from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pang
 from panorama.pangenomes import Pangenome
 
 
-def system_desc(max_id_len: int = 1, max_name_len: int = 1,  max_gf_name_len: int = 1,
+def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_gf_name_len: int = 1,
                 max_metadata_source: int = 1, with_canonic: bool = False) -> dict:
     """
 
@@ -57,6 +56,7 @@ def get_system_len(pangenome: Pangenome, source: str
     Returns:
         Maximum size of each element
     """
+
     def compare_len(sys, max_id_len, max_name_len, max_gf_name_len, max_annot_source_len) -> Tuple[int, int, int, int]:
         """
         Compare the length of elements to known maximum
@@ -127,7 +127,8 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     canonical_row = canonical_table.row
     sys2canonical_row = sys2canonical_table.row
     canonic_seen = set()
-    with tqdm(total=pangenome.number_of_systems(source=source, with_canonical=False), unit="system", disable=disable_bar) as progress:
+    with tqdm(total=pangenome.number_of_systems(source=source, with_canonical=False), unit="system",
+              disable=disable_bar) as progress:
         for system in pangenome.systems:
             for gf in system.families:
                 system_row["ID"] = system.ID
