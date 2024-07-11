@@ -45,6 +45,11 @@ dev = [
     "vitables>=3.0.0",
     "viztracer>=0.16.2",
 ]
+notebook = [
+    "jupyter-book>=1.0.0",
+    "notebook>=7.2.0",
+    "jupyter>=1.0.0",
+]
 #
 
 [project.urls]
