@@ -8,8 +8,10 @@ This module provides functions to project systems onto genomes.
 # default libraries
 from __future__ import annotations
 
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 import logging
+from itertools import combinations
 from typing import Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
@@ -48,6 +50,34 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
             - A list with counts of each system organization type (strict, extended, split).
             - The reconciled system partition.
     """
+    def has_short_path(node_list, n):
+        """
+        Checks if there exists at least one path of length less than `n`
+        connecting any two nodes in the given list of nodes in the graph.
+
+        Args:
+            G (networkx.Graph): The input graph.
+            node_list (list): List of nodes to check for paths.
+            n (int): The maximum length of the path to consider.
+
+        Returns:
+            bool: True if there exists at least one path of length less than `n`
+                  connecting any two nodes in the list, False otherwise.
+        """
+        path_length = defaultdict(dict)
+        has_path = {node: False for node in node_list}
+        for i, node1 in enumerate(node_list):
+            for node2 in node_list[i + 1:]:
+                if not has_path[node2]:
+                    try:
+                        path_length[node1][node2] = nx.shortest_path_length(graph, source=node1, target=node2)
+                        if path_length[node1][node2] <= n:
+                            has_path[node1] = True
+                            has_path[node2] = True
+                            break
+                    except nx.NetworkXNoPath:
+                        continue
+        return all(has_path.values())
 
     def write_projection_line(gene: Gene) -> List[str]:
         """
@@ -108,7 +138,8 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         model_cc = cc.intersection(model_genes)
         if len(model_cc) > 0:
             if model_cc == model_genes:
-                if len(cc) == len(model_genes):
+                func_unit = list(system.model.func_units)[0]
+                if len(model_cc) == 1 or has_short_path(list(model_cc), func_unit.max_separation):
                     counter[0] += 1
                     sys_state_in_org = "strict"
                 else:
