@@ -1,20 +1,22 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+This module contains functions for managing files and directories, and checking the sanity of a TSV file.
+"""
+
 # default libraries
-import argparse
-import os
 import sys
+import argparse
 import logging
+from typing import TextIO
+import shutil
 from pathlib import Path
-import csv
-from typing import TextIO, Dict, Union, List
+import numpy as np
+import pandas as pd
+from typing import Dict, Union
 from multiprocessing import Manager, Lock
-import pkg_resources
-
-# installed libraries
-
-# local libraries
+from importlib.metadata import distribution
 
 
 def check_log(name: str) -> TextIO:
@@ -32,7 +34,38 @@ def check_log(name: str) -> TextIO:
         return open(name, "w")
 
 
-def set_verbosity_level(args: argparse.Namespace):
+def pop_specific_action_grp(sub: argparse.ArgumentParser, title: str) -> argparse._SubParsersAction:
+    existing_titles = []
+
+    for action_group in sub._action_groups:
+        existing_titles.append(action_group.title)
+
+        if action_group.title == title:
+            sub._action_groups.remove(action_group)
+            return action_group
+
+    raise KeyError(f"{title} is not found in the provided subparser. Subparser contains {existing_titles}")
+
+
+def add_common_arguments(subparser: argparse.ArgumentParser) -> None:
+    """
+    Add common argument to the input subparser.
+
+    :param subparser: A subparser object from any subcommand.
+    """
+    common = pop_specific_action_grp(subparser, "Optional arguments")  # get the 'optional arguments' action group
+    common.title = "Common arguments"
+    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
+                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
+    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
+    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
+                        help="disables the progress bars")
+    common.add_argument('--force', action="store_true",
+                        help="Force writing in output directory and in pangenome output file.")
+    subparser._action_groups.append(common)
+
+
+def set_verbosity_level(args: argparse.Namespace) -> None:
     """Set the verbosity level
 
     :param args: argument pass by command line
@@ -46,137 +79,124 @@ def set_verbosity_level(args: argparse.Namespace):
 
         if args.log != sys.stdout and not args.disable_prog_bar:  # if output is not to stdout we remove progress bars.
             args.disable_prog_bar = True
-
-        logging.basicConfig(stream=args.log, level=level,
-                            format='%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s',
-                            datefmt='%Y-%m-%d %H:%M:%S')
-        logging.info("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.info("Panorama version: " + pkg_resources.get_distribution("panorama").version)
+        str_format = "%(asctime)s %(filename)s:l%(lineno)d %(levelname)s\t%(message)s"
+        datefmt = '%Y-%m-%d %H:%M:%S'
+        if args.log in [sys.stdout, sys.stderr]:
+            # use stream
+            logging.basicConfig(stream=args.log, level=level,
+                                format=str_format,
+                                datefmt=datefmt)
+        else:
+            # log is written in a files. basic condif uses filename
+            logging.basicConfig(filename=args.log, level=level,
+                                format=str_format,
+                                datefmt=datefmt)
+        logging.getLogger("PANORAMA").debug("Command: " + " ".join([arg for arg in sys.argv]))
+        logging.getLogger("PANORAMA").debug(f"PANORAMA version: {distribution('panorama').version}")
 
 
 # File managing system
-def mkdir(output: Union[Path, str], force: bool = False) -> Path:
-    """Create a directory at the given path
+def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
+    """
+    Create a directory at the given path.
 
-    :param output: Path to output directory
-    :param force: Pass exception if directory already exist
+    Args:
+        output (Path): The path to the output directory.
+        force (bool, optional): Whether to raise an exception if the directory already exists. Defaults to False.
+        erase (bool, optional): Whether to erase the directory if it already exists and force is True. Defaults to False.
 
-    :raise FileExistError: If the given directory already exist and no force is used
-    :raise Exception: Handle all others exception
+    Returns:
+        Path: The path to the output directory.
 
-    :return: Path object to output directory
+    Raises:
+        FileExistsError: If the directory already exists and force is False.
+        Exception: If an unexpected error occurs.
     """
     try:
-        os.makedirs(output.absolute().as_posix())
+        output.mkdir(parents=True, exist_ok=False)
     except OSError:
         if not force:
             raise FileExistsError(f"{output} already exists."
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
-            logging.warning(f"{output.as_posix()} already exist and file could be overwrite by the new generated")
-            return Path(output)
+            if erase:
+                logging.getLogger("PANORAMA").warning(f"Erasing the directory: {output}")
+                try:
+                    shutil.rmtree(output)
+                except Exception:
+                    raise Exception(f"It's not possible to remove {output}. Could be due to read-only files.")
+                else:
+                    return mkdir(output, force=force, erase=erase)
+            else:
+                logging.getLogger("PANORAMA").warning(
+                    f"{output.as_posix()} already exist and file could be overwrite by the new generated")
+                return Path(output)
     except Exception:
         raise Exception("An unexpected error happened. Please report on our GitHub")
     else:
         return Path(output)
 
 
-def path_exist(path: Path) -> Path:
-    try:
-        abs_path = path.resolve()
-        if not abs_path.exists():
-            raise FileNotFoundError
-    except FileNotFoundError:
-        raise FileNotFoundError(f"{path.resolve()} not exist")
-    except Exception:
-        raise Exception(f"An unexpected error happened. Please report to our github.")
-    else:
-        return abs_path
-
-
-def path_is_dir(path: Path) -> bool:
-    abs_path = path_exist(path)
-    if abs_path.is_dir():
-        return True
-    else:
-        return False
-
-
-def path_is_file(path: Path) -> bool:
-    abs_path = path_exist(path)
-    if abs_path.is_file():
-        return True
-    else:
-        return False
-
-
-def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str]]]:
-    """ Check if the given tsv is readable for the next PANORAMA step
-
-    :param tsv_path: Path to tsv file with list of pangenome
-
-    :raise IOError: If tsv or a pangenome not exist raise IOError
-    :raise Exception: Handle all others exception
-
-    :return: Dictionary with pangenome name as key and path to hdf5 file as value
+def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
     """
-    pan_to_path = {}
-    try:
-        p_file = open(tsv_path.absolute(), 'r')
-        tsv = csv.reader(p_file, delimiter="\t")
-    except IOError as ios_error:
-        raise IOError(ios_error)
-    except Exception as exception_error:
-        raise Exception(f"The following unexpected error happened when opening the list of pangenomes : "
-                        f"{exception_error}")
+    Check if the given TSV file is readable for the next PANORAMA step.
+
+    Args:
+        tsv_path (Path): The path to the TSV file with the list of pangenomes.
+
+    Returns:
+        Dict[str, Dict[str, Union[int, str, Path]]]: A dictionary with pangenome name as key and a dictionary with path and taxid as values.
+
+    Raises:
+        SyntaxError: If the TSV file has less than 2 columns.
+        ValueError: If there is a line with no value in pangenome name or if the pangenome names contain spaces.
+        FileNotFoundError: If unable to locate one or more pangenomes in the TSV file.
+    """
+    tsv = pd.read_csv(tsv_path, sep='\t', header=None)
+    if tsv.shape[1] < 2:
+        raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
     else:
-        for line in tsv:
-            if len(line) < 2:
-                raise SyntaxError("Format not readable. You need at least 2 columns (name and path to pangenome)")
-            if " " in line[0]:
-                raise ValueError(f"Your pangenome names contain spaces (The first encountered pangenome name that had "
-                                f"this string: '{line[0]}'). To ensure compatibility with all of the dependencies of "
-                                f"PPanGGOLiN this is not allowed. Please remove spaces from your pangenome names.")
-            try:
-                abs_path = path_exist(Path(line[1]))
-            except FileNotFoundError:
-                try:
-                    abs_path = path_exist(tsv_path.parent/Path(line[1]))
-                except FileNotFoundError as file_error:
-                    raise FileNotFoundError(f"{file_error}")
-                else:
-                    pan_to_path[line[0]] = {"path": abs_path,
-                                            "taxid": line[2] if len(line) > 2 else None}
-            except Exception:
-                raise Exception("Unexpected error")
-            else:
-                pan_to_path[line[0]] = {"path": abs_path,
-                                        "taxid": line[2] if len(line) > 2 else None}
-        p_file.close()
-        return pan_to_path
+        col_names = ['sp', 'path', 'taxid']
+        for col_idx in range(tsv.shape[1], len(col_names)):
+            tsv[col_names[col_idx]] = None
+    tsv.columns = col_names
+    if tsv['sp'].isnull().values.any():
+        err_df = pd.DataFrame([tsv['sp'], tsv['sp'].isnull()], ["pangenome_name", "error"]).T
+        logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+        raise ValueError("There is a line with no value in pangenome name (first column)")
+    else:
+        if tsv['sp'].str.count(" ").any():
+            err_df = pd.DataFrame([tsv['sp'], np.where(tsv['sp'].str.count(" ") >= 1, True, False)],
+                                  ["pangenome_name", "error"]).T
+            logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+            raise ValueError("Your pangenome names contain spaces. "
+                             "To ensure compatibility with all of the dependencies this is not allowed. "
+                             "Please remove spaces from your pangenome names.")
+    if tsv['path'].isnull().values.any():
+        err_df = pd.DataFrame([tsv['path'], tsv['path'].isnull()], ["pangenome_path", "error"]).T
+        logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+        raise ValueError("There is a line with no path (second column)")
+    else:
+        if not tsv["path"].map(lambda x: Path(x).exists()).all():
+            err_df = pd.DataFrame([tsv['path'], ~tsv["path"].map(lambda x: Path(x).exists())],
+                                  ["pangenome_path", "error"]).T
+            logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace('\n', '\n\t'))
+            raise FileNotFoundError("Unable to locate one or more pangenome in your file.}")
+        tsv["path"] = tsv["path"].map(lambda x: Path(x).resolve().absolute())
+
+        return tsv.set_index('sp').to_dict('index')
 
 
 def init_lock(lock: Lock = None):
     """
     Initialize the loading lock.
 
-    This function initializes the `loading_lock` variable as a global variable, assigning it the value of the `lock` parameter.
-    If the `loading_lock` is already initialized, the function does nothing.
+    Args:
+        lock (Lock, optional): The lock object to be assigned to `loading_lock`. Defaults to None.
 
-    :param lock: The lock object to be assigned to `loading_lock`.
+    Returns:
+        Lock: The lock object assigned to `loading_lock`.
     """
     if lock is None:
         manager = Manager()
         return manager.Lock()
-
-def pop_specific_action_grp(sub:argparse.ArgumentParser, title:str) -> argparse._SubParsersAction:  
-    existing_titles = []
-
-    for action_group in sub._action_groups:
-        existing_titles.append(action_group.title)
-
-        if action_group.title == title:
-            sub._action_groups.remove(action_group)
-            return action_group
-
-    raise KeyError(f"{title} is not found in the provided subparser. Subparser contains {existing_titles}")

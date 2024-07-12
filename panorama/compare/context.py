@@ -3,7 +3,7 @@
 
 # default libraries
 from __future__ import annotations
-from typing import Dict, Tuple
+from typing import Dict, Tuple, Union
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
 from multiprocessing import Manager, Lock
@@ -14,7 +14,6 @@ import networkx as nx
 
 from itertools import product
 from collections import defaultdict
-
 
 # installed libraries
 from tqdm import tqdm
@@ -29,6 +28,19 @@ from panorama.utils import mkdir, init_lock
 from panorama.format.read_binaries import load_pangenome
 from panorama.pangenomes import Pangenome
 from panorama.region import GeneContext
+
+def check_context_comparison(kwargs):
+    """
+    Checks the provided keyword arguments to ensure either 'sequences' or 'family' is present.
+
+    Args:
+        kwargs (dict): Keyword arguments to check.
+
+    Raises:
+        Exception: If neither 'sequences' nor 'family' is present in kwargs.
+    """
+    if "sequences" not in kwargs and "family" not in kwargs:
+        raise Exception("At least one of --sequences or --family option must be given")
 
 def check_run_context_arguments(ppanggolin_context_args):
     if ppanggolin_context_args["sequences"] is None and ppanggolin_context_args["families"] is None:
@@ -270,8 +282,8 @@ def compare_pair_of_contexts(context_pair: Tuple[GeneContext, GeneContext], min_
     """
 
     contextA, contextB = context_pair
-    contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
-    contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+    contextA_clst_family =  {gf.akin for gf in contextA.families}
+    contextB_clst_family = {gf.akin for gf in contextB.families}
     shared_family = len(contextA_clst_family & contextB_clst_family)
 
     clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
@@ -579,8 +591,8 @@ def compare_pair_of_context_graphs(context_pair: Tuple[GeneContext, GeneContext]
     cgc_scores = [info['score'] for info in cgc_infos]
 
     # Compute simple metrics 
-    contextA_clst_family =  {gf.family_cluster for gf in contextA.families}
-    contextB_clst_family = {gf.family_cluster for gf in contextB.families}
+    contextA_clst_family =  {gf.akin for gf in contextA.families}
+    contextB_clst_family = {gf.akin for gf in contextB.families}
     shared_family = len(contextA_clst_family & contextB_clst_family)
     clst_family_jaccard = shared_family / len(contextA_clst_family | contextB_clst_family)
 
@@ -785,8 +797,6 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
 
 
 def context_comparison_parser(parser):
-
-
     ## PPANGGOLIN CONTEXT ARGUMENTS
     compare_context_args = parser.add_argument_group(title="Optional contexts comparison arguments:", )
 
@@ -817,28 +827,24 @@ def context_comparison_parser(parser):
     
 
     optional = parser.add_argument_group(title="PPanGGoLiN context: optional arguments")
-
     optional.add_argument('--no_defrag', required=False, action="store_true",
                           help="DO NOT Realign gene families to link fragments with"
                                "their non-fragmented gene family.")
     
     optional.add_argument('--identity', required=False, type=float, default=0.5,
-                          help="min identity percentage threshold")
-    
+                          help="Minimum identity percentage threshold")
     optional.add_argument('--coverage', required=False, type=float, default=0.8,
-                          help="min coverage percentage threshold")
-    
+                          help="Minimum coverage percentage threshold")
     optional.add_argument("-t", "--transitive", required=False, type=int, default=4,
                           help="Size of the transitive closure used to build the graph. This indicates the number of "
-                               "non related genes allowed in-between two related genes. Increasing it will improve "
+                               "non-related genes allowed in-between two related genes. Increasing it will improve "
                                "precision but lower sensitivity a little.")
-    
     optional.add_argument("-w", "--window_size", required=False, type=int, default=5,
                         help="Number of neighboring genes that are considered on each side of "
                         "a gene of interest when searching for conserved genomic contexts.")
     
     optional.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
-                          help="minimum jaccard similarity used to filter edges between gene families. Increasing it "
+                          help="Minimum Jaccard similarity used to filter edges between gene families. Increasing it "
                                "will improve precision but lower sensitivity a lot.")
-    
     optional.add_argument('--graph_format', help="Format of the context graph. Can be gexf or graphml.", default='graphml')
+

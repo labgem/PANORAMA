@@ -1,0 +1,74 @@
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+py_modules=["panorama"]
+
+[project]
+name = "PANORAMA"
+
+authors = [
+    {name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr"},
+]
+#maintainers
+keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
+description = "Comparative pangenomic analysis toolbox"
+readme = "README.md"
+requires-python = ">=3.8"
+license = {file="LICENCE.txt"}
+classifiers=["Development Status :: Open alpha",
+             "Environment :: Console",
+             "Intended Audience :: Science/Research",
+             "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
+             "Natural Language :: English",
+             "Operating System :: POSIX :: Linux",
+             "Programming Language :: Python :: 3",
+             "Topic :: Scientific/Engineering :: Bio-Informatics"]
+##dependencies = [
+##    "requests",
+##    'importlib-metadata; python_version<"3.8"',
+##]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+doc = [
+    "sphinx==6.2.1",
+    "sphinx_rtd_theme==1.2.2",
+    "readthedocs-sphinx-search==0.3.1",
+    "sphinx-autobuild==2021.3.14",
+    "myst-parser==1.0.0",
+    "docutils==0.18.1"
+]
+dev = [
+    "matplotlib>=3.8",
+    "squarify>=0.4",
+    "seaborn>=0.13",
+    "vitables>=3.0.0",
+    "viztracer>=0.16.2",
+]
+notebook = [
+    "jupyter-book>=1.0.0",
+    "notebook>=7.2.0",
+    "jupyter>=1.0.0",
+]
+#
+
+[project.urls]
+Homepage = "https://labgem.genoscope.cns.fr"
+Repository = "https://github.com/labgem/PANORAMA"
+#Changelog = "https://github.com/me/spam/blob/master/CHANGELOG.md"
+#Documentation = "https://readthedocs.org"
+#
+#
+[project.scripts]
+panorama = "panorama.main:main"
+
+#[project.gui-scripts]  useful for windows https://packaging.python.org/en/latest/specifications/entry-points/
+#spam-gui = "spam:main_gui"
+#
+#[project.entry-points."spam.magical"] useful for windows
+#tomatoes = "spam:main_tomatoes"
+
+[tool.setuptools]
+packages = ["panorama"]
+[tool.setuptools.dynamic]
+version = {file = "VERSION"}

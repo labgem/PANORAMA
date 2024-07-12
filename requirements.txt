@@ -1,0 +1,3 @@
+ppanggolin>=2.1.0
+pyhmmer>=0.8.1
+lxml>=4.9.2

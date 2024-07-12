@@ -7,69 +7,104 @@ import argparse
 import logging
 from pathlib import Path
 import tempfile
-from typing import Dict, Union
-from multiprocessing import Manager, Lock
+from typing import Dict, List, Union
+from multiprocessing import Manager
 import subprocess
 from time import time
+from shutil import rmtree
 
 # installed libraries
 import pandas as pd
 
 # local libraries
 from panorama.utils import mkdir
-from panorama.pangenomes import Pangenomes
-from panorama.format.read_binaries import load_multiple_pangenomes
-from panorama.alignment.common import get_gf_pangenomes, createdb
+from panorama.pangenomes import Pangenome
+from panorama.format.read_binaries import load_pangenomes
+from panorama.alignment.common import write_pangenomes_families_sequences, createdb
 
 clust_col_names = ["cluster_id", "referent", "in_clust"]
 
 
-def write_clustering(clust_res: Path, outfile: Path):
-    """Write the clustering results with clustering ID
-
-    :param clust_res: Path to the clustering results
-    :param outfile: Path to the final output file
+def check_cluster_parameters(args: argparse.Namespace):
     """
-    logging.debug("Begin writing clustering...")
+    Checks if given command argument are legit if so return a dictionary with information needed to load pangenomes.
+
+    Args:
+        args: Argument in the command line
+    """
+    if not args.tmpdir.exists() or not args.tmpdir.is_dir():
+        raise NotADirectoryError("The given path for temporary directory is not found or not a directory."
+                                 "Please check your path and try again.")
+
+
+def check_pangenome_cluster(pangenome: Pangenome) -> None:
+    """
+    Function to check and load one pangenome in the loading process
+    Args:
+        pangenome: Pangenome object
+    """
+    if pangenome.status["genesClustered"] == "No":
+        raise AttributeError("You did not cluster the genes. "
+                             "See the 'ppanggolin cluster' command if you want to do that.")
+    if pangenome.status["geneFamilySequences"] == "No":
+        raise AttributeError("There is no sequences associated to the gene families.")
+
+
+def write_clustering(clust_res: Path, outfile: Path):
+    """
+    Write the clustering results with clustering ID
+
+    Args:
+        clust_res: Path to the clustering results
+        outfile: Path to the final output file
+    """
+
+    logging.getLogger("PANORAMA").debug("Begin writing clustering...")
     clust_df = pd.read_csv(clust_res, sep="\t", names=clust_col_names[1:])
     clust_id = {index: ref_fam for index, ref_fam in enumerate(clust_df[clust_col_names[1]].unique().tolist())}
     clust_id_df = pd.DataFrame.from_dict(clust_id, orient="index").reset_index()
     clust_id_df.columns = clust_col_names[0:2]
-    merge_clust = clust_id_df.merge(clust_df, on=clust_col_names[1])
+    merge_clust = clust_id_df.merge(clust_df, on=clust_col_names[1], how="inner", validate="one_to_many")
     merge_clust.to_csv(outfile, sep="\t", header=True, index=False)
-    logging.info(f"Pangenomes gene families similarities are saved here: {outfile.absolute().as_posix()}")
+    logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: {outfile.as_posix()}")
 
 
 def create_tsv(db: Path, clust: Path, output: Path, threads: int = 1):
     """
     Create a TSV from clustering result thanks to MMSeqs2
 
-    :param db: database of the sequences
-    :param clust: clustering results
-    :param output: output directory
-    :param threads: number of cpu available
+    Args:
+        db: database of the sequences
+        clust: clustering results
+        output: output directory
+        threads: Number of available threads. (Defaults 1).
     """
+
     cmd = ["mmseqs", "createtsv", db.absolute().as_posix(), db.absolute().as_posix(), clust.absolute().as_posix(),
            output.absolute().as_posix(), "--threads", str(threads), "--full-header"]
     logging.getLogger().debug(" ".join(cmd))
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
 
 
-def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], tmpdir: tempfile.TemporaryDirectory,
-                      lclust_db: Path = None, threads: int = 1) -> Path:
+def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], lclust_db: Path = None,
+                      tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Launch a linclust clustering provide by MMSeqs2 on pangenomes gene families
 
-    :param seq_db: Path to the MMSeqs2 database with all gene families
-    :param mmseqs2_opt: Dictionnary with all the option provide by MMSeqs2
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param lclust_db: Path to resulting database if you prefer a specific file
-    :param threads: Number of available threads
+    Args:
+        seq_db: List of path to gene families sequences
+        mmseqs2_opt: Dictionary with all the option provide by MMSeqs2
+        lclust_db: Path to resulting database if you prefer a specific file (Defaults None)
+        tmpdir: Temporary directory for MMSeqs2 (Defaults user temporary directory)
+        threads: Number of available threads. (Defaults 1).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
 
-    :return: Path to resulting database
+    Returns:
+        Dataframe with clustering results
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     if lclust_db is None:
-        lclust_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
-    logging.debug("Clustering all gene families with linclust process...")
+        lclust_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
+    logging.getLogger("PANORAMA").debug("Clustering all gene families with linclust process...")
     cmd = list(map(str, ['mmseqs', 'cluster', seq_db.absolute().as_posix(), lclust_db.absolute().as_posix(),
                          tmpdir.name, '--threads', threads, '--comp-bias-corr', mmseqs2_opt["comp_bias_corr"],
                          "--kmer-per-seq", mmseqs2_opt["kmer_per_seq"], "--min-seq-id", mmseqs2_opt["identity"],
@@ -79,29 +114,33 @@ def linclust_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str
                          "--max-rejected", mmseqs2_opt["max_reject"], "--cluster-mode", mmseqs2_opt["clust_mode"]]
                    )
                )
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     lclust_time = time() - begin_time
-    logging.debug(f"Linclust done in {round(lclust_time, 2)} seconds")
+    logging.getLogger("PANORAMA").debug(f"Linclust done in {round(lclust_time, 2)} seconds")
     return lclust_db
 
 
-def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], tmpdir: tempfile.TemporaryDirectory,
-                     cluster_db: Path = None, threads: int = 1) -> Path:
+def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]], cluster_db: Path = None,
+                     tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Launch a cluster clustering provide by MMSeqs2 on pangenomes gene families
 
-    :param seq_db: Path to the MMSeqs2 database with all gene families
-    :param mmseqs2_opt: Dictionnary with all the option provide by MMSeqs2
-    :param tmpdir: Temporary directory for MMSeqs2
-    :param cluster_db: Path to resulting database if you prefer a specific file
-    :param threads: Number of available threads
+    Args:
+        seq_db: List of path to gene families sequences
+        mmseqs2_opt: Dictionary with all the option provide by MMSeqs2
+        cluster_db: Path to resulting database if you prefer a specific file (Defaults None)
+        tmpdir: Temporary directory for MMSeqs2 (Defaults user temporary directory)
+        threads: Number of available threads. (Defaults 1).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
 
-    :return: Path to resulting database
+    Returns:
+        Dataframe with clustering results
     """
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
     if cluster_db is None:
-        cluster_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, delete=False).name)
-    logging.debug("Clustering all gene families with cluster process...")
+        cluster_db = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp).name)
+    logging.getLogger("PANORAMA").debug("Clustering all gene families with cluster process...")
     cmd = list(map(str,
                    ['mmseqs', 'cluster', seq_db.absolute().as_posix(), cluster_db.absolute().as_posix(),
                     tmpdir.name, '--threads', threads, '--max-seqs', mmseqs2_opt["max_seqs"], '--min-ungapped-score',
@@ -113,51 +152,56 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
                     mmseqs2_opt["clust_mode"]]
                    )
                )
-    logging.debug(" ".join(cmd))
+    logging.getLogger("PANORAMA").debug(" ".join(cmd))
     begin_time = time()
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
     lclust_time = time() - begin_time
-    logging.debug(f"Linclust done in {round(lclust_time, 2)} seconds")
+    logging.getLogger("PANORAMA").debug(f"Linclust done in {round(lclust_time, 2)} seconds")
     return cluster_db
 
 
-def cluster_gene_families(pangenomes: Pangenomes, method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
-                          lock: Lock, tmpdir: tempfile.TemporaryDirectory, threads: int = 1, disable_bar: bool = False):
+def cluster_gene_families(families_seq: List[Path], method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
+                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
     """Cluster pangenomes gene families with MMSeqs2
 
-    :param pangenomes: Pangenomes obejct containing all the pangenome to cluster
-    :param method: Choosen method to cluster pangenomes gene families
-    :param mmseqs2_opt: Dictionnary with all the option provide by MMSeqs2
-    :param lock: Global lock for multiprocessing execution
-    :param tmpdir:Temporary directory for MMSeqs2
-    :param threads: Number of available threads
-    :param disable_bar: Disable progressive bar
+    Args:
+        families_seq: List of path to gene families sequences
+        method:  Chosen method to cluster pangenomes gene families
+        mmseqs2_opt: Dictionary with all the option provide by MMSeqs2
+        tmpdir: Temporary directory for MMSeqs2 (Defaults user temporary directory)
+        threads: Number of available threads. (Defaults 1).
+        keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
 
-    :return: Clustering results from MMSeqs2
+    Returns:
+        Dataframe with clustering results
     """
-    gf_seqs = get_gf_pangenomes(pangenomes=pangenomes, create_db=False, lock=lock, tmpdir=tmpdir, threads=threads,
-                                disable_bar=disable_bar)
-    merge_db = createdb(list(gf_seqs.values()), tmpdir)
+    tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
+    merge_db = createdb(families_seq, tmpdir)
     if method == "linclust":
-        clust_db = linclust_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir, threads=threads)
+        clust_db = linclust_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt,
+                                     tmpdir=tmpdir, keep_tmp=keep_tmp, threads=threads)
     elif method == "cluster":
-        clust_db = cluster_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir, threads=threads)
+        clust_db = cluster_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt,
+                                    tmpdir=tmpdir, keep_tmp=keep_tmp, threads=threads)
     else:
-        raise ValueError("You must choose between linclut or cluster for clustering")
-    clust_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=False).name)
-    logging.getLogger().info("Writting clustering in tsv file")
+        raise ValueError("You must choose between linclust or cluster methods for clustering. "
+                         "Look at MMSeqs2 documentation for more information.")
+    clust_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=keep_tmp).name)
+    logging.getLogger().info("Writing clustering in tsv file")
     create_tsv(db=merge_db, clust=clust_db, output=clust_res, threads=threads)
-    logging.debug("Clustering done")
+    logging.getLogger("PANORAMA").debug("Clustering done")
     return clust_res
 
 
 def launch(args):
     """
-    Launch functions to annotate pangenomes
+    Launch functions to align gene families from pangenomes
 
-    :param args: Argument given
+    Args:
+        args: argument given in CLI
     """
-    # check_parameter(args)
+
+    check_cluster_parameters(args)
     mkdir(args.output, args.force)
     mmseqs2_opt = {"max_seqs": args.max_seqs, "min_ungapped": args.min_ungapped, "comp_bias_corr": args.comp_bias_corr,
                    "sensitivity": args.sensitivity, "kmer_per_seq": args.kmer_per_seq, "coverage": args.coverage,
@@ -166,25 +210,34 @@ def launch(args):
                    "clust_mode": args.clust_mode, "reassign": args.reassign}
     manager = Manager()
     lock = manager.Lock()
-    pangenomes = load_multiple_pangenomes(pangenome_list=args.pangenomes, need_info={"need_families": True}, lock=lock,
-                                          max_workers=args.threads, disable_bar=args.disable_prog_bar)
-    tmpdir = tempfile.TemporaryDirectory(dir=args.tmpdir)
-    clust_res = cluster_gene_families(pangenomes=pangenomes, method=args.method, mmseqs2_opt=mmseqs2_opt, lock=lock,
-                                      tmpdir=tmpdir, threads=args.threads, disable_bar=args.disable_prog_bar)
+    need_info = {"need_families": True, 'need_families_sequences': True}
+    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
+                                 check_function=check_pangenome_cluster, max_workers=args.threads,
+                                 lock=lock, disable_bar=args.disable_prog_bar)
+    tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
+    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, lock=lock,
+                                                                 threads=args.threads,
+                                                                 disable_bar=args.disable_prog_bar)
+    clust_res = cluster_gene_families(families_seq=list(pangenome2families_seq.values()), method=args.method,
+                                      mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir, threads=args.threads)
 
     outfile = args.output / "pangenome_gf_clustering.tsv"
     write_clustering(clust_res, outfile)
-    tmpdir.cleanup()
+    if not args.keep_tmp:
+        rmtree(tmpdir, ignore_errors=True)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
     Subparser to launch PANORAMA in Command line
 
-    :param sub_parser : sub_parser for align command
+    Args:
+        sub_parser: sub_parser for cluster command
 
-    :return : parser arguments for align command
+    Returns:
+        argparse.ArgumentParser: parser arguments for cluster command
     """
+
     parser = sub_parser.add_parser("cluster", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser_clust(parser)
     return parser
@@ -192,10 +245,12 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
 def parser_clust(parser):
     """
-    Parser for specific argument of annot command
+    Add argument to parser for cluster command
 
-    :param parser: parser for annot argument
+    Args:
+        parser: parser for cluster argument
     """
+
     required = parser.add_argument_group(title="Required arguments",
                                          description="All of the following arguments are required :")
     required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
@@ -209,7 +264,7 @@ def parser_clust(parser):
     mmseqs2 = parser.add_argument_group(title="MMSeqs2 arguments",
                                         description="The following arguments are optional."
                                                     "Look at MMSeqs2 documentation for more information."
-                                                    "If one MMSesq2 is missing fell free to ask on our github or "
+                                                    "If one MMSeqs2 is missing fell free to ask on our github or "
                                                     "to make a pull request")
     mmseqs2.add_argument("-s", "--sensitivity", type=int, required=False, nargs='?', default=4,
                          help='sensitivity used with MMSeqs2')
@@ -221,7 +276,7 @@ def parser_clust(parser):
                          help='Correct for locally biased amino acid composition')
     mmseqs2.add_argument("--kmer_per_seq", required=False, nargs='?', type=int, default=80,
                          help='k-mers per sequence')
-    mmseqs2.add_argument("--identity", required=False, nargs="?", default=0.8, type=float,
+    mmseqs2.add_argument("--identity", required=False, nargs="?", default=0.5, type=float,
                          help="Set the identity use to construct clustering [0-1]")
     mmseqs2.add_argument("--coverage", required=False, nargs="?", type=float, default=0.8,
                          help="Set the coverage use to construct clustering [0-1]")
@@ -240,27 +295,9 @@ def parser_clust(parser):
     mmseqs2.add_argument("--reassign", required=False, action="store_false", default=True,
                          help="Correct errors from cascaded clustering")
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
-                          help="directory for storing temporary files")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads")
-
-
-if __name__ == "__main__":
-    from panorama.utils import check_log, set_verbosity_level
-
-    main_parser = argparse.ArgumentParser(description="Comparative Pangenomic analyses toolsbox",
-                                          formatter_class=argparse.RawTextHelpFormatter)
-    parser_clust(main_parser)
-    common = main_parser._action_groups.pop(1)  # get the 'optional arguments' action group.
-    common.title = "Common arguments"
-    common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
-                        help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
-    common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
-    common.add_argument("-d", "--disable_prog_bar", required=False, action="store_true",
-                        help="disables the progress bars")
-    common.add_argument('--force', action="store_true",
-                        help="Force writing in output directory and in pangenome output file.")
-    main_parser._action_groups.append(common)
-    set_verbosity_level(main_parser.parse_args())
-    launch(main_parser.parse_args())
+    optional.add_argument("--tmpdir", required=False, type=Path, nargs='?', default=Path(tempfile.gettempdir()),
+                          help="directory for storing temporary files")
+    optional.add_argument("--keep_tmp", required=False, default=False, action="store_true",
+                          help="Keeping temporary files (useful for debugging).")
