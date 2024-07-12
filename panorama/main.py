@@ -72,7 +72,7 @@ def cmd_line():
             panorama.systems.detection.subparser(subparsers),
             panorama.alignment.align.subparser(subparsers),
             panorama.alignment.cluster.subparser(subparsers),
-            *panorama.compare.subparser(subparsers),
+            panorama.compare.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.systems.write_systems.subparser(subparsers),
             panorama.workflow.subparser(subparsers),

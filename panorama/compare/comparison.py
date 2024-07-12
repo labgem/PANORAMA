@@ -3,6 +3,7 @@
 
 # default libraries
 from __future__ import annotations
+import sys
 import argparse
 from pathlib import Path
 import tempfile
@@ -51,22 +52,19 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser_compare = sub_parser.add_parser("compare", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                           description='Comparison of modules and gene contexts among pangenomes')
+    parser = sub_parser.add_parser("compare", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+                                   description='Comparison of modules and gene contexts among pangenomes')
 
-    compare_subparser = parser_compare.add_subparsers(help='Comparison global option', dest="compare_subcommand")
-    context_parser = compare_subparser.add_parser("context")
-    optional = parser_compare.add_argument_group(
-        title="Optional arguments")  # important for compatibility with other subparser.
+    parser_comparison(parser)
 
-    parser_comparison(compare_subparser)
-    context_comparison_parser(context_parser)
+    if '--context' in sys.argv or '-h' in sys.argv or '--help' in sys.argv:
+        context_comparison_parser(parser)
     #
     # module_parser = compare_subparser.add_parser("module")
     # parser_comparison(module_parser)
     # module_comparison_parser(module_parser)
 
-    return parser_compare, module_parser, context_parser
+    return parser
 
 
 def parser_comparison(parser):
