@@ -27,7 +27,7 @@ def launch(args):
     pan_to_path = check_tsv_sanity(args.pangenomes)
     manager = Manager()
     lock = manager.Lock()
-    if args.compare_subcommand == "context":
+    if args.context:
 
         run_context_args = {"sequences": args.sequences, "families": args.family, "transitive": args.transitive,
                             "identity": args.identity, "coverage": args.coverage, "jaccard_threshold": args.jaccard,
@@ -63,7 +63,6 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     # module_parser = compare_subparser.add_parser("module")
     # parser_comparison(module_parser)
     # module_comparison_parser(module_parser)
-
     return parser
 
 
@@ -80,7 +79,10 @@ def parser_comparison(parser):
 
     required.add_argument('-o', '--output', required=True, type=Path,
                           help="Output directory where the file(s) will be written")
-
+    comparison = parser.add_argument_group(title="Pangenome comparison set object",
+                                           description="Choose on which pangenome object you want to compare pangenomes")
+    comparison.add_argument("--context", action='store_true',
+                            help="Launch context comparison")
     optional = parser.add_argument_group(title="Optional arguments")
 
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
