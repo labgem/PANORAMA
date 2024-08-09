@@ -75,7 +75,7 @@ def check_pangenome_pansystems(pangenome: Pangenome, source: str, force: bool = 
     Args:
         pangenome (Pangenome): The pangenome to check.
         source (str): The source of the annotation.
-        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
 
     Raises:
         ValueError: If systems are already detected based on the source and force is False.
@@ -110,7 +110,7 @@ def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, tabl
         partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
         proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
         threads (int, optional): The number of available threads. Defaults to 1.
-        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
         disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
         **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
     """
@@ -126,19 +126,19 @@ def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, tabl
                                     threads=threads, force=force, disable_bar=disable_bar)
 
 
-def pansystems(pangenomes: Pangenomes, source: str, models_path: Path, table: Path = None, hmm: Path = None,
-               k_best_hit: int = None, jaccard_threshold: float = 0.8, projection: bool = False,
-               association: List[str] = None, partition: bool = False, proksee: str = None, threads: int = 1,
-               force: bool = False, disable_bar: bool = False, **hmm_kwgs: Any) -> None:
+def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[str, List[HMM]] = None,
+               table: pd.DataFrame = None, k_best_hit: int = None, jaccard_threshold: float = 0.8,
+               projection: bool = False, association: List[str] = None, partition: bool = False, proksee: str = None,
+               threads: int = 1, force: bool = False, disable_bar: bool = False, **hmm_kwgs: Any) -> None:
     """
     Detects systems in multiple pangenomes.
 
     Args:
         pangenomes (Pangenomes): The pangenomes to analyze.
         source (str): The source of the annotation.
-        models_path (Path): The path to the models list file.
-        table (Path, optional): The path to a table with annotation information. Defaults to None.
-        hmm (Path, optional): The path to a tab-separated file with HMM information and path. Defaults to None.
+        models (Models): The models to detect systems.
+        table (pd.Dataframe, optional): Dataframe containing for each pangenome a path to a table with annotation information. Defaults to None.
+        hmm (Dict[str, List[HMM]], optional): A dictionary to identify which cutoff use to align HMM . Defaults to None.
         k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
         jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
         projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
@@ -146,7 +146,7 @@ def pansystems(pangenomes: Pangenomes, source: str, models_path: Path, table: Pa
         partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
         proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
         threads (int, optional): The number of available threads. Defaults to 1.
-        force (bool, optional): Whether to force the erase of already computed systems. Defaults to False.
+        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
         disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
         **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
 
@@ -154,20 +154,44 @@ def pansystems(pangenomes: Pangenomes, source: str, models_path: Path, table: Pa
         AssertionError: If neither table nor hmm is provided.
     """
     assert table is not None or hmm is not None, 'Must provide either table or hmm'
-    if table is not None:
-        path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
-        hmms = None
-    else:
-        hmms, hmm_kwgs["meta"] = read_hmms(hmm, disable_bar=disable_bar)
-        path_to_metadata = None
-    models = check_models(models_path, disable_bar=disable_bar)
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        if path_to_metadata is not None:
-            metadata_file = path_to_metadata.loc[path_to_metadata["Pangenome"] == pangenome.name]["path"].squeeze()
+        if table is not None:
+            metadata_file = table.loc[table["Pangenome"] == pangenome.name]["path"].squeeze()
         else:
             metadata_file = None
-        pansystems_pangenome(pangenome, source, models, metadata_file, hmms, k_best_hit, jaccard_threshold,
+        pansystems_pangenome(pangenome, source, models, metadata_file, hmm, k_best_hit, jaccard_threshold,
                              projection, association, partition, proksee, threads, force, disable_bar, **hmm_kwgs)
+
+
+def check_input_files(models_path: Path, table: Path = None, hmm: Path = None,
+                      disable_bar: bool = False) -> Tuple[pd.DataFrame, Dict[str, List[HMM]], pd.DataFrame, Models]:
+    """
+    Check the metadta table, the hmm and the models, in order to stop program before to read pangenome.
+
+    Args:
+        models_path (Path): The path to the models list file.
+        table (Path, optional): The path to a table with annotation information. Defaults to None.
+        hmm (Path, optional): The path to a tab-separated file with HMM information and path. Defaults to None.
+        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
+
+    Returns:
+        pd.Dataframe, optional: Dataframe containing for each pangenome a path to a table with annotation information.
+        Dict[str, List[HMM]]: A dictionary to identify which cutoff use to align HMM.
+        pd.Dataframe: Dataframe with hmm metadata information
+        Models: The models to detect systems.
+
+    Raises:
+        AssertionError: If neither table nor hmm is provided.
+    """
+    assert table is not None or hmm is not None, 'Must provide either table or hmm'
+    if table is not None:
+        path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
+        hmms, hmm_info = None, None
+    else:
+        hmms, hmm_info = read_hmms(hmm, disable_bar=disable_bar)
+        path_to_metadata = None
+    models = check_models(models_path, disable_bar=disable_bar)
+    return path_to_metadata, hmms, hmm_info, models
 
 
 def launch(args):
@@ -182,10 +206,11 @@ def launch(args):
     need_info, hmm_kwgs = check_pansystems_parameters(args)
     manager = Manager()
     lock = manager.Lock()
+    table, hmms, hmm_kwgs["meta"], models = check_input_files(args.models, args.table, args.hmm, args.disable_prog_bar)
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_pansystems, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
-    pansystems(pangenomes, args.source, args.models, args.table, args.hmm, args.k_best_hit, args.jaccard,
+    pansystems(pangenomes, args.source, models, hmms, table, args.k_best_hit, args.jaccard,
                args.projection, args.association, args.partition, args.proksee, args.threads,
                args.force, args.disable_prog_bar, **hmm_kwgs)
 
@@ -223,9 +248,9 @@ def parser_pansystems(parser):
                           help='Name of the annotation source where panorama as to select in pangenomes')
     required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
                           help='Output directory')
-    annotations = parser.add_argument_group(title="Annotation arguments",
-                                            description="All of the following arguments are used for annotation step:")
-    exclusive_mode = annotations.add_mutually_exclusive_group(required=True)
+    annotate = parser.add_argument_group(title="Annotation arguments",
+                                         description="All of the following arguments are used for annotation step:")
+    exclusive_mode = annotate.add_mutually_exclusive_group(required=True)
     exclusive_mode.add_argument('--table', type=Path, default=None,  # nargs='+',
                                 help='A list of tab-separated file, containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
@@ -278,7 +303,7 @@ def parser_pansystems(parser):
                        choices=["all", "modules", "RGPs", "spots"],
                        help="Write association between systems and others pangenomes elements")
     write.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                       choices=["all", "base", "modules", "RGP", "spots", "annotations"],
+                       choices=["all", "base", "modules", "RGP", "spots", "annotate"],
                        help="Write a proksee file with systems. "
                             "If you only want the systems with genes, gene families and partition, use base value."
                             "Write RGPs, spots or modules -split by `,'- if you want them.")

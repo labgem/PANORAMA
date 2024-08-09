@@ -187,7 +187,7 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[H
         disable_bar: Flag to disable the progress bar
 
     Returns:
-        Tuple[List[pyhmmer.plan7.HMM], pd.DataFrame]: List of HMM object
+        Tuple[Dict[str, List[pyhmmer.plan7.HMM], pd.DataFrame]: A dictionary to identify which cutoff use to align HMM and a pandas dataframe with hmm information
 
     Raises:
         Exception: Unexpected error occurred while reading HMM
