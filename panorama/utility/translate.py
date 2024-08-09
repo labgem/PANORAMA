@@ -187,7 +187,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
         raise KeyError("Core gene must be found in padloc keys")
 
     data_json = {"name": model_name, 'func_units': [],
-                 'parameters': {"max_forbidden": 0, "max_separation": 0, "min_mandatory": 1, "min_total": 1,
+                 'parameters': {"max_forbidden": 0, "transitivity": 0, "window": 1, "min_mandatory": 1, "min_total": 1,
                                 "max_mandatory": -1, "max_total": -1}
                  }
     if len(canonical) > 0:
@@ -196,7 +196,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     func_unit = {'name': model_name, 'presence': 'mandatory', 'same_strand': data_yaml["force_strand"],
                  'parameters':
                      {
-                         "max_separation": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
+                         "transitivity": data_yaml["maximum_separation"] - 1 if "maximum_separation" in data_yaml else 0,
                          "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
                          "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
                      }
@@ -292,13 +292,13 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -
             if attrib == 'presence':
                 dict_elem['presence'] = value
             elif attrib == 'inter_gene_max_space':
-                dict_elem['parameters']['max_separation'] = int(value)
+                dict_elem['parameters']['transitivity'] = int(value) - 1
             elif attrib == 'max_nb_genes':
                 dict_elem['parameters']['max_total'] = int(value)
             elif attrib == 'multi_system' and (value == 1 or value == "True"):
                 dict_elem['parameters']['multi_system'] = True
             elif attrib == "loner" and (value == 1 or value == "True"):
-                dict_elem["parameters"]["max_separation"] = -1
+                dict_elem["parameters"]["transitivity"] = -1
             elif attrib == 'multi_model' and (value == 1 or value == "True"):
                 dict_elem['parameters']['multi_model'] = True
 
@@ -356,13 +356,13 @@ def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
             elif attrib == 'min_genes_required':
                 dict_elem['parameters']['min_total'] = int(value)
             elif attrib == 'inter_gene_max_space':
-                dict_elem['parameters']['max_separation'] = int(value)
+                dict_elem['parameters']['transitivity'] = int(value) - 1
             elif attrib == 'max_nb_genes':
                 dict_elem['parameters']['max_total'] = -1
             elif attrib == 'multi_system' and value == 1:
                 dict_elem['parameters']['multi_system'] = True
             elif attrib == "loner" and (value == 1 or value is True):
-                dict_elem["parameters"]["max_separation"] = -1
+                dict_elem["parameters"]["transitivity"] = -1
             elif attrib == 'multi_model' and value == 1:
                 dict_elem['parameters']['multi_model'] = True
 
@@ -389,7 +389,7 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     if root.attrib is not None:  # Read attributes root
         for parameter, value in root.attrib.items():
             if parameter == 'inter_gene_max_space':
-                data_json['parameters']['max_separation'] = int(value)
+                data_json['parameters']['transitivity'] = int(value)
             elif parameter == 'min_mandatory_genes_required':
                 data_json['parameters']['min_mandatory'] = int(value)
             elif parameter == 'min_genes_required':
@@ -399,7 +399,7 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
             elif parameter == 'multi_system' and (value == 1 or value is True):
                 data_json['parameters']['multi_system'] = True
             elif parameter == "loner" and (value == 1 or value is True):
-                data_json["parameters"]["max_separation"] = -1
+                data_json["parameters"]["transitivity"] = -1
             elif parameter == 'multi_model' and (value == 1 or value is True):
                 data_json['parameters']['multi_model'] = True
     data_json['parameters']['max_forbidden'] = 0
@@ -414,8 +414,8 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     if len(fu_list) == 0:  # only genes
         data_json["func_units"].append({'name': data_json["name"], 'presence': 'mandatory',
                                         "families": fam_list, 'parameters': data_json["parameters"]})
-        data_json["parameters"] = {"max_forbidden": 0, "max_separation": 1, "min_mandatory": -1, "min_total": -1,
-                                   "max_mandatory": -1, "max_total": -1}
+        data_json["parameters"] = {"max_forbidden": 0, "transitivity": 0, "window": 1,  "min_mandatory": -1,
+                                   "min_total": -1, "max_mandatory": -1, "max_total": -1}
     else:
         for fu in fu_list:
             data_json["func_units"].append(fu)

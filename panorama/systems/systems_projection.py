@@ -137,7 +137,7 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
         if len(model_cc) > 0:
             if model_cc == model_genes:
                 func_unit = list(system.model.func_units)[0]
-                if len(model_cc) == 1 or has_short_path(list(model_cc), func_unit.max_separation):
+                if len(model_cc) == 1 or has_short_path(list(model_cc), func_unit.transitivity):
                     counter[0] += 1
                     sys_state_in_org = "strict"
                 else:
@@ -229,7 +229,6 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
     """
     pangenome_projection, organisms_projection = [], []
     func_unit = list(system.model.func_units)[0]
-    t = func_unit.max_separation + 1
     gene_families, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
     gene_families &= set(system.families)
     gene_families_name = {gf.name for gf in gene_families}
@@ -241,7 +240,7 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
         check_needed, _ = check_for_needed(org_mod_fam, gf2fam, fam2source, func_unit)
         if check_needed:
             pan_proj = [system.ID, system.name, organism.name]
-            genes_graph = compute_genes_graph(org_fam, organism, t, t + 1)
+            genes_graph = compute_genes_graph(org_fam, organism, func_unit.transitivity, func_unit.window)
             org_proj, counter, partition = project_system_on_organisms(genes_graph, system, organism,
                                                                        gf2fam, association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(system)] + counter)

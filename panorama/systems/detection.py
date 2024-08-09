@@ -478,9 +478,8 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
         fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
         check_needed, _ = check_for_needed(fu_families, gf2fam, fam2source, func_unit)
         if check_needed:
-            t = func_unit.max_separation + 1
-            context, combinations2orgs = compute_gene_context_graph(families=fu_families, transitive=t,
-                                                                    window_size=t + 1, disable_bar=True)
+            context, combinations2orgs = compute_gene_context_graph(families=fu_families, transitive=func_unit.transitivity,
+                                                                    window_size=func_unit.window, disable_bar=True)
             combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
             detected_systems |= search_system_in_context(context, fu_families, gf2fam, fam2source, func_unit, source,
                                                          jaccard_threshold, combinations)
