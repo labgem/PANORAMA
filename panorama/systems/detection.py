@@ -243,11 +243,7 @@ def check_for_forbidden(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[s
     for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
         for family in gene_fam2mod_fam[node.name]:
             if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
-                count_forbidden += 1
-                forbidden_list.remove(family.name)
-                if count_forbidden > func_unit.max_forbidden:
-                    return True
-                break
+                return True
     return False
 
 
@@ -315,11 +311,7 @@ def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str,
 
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
-        if (func_unit.max_mandatory >= count_mandatory or func_unit.max_mandatory == -1) and \
-                (func_unit.max_total >= count_total or func_unit.max_total == -1):
-            return True, families2meta_info
-        else:
-            return False, families2meta_info
+        return True, families2meta_info
     else:
         return False, families2meta_info
 
