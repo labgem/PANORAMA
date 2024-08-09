@@ -176,7 +176,8 @@ def project_system_on_organisms(graph: nx.Graph, system: System, organism: Organ
     return projection, counter, conciliate_system_partition(partitions)
 
 
-def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 0, w: int = 1) -> nx.Graph:
+def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 0,
+                        w: int = 1, same_strand: bool = False) -> nx.Graph:
     """
     Compute the genes graph for a given genomic context in an organism.
 
@@ -203,12 +204,21 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
             if l_gene in genes_graph.nodes:
                 for t_gene in left_genes[l_idx:t + 1]:
                     if t_gene in genes_graph.nodes:
-                        genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+                        if same_strand:
+                            if t_gene.strand == l_gene.strand:
+                                genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+                        else:
+                            genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+
         for r_idx, r_gene in enumerate(right_genes, start=1):
             if r_gene in genes_graph.nodes:
                 for t_gene in right_genes[r_idx:t + 1]:
                     if t_gene in genes_graph.nodes:
-                        genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
+                        if same_strand:
+                            if t_gene.strand == r_gene.strand:
+                                genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
+                        else:
+                            genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
     return genes_graph
 
 

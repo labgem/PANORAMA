@@ -195,7 +195,7 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
     func_unit = {'name': model_name, 'presence': 'mandatory', 'same_strand': data_yaml["force_strand"],
                  'parameters':
                      {
-                         "transitivity": data_yaml["maximum_separation"] - 1 if "maximum_separation" in data_yaml else 0,
+                         "transitivity": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
                          "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
                          "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
                      }
