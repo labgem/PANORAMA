@@ -227,7 +227,7 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     canonical_sys = []
     if re.search("_other", model_name):
         basename = re.split("_other", model_name)[0]
-        for canon_file in models.glob("*.yaml"):
+        for canon_file in models.rglob("*.yaml"):
             name_canon = canon_file.stem
             if (re.search(f"{basename}_", name_canon) or re.search(f"{basename}$", name_canon)) \
                     and name_canon != model_name:
@@ -256,8 +256,9 @@ def translate_padloc(padloc_db: Path, output: Path, hmm_coverage: float = None, 
     create_hmm_list_file(hmm_path=[padloc_db / "hmm"], output=output, metadata_df=meta_df, hmm_coverage=hmm_coverage,
                          target_coverage=target_coverage, binary_hmm=True, force=force, disable_bar=disable_bar)
     logging.getLogger("PANORAMA").info("Begin to translate padloc models...")
-    for model in tqdm(list(padloc_db.rglob("*.yaml")), unit="file", disable=disable_bar):
-        canonical_sys = search_canonical_padloc(model.stem, padloc_db)
+    model_path = padloc_db / "sys"
+    for model in tqdm(list(model_path.rglob("*.yaml")), unit="file", disable=disable_bar):
+        canonical_sys = search_canonical_padloc(model.stem, model_path)
         data = read_yaml(model)
         list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
     return list_data
