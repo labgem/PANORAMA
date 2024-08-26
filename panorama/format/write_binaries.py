@@ -7,9 +7,11 @@ This module provides functions to write, update and erase a pangenome data from 
 
 # default libraries
 import logging
-from typing import Tuple
+from typing import Dict, Tuple, Union, Any
 # installed libraries
 import tables
+from docutils.nodes import description
+from sqlalchemy.sql.coercions import expect
 from tqdm import tqdm
 from ppanggolin.formats.writeBinaries import write_status as super_write_status
 from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pangenome
@@ -19,26 +21,46 @@ from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pang
 from panorama.pangenomes import Pangenome
 
 
-def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_gf_name_len: int = 1,
-                max_metadata_source: int = 1, with_canonic: bool = False) -> dict:
+def system_unit_desc(max_name_len: int = 1, max_gf_name_len: int = 1,
+                     max_metadata_source: int = 1) -> Dict[str, Union[tables.StringCol, tables.Int64Col]]:
     """
+    Get the dictionary that describes the table of system unit.
 
     Args:
-        max_id_len: Maximum size of system name
         max_name_len: Maximum size of gene family name
         max_gf_name_len: Maximum size of gene family name
         max_metadata_source: Maximum size of annotation source name
-        with_canonic: If true, include number of canonical
 
     Returns:
-        Formated table
+        The description of the table
     """
     desc = {
-        "ID": tables.StringCol(itemsize=max_id_len),
+        "ID": tables.Int64Col(),
         "name": tables.StringCol(itemsize=max_name_len),
         "geneFam": tables.StringCol(itemsize=max_gf_name_len),
         "metadata_id": tables.Int64Col(),
         "metadata_source": tables.StringCol(itemsize=max_metadata_source),
+    }
+    return desc
+
+
+def system_desc(max_id_len: int = 1, max_name_len: int = 1, with_canonic: bool = False
+                ) -> Dict[str, Union[tables.StringCol, tables.Int64Col]]:
+    """
+    Get the dictionary that describes the table of system.
+
+    Args:
+        max_id_len: Maximum size of system name
+        max_name_len: Maximum size of gene family name
+        with_canonic: If true, include number of canonical
+
+    Returns:
+        The description of the table
+    """
+    desc = {
+        "ID": tables.StringCol(itemsize=max_id_len),
+        "name": tables.StringCol(itemsize=max_name_len),
+        "unit": tables.Int64Col(),
     }
     if with_canonic:
         desc["canonical"] = tables.Int64Col()
@@ -46,7 +68,7 @@ def system_desc(max_id_len: int = 1, max_name_len: int = 1, max_gf_name_len: int
 
 
 def get_system_len(pangenome: Pangenome, source: str
-                   ) -> Tuple[Tuple[int, int, int, int, int], Tuple[int, int, int, int, int], int]:
+                   ) -> tuple[tuple[Any, int], tuple[Any, int], tuple[Any, int], tuple[Any, int], int]:
     """
     Get maximum size of gene families information
     Args:
@@ -57,14 +79,16 @@ def get_system_len(pangenome: Pangenome, source: str
         Maximum size of each element
     """
 
-    def compare_len(sys, max_id_len, max_name_len, max_gf_name_len, max_annot_source_len) -> Tuple[int, int, int, int]:
+    def compare_len(sys, max_id_len: int, max_sys_name_len: int, max_unit_name_len: int,
+                    max_gf_name_len: int, max_annot_source_len: int) -> Tuple[Tuple[int, int], Tuple[int, int, int]]:
         """
         Compare the length of elements to known maximum
 
         Args:
             sys: system to get info from
             max_id_len: Maximum size of the system identifier
-            max_name_len: Maximum size of system name
+            max_sys_name_len: Maximum size of system name
+            max_unit_name_len: Maximum size of system unit name
             max_gf_name_len: Maximum size of gene family name
             max_annot_source_len: Maximum size of annotation source name
 
@@ -74,28 +98,52 @@ def get_system_len(pangenome: Pangenome, source: str
 
         if len(sys.ID) > max_id_len:
             max_id_len = len(sys.name)
-        if len(sys.name) > max_name_len:
-            max_name_len = len(sys.name)
+        if len(sys.name) > max_sys_name_len:
+            max_sys_name_len = len(sys.name)
         for annot_source in sys.annotation_sources():
             if len(annot_source) > max_annot_source_len:
                 max_annot_source_len = len(annot_source)
-        for gf in sys.families:
-            if len(gf.name) > max_gf_name_len:
-                max_gf_name_len = len(gf.name)
-        return max_id_len, max_name_len, max_gf_name_len, max_annot_source_len
+        for unit in sys.units:
+            if len(unit.name) > max_unit_name_len:
+                max_unit_name_len = len(unit.name)
+            for gf in unit.families:
+                if len(gf.name) > max_gf_name_len:
+                    max_gf_name_len = len(gf.name)
+        return (max_id_len, max_sys_name_len), (max_unit_name_len, max_gf_name_len, max_annot_source_len)
 
-    max_len_sys = (1, 1, 1, 1)
-    max_len_canonical = (1, 1, 1, 1)
-    expected_rows_sys, expected_rows_can, expected_rows_sys2can = (0, 0, 0)
+    max_len_sys = (1, 1)
+    max_len_unit = (1, 1, 1)
+    max_len_canonical = (1, 1)
+    max_len_canon_unit = (1, 1, 1)
+    exp_rows_sys, exp_rows_units, exp_rows_can, exp_rows_can_units, exp_rows_sys2can = (0, 0, 0, 0, 0)
 
     for system in pangenome.get_system_by_source(source):
-        max_len_sys = compare_len(system, *max_len_sys)
-        expected_rows_sys += len(system)
+        max_len_sys, max_len_unit = compare_len(system, *max_len_sys, *max_len_unit)
+        exp_rows_sys += len(system)
+        exp_rows_units += system.number_of_families
         for canonical in system.canonical:
-            max_len_canonical = compare_len(canonical, *max_len_canonical)
-            expected_rows_can += len(canonical)
+            max_len_canonical, max_len_canon_unit = compare_len(canonical, *max_len_canonical, *max_len_canon_unit)
+            exp_rows_can += len(canonical)
+            exp_rows_can_units += canonical.number_of_families
 
-    return (*max_len_sys, expected_rows_sys), (*max_len_canonical, expected_rows_can), expected_rows_sys2can
+    return ((*max_len_sys, exp_rows_sys), (*max_len_unit, exp_rows_units), (*max_len_canonical, exp_rows_can),
+            (*max_len_canon_unit, exp_rows_can_units), exp_rows_sys2can)
+
+
+def write_system_row(system, sys_row: tables.Table.row, unit_row: tables.Table.row, is_canonical: bool = False):
+    for unit in system.units:
+        sys_row["ID"] = system.ID
+        sys_row["name"] = system.name
+        sys_row["unit"] = unit.ID
+        if not is_canonical:
+            sys_row["canonical"] = len(system.canonical)
+        sys_row.append()
+        for gf in system.families:
+            unit_row["ID"] = unit.ID
+            unit_row["name"] = unit.name
+            unit_row["geneFam"] = gf.name
+            unit_row["metadata_source"], unit_row["metadata_id"] = unit.get_metainfo(gf)
+            unit_row.append()
 
 
 def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_bar: bool = False):
@@ -112,46 +160,41 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
         systems_group = h5f.create_group("/", "systems", "Detected systems")
     else:
         systems_group = h5f.root.systems
-    system_len, canonical_len, expected_rows_sys2can = get_system_len(pangenome, source)
+    system_len, unit_len, canonical_len, canonical_unit_len, exp_rows_sys2can = get_system_len(pangenome, source)
     source_group = h5f.create_group(systems_group, source, f"Detected systems from source: {source}")
     source_group._v_attrs.metadata_sources = pangenome.systems_sources_to_metadata_source()[source]
-    system_table = h5f.create_table(source_group, "system", description=system_desc(*system_len[:-1], True),
+    system_table = h5f.create_table(source_group, "systems", description=system_desc(*system_len[:-1], True),
                                     expectedrows=system_len[-1])
+    unit_table = h5f.create_table(source_group, "units", description=system_unit_desc(*unit_len[:-1]),
+                                  expectedrows=unit_len[-1])
     canonical_table = h5f.create_table(source_group, "canonic", description=system_desc(*canonical_len[:-1]),
                                        expectedrows=canonical_len[-1])
+    canonical_unit_table = h5f.create_table(source_group, "canonic_units", expectedrows=canonical_unit_len[-1],
+                                            description=system_unit_desc(*canonical_unit_len[:-1]))
     sys2canonical_table = h5f.create_table(source_group, "system_to_canonical",
                                            description={"system": tables.StringCol(itemsize=system_len[0]),
                                                         "canonic": tables.StringCol(itemsize=canonical_len[0])},
-                                           expectedrows=expected_rows_sys2can)
-    system_row = system_table.row
-    canonical_row = canonical_table.row
+                                           expectedrows=exp_rows_sys2can)
+    system_row, unit_row = system_table.row, unit_table.row
+    canonical_row, canonical_unit_row = canonical_table.row, canonical_unit_table.row
     sys2canonical_row = sys2canonical_table.row
     canonic_seen = set()
     with tqdm(total=pangenome.number_of_systems(source=source, with_canonical=False), unit="system",
               disable=disable_bar) as progress:
         for system in pangenome.systems:
-            for gf in system.families:
-                system_row["ID"] = system.ID
-                system_row["name"] = system.name
-                system_row["geneFam"] = gf.name
-                system_row["metadata_source"], system_row["metadata_id"] = system.get_metainfo(gf)
-                system_row["canonical"] = len(system.canonical)
-                system_row.append()
-            progress.update()
+            write_system_row(system, system_row, unit_row)
             for canonical in system.canonical:
                 if canonical.ID not in canonic_seen:
                     canonic_seen.add(canonical.ID)
-                    for gf in canonical.families:
-                        canonical_row["geneFam"] = gf.name
-                        canonical_row["ID"] = canonical.ID
-                        canonical_row["name"] = canonical.name
-                        canonical_row["metadata_source"], canonical_row["metadata_id"] = canonical.get_metainfo(gf)
-                        canonical_row.append()
+                    write_system_row(canonical, canonical_row, canonical_unit_row, is_canonical=True)
                 sys2canonical_row["system"] = system.ID
                 sys2canonical_row["canonic"] = canonical.ID
                 sys2canonical_row.append()
+            progress.update()
         system_table.flush()
+        unit_table.flush()
         canonical_table.flush()
+        canonical_unit_table.flush()
         sys2canonical_table.flush()
     logging.getLogger("PANORAMA").debug(f"Write {pangenome.number_of_systems(source=source, with_canonical=False)} "
                                         f"systems, with {len(canonic_seen)} canonical systems.")
