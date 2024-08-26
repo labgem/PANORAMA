@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # coding: utf8
 
+"""
+This module provides classes to represent gene families and study them
+"""
 
 # default libraries
 from __future__ import annotations
@@ -11,19 +14,31 @@ from ppanggolin.geneFamily import GeneFamily as Fam
 from ppanggolin.genome import Organism
 from pyhmmer.plan7 import HMM
 
-
 # local libraries
 
 
 class GeneFamily(Fam):
     """
-    This represents a single gene family. It will be a node in the pangenome graph, and be aware of its genes and edges.
+    Represents a single gene family. It is a node in the pangenome graph and is aware of its genes and edges.
 
-    :param family_id: The internal identifier to give to the gene family
-    :param name: The name of the gene family (to be printed in output files)
+    Attributes:
+        name (str): The name of the gene family to be printed in output files.
+        _hmm (HMM, optional): The HMM associated with the gene family.
+        profile (optional): The profile associated with the gene family.
+        optimized_profile (optional): The optimized profile for the gene family.
+        _units_getter (dict): A dictionary to retrieve system units.
+        _systems_getter (dict): A dictionary to retrieve systems.
+        _akin (Akin, optional): The akin families associated with other pangenomes.
     """
 
     def __init__(self, family_id: int, name: str):
+        """
+        Initializes a GeneFamily instance.
+
+        Args:
+            family_id (int): The internal identifier of the gene family.
+            name (str): The name of the gene family.
+        """
         super().__init__(family_id, name)
         self._hmm = None
         self.profile = None
@@ -32,167 +47,263 @@ class GeneFamily(Fam):
         self._systems_getter = {}
         self._akin = None
 
-    def __repr__(self):
+    def __repr__(self) -> str:
+        """
+        Returns a string representation of the GeneFamily instance.
+
+        Returns:
+            str: The string representation of the GeneFamily instance.
+        """
         return f"GF {self.ID}: {self.name}"
 
-    def __hash__(self):
+    def __hash__(self) -> int:
+        """
+        Returns the hash of the GeneFamily instance.
+
+        Returns:
+            int: The hash value of the GeneFamily instance.
+        """
         return hash((self.name, self.ID))
 
     def __eq__(self, other: GeneFamily) -> bool:
         """
-        Test whether two gene families have the same genes
+        Checks if two GeneFamily instances are equal based on their genes.
 
-        :param other: Another system to test equality
+        Args:
+            other (GeneFamily): Another GeneFamily instance to compare.
 
-        :return: Equal or not
+        Returns:
+            bool: True if the GeneFamily instances are equal, False otherwise.
 
-        :raises TypeError: Try to compare a systems with another type object
+        Raises:
+            TypeError: If the other object is not a GeneFamily instance.
         """
         if not isinstance(other, GeneFamily):
-            raise TypeError(f"Another gene family is expected to be compared to the first one. "
-                            f"You give a {type(other)}")
+            raise TypeError(
+                f"Expected another GeneFamily instance for comparison, but received {type(other)}"
+            )
         return set(self.genes) == set(other.genes)
 
     def __ne__(self, other: GeneFamily) -> bool:
+        """
+        Checks if two GeneFamily instances are not equal.
+
+        Args:
+            other (GeneFamily): Another GeneFamily instance to compare.
+
+        Returns:
+            bool: True if the GeneFamily instances are not equal, False otherwise.
+        """
         return not self.__eq__(other)
 
     def _getattr_from_ppanggolin(self, family: Fam):
-        """Get attribute from ppanggolin gene family to set in PANORAMA Gene Family object
-        :param family: ppanggolin gene family object
+        """
+        Copies attributes from a PPanGGOLiN GeneFamily instance to a PANORAMA GeneFamily instance.
+
+        Args:
+            family (Fam): A PPanGGOLiN GeneFamily instance.
         """
         self._edges = family.edges
         self._genePerOrg = family._genePerOrg
         self._genes_getter = family._genes_getter
-        self.removed = family.removed  # for the repeated family not added in the main graph
+        self.removed = family.removed
         self.sequence = family.sequence
         self.partition = family.partition
         self._spots = family.spots
         self._module = family.module
         self.bitarray = family.bitarray
         for meta in family.metadata:
-            self.add_metadata(meta.source, meta)
+            self.add_metadata(meta, meta.ID)
 
     @property
     def HMM(self) -> HMM:
-        """Return gf HMM"""
+        """
+        Gets the HMM associated with the GeneFamily.
+
+        Returns:
+            HMM: The HMM associated with the GeneFamily.
+        """
         return self._hmm
 
     @HMM.setter
     def HMM(self, hmm: HMM):
+        """
+        Sets the HMM for the GeneFamily.
+
+        Args:
+            hmm (HMM): The HMM to associate with the GeneFamily.
+
+        Raises:
+            TypeError: If the provided hmm is not an HMM instance.
+        """
         if not isinstance(hmm, HMM):
-            raise TypeError(f"Expected type is {HMM.__class__.name}, found type was {type(hmm)}")
+            raise TypeError(
+                f"Expected an HMM instance, but received {type(hmm)}"
+            )
         self._hmm = hmm
 
     @staticmethod
     def recast(family: Fam) -> GeneFamily:
-        """Recast a family from PPanGGOLiN into PANORAMA Gene Family
-
-        Todo look at this function is still needed
         """
-        assert isinstance(family, Fam), "family must be a Gene Family object from PPanGGOLiN"
+        Recasts a PPanGGOLiN GeneFamily into a PANORAMA GeneFamily.
+
+        Args:
+            family (Fam): A PPanGGOLiN GeneFamily instance.
+
+        Returns:
+            GeneFamily: The recast PANORAMA GeneFamily instance.
+        """
+        assert isinstance(family, Fam), "Expected a PPanGGOLiN GeneFamily instance."
         panorama_fam = GeneFamily(family_id=family.ID, name=family.name)
         panorama_fam._getattr_from_ppanggolin(family)
         return panorama_fam
 
     def add_system_unit(self, unit):
-        """Add a system to the family
-        :param unit: System to add
-        :type unit: System
+        """
+        Adds a system unit to the GeneFamily.
+
+        Args:
+            unit: The system unit to add.
+
+        Raises:
+            KeyError: If a different system unit with the same ID already exists.
         """
         if unit in self._systems_getter and self.get_system(unit.ID) != unit:
-            logging.getLogger("PANORAMA").error(f"System unit {unit.ID}: {unit.name} can't be added to family "
-                                                f"because same ID is known for {self.get_system(unit.ID).name} ")
-            raise KeyError(f"A different system with the same name already exist in the gene family {self}")
+            logging.getLogger("PANORAMA").error(
+                f"System unit {unit.ID}: {unit.name} can't be added to family "
+                f"because the same ID is known for {self.get_system(unit.ID).name} "
+            )
+            raise KeyError(
+                f"A different system with the same name already exists in the gene family {self}"
+            )
         self._units_getter[unit.ID] = unit
 
     def get_system_unit(self, identifier: int):
-        """Get a system by its identifier
-        :param identifier: name of the system
+        """
+        Gets a system unit by its identifier.
 
-        :return: the system searched in the family
-        :rtype: System
+        Args:
+            identifier (int): The ID of the system unit to retrieve.
 
-        :raises KeyError: System with the given name does not exist in the module
+        Returns:
+            System: The system unit with the specified identifier.
+
+        Raises:
+            KeyError: If the system unit with the given ID does not exist.
         """
         try:
             return self._units_getter[identifier]
         except KeyError:
-            raise KeyError(f"There isn't system with the ID {identifier} in the gene family")
+            raise KeyError(
+                f"No system with ID {identifier} found in the gene family."
+            )
 
     def add_system(self, system):
-        """Add a system to the family
-        :param system: System to add
-        :type system: System
         """
-        # if system.ID in self._systems_getter and self.get_system(system.ID) != system:
-        #     logging.getLogger("PANORAMA").error(f"System {system.ID}: {system.name} can't be added to family "
-        #                                         f"because same ID is known for {self.get_system(system.ID).name} ")
-        #     raise KeyError(f"A different system with the same name already exist in the gene family {self}")
+        Adds a system to the GeneFamily.
+
+        Args:
+            system: The system to add.
+        """
         self._systems_getter[system.ID] = system
 
     def get_system(self, identifier: int):
-        """Get a system by its identifier
-        :param identifier: name of the system
+        """
+        Gets a system by its identifier.
 
-        :return: the system searched in the family
-        :rtype: System
+        Args:
+            identifier (int): The ID of the system to retrieve.
 
-        :raises KeyError: System with the given name does not exist in the module
+        Returns:
+            System: The system with the specified identifier.
+
+        Raises:
+            KeyError: If the system with the given ID does not exist.
         """
         try:
             return self._systems_getter[identifier]
         except KeyError:
-            raise KeyError(f"There isn't system with the ID {identifier} in the gene family")
+            raise KeyError(
+                f"No system with ID {identifier} found in the gene family."
+            )
 
     def is_multigenic(self) -> bool:
-        """Check whether the gene family is multigenic"""
-        if len(self) == len(set(self.organisms)):
-            return True
-        else:
-            return False
+        """
+        Checks whether the GeneFamily is multigenic.
+
+        Returns:
+            bool: True if the GeneFamily is multigenic, False otherwise.
+        """
+        return len(self) == len(set(self.organisms))
 
     def is_multigenic_in_org(self, organism: Organism) -> bool:
-        """Check if the gene family is multigenic for this organism"""
-        if len(set(self.get_genes_per_org(organism))) > 1:
-            return True
-        else:
-            return False
+        """
+        Checks whether the GeneFamily is multigenic in a specific organism.
+
+        Args:
+            organism (Organism): The organism to check.
+
+        Returns:
+            bool: True if the GeneFamily is multigenic in the organism, False otherwise.
+        """
+        return len(set(self.get_genes_per_org(organism))) > 1
 
     @property
     def akin(self) -> Akin:
-        """Get the akin families with other pangenomes
+        """
+        Gets the akin families associated with other pangenomes.
 
         Returns:
-            Similar families
+            Akin: The akin families.
+
+        Raises:
+            KeyError: If no akin families are assigned.
         """
         if self._akin is None:
-            logging.getLogger('PANORAMA').debug(f"Not any akin families has been assigned to {self.name}")
+            logging.getLogger('PANORAMA').debug(
+                f"No akin families assigned to {self.name}."
+            )
         return self._akin
 
     @akin.setter
     def akin(self, akin: Akin):
-        """Set the akin families with other pangenomes
+        """
+        Sets the akin families associated with other pangenomes.
 
         Args:
-            akin: Similar families
+            akin (Akin): The akin families to set.
 
         Raises:
-            KeyError: if akin is not instance Akin
+            TypeError: If the provided akin is not an Akin instance.
         """
         if not isinstance(akin, Akin):
             raise TypeError(f"{akin} is not an instance of Akin.")
         if self._akin is not None and self._akin != akin:
-            logging.getLogger("PANORAMA").debug(f"Akin families is already set for {self.name} and "
-                                                "a different one is given. Could be an error")
+            logging.getLogger("PANORAMA").debug(
+                f"Akin families are already set for {self.name}, and a different one was provided. This could be an error."
+            )
         self._akin = akin
 
 
 class Akin:
     """
-    This class represents a group of gene families that are similar between multiple pangenomes
+    Represents a group of gene families that are similar across multiple pangenomes.
+
+    Attributes:
+        ID (int): The identifier of the Akin instance.
+        reference (str): The reference gene family name.
+        _families (dict): A dictionary of gene families in the Akin group.
     """
 
     def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily) -> None:
+        """
+        Initializes an Akin instance.
+
+        Args:
+            identifier (int): The identifier of the Akin instance.
+            reference (GeneFamily): The reference GeneFamily instance.
+            *gene_families (GeneFamily): Additional GeneFamily instances to add.
+        """
         self.ID = identifier
         self._families = {}
         self.reference = reference.name
@@ -201,35 +312,59 @@ class Akin:
             self.add(gene_family)
 
     def __setitem__(self, name: str, family: GeneFamily):
-        try:
-            _ = self._families[name]
-        except KeyError:
-            self._families[name] = family
-        else:
-            raise KeyError(f"Gene family: {name} already exists in the cluster")
+        """
+        Adds a GeneFamily to the Akin group.
 
-    def __getitem__(self, name: str):
-        try:
-            return self._families[name]
-        except KeyError:
-            raise KeyError(f"There is no gene family: {name} in the cluster")
+        Args:
+            name (str): The name of the GeneFamily.
+            family (GeneFamily): The GeneFamily instance to add.
+
+        Raises:
+            KeyError: If the GeneFamily with the given name already exists in the Akin group.
+        """
+        if name in self._families:
+            raise KeyError(f"Gene family '{name}' already exists in the cluster.")
+        self._families[name] = family
+
+    def __getitem__(self, name: str) -> GeneFamily:
+        """
+        Retrieves a GeneFamily from the Akin group by name.
+
+        Args:
+            name (str): The name of the GeneFamily to retrieve.
+
+        Returns:
+            GeneFamily: The GeneFamily instance with the specified name.
+
+        Raises:
+            KeyError: If the GeneFamily with the given name does not exist in the Akin group.
+        """
+        if name not in self._families:
+            raise KeyError(f"No gene family '{name}' found in the cluster.")
+        return self._families[name]
 
     def add(self, family: GeneFamily):
         """
-        Add a gene family to the set of akin families
+        Adds a GeneFamily to the Akin group.
 
         Args:
-            family: the akin gene families
+            family (GeneFamily): The GeneFamily instance to add.
+
+        Raises:
+            AssertionError: If the provided family is not a GeneFamily instance.
         """
-        assert isinstance(family, GeneFamily), "A GeneFamily object is expected to be added to cluster"
+        assert isinstance(family, GeneFamily), "Expected a GeneFamily instance."
         self._families[family.name] = family
         family.akin = self
 
     def get(self, name: str) -> GeneFamily:
         """
-        Get a gene family from the set of akin families
+        Retrieves a GeneFamily from the Akin group by name.
 
         Args:
-            name: the gene family name to get
+            name (str): The name of the GeneFamily to retrieve.
+
+        Returns:
+            GeneFamily: The GeneFamily instance with the specified name.
         """
         return self._families[name]

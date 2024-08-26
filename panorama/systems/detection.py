@@ -121,7 +121,7 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
 
     Returns:
         tuple: A tuple containing:
-            - set: Gene families of interest in the functional unit.
+            - Set[GeneFamily]: Gene families of interest in the functional unit.
             - dict: Dictionary linking gene families to their annotations.
             - dict: Dictionary linking families to their sources.
     """
@@ -163,7 +163,8 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], organisms: 
 
     Args:
         graph (nx.Graph): A sub-pangenome graph.
-        families (set of GeneFamily): List of families that code for the system.
+        families (Set[GeneFamily]): List of families that code for the system.
+        organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
 
@@ -178,8 +179,6 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], organisms: 
             set: The set of genes in the gene family that are in organisms of interest.
         """
         if family.name not in fam2genes_in_orgs:
-            a = list(family.genes)
-            b = graph.nodes[family]["genes"]
             family_genes_in_orgs = {gene for gene in graph.nodes[family]["genes"] if gene.organism in organisms_of_interest}
             fam2genes_in_orgs[family.name] = family_genes_in_orgs
         else:
@@ -226,8 +225,8 @@ def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fa
     Checks if there are forbidden conditions in the families.
 
     Args:
-        gene_families (set of GeneFamily): Set of gene families.
-        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
+        gene_families (Set[GeneFamily]): Set of gene families.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
         func_unit (FuncUnit): Functional unit to check against.
 
     Returns:
@@ -264,9 +263,9 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
     Checks if the presence/absence rules for needed families are respected.
 
     Args:
-        gene_families (set of GeneFamily): Set of gene families.
-        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
-        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        gene_families (Set[GeneFamily]): Set of gene families.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
+        mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
         func_unit (FuncUnit): Functional unit to check against.
 
     Returns:
@@ -326,13 +325,13 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
         return False, families2meta_info
 
 
-def get_subcombinations(combi: Set[GeneFamily],
-                        combinations: List[FrozenSet[GeneFamily]]) -> List[FrozenSet[GeneFamily]]:
+def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[GeneFamily]]
+                        ) -> List[FrozenSet[GeneFamily]]:
     """
     Removes a combination and all its sub-combinations from a list of combinations.
 
     Args:
-        combi (set of GeneFamily): Combination to be removed.
+        combi (Set[GeneFamily]): Combination to be removed.
         combinations (list of FrozenSet[GeneFamily]): List of combinations to be filtered.
 
     Returns:
@@ -357,16 +356,16 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
 
     Args:
         graph (nx.Graph): A graph with families in one connected component.
-        families (set of GeneFamily): A set of families that code for the searched model.
-        gene_fam2mod_fam (dict): Dictionary linking gene families to their annotations.
-        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        families (Set[GeneFamily]): A set of families that code for the searched model.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to their annotations.
+        mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
         combinations (list of FrozenSet[GeneFamily], optional): List of family combinations known to exist in genomes.
 
     Returns:
-        set: Set of all detected functional unit in the graph.
+        Set[SystemUnit]: Set of all detected functional unit in the graph.
     """
     detected_fu = set()
     while len(combinations) > 0:
@@ -402,16 +401,16 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
 
     Args:
         graph (nx.Graph): A graph with families in a pangenomic context.
-        families (set of GeneFamily): A set of families that code for the searched model.
-        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
-        mod_fam2meta_source (dict): Dictionary linking model families to metadata sources.
+        families (Set[GeneFamily]): A set of families that code for the searched model.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
+        mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
         combinations (list of FrozenSet[GeneFamily], optional): Known existing combination of families that code for the searched model.
 
     Returns:
-        set: Set of detected systems in the pangenomic context.
+        Set[SystemUnit]: Set of detected systems in the pangenomic context.
     """
     detected_fu = set()
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
@@ -485,13 +484,13 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
 
     Args:
         func_unit (FuncUnit): The functional unit to consider.
-        gene_families (set of GeneFamily): Set of gene families that might be in the system.
-        gene_fam2mod_fam (dict): Dictionary linking gene families to model families.
+        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
 
     Returns:
         tuple: A tuple containing:
-            - set: Gene families that code for the functional unit.
-            - set: The neutral families.
+            - Set[GeneFamily]: Gene families that code for the functional unit.
+            - Set[GeneFamily]: The neutral families.
     """
     fu_families = set()
     neutral_families = set()
@@ -509,6 +508,19 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
 def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Dict[str, Set[Family]],
                         fam2source: Dict[str, str], source: str, jaccard_threshold: float = 0.8
                         ) -> Dict[str, Set[SystemUnit]]:
+    """
+
+    Args:
+        model (Model): Model corresponding to the system searched.
+        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
+        gf2fam (Dict[str, Set[Family]]): Dictionary linking gene families to their annotations.
+        fam2source (Dict[str, str]): Dictionary linking families to their sources.
+        source (str): Name of the annotation source
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+
+    Returns:
+        Dict[str, Set[SystemUnit]]: System unit found with their name as key and the units as value.
+    """
     su_found = {}
     for func_unit in model.func_units:
         fu_families = set()
@@ -589,6 +601,19 @@ def get_system_unit_combinations(su_found: Dict[str, Set[SystemUnit]], model: Mo
 
 def search_for_system(model: Model, su_found: Dict[str, Set[SystemUnit]], source: str,
                       jaccard_threshold: float = 0.8) -> Set[System]:
+    """
+    Search a system corresponding to the model based on the unit found.
+
+    Args:
+        model (Model): Model corresponding to the system searched.
+        su_found (Dict[str, Set[SystemUnit]]): the system unit found for the model.
+        source (str): Name of the annotation source
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+
+
+    Returns:
+        Set[System]: Systems detected
+    """
     gene_families = {fam for su_set in su_found.values() for su in su_set for fam in su.families}
     context, _ = compute_gene_context_graph(families=gene_families, transitive=model.transitivity,
                                             window_size=model.window, disable_bar=True)

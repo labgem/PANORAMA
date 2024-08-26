@@ -220,6 +220,12 @@ class System(MetaFeatures):
 
     @property
     def number_of_families(self):
+        """
+        Get the number of families in the system
+
+        Returns:
+            int: Number of families.
+        """
         return sum(len(unit) for unit in self.units)
 
     def is_superset(self, other: System) -> bool:
@@ -396,7 +402,6 @@ class System(MetaFeatures):
         """
         if self._fam2unit is None:
             self._mk_fam2unit()
-        a = self._fam2unit[gene_family].get_metainfo(gene_family)
         return self._fam2unit[gene_family].get_metainfo(gene_family)
 
     def annotation_sources(self) -> Set[str]:

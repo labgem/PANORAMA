@@ -8,10 +8,9 @@ This module provides functions to write, update and erase a pangenome data from 
 # default libraries
 import logging
 from typing import Dict, Tuple, Union, Any
+
 # installed libraries
 import tables
-from docutils.nodes import description
-from sqlalchemy.sql.coercions import expect
 from tqdm import tqdm
 from ppanggolin.formats.writeBinaries import write_status as super_write_status
 from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pangenome
@@ -32,7 +31,7 @@ def system_unit_desc(max_name_len: int = 1, max_gf_name_len: int = 1,
         max_metadata_source: Maximum size of annotation source name
 
     Returns:
-        The description of the table
+        Dict: The description of the table
     """
     desc = {
         "ID": tables.Int64Col(),
@@ -55,7 +54,7 @@ def system_desc(max_id_len: int = 1, max_name_len: int = 1, with_canonic: bool =
         with_canonic: If true, include number of canonical
 
     Returns:
-        The description of the table
+        Dict: The description of the table
     """
     desc = {
         "ID": tables.StringCol(itemsize=max_id_len),
@@ -68,15 +67,21 @@ def system_desc(max_id_len: int = 1, max_name_len: int = 1, with_canonic: bool =
 
 
 def get_system_len(pangenome: Pangenome, source: str
-                   ) -> tuple[tuple[Any, int], tuple[Any, int], tuple[Any, int], tuple[Any, int], int]:
+                   ) -> Tuple[Tuple[Any, int], Tuple[Any, int], Tuple[Any, int], Tuple[Any, int], int]:
     """
     Get maximum size of gene families information
+
     Args:
         pangenome: Pangenome filled with systems
         source: Name of the system source
 
     Returns:
-        Maximum size of each element
+        Tuple: Information to build tables
+            - Tuple: Maximum size for the system table and the expected rows.
+            - Tuple: Maximum size for the unit table and the expected rows.
+            - Tuple: Maximum size for the canonical table and the expected rows.
+            - Tuple: Maximum size for the canonical unit table and the expected rows.
+            - int: Expected rows for cross table between systems and their canonical version.
     """
 
     def compare_len(sys, max_id_len: int, max_sys_name_len: int, max_unit_name_len: int,
@@ -93,7 +98,9 @@ def get_system_len(pangenome: Pangenome, source: str
             max_annot_source_len: Maximum size of annotation source name
 
         Returns:
-            Maximum length of each element
+            Tuple: Maximum element size to build tables
+            - Tuple: Maximum size for the system table.
+            - Tuple: Maximum size for the unit table.
         """
 
         if len(sys.ID) > max_id_len:
@@ -130,7 +137,16 @@ def get_system_len(pangenome: Pangenome, source: str
             (*max_len_canon_unit, exp_rows_can_units), exp_rows_sys2can)
 
 
-def write_system_row(system, sys_row: tables.Table.row, unit_row: tables.Table.row, is_canonical: bool = False):
+def write_system_rows(system, sys_row: tables.Table.row, unit_row: tables.Table.row, is_canonical: bool = False):
+    """
+    Write row corresponding to one system in the corresponding table.
+
+    Args:
+        system: System to write
+        sys_row: System table
+        unit_row: Unit table
+        is_canonical: The system is canonical to another one
+    """
     for unit in system.units:
         sys_row["ID"] = system.ID
         sys_row["name"] = system.name
@@ -182,11 +198,11 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
     with tqdm(total=pangenome.number_of_systems(source=source, with_canonical=False), unit="system",
               disable=disable_bar) as progress:
         for system in pangenome.systems:
-            write_system_row(system, system_row, unit_row)
+            write_system_rows(system, system_row, unit_row)
             for canonical in system.canonical:
                 if canonical.ID not in canonic_seen:
                     canonic_seen.add(canonical.ID)
-                    write_system_row(canonical, canonical_row, canonical_unit_row, is_canonical=True)
+                    write_system_rows(canonical, canonical_row, canonical_unit_row, is_canonical=True)
                 sys2canonical_row["system"] = system.ID
                 sys2canonical_row["canonic"] = canonical.ID
                 sys2canonical_row.append()

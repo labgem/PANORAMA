@@ -1,6 +1,10 @@
 #!/usr/bin/env python3
 # coding: utf8
 
+"""
+This module provides classes to represent a pangenome or a set of pangenomes
+"""
+
 # default libraries
 import logging
 from pathlib import Path

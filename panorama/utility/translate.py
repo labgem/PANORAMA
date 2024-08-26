@@ -383,7 +383,6 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     """
     data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
     if len(canonical) > 0:
-        print("pika")
         data_json["canonical"] = canonical
     if root.attrib is not None:  # Read attributes root
         for parameter, value in root.attrib.items():
