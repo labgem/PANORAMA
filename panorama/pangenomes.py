@@ -35,7 +35,6 @@ class Pangenome(Pan):
         super().__init__()
         self._system_getter = {}
         self._name2system = {}
-        self._max_id_system = 0
         self._systems_sources = None
         self._systems_sources2metada_sources = None
         self.name = name
@@ -216,9 +215,6 @@ class Pangenome(Pan):
 
         Args:
             system (System): Detected system to be added.
-
-        TODO:
-            Merge systems.
         """
         same_sys = False
         canonical_systems = []
@@ -250,13 +246,9 @@ class Pangenome(Pan):
                         family.add_system(system)
 
         if not same_sys:
-            self._max_id_system += 1
-            system.ID = str(self._max_id_system)
             self._system_getter[system.ID] = system
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)
-            for family in system.families:
-                family.add_system(system)
         self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
 
     def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:

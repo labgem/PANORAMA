@@ -8,10 +8,13 @@ This module provides functions to detect biological systems in pangenomes.
 # default libraries
 from __future__ import annotations
 import argparse
+import itertools
 import time
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
+
+from networkx import contracted_nodes
 from tqdm import tqdm
 from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
@@ -19,14 +22,14 @@ from collections import defaultdict
 
 # installed libraries
 import networkx as nx
-from ppanggolin.genome import Gene
+from ppanggolin.genome import Gene, Organism
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
 # local libraries
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Models, Model, FuncUnit, Family
-from panorama.systems.system import System
+from panorama.systems.system import System, SystemUnit
 from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
@@ -132,8 +135,9 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                     gene_families.add(gf)
                     gf2fam[gf.name].add(fam_model)
                     if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning("Two annotations have the same protein name for different "
-                                                              "sources. First source encountered will be used.")
+                        logging.getLogger("PANORAMA").warning(
+                            "Two annotations have the same protein name for different "
+                            "sources. First source encountered will be used.")
                     else:
                         fam2source[fam_model.name] = source
 
@@ -152,7 +156,8 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
     return gene_families, gf2fam, fam2source
 
 
-def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_threshold: float = 0.8) -> None:
+def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], organisms: Set[Organism] = None,
+                         jaccard_threshold: float = 0.8) -> None:
     """
     Filters a graph based on a local Jaccard index.
 
@@ -161,6 +166,7 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
         families (set of GeneFamily): List of families that code for the system.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
+
     def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
         """
         Retrieves the set of genes in the gene family that are in organisms of interest.
@@ -172,23 +178,28 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
             set: The set of genes in the gene family that are in organisms of interest.
         """
         if family.name not in fam2genes_in_orgs:
-            family_genes_in_orgs = {gene for gene in family.genes if gene.organism in organisms_of_interest}
+            a = list(family.genes)
+            b = graph.nodes[family]["genes"]
+            family_genes_in_orgs = {gene for gene in graph.nodes[family]["genes"] if gene.organism in organisms_of_interest}
             fam2genes_in_orgs[family.name] = family_genes_in_orgs
         else:
             family_genes_in_orgs = fam2genes_in_orgs[family.name]
         return family_genes_in_orgs
 
     # Compute local Jaccard
-    organisms_of_interest = set()
-    if len(families) > 1:
-        subgraph = graph.subgraph(families)
-        for _, _, data in subgraph.edges(data=True):
-            organisms_of_interest |= data['genomes']
+    if organisms is None:
+        organisms_of_interest = set()
+        if len(families) > 1:
+            subgraph = graph.subgraph(families)
+            for _, _, data in subgraph.edges(data=True):
+                organisms_of_interest |= data['genomes']
 
-    elif len(families) == 1:
-        organisms_of_interest = set(list(families)[0].organisms)
+        elif len(families) == 1:
+            organisms_of_interest = set(list(families)[0].organisms)
+        else:
+            raise AssertionError("No families of interest")
     else:
-        raise AssertionError("No families of interest")
+        organisms_of_interest = organisms
 
     fam2genes_in_orgs = {}
     edges2remove = set()
@@ -209,8 +220,8 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], jaccard_thr
     graph.remove_edges_from(edges2remove)
 
 
-def check_for_forbidden(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                        func_unit: FuncUnit) -> bool:
+def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
+                                 func_unit: FuncUnit) -> bool:
     """
     Checks if there are forbidden conditions in the families.
 
@@ -222,7 +233,6 @@ def check_for_forbidden(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[s
     Returns:
         bool: True if forbidden conditions are encountered, False otherwise.
     """
-    count_forbidden = 0
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
 
     def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
@@ -247,9 +257,9 @@ def check_for_forbidden(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[s
     return False
 
 
-def check_for_needed(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                     mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
-                     ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
+def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
+                              mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
+                              ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
     Checks if the presence/absence rules for needed families are respected.
 
@@ -338,12 +348,12 @@ def get_subcombinations(combi: Set[GeneFamily],
     return remove_combinations
 
 
-def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                        mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
-                        jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                        ) -> Set[System]:
+def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
+                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
+                    jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
+                    ) -> Set[SystemUnit]:
     """
-    Searches for systems corresponding to a model in a graph.
+    Searches for functional unit corresponding to a model in a graph.
 
     Args:
         graph (nx.Graph): A graph with families in one connected component.
@@ -356,37 +366,39 @@ def search_system_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod
         combinations (list of FrozenSet[GeneFamily], optional): List of family combinations known to exist in genomes.
 
     Returns:
-        set: Set of all detected systems in the graph.
+        set: Set of all detected functional unit in the graph.
     """
-    detected_systems = set()
+    detected_fu = set()
     while len(combinations) > 0:
         families_combination = set(combinations.pop(0))
-        check_needed, _ = check_for_needed(families_combination, gene_fam2mod_fam, mod_fam2meta_source, func_unit)
+        check_needed, _ = check_for_needed_families(families_combination, gene_fam2mod_fam, mod_fam2meta_source,
+                                                    func_unit)
         if check_needed:
-            if not check_for_forbidden(families_combination, gene_fam2mod_fam, func_unit):
+            if not check_for_forbidden_families(families_combination, gene_fam2mod_fam, func_unit):
                 local_graph = graph.copy()
                 local_graph.remove_nodes_from(families.difference(families_combination))
-                filter_local_context(local_graph, families_combination, jaccard_threshold)
+                filter_local_context(local_graph, families_combination, jaccard_threshold=jaccard_threshold)
                 for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
                     cc: Set[GeneFamily]
-                    check_needed, fam2metainfo = check_for_needed(cc, gene_fam2mod_fam, mod_fam2meta_source, func_unit)
-                    if check_needed and not check_for_forbidden(cc, gene_fam2mod_fam, func_unit):
-                        detected_systems.add(System(system_id=0, model=func_unit.model, source=source,
-                                                    gene_families=cc, families_to_metainfo=fam2metainfo))
+                    check_needed, fam2metainfo = check_for_needed_families(cc, gene_fam2mod_fam, mod_fam2meta_source,
+                                                                           func_unit)
+                    if check_needed and not check_for_forbidden_families(cc, gene_fam2mod_fam, func_unit):
+                        detected_fu.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                                                   families_to_metainfo=fam2metainfo))
                         get_subcombinations(cc.intersection(families_combination), combinations)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
             get_subcombinations(families_combination, combinations)
 
-    return detected_systems
+    return detected_fu
 
 
-def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                             mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
-                             jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                             ) -> Set[System]:
+def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
+                           mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
+                           jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
+                           ) -> Set[SystemUnit]:
     """
-    Searches for systems corresponding to a model in a pangenomic context.
+    Searches for system unit corresponding to a model in a pangenomic context.
 
     Args:
         graph (nx.Graph): A graph with families in a pangenomic context.
@@ -401,7 +413,7 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
     Returns:
         set: Set of detected systems in the pangenomic context.
     """
-    detected_systems = set()
+    detected_fu = set()
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
         families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
@@ -411,10 +423,58 @@ def search_system_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fa
         if len(families_in_cc) > 0:
             combinations_in_cc = get_subcombinations(families_in_cc, combinations)
             families_in_cc |= neutral_families
-            new_detected_systems = search_system_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
-                                                       func_unit, source, jaccard_threshold, combinations_in_cc)
-            detected_systems |= new_detected_systems
-    return detected_systems
+            new_detected_fu = search_fu_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
+                                              func_unit, source, jaccard_threshold, combinations_in_cc)
+            detected_fu |= new_detected_fu
+    return detected_fu
+
+
+def check_for_needed_units(su_found: Dict[str, Set[SystemUnit]], model: Model) -> bool:
+    """
+    Checks if the presence/absence rules for needed functional units are respected.
+
+    Args:
+        su_found (Dict[str, Set[SystemUnit]]): Dictionary with all system unit found sorted by name.
+        model (Model): Model corresponding to the system checked.
+
+    Returns:
+        bool: True if forbidden conditions are encountered, False otherwise.
+    """
+    count_mandatory, count_total = (0, 0)
+    mandatory_list, accessory_list = (list(map(lambda x: x.name, model.mandatory)),
+                                      list(map(lambda x: x.name, model.accessory)))
+    for name, fu_set in su_found.items():
+        if name in mandatory_list:
+            if len(fu_set) > 0:
+                count_mandatory += 1
+                count_total += 1
+        elif name in accessory_list and len(fu_set) > 0:
+            count_total += 1
+
+    if (count_mandatory >= model.min_mandatory or model.min_mandatory == -1) and \
+            (count_total >= model.min_total or model.min_total == -1):
+        return True
+    else:
+        return False
+
+
+def check_for_forbidden_unit(su_found: Dict[str, Set[SystemUnit]], model: Model) -> bool:
+    """
+    Checks if there are forbidden system unit.
+
+    Args:
+        su_found (Dict[str, Set[SystemUnit]]): Dictionary with all system unit found sorted by name.
+        model (Model): Model corresponding to the system checked.
+
+    Returns:
+        bool: True if forbidden conditions are encountered, False otherwise.
+    """
+    forbidden_list = list(map(lambda x: x.name, model.forbidden))
+
+    for name, fu_set in su_found.items():
+        if name in forbidden_list and len(fu_set) > 0:
+            return True
+    return False
 
 
 def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[GeneFamily],
@@ -446,6 +506,113 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
     return fu_families, neutral_families
 
 
+def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Dict[str, Set[Family]],
+                        fam2source: Dict[str, str], source: str, jaccard_threshold: float = 0.8
+                        ) -> Dict[str, Set[SystemUnit]]:
+    su_found = {}
+    for func_unit in model.func_units:
+        fu_families = set()
+        fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
+        check_needed, _ = check_for_needed_families(fu_families, gf2fam, fam2source, func_unit)
+        if check_needed:
+            context, combinations2orgs = compute_gene_context_graph(families=fu_families,
+                                                                    transitive=func_unit.transitivity,
+                                                                    window_size=func_unit.window, disable_bar=True)
+            combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
+            su_found[func_unit.name] = search_unit_in_context(context, fu_families, gf2fam, fam2source, func_unit,
+                                                              source, jaccard_threshold, combinations)
+    return su_found
+
+
+def get_system_unit_combinations(su_found: Dict[str, Set[SystemUnit]], model: Model):
+    """
+       Generate combinations of system units that could code for a system.
+
+       The function generates combinations from mandatory, optional, and neutral categories,
+       ensuring that model parameters are respected. Combinations with and without elements
+       from neutral categories are generated.
+
+       Args:
+           su_found (Dict[str, Set[SystemUnit]]): A dictionary where keys are functional unit names and
+                        values are sets of elements belonging to each functional unit model.
+           model (Model): Model corresponding to the functional unit.
+
+       Returns:
+           list: A list of all possible valid combinations based on the model.
+       """
+    mandatory_list = list(map(lambda x: x.name, model.mandatory))
+    accessory_list = list(map(lambda x: x.name, model.accessory))
+    neutral_list = list(map(lambda x: x.name, model.neutral))
+    # Extract elements by category
+    mandatory_unit = {name: su_found[name] for name in mandatory_list}
+    accessory_unit = {name: su_found[name] for name in accessory_list}
+    neutral_unit = {name: su_found[name] for name in neutral_list}
+
+    # Initialize a list to store valid combinations
+    valid_combinations = []
+
+    # Generate combinations with at least min_mandatory mandatory categories
+    for num_mandatory in range(model.min_mandatory, len(mandatory_unit) + 1):
+        mandatory_combos = itertools.combinations(mandatory_unit, num_mandatory)
+
+        for mandatory_combo in mandatory_combos:
+            # Combine with accessory categories to meet the min_total constraint
+            for num_accessory in range(max(0, model.min_total - num_mandatory), len(accessory_unit) + 1):
+                accessory_combos = itertools.combinations(accessory_unit, num_accessory)
+
+                for accessory_combo in accessory_combos:
+                    # Form a combination of selected mandatory and accessory categories
+                    combo_min_acc = list(mandatory_combo) + list(accessory_combo)
+
+                    # Select one element from each category
+                    combo_units = []
+                    for cat in combo_min_acc:
+                        combo_units.append(list(su_found[cat]))
+
+                    # Generate cartesian product of elements (one element per category)
+                    product = list(itertools.product(*combo_units))
+
+                    for p in product:
+                        # Store the combination without neutral elements
+                        final_combo = list(p)
+                        valid_combinations.append(final_combo)
+
+                        # Generate and store the combination with neutral elements
+                        final_combo_with_neutral = list(final_combo)
+                        for neutral_cat in neutral_unit:
+                            final_combo_with_neutral.append(
+                                list(neutral_unit[neutral_cat])[0])  # Add one neutral element
+                        valid_combinations.append(final_combo_with_neutral)
+
+    return valid_combinations
+
+
+def search_for_system(model: Model, su_found: Dict[str, Set[SystemUnit]], source: str,
+                      jaccard_threshold: float = 0.8) -> Set[System]:
+    gene_families = {fam for su_set in su_found.values() for su in su_set for fam in su.families}
+    context, _ = compute_gene_context_graph(families=gene_families, transitive=model.transitivity,
+                                            window_size=model.window, disable_bar=True)
+    detect_system = set()
+    for combination in get_system_unit_combinations(su_found, model):
+        fam2su = {}
+        contracted_graph = context.copy()
+        organisms = set()
+        for su in combination:
+            fam_list = list(su.families)
+            u = fam_list.pop(0)
+            for v in fam_list:
+                contracted_nodes(contracted_graph, u, v)
+            fam2su[u] = su
+            organisms |= set(su.organisms)
+        filter_local_context(contracted_graph, set(fam2su.keys()), organisms, jaccard_threshold)
+        for cc in sorted(nx.connected_components(contracted_graph), key=len, reverse=True):
+            cc: Set[GeneFamily]
+            su_in_cc = {fam2su[fam].name: fam2su[fam] for fam in cc if fam in fam2su}
+            if check_for_needed_units(su_in_cc, model):
+                detect_system.add(System(model, source, units=set(su_in_cc.values())))
+    return detect_system
+
+
 def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]], source: str,
                   jaccard_threshold: float = 0.8) -> Set[System]:
     """
@@ -462,19 +629,17 @@ def search_system(model: Model, meta2fam: Dict[str, Dict[str, Set[GeneFamily]]],
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     begin = time.time()
-    detected_systems = set()
     gene_families, gf2fam, fam2source = dict_families_context(model, meta2fam)
-
-    for func_unit in model.func_units:
-        fu_families = set()
-        fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
-        check_needed, _ = check_for_needed(fu_families, gf2fam, fam2source, func_unit)
-        if check_needed:
-            context, combinations2orgs = compute_gene_context_graph(families=fu_families, transitive=func_unit.transitivity,
-                                                                    window_size=func_unit.window, disable_bar=True)
-            combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
-            detected_systems |= search_system_in_context(context, fu_families, gf2fam, fam2source, func_unit, source,
-                                                         jaccard_threshold, combinations)
+    su_found = search_system_units(model, gene_families, gf2fam, fam2source, source, jaccard_threshold)
+    detected_systems = set()
+    if check_for_needed_units(su_found, model) and not check_for_forbidden_unit(su_found, model):
+        if len(su_found) == 1:  # only one functional unit found so each one correspond to a system
+            for fu in next(iter(su_found.values())):
+                new_sys = System(model=model, source=source)
+                new_sys.add_unit(fu)
+                detected_systems.add(new_sys)
+        else:
+            detected_systems = search_for_system(model, su_found, source, jaccard_threshold)
     logging.getLogger("PANORAMA").debug(f"Done search for model {model.name} in {time.time() - begin} seconds")
     return detected_systems
 

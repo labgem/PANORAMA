@@ -28,6 +28,7 @@ class GeneFamily(Fam):
         self._hmm = None
         self.profile = None
         self.optimized_profile = None
+        self._units_getter = {}
         self._systems_getter = {}
         self._akin = None
 
@@ -92,6 +93,31 @@ class GeneFamily(Fam):
         panorama_fam = GeneFamily(family_id=family.ID, name=family.name)
         panorama_fam._getattr_from_ppanggolin(family)
         return panorama_fam
+
+    def add_system_unit(self, unit):
+        """Add a system to the family
+        :param unit: System to add
+        :type unit: System
+        """
+        if unit in self._systems_getter and self.get_system(unit.ID) != unit:
+            logging.getLogger("PANORAMA").error(f"System unit {unit.ID}: {unit.name} can't be added to family "
+                                                f"because same ID is known for {self.get_system(unit.ID).name} ")
+            raise KeyError(f"A different system with the same name already exist in the gene family {self}")
+        self._units_getter[unit.ID] = unit
+
+    def get_system_unit(self, identifier: int):
+        """Get a system by its identifier
+        :param identifier: name of the system
+
+        :return: the system searched in the family
+        :rtype: System
+
+        :raises KeyError: System with the given name does not exist in the module
+        """
+        try:
+            return self._units_getter[identifier]
+        except KeyError:
+            raise KeyError(f"There isn't system with the ID {identifier} in the gene family")
 
     def add_system(self, system):
         """Add a system to the family
