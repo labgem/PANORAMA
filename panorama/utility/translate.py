@@ -381,7 +381,10 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     Returns:
         dict: PANORAMA model information
     """
-    data_json = {"name": model_name, 'func_units': [], 'parameters': dict(), "canonical": canonical}
+    data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
+    if len(canonical) > 0:
+        print("pika")
+        data_json["canonical"] = canonical
     if root.attrib is not None:  # Read attributes root
         for parameter, value in root.attrib.items():
             if parameter == 'inter_gene_max_space':
@@ -515,7 +518,7 @@ def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
         basename = re.split("-Type-", model_name)
         base_class = basename[0]
         base_type = basename[-1]
-        for canon_file in models.glob(f"{base_class}*.xml"):
+        for canon_file in models.rglob(f"{base_class}*.xml"):
             name_canon = canon_file.stem
             if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
                 logging.getLogger("PANORAMA").debug("")
@@ -528,24 +531,24 @@ def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
             base_type, subtype = base_type.split('_')
         else:
             subtype = ""
-        for canon_file in models.glob("*.xml"):
+        for canon_file in models.rglob("*.xml"):
             name_canon = canon_file.stem
             if re.search(f"{base_class}_Type_{base_type}_{subtype}", name_canon) and name_canon != model_name:
                 logging.getLogger("PANORAMA").debug("")
                 canonical_sys.append(name_canon)
     elif model_name in ["CAS_Cluster", "CBASS", "Wadjet"]:
-        for canon_file in models.glob(f"{model_name}*.xml"):
+        for canon_file in models.rglob(f"{model_name}*.xml"):
             if canon_file.stem != model_name:
                 canonical_sys.append(canon_file.stem)
     return canonical_sys
 
 
-def get_models_path(macsy_db: Path, source: str) -> Dict[str, Path]:
+def get_models_path(models: Path, source: str) -> Dict[str, Path]:
     """
     Associate a unique name for the model to its path in function of the source
 
     Args:
-        macsy_db: Models database path
+        models: Models database path
         source: Name of the source.
 
     Returns:
@@ -553,7 +556,7 @@ def get_models_path(macsy_db: Path, source: str) -> Dict[str, Path]:
     """
     model2path = {}
 
-    for model in macsy_db.joinpath("definitions").rglob("*.xml"):
+    for model in models.rglob("*.xml"):
         if source == "defense-finder":
             model2path[model.stem] = model
         elif source == "CONJScan":
@@ -589,11 +592,11 @@ def translate_macsyfinder(macsy_db: Path, output: Path, hmm_coverage: float = No
                                          disable_bar)
     list_data = []
     logging.getLogger('PANORAMA').info(f"Begin to translate {source} models")
-
-    for name, path in tqdm(get_models_path(macsy_db, source).items(), unit='file',
+    model_path = macsy_db / "definitions"
+    for name, path in tqdm(get_models_path(model_path, source).items(), unit='file',
                            desc='Translate models', disable=disable_bar):
         try:
-            canonical_sys = search_canonical_macsyfinder(name, path)
+            canonical_sys = search_canonical_macsyfinder(name, model_path)
             root = read_xml(path)
             list_data.append(translate_macsyfinder_model(root, name, hmm_df, canonical_sys))
         except Exception as error:
