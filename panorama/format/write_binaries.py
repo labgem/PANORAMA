@@ -145,7 +145,7 @@ def write_systems(pangenome: Pangenome, h5f: tables.File, source: str, disable_b
                         canonical_row["geneFam"] = gf.name
                         canonical_row["ID"] = canonical.ID
                         canonical_row["name"] = canonical.name
-                        canonical_row["metadata_source"], system_row["metadata_id"] = canonical.get_metainfo(gf)
+                        canonical_row["metadata_source"], canonical_row["metadata_id"] = canonical.get_metainfo(gf)
                         canonical_row.append()
                 sys2canonical_row["system"] = system.ID
                 sys2canonical_row["canonic"] = canonical.ID

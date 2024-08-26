@@ -218,6 +218,10 @@ class System(MetaFeatures):
             families |= set(unit.families)
         yield from families
 
+    @property
+    def number_of_families(self):
+        return sum(len(unit) for unit in self.units)
+
     def is_superset(self, other: System) -> bool:
         """Checks if the current System includes another System.
 
@@ -257,7 +261,7 @@ class System(MetaFeatures):
                 return False
         return True
 
-    def intersection(self, other: System) -> Dict[str, SystemUnit]:
+    def intersection(self, other: System) -> Set[SystemUnit]:
         """Computes the intersection of two System objects.
 
         Args:
@@ -272,15 +276,14 @@ class System(MetaFeatures):
         if not isinstance(other, System):
             raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
 
-        if self.model.name == other.model.name:
-            intersected_unit_getter = {}
-            for name in self._unit_getter:
-                if name in other._unit_getter:
-                    if self.get_unit(name).is_superset(other.get_unit(name)):
-                        intersected_unit_getter[name] = self.get_unit(name)
-                    elif self.get_unit(name).is_subset(other.get_unit(name)):
-                        intersected_unit_getter[name] = other.get_unit(name)
-            return intersected_unit_getter
+        intersected_unit_getter = set()
+        for s_unit in self.units:
+            for o_unit in other.units:
+                if s_unit.is_superset(o_unit):
+                    intersected_unit_getter.add(s_unit)
+                elif s_unit.is_subset(o_unit):
+                    intersected_unit_getter.add(o_unit)
+        return intersected_unit_getter
 
     def difference(self, other: System) -> Dict[str, SystemUnit]:
         """Find the unit that are in other but not in self.
@@ -381,7 +384,6 @@ class System(MetaFeatures):
             for fam in unit.families:
                 self._fam2unit[fam] = unit
 
-
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
         """
         Retrieves metadata for a gene family.
@@ -394,6 +396,7 @@ class System(MetaFeatures):
         """
         if self._fam2unit is None:
             self._mk_fam2unit()
+        a = self._fam2unit[gene_family].get_metainfo(gene_family)
         return self._fam2unit[gene_family].get_metainfo(gene_family)
 
     def annotation_sources(self) -> Set[str]:

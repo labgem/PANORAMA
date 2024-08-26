@@ -124,10 +124,10 @@ class GeneFamily(Fam):
         :param system: System to add
         :type system: System
         """
-        if system.ID in self._systems_getter and self.get_system(system.ID) != system:
-            logging.getLogger("PANORAMA").error(f"System {system.ID}: {system.name} can't be added to family "
-                                                f"because same ID is known for {self.get_system(system.ID).name} ")
-            raise KeyError(f"A different system with the same name already exist in the gene family {self}")
+        # if system.ID in self._systems_getter and self.get_system(system.ID) != system:
+        #     logging.getLogger("PANORAMA").error(f"System {system.ID}: {system.name} can't be added to family "
+        #                                         f"because same ID is known for {self.get_system(system.ID).name} ")
+        #     raise KeyError(f"A different system with the same name already exist in the gene family {self}")
         self._systems_getter[system.ID] = system
 
     def get_system(self, identifier: int):

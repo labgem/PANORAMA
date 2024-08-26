@@ -226,8 +226,8 @@ class Pangenome(Pan):
                     system.ID = system_in.ID
                     self._system_getter[system.ID] = system
                     same_sys = True
-                    for family in system.difference(system_in):
-                        family.add_system(system)
+                    for unit in system.difference(system_in).values():
+                        unit.system_in = system
                 elif system_in.is_superset(system):
                     same_sys = True
             elif system.name in system_in.canonical_models():
@@ -239,11 +239,9 @@ class Pangenome(Pan):
                 # New system is a canonical system for a system in pangenome
                 if len(system.intersection(system_in)) > 0:
                     system_in.add_canonical(system)
-                    self._max_id_system += 1
-                    system.ID = str(self._max_id_system)
                     same_sys = True
                     for family in system.families:
-                        family.add_system(system)
+                        family.add_system(system_in)
 
         if not same_sys:
             self._system_getter[system.ID] = system

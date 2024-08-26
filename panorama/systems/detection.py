@@ -676,7 +676,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                     result = future.result()
                     detected_systems |= result
 
-    for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x))):
+    for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)):
         pangenome.add_system(system)
     logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
     logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
