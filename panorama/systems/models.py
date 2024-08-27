@@ -422,9 +422,10 @@ class _ModFuFeatures:
         self.neutral = neutral if neutral is not None else set()
         self.same_strand = same_strand
         self._child_type = "Functional unit" if isinstance(self, Model) else "Family"
+        self._child_getter = None
 
     @property
-    def _children(self):
+    def _children(self) -> Generator[Union[FuncUnit, Family], None, None]:
         """
         Get all child elements.
 
@@ -510,6 +511,33 @@ class _ModFuFeatures:
             self.forbidden.add(child)
         else:
             self.neutral.add(child)
+
+    def _mk_child_getter(self):
+        self._child_getter = {}
+        for child in self._children:
+            self._child_getter[child.name] = child
+
+    def get(self, name: str) -> Union[FuncUnit, Family]:
+        """
+        Get a child from his name
+
+        Args:
+            name: name of the child to get.
+
+        Returns:
+            Union[FuncUnit, Family]: The child element
+
+        Raises:
+            KeyError: If the child is not found.
+        """
+        if self._child_getter is None:
+            self._mk_child_getter()
+        try:
+            child = self._child_getter[name]
+        except KeyError:
+            raise KeyError(f"No such {self._child_type} with {name} in {type(self)}")
+        else:
+            return child
 
 
 class Model(_BasicFeatures, _ModFuFeatures):
@@ -611,6 +639,21 @@ class Model(_BasicFeatures, _ModFuFeatures):
             Family: All families that are duplicated in functional unit.
         """
         yield from self._duplicate(filter_type)
+
+    def get(self, name: str) -> Union[FuncUnit]:
+        """
+        Get a functional unit in the model with his name
+
+        Args:
+            name: name of the functional unit to get.
+
+        Returns:
+            FuncUnit: The functional unit element
+
+        Raises:
+            KeyError: If the functional unit with the name is not found.
+        """
+        return super().get(name)
 
     def check_model(self):
         """
@@ -760,6 +803,21 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         """
         yield from self._children
 
+    def get(self, name: str) -> Union[Family]:
+        """
+        Get a family in the functional unit with his name
+
+        Args:
+            name: name of the family to get.
+
+        Returns:
+            FuncUnit: The family element
+
+        Raises:
+            KeyError: If the family with the name is not found.
+        """
+        return super().get(name)
+
     def families_names(self, presence: str = None):
         """
         Get all families names.
@@ -859,7 +917,8 @@ class Family(_BasicFeatures, _FuFamFeatures):
         multi_model (bool, optional): If the family can be present in multiple models. Defaults to False.
     """
 
-    def __init__(self, name: str = "", transitivity: int = 0, window: int = 1, presence: str = "", func_unit: FuncUnit = None,
+    def __init__(self, name: str = "", transitivity: int = 0, window: int = 1, presence: str = "",
+                 func_unit: FuncUnit = None,
                  duplicate: int = 0, exchangeable: Set[str] = None, multi_system: bool = False,
                  multi_model: bool = False):
         """

@@ -7,7 +7,6 @@ This module provides functions to read and load pangenome data from HDF5 files.
 
 # default libraries
 import logging
-from collections import defaultdict
 
 from tqdm import tqdm
 from typing import Callable, Dict, List
@@ -25,7 +24,7 @@ from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
 # local libraries
-from panorama.systems.system import System
+from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
@@ -53,7 +52,8 @@ def get_status(pangenome, pangenome_file: Path):
     h5f.close()
 
 
-def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, models: Models, disable_bar: bool = False):
+def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, models: Models,
+                           read_canonical: bool = True, disable_bar: bool = False):
     """
     Read systems for one source and add them to the pangenome.
 
@@ -61,58 +61,86 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
         pangenome (Pangenome): Pangenome containing systems.
         source_group: Source group with 3 tables to read systems.
         models (Models): Models associated with systems.
-        disable_bar (bool): Whether to disable the progress bar.
+        read_canonical (bool, optional): Read canonical systems (default True)
+        disable_bar (bool, optional): Whether to disable the progress bar (default False).
     """
-    systems = {}
-    canonic = {}
-    system2canon = defaultdict(set)
-    source = source_group._v_name
 
-    def read_system_line(line, sys_dict) -> System:
+    def read_system_unit(unit_row: tables.Table.row, units_dict: Dict[str, SystemUnit]):
+        """
+        Global function to read a line in unit table
+
+        Args:
+            unit_row: the row with unit information to read
+            units_dict: Dictionary of read units, with identifier as key and unit as value
+        """
+        unit_id = unit_row["ID"]
+        if unit_id not in units_dict:
+            fu_name = unit_row["name"].decode()
+            model = models.get_model(fu2model[fu_name])
+            unit = SystemUnit(functional_unit=model.get(fu_name), source=source)
+            unit.ID = unit_id
+            units_dict[unit_id] = unit
+        else:
+            unit = units_dict[unit_id]
+        unit.add_family(pangenome.get_gene_family(unit_row["geneFam"].decode()),
+                        unit_row["metadata_source"].decode(), int(unit_row["metadata_id"]))
+
+    def read_system(sys_row: tables.Table.row, sys_dict: Dict[str, System]) -> System:
         """
         Global function to read a line in system table
 
         Args:
-            line: The line to read.
-            sys_dict: System dictionary
-
-        Returns:
-            A system object
+            sys_row: the row with system information to read
+            sys_dict: Dictionary of read systems, with identifier as key and system as value
         """
-        identifier = line["ID"].decode()
-        if identifier not in sys_dict:
-            model = models.get_model(line["name"].decode())
-            sys = System(system_id=identifier, model=model, source=source)
-            sys_dict[identifier] = sys
+        sys_id = sys_row["ID"].decode()
+        if sys_id not in sys_dict:
+            model = models.get_model(sys_row["name"].decode())
+            sys = System(system_id=sys_id, model=model, source=source)
+            sys_dict[sys_id] = sys
         else:
-            sys = sys_dict[identifier]
-        sys.add_family(pangenome.get_gene_family(line["geneFam"].decode()),
-                       line["metadata_source"].decode(), int(line["metadata_id"]))
+            sys = sys_dict[sys_id]
+        sys.add_unit(units[sys_row["unit"]])
         return sys
 
-    system_table = source_group.system
-    canonical_table = source_group.canonic
-    sys2canonical_table = source_group.system_to_canonical
-    with tqdm(total=system_table.nrows + canonical_table.nrows + sys2canonical_table.nrows,
-              unit="line", desc="Read pangenome systems", disable=disable_bar) as progress:
-        for row in read_chunks(sys2canonical_table):
-            system2canon[row["system"].decode()].add(row["canonic"].decode())
+    source = source_group._v_name
+    fu2model = {fu.name: model.name for model in models for fu in model.func_units}
+    system_table = source_group.systems
+    unit_table = source_group.units
+    systems = {}
+    with tqdm(total=system_table.nrows + unit_table.nrows, unit="line",
+              desc="Read pangenome systems", disable=disable_bar) as progress:
+        units = {}
+        for row in read_chunks(unit_table):
+            read_system_unit(row, units)
             progress.update()
-
-        for row in read_chunks(canonical_table):
-            read_system_line(row, canonic)
-            progress.update()
-
         for row in read_chunks(system_table):
-            system = read_system_line(row, systems)
-            for canon_id in system2canon.pop(system.ID, []):
-                system.add_canonical(canonic[canon_id])
-            progress.update()
+            read_system(row, systems)
+    logging.getLogger("PANORAMA").debug(f"Number of systems read: {len(systems)}")
+    if read_canonical:
+        canonic = {}
+        canon_table = source_group.canonic
+        canon_unit_table = source_group.canonic_units
+        sys2canonical_table = source_group.system_to_canonical
+
+        with tqdm(total=canon_table.nrows + canon_unit_table.nrows + sys2canonical_table.nrows,
+                  unit="line", desc="Read pangenome canonical systems", disable=disable_bar) as progress:
+            canon_units = {}
+            for row in read_chunks(canon_unit_table):
+                read_system_unit(row, canon_units)
+                progress.update()
+
+            for row in read_chunks(canon_table):
+                read_system(row, canonic)
+                progress.update()
+
+            for row in read_chunks(sys2canonical_table):
+                systems[row["system"].decode()].add_canonical(canonic[row["canonic"].decode()])
+                progress.update()
+            logging.getLogger("PANORAMA").debug(f"Number of canonical system: {len(canonic)}")
 
     logging.getLogger("PANORAMA").info(f"Add system from {source} to pangenome...")
-    logging.getLogger("PANORAMA").debug(f"Number of systems found: {len(systems)} "
-                                        f"with {len(canonic)} canonical system")
-    for system in tqdm(sorted(systems.values(), key=lambda x: (len(x.model.canonical), -len(x))),
+    for system in tqdm(sorted(systems.values(), key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)),
                        disable=False if logging.getLogger().level == logging.DEBUG else True,
                        desc="Add system to pangenome"):
         pangenome.add_system(system)
