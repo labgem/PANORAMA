@@ -192,7 +192,7 @@ class Module(Mod):
             families (set, optional): The set of families that define the module. Defaults to None.
         """
         super().__init__(module_id=module_id, families=families)
-        self._systemsGetter = {}
+        self._unit_getter = {}
         self._sys2fam = {}
 
     @property
@@ -219,7 +219,7 @@ class Module(Mod):
         return len(set(self.organisms))
 
     @property
-    def gene_families(self) -> GeneFamily:
+    def gene_families(self) -> Generator[GeneFamily, None, None]:
         """
         Get the set of gene families that define the module.
 
@@ -229,6 +229,59 @@ class Module(Mod):
         return super().families
 
     @property
+    def units(self):
+        """
+        Generator of the systems associated with the module.
+
+        Yields:
+            Generator[SystemUnit]: The next system associated with the module.
+        """
+        yield from self._unit_getter.values()
+
+    def get_unit(self, identifier: int):
+        """
+        Get a unit associated with the module.
+
+        Args:
+            identifier (int): The identifier of the unit.
+
+        Returns:
+            System: The unit with the given identifier.
+
+        Raises:
+            KeyError: If the unit is not associated with the module.
+        """
+        try:
+            unit = self._unit_getter[identifier]
+        except KeyError:
+            raise KeyError(f"System {identifier} is not associated to module {self.ID}")
+        else:
+            return unit
+
+    def add_unit(self, unit):
+        """
+        Add a system to the module.
+
+        Args:
+            unit (System): The system to add to the module.
+
+        Raises:
+            Exception: If a system with the same ID but different name or gene families is already associated with the module.
+        """
+        try:
+            unit_in = self.get_unit(unit.ID)
+        except KeyError:
+            self._unit_getter[unit.ID] = unit
+        else:
+            if unit.name != unit_in.name:
+                raise Exception("Two system with same ID but with different name are trying to be added to module."
+                                "This error is unexpected. Please report on our GitHub")
+            else:
+                if unit.families != unit_in.families:
+                    raise Exception("Two system with same ID and name but with different gene families are trying to be"
+                                    " added to module. This error is unexpected. Please report on our GitHub")
+
+    @property
     def systems(self):
         """
         Generator of the systems associated with the module.
@@ -236,51 +289,10 @@ class Module(Mod):
         Yields:
             System: The next system associated with the module.
         """
-        for system in self._systemsGetter.values():
-            yield system
-
-    def get_system(self, identifier: int):
-        """
-        Get a system associated with the module.
-
-        Args:
-            identifier (int): The identifier of the system.
-
-        Returns:
-            System: The system with the given identifier.
-
-        Raises:
-            KeyError: If the system is not associated with the module.
-        """
-        try:
-            system = self._systemsGetter[identifier]
-        except KeyError:
-            raise KeyError(f"System {identifier} is not associated to module {self.ID}")
-        else:
-            return system
-
-    def add_system(self, system):
-        """
-        Add a system to the module.
-
-        Args:
-            system (System): The system to add to the module.
-
-        Raises:
-            Exception: If a system with the same ID but different name or gene families is already associated with the module.
-        """
-        try:
-            self.get_system(system.ID)
-        except KeyError:
-            self._systemsGetter[system.ID] = system
-        else:
-            if system.name != self._systemsGetter[system.ID].name:
-                raise Exception("Two system with same ID but with different name are trying to be added to module."
-                                "This error is unexpected. Please report on our GitHub")
-            else:
-                if system.families != self._systemsGetter[system.ID].families:
-                    raise Exception("Two system with same ID and name but with different gene families are trying to be"
-                                    " added to module. This error is unexpected. Please report on our GitHub")
+        systems = set()
+        for unit in self.units:
+            systems.add(unit.system)
+        yield from systems
 
 
 class GeneContext(GeneCont):
@@ -292,7 +304,6 @@ class GeneContext(GeneCont):
 
     def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], families_of_interest: Set[GeneFamily]):
         """
-        :param pangenome_name : name of the pangenome of the context
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
         """
@@ -317,6 +328,5 @@ class GeneContext(GeneCont):
     def __gt__(self, other):
         return self.ID > other.ID
 
-    
     def __lt__(self, other):
         return self.ID < other.ID
