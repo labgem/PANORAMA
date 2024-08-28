@@ -49,9 +49,6 @@ class System(MetaFeatures):
         self.model = model
         self.source = source
         self._unit_getter = {}
-        self._regions_getter = {}
-        self._spots_getter = {}
-        self._modules_getter = {}
         self.canonical = set()
         self._fam2unit = None
         if units is not None:
@@ -351,10 +348,10 @@ class System(MetaFeatures):
         Yields:
             Organism: Generator of organisms in the model.
         """
-        organisms = set()
-        for family in self.models_families:
-            organisms |= set(family.organisms)
-        yield from organisms
+        model_organisms = set()
+        for unit in self.units:
+            model_organisms |= set(unit.models_organisms)
+        yield from model_organisms
 
     def canonical_models(self) -> List[str]:
         """
@@ -424,9 +421,10 @@ class System(MetaFeatures):
         Yields:
             Module: Generator of modules.
         """
-        if not self._modules_getter:
-            self._asso_modules()
-        yield from self._modules_getter.values()
+        modules = set()
+        for unit in self.units:
+            modules |= set(unit.modules)
+        yield from modules
 
     def get_module(self, identifier: int) -> Module:
         """
@@ -441,39 +439,18 @@ class System(MetaFeatures):
         Raises:
             KeyError: If the module with the given identifier is not associated with the system.
         """
-        try:
-            return self._modules_getter[identifier]
-        except KeyError:
-            raise KeyError(f"Module with identifier {identifier} is not associated with system {self.ID}")
-
-    def add_module(self, module: Module):
-        """
-        Adds a module to the system.
-
-        Args:
-            module: Module to be added.
-
-        Raises:
-            Exception: If another module with the same identifier is already associated with the system.
-        """
-        try:
-            mod_in = self.get_module(identifier=module.ID)
-        except KeyError:
-            self._modules_getter[module.ID] = module
-            module.add_system(self)
+        spot = None
+        for unit in self.units:
+            try:
+                spot = unit.get_module(identifier)
+            except KeyError:
+                pass
+            else:
+                break
+        if spot is not None:
+            return spot
         else:
-            if module != mod_in:
-                raise Exception(
-                    f"Another module with identifier {module.ID} is already associated with system {self.ID}. "
-                    f"This is unexpected. Please report an issue on our GitHub")
-
-    def _asso_modules(self):
-        """
-        Associates modules to the system based on the families.
-        """
-        for family in self.families:
-            if family.module is not None:
-                self.add_module(family.module)
+            raise KeyError(f"Module with name {identifier} is not associated with system {self.ID}")
 
     @property
     def spots(self) -> Generator[Spot, None, None]:
@@ -483,17 +460,10 @@ class System(MetaFeatures):
         Yields:
             Spot: Generator of spots.
         """
-        if not self._spots_getter:
-            self._make_spot_getter()
-        yield from self._spots_getter.values()
-
-    def _make_spot_getter(self):
-        """
-        Creates the spot getter.
-        """
-        for region in self.regions:
-            if region.spot is not None:
-                self.add_spot(region.spot)
+        spots = set()
+        for unit in self.units:
+            spots |= set(unit.spots)
+        yield from spots
 
     def get_spot(self, identifier: int) -> Spot:
         """
@@ -508,29 +478,18 @@ class System(MetaFeatures):
         Raises:
             KeyError: If the spot with the given identifier is not associated with the system.
         """
-        try:
-            return self._spots_getter[identifier]
-        except KeyError:
-            raise KeyError(f"Spot with identifier {identifier} is not associated with system {self.ID}")
-
-    def add_spot(self, spot: Spot):
-        """
-        Adds a spot to the system.
-
-        Args:
-            spot: Spot to be added.
-
-        Raises:
-            Exception: If another spot with the same identifier is already associated with the system.
-        """
-        try:
-            spot_in = self.get_spot(identifier=spot.ID)
-        except KeyError:
-            self._spots_getter[spot.ID] = spot
+        spot = None
+        for unit in self.units:
+            try:
+                spot = unit.get_spot(identifier)
+            except KeyError:
+                pass
+            else:
+                break
+        if spot is not None:
+            return spot
         else:
-            if spot != spot_in:
-                raise Exception(f"Another spot with identifier {spot.ID} is already associated with system {self.ID}. "
-                                f"This is unexpected. Please report an issue on our GitHub")
+            raise KeyError(f"Spot with name {identifier} is not associated with system {self.ID}")
 
     @property
     def regions(self) -> Generator[Region, None, None]:
@@ -540,7 +499,10 @@ class System(MetaFeatures):
         Yields:
             Region: Generator of regions.
         """
-        yield from self._regions_getter.values()
+        regions = set()
+        for unit in self.units:
+            regions |= set(unit.regions)
+        yield from regions
 
     def get_region(self, name: str) -> Region:
         """
@@ -555,30 +517,18 @@ class System(MetaFeatures):
         Raises:
             KeyError: If the region with the given name is not associated with the system.
         """
-        try:
-            return self._regions_getter[name]
-        except KeyError:
-            raise KeyError(f"Region with identifier {name} is not associated with system {self.ID}")
-
-    def add_region(self, region: Region):
-        """
-        Adds a region to the system.
-
-        Args:
-            region: Region to be added.
-
-        Raises:
-            Exception: If another region with the same identifier is already associated with the system.
-        """
-        try:
-            region_in = self.get_region(name=region.name)
-        except KeyError:
-            self._regions_getter[region.name] = region
+        region = None
+        for unit in self.units:
+            try:
+                region = unit.get_region(name)
+            except KeyError:
+                pass
+            else:
+                break
+        if region is not None:
+            return region
         else:
-            if region != region_in:
-                raise Exception(
-                    f"Another region with identifier {region.name} is already associated with system {self.ID}. "
-                    f"This is unexpected. Please report an issue on our GitHub")
+            raise KeyError(f"Region with name {name} is not associated with system {self.ID}")
 
 
 class SystemUnit:
@@ -608,6 +558,9 @@ class SystemUnit:
         self.source = source
         self._families_getter = {}
         self._families2metainfo = {}
+        self._regions_getter = {}
+        self._spots_getter = {}
+        self._modules_getter = {}
         self._models_families = None
         self._system = None
         if gene_families:
@@ -892,6 +845,19 @@ class SystemUnit:
             organisms |= set(family.organisms)
         yield from organisms
 
+    @property
+    def models_organisms(self) -> Generator[Organism, None, None]:
+        """
+        Retrieves the organisms where the system belongs, considering only families in the model.
+
+        Yields:
+            Organism: Generator of organisms in the model.
+        """
+        organisms = set()
+        for family in self.models_families:
+            organisms |= set(family.organisms)
+        yield from organisms
+
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
         """
         Retrieves metadata for a gene family.
@@ -912,3 +878,167 @@ class SystemUnit:
             Set[str]: Set of annotation sources.
         """
         return {metainfo[0] for metainfo in self._families2metainfo.values() if metainfo[0] != ''}
+
+    @property
+    def modules(self) -> Generator[Module, None, None]:
+        """
+        Retrieves the modules associated with the unit.
+
+        Yields:
+            Module: Generator of modules.
+        """
+        if not self._modules_getter:
+            self._asso_modules()
+        yield from self._modules_getter.values()
+
+    def get_module(self, identifier: int) -> Module:
+        """
+        Retrieves a module by its identifier.
+
+        Args:
+            identifier: Identifier of the module.
+
+        Returns:
+            Module: Module with the given identifier.
+
+        Raises:
+            KeyError: If the module with the given identifier is not associated with the unit.
+        """
+        try:
+            return self._modules_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Module with identifier {identifier} is not associated with unit {self.ID}")
+
+    def add_module(self, module: Module):
+        """
+        Adds a module to the unit.
+
+        Args:
+            module: Module to be added.
+
+        Raises:
+            Exception: If another module with the same identifier is already associated with the unit.
+        """
+        try:
+            mod_in = self.get_module(identifier=module.ID)
+        except KeyError:
+            self._modules_getter[module.ID] = module
+            module.add_unit(self)
+        else:
+            if module != mod_in:
+                raise Exception(
+                    f"Another module with identifier {module.ID} is already associated with unit {self.ID}. "
+                    f"This is unexpected. Please report an issue on our GitHub")
+
+    def _asso_modules(self):
+        """
+        Associates modules to the unit based on the families.
+        """
+        for family in self.families:
+            if family.module is not None:
+                self.add_module(family.module)
+
+    @property
+    def spots(self) -> Generator[Spot, None, None]:
+        """
+        Retrieves the spots associated with the unit.
+
+        Yields:
+            Spot: Generator of spots.
+        """
+        if not self._spots_getter:
+            self._make_spot_getter()
+        yield from self._spots_getter.values()
+
+    def _make_spot_getter(self):
+        """
+        Creates the spot getter.
+        """
+        for region in self.regions:
+            if region.spot is not None:
+                self.add_spot(region.spot)
+
+    def get_spot(self, identifier: int) -> Spot:
+        """
+        Retrieves a spot by its identifier.
+
+        Args:
+            identifier: Identifier of the spot.
+
+        Returns:
+            Spot: Spot with the given identifier.
+
+        Raises:
+            KeyError: If the spot with the given identifier is not associated with the unit.
+        """
+        try:
+            return self._spots_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Spot with identifier {identifier} is not associated with unit {self.ID}")
+
+    def add_spot(self, spot: Spot):
+        """
+        Adds a spot to the unit.
+
+        Args:
+            spot: Spot to be added.
+
+        Raises:
+            Exception: If another spot with the same identifier is already associated with the unit.
+        """
+        try:
+            spot_in = self.get_spot(identifier=spot.ID)
+        except KeyError:
+            self._spots_getter[spot.ID] = spot
+        else:
+            if spot != spot_in:
+                raise Exception(f"Another spot with identifier {spot.ID} is already associated with unit {self.ID}. "
+                                f"This is unexpected. Please report an issue on our GitHub")
+
+    @property
+    def regions(self) -> Generator[Region, None, None]:
+        """
+        Retrieves the regions associated with the unit.
+
+        Yields:
+            Region: Generator of regions.
+        """
+        yield from self._regions_getter.values()
+
+    def get_region(self, name: str) -> Region:
+        """
+        Retrieves a region by its name.
+
+        Args:
+            name: Name of the region.
+
+        Returns:
+            Region: Region with the given name.
+
+        Raises:
+            KeyError: If the region with the given name is not associated with the unit.
+        """
+        try:
+            return self._regions_getter[name]
+        except KeyError:
+            raise KeyError(f"Region with identifier {name} is not associated with unit {self.ID}")
+
+    def add_region(self, region: Region):
+        """
+        Adds a region to the unit.
+
+        Args:
+            region: Region to be added.
+
+        Raises:
+            Exception: If another region with the same identifier is already associated with the unit.
+        """
+        try:
+            region_in = self.get_region(name=region.name)
+        except KeyError:
+            self._regions_getter[region.name] = region
+        else:
+            if region != region_in:
+                raise Exception(
+                    f"Another region with identifier {region.name} is already associated with unit {self.ID}. "
+                    f"This is unexpected. Please report an issue on our GitHub")

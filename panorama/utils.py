@@ -9,7 +9,7 @@ This module contains functions for managing files and directories, and checking 
 import sys
 import argparse
 import logging
-from typing import TextIO
+from typing import TextIO, Set
 import shutil
 from pathlib import Path
 import numpy as np
@@ -200,3 +200,22 @@ def init_lock(lock: Lock = None):
     if lock is None:
         manager = Manager()
         return manager.Lock()
+
+
+def conciliate_partition(partition: Set[str]) -> str:
+    """
+    Conciliate  a set of partition
+
+    Args:
+        partition (Set[str]): All partitions.
+
+    Returns:
+        str: The reconciled partition.
+    """
+    if len(partition) == 1:
+        return partition.pop()
+    else:
+        if "persistent" in partition:
+            return "persistent|accessory"
+        else:
+            return 'accessory'

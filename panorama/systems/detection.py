@@ -126,13 +126,15 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
             - dict: Dictionary linking families to their sources.
     """
     gene_families = set()
-    gf2fam = defaultdict(set)
+    gf2fam = {}
     fam2source = {}
     for fam_model in model.families:
         for source, annotation2families in annot2fam.items():
             if fam_model.name in annotation2families:
                 for gf in annotation2families[fam_model.name]:
                     gene_families.add(gf)
+                    if gf.name not in gf2fam:
+                        gf2fam[gf.name] = set()
                     gf2fam[gf.name].add(fam_model)
                     if fam_model.name in fam2source and fam2source[fam_model.name] != source:
                         logging.getLogger("PANORAMA").warning(
@@ -146,6 +148,8 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                 if exchangeable in annotation2families:
                     for gf in annotation2families[exchangeable]:
                         gene_families.add(gf)
+                        if gf.name not in gf2fam:
+                            gf2fam[gf.name] = set()
                         gf2fam[gf.name].add(fam_model)
                         if fam_model.name in fam2source and fam2source[fam_model.name] != source:
                             logging.getLogger("PANORAMA").warning(
@@ -179,7 +183,8 @@ def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], organisms: 
             set: The set of genes in the gene family that are in organisms of interest.
         """
         if family.name not in fam2genes_in_orgs:
-            family_genes_in_orgs = {gene for gene in graph.nodes[family]["genes"] if gene.organism in organisms_of_interest}
+            family_genes_in_orgs = {gene for gene in graph.nodes[family]["genes"] if
+                                    gene.organism in organisms_of_interest}
             fam2genes_in_orgs[family.name] = family_genes_in_orgs
         else:
             family_genes_in_orgs = fam2genes_in_orgs[family.name]
@@ -250,9 +255,10 @@ def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fa
             return 0
 
     for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        for family in gene_fam2mod_fam[node.name]:
-            if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
-                return True
+        if node.name in gene_fam2mod_fam:
+            for family in gene_fam2mod_fam[node.name]:
+                if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
+                    return True
     return False
 
 
@@ -294,29 +300,30 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
 
     families2meta_info = {}
     for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        for family in gene_fam2mod_fam[node.name]:
-            avail_name = {family.name}.union(family.exchangeable)
-            if family.presence == 'mandatory' and family.name in mandatory_list:  # if node is mandatory
-                for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                    if metadata.protein_name in avail_name:
-                        families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    elif "secondary_name" in metadata.fields:
-                        if any(name in avail_name for name in metadata.secondary_name.split(",")):
+        if node.name in gene_fam2mod_fam:
+            for family in gene_fam2mod_fam[node.name]:
+                avail_name = {family.name}.union(family.exchangeable)
+                if family.presence == 'mandatory' and family.name in mandatory_list:  # if node is mandatory
+                    for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
+                        if metadata.protein_name in avail_name:
                             families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                count_mandatory += 1
-                count_total += 1
-                mandatory_list.remove(family.name)
-                break
-            elif family.presence == 'accessory' and family.name in accessory_list:  # if node is accessory
-                for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                    if metadata.protein_name in avail_name:
-                        families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    elif "secondary_name" in metadata.fields:
-                        if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                        elif "secondary_name" in metadata.fields:
+                            if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                                families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
+                    count_mandatory += 1
+                    count_total += 1
+                    mandatory_list.remove(family.name)
+                    break
+                elif family.presence == 'accessory' and family.name in accessory_list:  # if node is accessory
+                    for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
+                        if metadata.protein_name in avail_name:
                             families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                count_total += 1
-                accessory_list.remove(family.name)
-                break
+                        elif "secondary_name" in metadata.fields:
+                            if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                                families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
+                    count_total += 1
+                    accessory_list.remove(family.name)
+                    break
 
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
             (count_total >= func_unit.min_total or func_unit.min_total == -1):
@@ -413,16 +420,18 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
         Set[SystemUnit]: Set of detected systems in the pangenomic context.
     """
     detected_fu = set()
+    families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
-        families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
-        families_in_cc &= cc_graph.nodes
-        neutral_families &= cc_graph.nodes
+        fam_in_cc = families_in_cc.copy()
+        n_fam = neutral_families.copy()
+        fam_in_cc &= cc_graph.nodes
+        n_fam &= cc_graph.nodes
 
         if len(families_in_cc) > 0:
-            combinations_in_cc = get_subcombinations(families_in_cc, combinations)
-            families_in_cc |= neutral_families
-            new_detected_fu = search_fu_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
+            combinations_in_cc = get_subcombinations(fam_in_cc, combinations)
+            fam_in_cc |= n_fam
+            new_detected_fu = search_fu_in_cc(cc_graph, fam_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
                                               func_unit, source, jaccard_threshold, combinations_in_cc)
             detected_fu |= new_detected_fu
     return detected_fu
@@ -495,13 +504,18 @@ def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[Ge
     fu_families = set()
     neutral_families = set()
     for gf in gene_families:
+        is_neutral = False
+        is_functional = False
         for family in gene_fam2mod_fam[gf.name]:
             if family in func_unit.neutral:
-                neutral_families.add(gf)
-                break
+                is_neutral = True
             elif family in func_unit.families:
-                fu_families.add(gf)
-                break
+                is_functional = True
+
+        if is_functional:
+            fu_families.add(gf)
+        elif is_neutral:
+            neutral_families.add(gf)
     return fu_families, neutral_families
 
 
@@ -531,8 +545,11 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
                                                                     transitive=func_unit.transitivity,
                                                                     window_size=func_unit.window, disable_bar=True)
             combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
-            su_found[func_unit.name] = search_unit_in_context(context, fu_families, gf2fam, fam2source, func_unit,
-                                                              source, jaccard_threshold, combinations)
+            a = combinations.copy()
+            new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, func_unit,
+                                                     source, jaccard_threshold, combinations)
+            if len(new_detected_fu) > 0:
+                su_found[func_unit.name] = new_detected_fu
     return su_found
 
 
@@ -556,9 +573,9 @@ def get_system_unit_combinations(su_found: Dict[str, Set[SystemUnit]], model: Mo
     accessory_list = list(map(lambda x: x.name, model.accessory))
     neutral_list = list(map(lambda x: x.name, model.neutral))
     # Extract elements by category
-    mandatory_unit = {name: su_found[name] for name in mandatory_list}
-    accessory_unit = {name: su_found[name] for name in accessory_list}
-    neutral_unit = {name: su_found[name] for name in neutral_list}
+    mandatory_unit = {name: su_found[name] for name in mandatory_list if name in su_found}
+    accessory_unit = {name: su_found[name] for name in accessory_list if name in su_found}
+    neutral_unit = {name: su_found[name] for name in neutral_list if name in su_found}
 
     # Initialize a list to store valid combinations
     valid_combinations = []
@@ -701,7 +718,10 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                     result = future.result()
                     detected_systems |= result
 
-    for system in sorted(detected_systems, key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)):
+    for idx, system in enumerate(sorted(detected_systems,
+                                        key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)),
+                                 start=1):
+        system.ID = str(idx)
         pangenome.add_system(system)
     logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
     logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
