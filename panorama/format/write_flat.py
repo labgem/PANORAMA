@@ -212,7 +212,7 @@ def write_pangenome_families_annotations(pangenome: Pangenome, output: Path, sou
                 for source in sources:
                     index_annot = 0
                     if source in gf.sources:
-                        for annotation in gf.get_metadata_by_source(source):
+                        for annotation in gf.get_metadata_by_source(source).values():
                             annotation: ppanggolin.metadata.Metadata
                             annot_array[index_annot, index_source] = annotation.protein_name
                             annot_array[index_annot, index_source + 1] = annotation.Accession
