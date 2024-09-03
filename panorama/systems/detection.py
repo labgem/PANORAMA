@@ -22,7 +22,7 @@ from collections import defaultdict
 
 # installed libraries
 import networkx as nx
-from ppanggolin.genome import Gene, Organism
+from ppanggolin.genome import Organism
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 
@@ -160,58 +160,24 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
     return gene_families, gf2fam, fam2source
 
 
-def filter_local_context(graph: nx.Graph, families: Set[GeneFamily], organisms: Set[Organism] = None,
+def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
                          jaccard_threshold: float = 0.8) -> None:
     """
     Filters a graph based on a local Jaccard index.
 
     Args:
         graph (nx.Graph): A sub-pangenome graph.
-        families (Set[GeneFamily]): List of families that code for the system.
         organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
 
-    def get_family_genes_in_organisms(family: GeneFamily) -> Set[Gene]:
-        """
-        Retrieves the set of genes in the gene family that are in organisms of interest.
-
-        Args:
-            family (GeneFamily): The gene family to search genes for.
-
-        Returns:
-            set: The set of genes in the gene family that are in organisms of interest.
-        """
-        if family.name not in fam2genes_in_orgs:
-            family_genes_in_orgs = {gene for gene in graph.nodes[family]["genes"] if
-                                    gene.organism in organisms_of_interest}
-            fam2genes_in_orgs[family.name] = family_genes_in_orgs
-        else:
-            family_genes_in_orgs = fam2genes_in_orgs[family.name]
-        return family_genes_in_orgs
-
     # Compute local Jaccard
-    if organisms is None:
-        organisms_of_interest = set()
-        if len(families) > 1:
-            subgraph = graph.subgraph(families)
-            for _, _, data in subgraph.edges(data=True):
-                organisms_of_interest |= data['genomes']
-
-        elif len(families) == 1:
-            organisms_of_interest = set(list(families)[0].organisms)
-        else:
-            raise AssertionError("No families of interest")
-    else:
-        organisms_of_interest = organisms
-
-    fam2genes_in_orgs = {}
     edges2remove = set()
     for f1, f2, data in graph.edges(data=True):
-        f1_genes_in_orgs = get_family_genes_in_organisms(f1)
-        f2_genes_in_orgs = get_family_genes_in_organisms(f2)
-        f1_gene_proportion = len(data['genes'][f1]) / len(f1_genes_in_orgs) if len(f1_genes_in_orgs) > 0 else 0
-        f2_gene_proportion = len(data['genes'][f2]) / len(f2_genes_in_orgs) if len(f2_genes_in_orgs) > 0 else 0
+        f1_orgs = set(f1.organisms).intersection(organisms)
+        f2_orgs = set(f2.organisms).intersection(organisms)
+        f1_gene_proportion = len(data["genomes"]) / len(f1_orgs) if len(f1_orgs) > 0 else 0
+        f2_gene_proportion = len(data["genomes"]) / len(f2_orgs) if len(f2_orgs) > 0 else 0
 
         data['f1'] = f1.name
         data['f2'] = f2.name
@@ -282,6 +248,7 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
     count_mandatory, count_total = (0, 0)
     mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
                                       list(map(lambda x: x.name, func_unit.accessory)))
+    mandatory_seen, accessory_seen = set(), set()
 
     def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
         """Gets the number of model families associated with the gene family.
@@ -299,6 +266,7 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
             return 0
 
     families2meta_info = {}
+
     for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
         if node.name in gene_fam2mod_fam:
             for family in gene_fam2mod_fam[node.name]:
@@ -310,9 +278,10 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
                         elif "secondary_name" in metadata.fields:
                             if any(name in avail_name for name in metadata.secondary_name.split(",")):
                                 families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    count_mandatory += 1
-                    count_total += 1
-                    mandatory_list.remove(family.name)
+                    if family.name not in mandatory_seen:
+                        count_mandatory += 1
+                        count_total += 1
+                        mandatory_seen.add(family.name)
                     break
                 elif family.presence == 'accessory' and family.name in accessory_list:  # if node is accessory
                     for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
@@ -321,8 +290,9 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
                         elif "secondary_name" in metadata.fields:
                             if any(name in avail_name for name in metadata.secondary_name.split(",")):
                                 families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    count_total += 1
-                    accessory_list.remove(family.name)
+                    if family.name not in accessory_seen:
+                        count_total += 1
+                        accessory_seen.add(family.name)
                     break
 
     if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
@@ -332,23 +302,25 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
         return False, families2meta_info
 
 
-def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[GeneFamily]]
-                        ) -> List[FrozenSet[GeneFamily]]:
+def get_subcombinations(combi: Set[GeneFamily], combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]]
+                        ) -> Dict[FrozenSet[GeneFamily], Set[Organism]]:
     """
     Removes a combination and all its sub-combinations from a list of combinations.
 
     Args:
         combi (Set[GeneFamily]): Combination to be removed.
-        combinations (list of FrozenSet[GeneFamily]): List of combinations to be filtered.
+        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
 
     Returns:
-        list: List of removed combinations.
+        Dict[FrozenSet[GeneFamily], Set[Organism]]: Dict of removed combination
     """
     index = 0
-    remove_combinations = []
+    remove_combinations = {}
+    combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
     while index < len(combinations):
         if combinations[index].issubset(combi):
-            remove_combinations.append(combinations.pop(index))
+            remove_combinations[combinations[index]] = combinations2orgs.pop(combinations[index])
+            combinations.remove(combinations[index])
         else:
             index += 1
     return remove_combinations
@@ -356,8 +328,8 @@ def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[Gen
 
 def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
                     mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
-                    jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                    ) -> Set[SystemUnit]:
+                    combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
+                    jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
     """
     Searches for functional unit corresponding to a model in a graph.
 
@@ -369,21 +341,24 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
-        combinations (list of FrozenSet[GeneFamily], optional): List of family combinations known to exist in genomes.
+        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
 
     Returns:
         Set[SystemUnit]: Set of all detected functional unit in the graph.
     """
     detected_fu = set()
-    while len(combinations) > 0:
-        families_combination = set(combinations.pop(0))
+    while combinations2orgs:
+        # Continue if there is key inside
+        families_combination = max(combinations2orgs.keys(), key=len)
+        organisms_of_interest = combinations2orgs.pop(families_combination)
+        families_combination = set(families_combination)
         check_needed, _ = check_for_needed_families(families_combination, gene_fam2mod_fam, mod_fam2meta_source,
                                                     func_unit)
         if check_needed:
             if not check_for_forbidden_families(families_combination, gene_fam2mod_fam, func_unit):
                 local_graph = graph.copy()
                 local_graph.remove_nodes_from(families.difference(families_combination))
-                filter_local_context(local_graph, families_combination, jaccard_threshold=jaccard_threshold)
+                filter_local_context(local_graph, organisms_of_interest, jaccard_threshold=jaccard_threshold)
                 for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
                     cc: Set[GeneFamily]
                     check_needed, fam2metainfo = check_for_needed_families(cc, gene_fam2mod_fam, mod_fam2meta_source,
@@ -391,18 +366,18 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
                     if check_needed and not check_for_forbidden_families(cc, gene_fam2mod_fam, func_unit):
                         detected_fu.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
                                                    families_to_metainfo=fam2metainfo))
-                        get_subcombinations(cc.intersection(families_combination), combinations)
+                        get_subcombinations(cc.intersection(families_combination), combinations2orgs)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
-            get_subcombinations(families_combination, combinations)
+            get_subcombinations(families_combination, combinations2orgs)
 
     return detected_fu
 
 
 def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
                            mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
-                           jaccard_threshold: float = 0.8, combinations: List[FrozenSet[GeneFamily]] = None
-                           ) -> Set[SystemUnit]:
+                           combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
+                           jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
     """
     Searches for system unit corresponding to a model in a pangenomic context.
 
@@ -414,7 +389,7 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
-        combinations (list of FrozenSet[GeneFamily], optional): Known existing combination of families that code for the searched model.
+        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
 
     Returns:
         Set[SystemUnit]: Set of detected systems in the pangenomic context.
@@ -429,10 +404,10 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
         n_fam &= cc_graph.nodes
 
         if len(families_in_cc) > 0:
-            combinations_in_cc = get_subcombinations(fam_in_cc, combinations)
+            combinations2org_in_cc = get_subcombinations(fam_in_cc, combinations2orgs)
             fam_in_cc |= n_fam
-            new_detected_fu = search_fu_in_cc(cc_graph, fam_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
-                                              func_unit, source, jaccard_threshold, combinations_in_cc)
+            new_detected_fu = search_fu_in_cc(cc_graph, fam_in_cc, gene_fam2mod_fam, mod_fam2meta_source, func_unit,
+                                              source, combinations2org_in_cc, jaccard_threshold)
             detected_fu |= new_detected_fu
     return detected_fu
 
@@ -544,10 +519,8 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
             context, combinations2orgs = compute_gene_context_graph(families=fu_families,
                                                                     transitive=func_unit.transitivity,
                                                                     window_size=func_unit.window, disable_bar=True)
-            combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
-            a = combinations.copy()
             new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, func_unit,
-                                                     source, jaccard_threshold, combinations)
+                                                     source, combinations2orgs, jaccard_threshold)
             if len(new_detected_fu) > 0:
                 su_found[func_unit.name] = new_detected_fu
     return su_found
@@ -646,7 +619,7 @@ def search_for_system(model: Model, su_found: Dict[str, Set[SystemUnit]], source
                 contracted_nodes(contracted_graph, u, v)
             fam2su[u] = su
             organisms |= set(su.organisms)
-        filter_local_context(contracted_graph, set(fam2su.keys()), organisms, jaccard_threshold)
+        filter_local_context(contracted_graph, organisms, jaccard_threshold)
         for cc in sorted(nx.connected_components(contracted_graph), key=len, reverse=True):
             cc: Set[GeneFamily]
             su_in_cc = {fam2su[fam].name: fam2su[fam] for fam in cc if fam in fam2su}

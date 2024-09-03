@@ -775,7 +775,14 @@ class SystemUnit:
         if not isinstance(other, SystemUnit):
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
-        return other.is_superset(self)
+
+        if len(other) < len(self):
+            return False
+        else:
+            for name, family in self._families_getter.items():
+                if name not in other._families_getter or other._families_getter[name] != family:
+                    return False
+            return True
 
     def intersection(self, other) -> Dict[str, GeneFamily]:
         """Computes the intersection of gene families between two units.
@@ -815,10 +822,14 @@ class SystemUnit:
             if name not in other._families_getter or self._families_getter[name] != other._families_getter[name]
         }
 
-    def _get_models_families(self):
+    def _get_models_families(self) -> Set[GeneFamily]:
+        families = set()
+        if self.system.ID == "6":
+            print("bulbi")
         for family, metainfo in self._families2metainfo.items():
             if metainfo[1] != 0:
-                yield family
+                families.add(family)
+        return families
 
     @property
     def models_families(self) -> Generator[GeneFamily, None, None]:
@@ -829,7 +840,7 @@ class SystemUnit:
             GeneFamily: Generator of gene families in the model.
         """
         if self._models_families is None:
-            self._models_families = set(self._get_models_families())
+            self._models_families = self._get_models_families()
         yield from self._models_families
 
     @property

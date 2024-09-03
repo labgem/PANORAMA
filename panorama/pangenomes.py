@@ -225,15 +225,15 @@ class Pangenome(Pan):
         drop_sys_key = []
         for system_in in self.get_system_by_source(system.source):
             if system_in.name == system.name:
-                if system_in.is_subset(system):
+                if system_in.is_superset(system):
+                    same_sys = True
+                elif system_in.is_subset(system):
                     # A system with this name already exist and system in pangenome is subset of new system
                     system.ID = system_in.ID
                     self._system_getter[system.ID] = system
                     same_sys = True
                     for unit in system.difference(system_in).values():
                         unit.system_in = system
-                elif system_in.is_superset(system):
-                    same_sys = True
             elif system.name in system_in.canonical_models():
                 # System in pangenome is a canonical system for new system
                 if len(system.intersection(system_in)) > 0:
