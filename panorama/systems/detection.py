@@ -13,18 +13,20 @@ import time
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
-
-from networkx import contracted_nodes
-from tqdm import tqdm
 from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
 from collections import defaultdict
 
 # installed libraries
+import numpy as np
+import pandas as pd
+from scipy.optimize import linear_sum_assignment
 import networkx as nx
+from tqdm import tqdm
 from ppanggolin.genome import Organism
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
+from ppanggolin.metadata import Metadata
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -33,6 +35,9 @@ from panorama.systems.system import System, SystemUnit
 from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
+
+
+pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
 
 
 def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str, List[str]]]:
@@ -228,9 +233,51 @@ def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fa
     return False
 
 
-def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                              mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
-                              ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
+def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
+                               mod_fam2meta_source: Dict[str, str]
+                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[str, Metadata]], Dict[str, Dict[str, Metadata]]]:
+    def add_metadata_to_dict(presence_gfs2metadata):
+        for metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).values():
+            if metadata.protein_name in avail_name:
+                if node.name in presence_gfs2metadata[family.name]:
+                    print("pika")
+                presence_gfs2metadata[family.name][node.name] = metadata
+            elif "secondary_name" in metadata.fields:
+                if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                    if node.name in presence_gfs2metadata[family.name]:
+                        print("pika")
+                    presence_gfs2metadata[family.name][node.name] = metadata
+
+    mandatory_gfs2metadata = defaultdict(dict)
+    accessory_gfs2metadata = defaultdict(dict)
+    gfs = set()
+    for node in gene_families:
+        for family in gene_fam2mod_fam[node.name]:
+            avail_name = {family.name}.union(family.exchangeable)
+            if family.presence == "mandatory":
+                add_metadata_to_dict(mandatory_gfs2metadata)
+                gfs.add(node.name)
+            elif family.presence == "accessory":
+                add_metadata_to_dict(accessory_gfs2metadata)
+                gfs.add(node.name)
+
+    fams = list(mandatory_gfs2metadata.keys()) + list(accessory_gfs2metadata.keys())
+    score_matrix = np.zeros((len(fams), len(gene_families)))
+    gfs = list(gfs)
+    for i, fam in enumerate(fams):
+        if fam in mandatory_gfs2metadata:
+            gfs2metadata = mandatory_gfs2metadata[fam]
+        else:
+            gfs2metadata = accessory_gfs2metadata[fam]
+        for j, gf in enumerate(gfs):
+            score_matrix[i, j] = gfs2metadata[gf].score if gf in gfs2metadata else 0
+
+    return (pd.DataFrame(score_matrix, index=fams, columns=gfs),
+            mandatory_gfs2metadata, accessory_gfs2metadata)
+
+
+def check_for_needed_families(score_matrix: pd.DataFrame, mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+                              func_unit: FuncUnit) -> Tuple[bool, Dict[str, str]]:
     """
     Checks if the presence/absence rules for needed families are respected.
 
@@ -245,90 +292,70 @@ def check_for_needed_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: 
             - bool: True if the needed conditions are met, False otherwise.
             - dict: Dictionary linking gene families to their metadata information.
     """
-    count_mandatory, count_total = (0, 0)
-    mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
-                                      list(map(lambda x: x.name, func_unit.accessory)))
-    mandatory_seen, accessory_seen = set(), set()
+    mandatory_gfs = {gf for gfs2metadata in mandatory_gfs2metadata.values() for gf in gfs2metadata.keys()}
 
-    def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Gets the number of model families associated with the gene family.
+    def verifie_contraintes(combinaison):
+        mandatory_count = sum(1 for cle, objet in combinaison.items() if objet in mandatory_gfs)
+        total_count = len(combinaison)
+        return mandatory_count >= func_unit.min_mandatory and total_count >= func_unit.min_total
 
-        Args:
-            gene_family (GeneFamily): The gene family of interest.
+    fams = score_matrix.index.values.tolist()
+    gfs = score_matrix.columns.values.tolist()
 
-        Returns:
-            int: The number of model families associated with the gene family.
-        """
-        model_families = gene_fam2mod_fam.get(gene_family.name)
-        if model_families is not None:
-            return len(model_families)
+    while True:
+        row_ind, col_ind = linear_sum_assignment(-score_matrix.values)
+
+        current_combi = {}
+        current_score = 0
+        for i in range(len(row_ind)):
+            fam = fams[row_ind[i]]
+            gf = gfs[col_ind[i]]
+            if score_matrix.loc[fam][gf] != 0:
+                current_combi[fam] = gf
+                current_score += score_matrix.loc[fam][gf]
+
+        # Vérifier les contraintes
+        if verifie_contraintes(current_combi):
+            return True, {fam: gf for fam, gf in current_combi.items()}
         else:
-            return 0
+            # Si les contraintes ne sont pas respectées, réduire le score des objets les plus faibles
+            min_score = np.min(score_matrix[score_matrix > 0])
+            score_matrix[score_matrix == min_score] = 0
 
-    families2meta_info = {}
-
-    for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        if node.name in gene_fam2mod_fam:
-            for family in gene_fam2mod_fam[node.name]:
-                avail_name = {family.name}.union(family.exchangeable)
-                if family.presence == 'mandatory' and family.name in mandatory_list:  # if node is mandatory
-                    for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                        if metadata.protein_name in avail_name:
-                            families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                        elif "secondary_name" in metadata.fields:
-                            if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                                families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    if family.name not in mandatory_seen:
-                        count_mandatory += 1
-                        count_total += 1
-                        mandatory_seen.add(family.name)
-                    break
-                elif family.presence == 'accessory' and family.name in accessory_list:  # if node is accessory
-                    for meta_id, metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                        if metadata.protein_name in avail_name:
-                            families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                        elif "secondary_name" in metadata.fields:
-                            if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                                families2meta_info[node] = (mod_fam2meta_source[family.name], meta_id)
-                    if family.name not in accessory_seen:
-                        count_total += 1
-                        accessory_seen.add(family.name)
-                    break
-
-    if (count_mandatory >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and \
-            (count_total >= func_unit.min_total or func_unit.min_total == -1):
-        return True, families2meta_info
-    else:
-        return False, families2meta_info
+        # Si on a tout mis à zéro, on sort de la boucle
+        if np.all(score_matrix == 0):
+            break
+    return False, {}
 
 
-def get_subcombinations(combi: Set[GeneFamily], combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]]
-                        ) -> Dict[FrozenSet[GeneFamily], Set[Organism]]:
+def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[GeneFamily]]
+                        ) -> List[FrozenSet[GeneFamily]]:
     """
     Removes a combination and all its sub-combinations from a list of combinations.
 
     Args:
-        combi (Set[GeneFamily]): Combination to be removed.
-        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
+        combi (set of GeneFamily): Combination to be removed.
+        combinations (list of FrozenSet[GeneFamily]): List of combinations to be filtered.
 
     Returns:
-        Dict[FrozenSet[GeneFamily], Set[Organism]]: Dict of removed combination
+        List[FrozenSet[GeneFamily]]: List of removed combinations.
     """
     index = 0
-    remove_combinations = {}
-    combinations = sorted(set(combinations2orgs.keys()), key=len, reverse=True)
+    remove_combinations = []
     while index < len(combinations):
         if combinations[index].issubset(combi):
-            remove_combinations[combinations[index]] = combinations2orgs.pop(combinations[index])
-            combinations.remove(combinations[index])
+            remove_combinations.append(combinations.pop(index))
         else:
             index += 1
     return remove_combinations
 
 
 def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
-                    combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
+                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str, score_matrix: pd.DataFrame,
+                    mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+                    accessory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+                    combinations: List[FrozenSet[GeneFamily]],
+                    combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]],
                     jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
     """
     Searches for functional unit corresponding to a model in a graph.
@@ -346,36 +373,72 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
     Returns:
         Set[SystemUnit]: Set of all detected functional unit in the graph.
     """
-    detected_fu = set()
-    while combinations2orgs:
-        # Continue if there is key inside
-        families_combination = max(combinations2orgs.keys(), key=len)
-        organisms_of_interest = combinations2orgs.pop(families_combination)
+    def get_fam2metainfo():
+        fam2meta_info = {}
+        for fam, name in fam2gf.items():
+            if fam in mandatory_gfs2metadata:
+                a = "mandatory"
+                gf2metadata = mandatory_gfs2metadata[fam]
+            else:
+                a = "accessory"
+                gf2metadata = accessory_gfs2metadata[fam]
+            try:
+                metadata = gf2metadata[name]
+            except KeyError as kerro:
+                raise kerro
+            else:
+                try:
+                    fam2meta_info[name2gf[name]] = (mod_fam2meta_source[fam], metadata.metadata_id)
+                except KeyError as kerro2:
+                    raise kerro2
+                else:
+                    return fam2meta_info
+
+    detected_su = set()
+    name2gf = {gf.name: gf for gf in families}
+    while len(combinations) > 0:
+        # Continue if there is combination
+        families_combination = combinations.pop(0)
+        organisms_of_interest = combinations2orgs[families_combination]
         families_combination = set(families_combination)
-        check_needed, _ = check_for_needed_families(families_combination, gene_fam2mod_fam, mod_fam2meta_source,
-                                                    func_unit)
+        filtered_matrix = score_matrix[[gf.name for gf in families_combination]]
+        check_needed, _ = check_for_needed_families(filtered_matrix, mandatory_gfs2metadata, func_unit)
         if check_needed:
             if not check_for_forbidden_families(families_combination, gene_fam2mod_fam, func_unit):
                 local_graph = graph.copy()
                 local_graph.remove_nodes_from(families.difference(families_combination))
                 filter_local_context(local_graph, organisms_of_interest, jaccard_threshold=jaccard_threshold)
-                for cc in sorted(nx.connected_components(local_graph), key=len, reverse=True):
+                for cc in sorted([cc for cc in nx.connected_components(local_graph)
+                                  if len(cc.intersection(families_combination)) > func_unit.min_total],
+                                 key=lambda c: (len(c), sorted(c)), reverse=True):
                     cc: Set[GeneFamily]
-                    check_needed, fam2metainfo = check_for_needed_families(cc, gene_fam2mod_fam, mod_fam2meta_source,
-                                                                           func_unit)
-                    if check_needed and not check_for_forbidden_families(cc, gene_fam2mod_fam, func_unit):
-                        detected_fu.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
-                                                   families_to_metainfo=fam2metainfo))
-                        get_subcombinations(cc.intersection(families_combination), combinations2orgs)
+                    families_in_cc = families_combination.intersection(cc)
+                    final_matrix = filtered_matrix[[gf.name for gf in families_in_cc]]
+                    check_needed, fam2gf = check_for_needed_families(final_matrix, mandatory_gfs2metadata, func_unit)
+                    if check_needed and not check_for_forbidden_families(families_in_cc, gene_fam2mod_fam, func_unit):
+                        fam2meta_info = get_fam2metainfo()
+                        new_su = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                                            families_to_metainfo=fam2meta_info)
+                        add_new_su = True
+                        for su_in in detected_su:
+                            if su_in.is_superset(new_su):
+                                add_new_su = False
+                                break
+                        if add_new_su:
+                            detected_su.add(new_su)
+                        get_subcombinations(cc.intersection(families_combination), combinations)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
-            get_subcombinations(families_combination, combinations2orgs)
+            get_subcombinations(families_combination, combinations)
 
-    return detected_fu
+    return detected_su
 
 
 def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                           mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str,
+                           mod_fam2meta_source: Dict[str, str], score_matrix: pd.DataFrame,
+                           mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+                           accessory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+                           func_unit: FuncUnit, source: str,
                            combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
                            jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
     """
@@ -396,6 +459,7 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
     """
     detected_fu = set()
     families_in_cc, neutral_families = get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
+    combinations = sorted(combinations2orgs.keys(), key=lambda fs: (len(fs), sorted(fs)), reverse=True)
     for cc_graph in [graph.subgraph(c).copy() for c in sorted(nx.connected_components(graph),
                                                               key=len, reverse=True)]:
         fam_in_cc = families_in_cc.copy()
@@ -404,10 +468,11 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
         n_fam &= cc_graph.nodes
 
         if len(families_in_cc) > 0:
-            combinations2org_in_cc = get_subcombinations(fam_in_cc, combinations2orgs)
+            combinations_in_cc = get_subcombinations(fam_in_cc, combinations)
             fam_in_cc |= n_fam
             new_detected_fu = search_fu_in_cc(cc_graph, fam_in_cc, gene_fam2mod_fam, mod_fam2meta_source, func_unit,
-                                              source, combinations2org_in_cc, jaccard_threshold)
+                                              source, score_matrix, mandatory_gfs2metadata, accessory_gfs2metadata,
+                                              combinations_in_cc, combinations2orgs, jaccard_threshold)
             detected_fu |= new_detected_fu
     return detected_fu
 
@@ -514,13 +579,16 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
     for func_unit in model.func_units:
         fu_families = set()
         fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
-        check_needed, _ = check_for_needed_families(fu_families, gf2fam, fam2source, func_unit)
+        scores_matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
+        check_needed, _ = check_for_needed_families(scores_matrix, md_gfs2meta, func_unit)
         if check_needed:
             context, combinations2orgs = compute_gene_context_graph(families=fu_families,
                                                                     transitive=func_unit.transitivity,
-                                                                    window_size=func_unit.window, disable_bar=True)
-            new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, func_unit,
-                                                     source, combinations2orgs, jaccard_threshold)
+                                                                    window_size=func_unit.window,
+                                                                    disable_bar=True)
+            new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, scores_matrix,
+                                                     md_gfs2meta, acc_gfs2meta, func_unit, source,
+                                                     combinations2orgs, jaccard_threshold)
             if len(new_detected_fu) > 0:
                 su_found[func_unit.name] = new_detected_fu
     return su_found
@@ -616,7 +684,7 @@ def search_for_system(model: Model, su_found: Dict[str, Set[SystemUnit]], source
             fam_list = list(su.families)
             u = fam_list.pop(0)
             for v in fam_list:
-                contracted_nodes(contracted_graph, u, v)
+                nx.contracted_nodes(contracted_graph, u, v)
             fam2su[u] = su
             organisms |= set(su.organisms)
         filter_local_context(contracted_graph, organisms, jaccard_threshold)

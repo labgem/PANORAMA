@@ -84,6 +84,22 @@ class GeneFamily(Fam):
             )
         return set(self.genes) == set(other.genes)
 
+    def __lt__(self, other: GeneFamily) -> bool:
+        if len(self) == len(other):
+            return self.ID < other.ID
+        return len(self) < len(other)
+
+    def __le__(self, other):
+        return len(self) <= len(other)
+
+    def __gt__(self, other: GeneFamily) -> bool:
+        if len(self) == len(other):
+            return self.ID > other.ID
+        return len(self) > len(other)
+
+    def __ge__(self, other: GeneFamily) -> bool:
+        return len(self) >= len(other)
+
     def __ne__(self, other: GeneFamily) -> bool:
         """
         Checks if two GeneFamily instances are not equal.
