@@ -13,14 +13,11 @@ import time
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
+from typing import Dict, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
-from collections import defaultdict
 
 # installed libraries
-import numpy as np
 import pandas as pd
-from scipy.optimize import linear_sum_assignment
 import networkx as nx
 from tqdm import tqdm
 from ppanggolin.genome import Organism
@@ -30,14 +27,14 @@ from ppanggolin.metadata import Metadata
 
 # local libraries
 from panorama.geneFamily import GeneFamily
+from panorama.systems.utils import (filter_local_context, check_for_forbidden_families, get_metadata_to_families,
+                                    get_gfs_matrix_combination, dict_families_context, greedy_algorithm,
+                                    find_combinations)
 from panorama.systems.models import Models, Model, FuncUnit, Family
 from panorama.systems.system import System, SystemUnit
 from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.utils import init_lock
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
-
-
-pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
 
 
 def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str, List[str]]]:
@@ -51,7 +48,7 @@ def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str,
         argparse.ArgumentTypeError: If 'jaccard' is not a restricted float.
 
     Returns:
-        dict: A dictionary indicating the required annotations and sources.
+        dict: A dictionary indicating the required families and sources.
     """
     args.jaccard = restricted_float(args.jaccard)
     args.annotation_sources = [args.source] if args.annotation_sources is None else args.annotation_sources
@@ -62,11 +59,11 @@ def check_detection_args(args: argparse.Namespace) -> Dict[str, Union[bool, str,
 def check_pangenome_detection(pangenome: Pangenome, metadata_sources: List[str], systems_source: str,
                               force: bool = False) -> None:
     """
-    Checks and loads pangenome information before adding annotations.
+    Checks and loads pangenome information before adding families.
 
     Args:
         pangenome (Pangenome): Pangenome object to be checked.
-        metadata_sources (list of str): Sources used to associate annotations to gene families.
+        metadata_sources (list of str): Sources used to associate families to gene families.
         systems_source (str): Source used to detect systems.
         force (bool, optional): If True, forces the erasure of pangenome systems from the source.
 
@@ -91,243 +88,6 @@ def check_pangenome_detection(pangenome: Pangenome, metadata_sources: List[str],
                              "Please see the command annotation before detecting systems")
 
 
-def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
-    """
-    Retrieves a mapping of metadata to sets of gene families for each metadata source.
-
-    Args:
-        pangenome (Pangenome): Pangenome object containing gene families.
-        sources (iterable of str): List of metadata source names.
-
-    Returns:
-        dict: A dictionary where each metadata source maps to another dictionary of metadata to sets of gene families.
-    """
-    meta2fam = {source: defaultdict(set) for source in sources}
-    for source in sources:
-        for gf in pangenome.gene_families:
-            metadata = gf.get_metadata_by_source(source)
-            if metadata is not None:
-                for meta in metadata.values():
-                    meta2fam[source][meta.protein_name].add(gf)
-                    if "secondary_name" in meta.fields:
-                        for secondary_name in meta.secondary_name.split(','):
-                            meta2fam[source][secondary_name].add(gf)
-    return meta2fam
-
-
-def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
-        -> Tuple[Set[GeneFamily], Dict[str, Set[Family]], Dict[str, str]]:
-    """
-    Retrieves all gene families associated with the families in the model.
-
-    Args:
-        model (Model): Model containing the families.
-        annot2fam (dict): Dictionary of annotated families.
-
-    Returns:
-        tuple: A tuple containing:
-            - Set[GeneFamily]: Gene families of interest in the functional unit.
-            - dict: Dictionary linking gene families to their annotations.
-            - dict: Dictionary linking families to their sources.
-    """
-    gene_families = set()
-    gf2fam = {}
-    fam2source = {}
-    for fam_model in model.families:
-        for source, annotation2families in annot2fam.items():
-            if fam_model.name in annotation2families:
-                for gf in annotation2families[fam_model.name]:
-                    gene_families.add(gf)
-                    if gf.name not in gf2fam:
-                        gf2fam[gf.name] = set()
-                    gf2fam[gf.name].add(fam_model)
-                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning(
-                            "Two annotations have the same protein name for different "
-                            "sources. First source encountered will be used.")
-                    else:
-                        fam2source[fam_model.name] = source
-
-        for exchangeable in fam_model.exchangeable:
-            for source, annotation2families in annot2fam.items():
-                if exchangeable in annotation2families:
-                    for gf in annotation2families[exchangeable]:
-                        gene_families.add(gf)
-                        if gf.name not in gf2fam:
-                            gf2fam[gf.name] = set()
-                        gf2fam[gf.name].add(fam_model)
-                        if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                            logging.getLogger("PANORAMA").warning(
-                                "Two annotations have the same protein name for different "
-                                "sources. First source encountered will be used.")
-                        else:
-                            fam2source[fam_model.name] = source
-    return gene_families, gf2fam, fam2source
-
-
-def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
-                         jaccard_threshold: float = 0.8) -> None:
-    """
-    Filters a graph based on a local Jaccard index.
-
-    Args:
-        graph (nx.Graph): A sub-pangenome graph.
-        organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
-    """
-
-    # Compute local Jaccard
-    edges2remove = set()
-    for f1, f2, data in graph.edges(data=True):
-        f1_orgs = set(f1.organisms).intersection(organisms)
-        f2_orgs = set(f2.organisms).intersection(organisms)
-        f1_gene_proportion = len(data["genomes"]) / len(f1_orgs) if len(f1_orgs) > 0 else 0
-        f2_gene_proportion = len(data["genomes"]) / len(f2_orgs) if len(f2_orgs) > 0 else 0
-
-        data['f1'] = f1.name
-        data['f2'] = f2.name
-        data['f1_jaccard_gene'] = f1_gene_proportion
-        data['f2_jaccard_gene'] = f2_gene_proportion
-
-        if not ((f1_gene_proportion >= jaccard_threshold) and (f2_gene_proportion >= jaccard_threshold)):
-            edges2remove.add((f1, f2))
-
-    graph.remove_edges_from(edges2remove)
-
-
-def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                                 func_unit: FuncUnit) -> bool:
-    """
-    Checks if there are forbidden conditions in the families.
-
-    Args:
-        gene_families (Set[GeneFamily]): Set of gene families.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
-        func_unit (FuncUnit): Functional unit to check against.
-
-    Returns:
-        bool: True if forbidden conditions are encountered, False otherwise.
-    """
-    forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
-
-    def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Gets the number of model families associated with the gene family.
-
-        Args:
-            gene_family (GeneFamily): The gene family of interest.
-
-        Returns:
-            int: The number of model families associated with the gene family.
-        """
-        model_families = gene_fam2mod_fam.get(gene_family.name)
-        if model_families is not None:
-            return len(model_families)
-        else:
-            return 0
-
-    for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        if node.name in gene_fam2mod_fam:
-            for family in gene_fam2mod_fam[node.name]:
-                if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
-                    return True
-    return False
-
-
-def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                               mod_fam2meta_source: Dict[str, str]
-                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[str, Metadata]], Dict[str, Dict[str, Metadata]]]:
-    def add_metadata_to_dict(presence_gfs2metadata):
-        for metadata in node.get_metadata_by_source(mod_fam2meta_source[family.name]).values():
-            if metadata.protein_name in avail_name:
-                if node.name in presence_gfs2metadata[family.name]:
-                    print("pika")
-                presence_gfs2metadata[family.name][node.name] = metadata
-            elif "secondary_name" in metadata.fields:
-                if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                    if node.name in presence_gfs2metadata[family.name]:
-                        print("pika")
-                    presence_gfs2metadata[family.name][node.name] = metadata
-
-    mandatory_gfs2metadata = defaultdict(dict)
-    accessory_gfs2metadata = defaultdict(dict)
-    gfs = set()
-    for node in gene_families:
-        for family in gene_fam2mod_fam[node.name]:
-            avail_name = {family.name}.union(family.exchangeable)
-            if family.presence == "mandatory":
-                add_metadata_to_dict(mandatory_gfs2metadata)
-                gfs.add(node.name)
-            elif family.presence == "accessory":
-                add_metadata_to_dict(accessory_gfs2metadata)
-                gfs.add(node.name)
-
-    fams = list(mandatory_gfs2metadata.keys()) + list(accessory_gfs2metadata.keys())
-    score_matrix = np.zeros((len(fams), len(gene_families)))
-    gfs = list(gfs)
-    for i, fam in enumerate(fams):
-        if fam in mandatory_gfs2metadata:
-            gfs2metadata = mandatory_gfs2metadata[fam]
-        else:
-            gfs2metadata = accessory_gfs2metadata[fam]
-        for j, gf in enumerate(gfs):
-            score_matrix[i, j] = gfs2metadata[gf].score if gf in gfs2metadata else 0
-
-    return (pd.DataFrame(score_matrix, index=fams, columns=gfs),
-            mandatory_gfs2metadata, accessory_gfs2metadata)
-
-
-def check_for_needed_families(score_matrix: pd.DataFrame, mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
-                              func_unit: FuncUnit) -> Tuple[bool, Dict[str, str]]:
-    """
-    Checks if the presence/absence rules for needed families are respected.
-
-    Args:
-        gene_families (Set[GeneFamily]): Set of gene families.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
-        mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
-        func_unit (FuncUnit): Functional unit to check against.
-
-    Returns:
-        tuple: A tuple containing:
-            - bool: True if the needed conditions are met, False otherwise.
-            - dict: Dictionary linking gene families to their metadata information.
-    """
-    mandatory_gfs = {gf for gfs2metadata in mandatory_gfs2metadata.values() for gf in gfs2metadata.keys()}
-
-    def verifie_contraintes(combinaison):
-        mandatory_count = sum(1 for cle, objet in combinaison.items() if objet in mandatory_gfs)
-        total_count = len(combinaison)
-        return mandatory_count >= func_unit.min_mandatory and total_count >= func_unit.min_total
-
-    fams = score_matrix.index.values.tolist()
-    gfs = score_matrix.columns.values.tolist()
-
-    while True:
-        row_ind, col_ind = linear_sum_assignment(-score_matrix.values)
-
-        current_combi = {}
-        current_score = 0
-        for i in range(len(row_ind)):
-            fam = fams[row_ind[i]]
-            gf = gfs[col_ind[i]]
-            if score_matrix.loc[fam][gf] != 0:
-                current_combi[fam] = gf
-                current_score += score_matrix.loc[fam][gf]
-
-        # Vérifier les contraintes
-        if verifie_contraintes(current_combi):
-            return True, {fam: gf for fam, gf in current_combi.items()}
-        else:
-            # Si les contraintes ne sont pas respectées, réduire le score des objets les plus faibles
-            min_score = np.min(score_matrix[score_matrix > 0])
-            score_matrix[score_matrix == min_score] = 0
-
-        # Si on a tout mis à zéro, on sort de la boucle
-        if np.all(score_matrix == 0):
-            break
-    return False, {}
-
-
 def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[GeneFamily]]
                         ) -> List[FrozenSet[GeneFamily]]:
     """
@@ -350,10 +110,10 @@ def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[Gen
     return remove_combinations
 
 
-def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str, score_matrix: pd.DataFrame,
-                    mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
-                    accessory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str, matrix: pd.DataFrame,
+                    mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
+                    accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
                     combinations: List[FrozenSet[GeneFamily]],
                     combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]],
                     jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
@@ -363,81 +123,84 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
     Args:
         graph (nx.Graph): A graph with families in one connected component.
         families (Set[GeneFamily]): A set of families that code for the searched model.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to their annotations.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to their families.
         mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
+        matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
+        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families
+        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families
+        combinations: Existing combination of gene families in organisms.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
 
     Returns:
         Set[SystemUnit]: Set of all detected functional unit in the graph.
     """
-    def get_fam2metainfo():
-        fam2meta_info = {}
-        for fam, name in fam2gf.items():
+
+    def get_gf2metainfo() -> Dict[GeneFamily, Tuple[str, int]]:
+        """
+        Build a dictionary of gene families link to the metadata coding for the unit.
+
+        Returns:
+            Dict[GeneFamily, Tuple[str, int]]: Dictionary with gene families as key and a tuple of metadata source and id as value
+        """
+        gf2meta_info = {}
+        for gf_name, fam in fam2gf.items():
             if fam in mandatory_gfs2metadata:
-                a = "mandatory"
                 gf2metadata = mandatory_gfs2metadata[fam]
             else:
-                a = "accessory"
                 gf2metadata = accessory_gfs2metadata[fam]
-            try:
-                metadata = gf2metadata[name]
-            except KeyError as kerro:
-                raise kerro
-            else:
-                try:
-                    fam2meta_info[name2gf[name]] = (mod_fam2meta_source[fam], metadata.metadata_id)
-                except KeyError as kerro2:
-                    raise kerro2
-                else:
-                    return fam2meta_info
+            gf = name2gf[gf_name]
+            meta_id, _ = gf2metadata[gf]
+            gf2meta_info[gf] = (mod_fam2meta_source[fam], meta_id)
+        return gf2meta_info
 
     detected_su = set()
     name2gf = {gf.name: gf for gf in families}
+    mandatory_gfs = {gf for gf2metadata in mandatory_gfs2metadata.values() for gf in gf2metadata.keys() if
+                     gf in families}
+    accessory_gfs = {gf for gf2metadata in accessory_gfs2metadata.values() for gf in gf2metadata.keys() if
+                     gf in families}
     while len(combinations) > 0:
         # Continue if there is combination
-        families_combination = combinations.pop(0)
-        organisms_of_interest = combinations2orgs[families_combination]
-        families_combination = set(families_combination)
-        filtered_matrix = score_matrix[[gf.name for gf in families_combination]]
-        check_needed, _ = check_for_needed_families(filtered_matrix, mandatory_gfs2metadata, func_unit)
-        if check_needed:
-            if not check_for_forbidden_families(families_combination, gene_fam2mod_fam, func_unit):
+        context_combination = combinations.pop(0)  # combination found when searching contex
+        organisms_of_interest = combinations2orgs[context_combination]
+        context_combination = set(context_combination)
+        context_gfs_name = {gf.name for gf in context_combination} & {gf.name for gf in mandatory_gfs | accessory_gfs}
+        if len(context_gfs_name) >= func_unit.min_total:
+            filtered_matrix = matrix[list(context_gfs_name)]
+            find_combs = find_combinations(filtered_matrix, func_unit)
+            for gfs_name_combinations, _ in find_combs:
+                gfs_combinations = {name2gf[name] for name in gfs_name_combinations}
                 local_graph = graph.copy()
-                local_graph.remove_nodes_from(families.difference(families_combination))
+                # Keep only mandatory and accessory of current combination and eventual forgiven and neutral families.
+                node2remove = families.difference(context_combination) | mandatory_gfs.union(accessory_gfs).difference(
+                    gfs_combinations)
+                local_graph.remove_nodes_from(node2remove)
                 filter_local_context(local_graph, organisms_of_interest, jaccard_threshold=jaccard_threshold)
                 for cc in sorted([cc for cc in nx.connected_components(local_graph)
-                                  if len(cc.intersection(families_combination)) > func_unit.min_total],
+                                  if len(cc.intersection(context_combination)) >= func_unit.min_total],
                                  key=lambda c: (len(c), sorted(c)), reverse=True):
-                    cc: Set[GeneFamily]
-                    families_in_cc = families_combination.intersection(cc)
-                    final_matrix = filtered_matrix[[gf.name for gf in families_in_cc]]
-                    check_needed, fam2gf = check_for_needed_families(final_matrix, mandatory_gfs2metadata, func_unit)
-                    if check_needed and not check_for_forbidden_families(families_in_cc, gene_fam2mod_fam, func_unit):
-                        fam2meta_info = get_fam2metainfo()
-                        new_su = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
-                                            families_to_metainfo=fam2meta_info)
-                        add_new_su = True
-                        for su_in in detected_su:
-                            if su_in.is_superset(new_su):
-                                add_new_su = False
-                                break
-                        if add_new_su:
-                            detected_su.add(new_su)
-                        get_subcombinations(cc.intersection(families_combination), combinations)
+                    families_in_cc = context_combination.intersection(cc)
+                    final_matrix = filtered_matrix[list({gf.name for gf in families_in_cc} & context_gfs_name)]
+                    if not check_for_forbidden_families(families_in_cc, gene_fam2mod_fam, func_unit):
+                        working_combs = find_combinations(final_matrix, func_unit)
+                        for working_comb, fam2gf in working_combs:
+                            detected_su.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                                                       families_to_metainfo=get_gf2metainfo()))
+                            get_subcombinations(cc.intersection(context_combination), combinations)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
-            get_subcombinations(families_combination, combinations)
+            get_subcombinations(context_combination, combinations)
 
     return detected_su
 
 
-def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[str, Set[Family]],
-                           mod_fam2meta_source: Dict[str, str], score_matrix: pd.DataFrame,
-                           mandatory_gfs2metadata: Dict[str, Dict[str, Metadata]],
-                           accessory_gfs2metadata: Dict[str, Dict[str, Metadata]],
+def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+                           mod_fam2meta_source: Dict[str, str], matrix: pd.DataFrame,
+                           mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
+                           accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
                            func_unit: FuncUnit, source: str,
                            combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
                            jaccard_threshold: float = 0.8) -> Set[SystemUnit]:
@@ -451,6 +214,9 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
         mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
+        matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
+        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families
+        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): the combination of gene families corresponding to the context that exist in at least one genome
 
@@ -471,10 +237,81 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
             combinations_in_cc = get_subcombinations(fam_in_cc, combinations)
             fam_in_cc |= n_fam
             new_detected_fu = search_fu_in_cc(cc_graph, fam_in_cc, gene_fam2mod_fam, mod_fam2meta_source, func_unit,
-                                              source, score_matrix, mandatory_gfs2metadata, accessory_gfs2metadata,
+                                              source, matrix, mandatory_gfs2metadata, accessory_gfs2metadata,
                                               combinations_in_cc, combinations2orgs, jaccard_threshold)
             detected_fu |= new_detected_fu
     return detected_fu
+
+
+def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[GeneFamily],
+                                      gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]
+                                      ) -> Tuple[Set[GeneFamily], Set[GeneFamily]]:
+    """
+    Retrieves the gene families that might be in the functional unit.
+
+    Args:
+        func_unit (FuncUnit): The functional unit to consider.
+        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
+        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
+
+    Returns:
+        tuple: A tuple containing:
+            - Set[GeneFamily]: Gene families that code for the functional unit.
+            - Set[GeneFamily]: The neutral families.
+    """
+    fu_families = set()
+    neutral_families = set()
+    for gf in gene_families:
+        is_neutral = False
+        is_functional = False
+        for family in gene_fam2mod_fam[gf]:
+            if family in func_unit.neutral:
+                is_neutral = True
+            elif family in func_unit.families:
+                is_functional = True
+
+        if is_functional:
+            fu_families.add(gf)
+        elif is_neutral:
+            neutral_families.add(gf)
+    return fu_families, neutral_families
+
+
+def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Dict[GeneFamily, Set[Family]],
+                        fam2source: Dict[str, str], source: str, jaccard_threshold: float = 0.8
+                        ) -> Dict[str, Set[SystemUnit]]:
+    """
+
+    Args:
+        model (Model): Model corresponding to the system searched.
+        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
+        gf2fam (Dict[str, Set[Family]]): Dictionary linking gene families to their families.
+        fam2source (Dict[str, str]): Dictionary linking families to their sources.
+        source (str): Name of the annotation source
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+
+    Returns:
+        Dict[str, Set[SystemUnit]]: System unit found with their name as key and the units as value.
+    """
+    su_found = {}
+    for func_unit in model.func_units:
+        fu_families = set()
+        fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
+        if fu_families:
+            matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
+            solution, _ = greedy_algorithm(matrix, func_unit)
+            if solution:
+                context, combinations2orgs = compute_gene_context_graph(families=fu_families,
+                                                                        transitive=func_unit.transitivity,
+                                                                        window_size=func_unit.window,
+                                                                        disable_bar=True)
+                combinations2orgs = {combs: org for combs, org in combinations2orgs.items() if len(combs) >= func_unit.min_total}
+                new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, matrix, md_gfs2meta,
+                                                         acc_gfs2meta, func_unit, source, combinations2orgs,
+                                                         jaccard_threshold)
+                if len(new_detected_fu) > 0:
+                    su_found[func_unit.name] = new_detected_fu
+    return su_found
 
 
 def check_for_needed_units(su_found: Dict[str, Set[SystemUnit]], model: Model) -> bool:
@@ -523,75 +360,6 @@ def check_for_forbidden_unit(su_found: Dict[str, Set[SystemUnit]], model: Model)
         if name in forbidden_list and len(fu_set) > 0:
             return True
     return False
-
-
-def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[GeneFamily],
-                                      gene_fam2mod_fam: Dict[str, Set[Family]]
-                                      ) -> Tuple[Set[GeneFamily], Set[GeneFamily]]:
-    """
-    Retrieves the gene families that might be in the functional unit.
-
-    Args:
-        func_unit (FuncUnit): The functional unit to consider.
-        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
-
-    Returns:
-        tuple: A tuple containing:
-            - Set[GeneFamily]: Gene families that code for the functional unit.
-            - Set[GeneFamily]: The neutral families.
-    """
-    fu_families = set()
-    neutral_families = set()
-    for gf in gene_families:
-        is_neutral = False
-        is_functional = False
-        for family in gene_fam2mod_fam[gf.name]:
-            if family in func_unit.neutral:
-                is_neutral = True
-            elif family in func_unit.families:
-                is_functional = True
-
-        if is_functional:
-            fu_families.add(gf)
-        elif is_neutral:
-            neutral_families.add(gf)
-    return fu_families, neutral_families
-
-
-def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Dict[str, Set[Family]],
-                        fam2source: Dict[str, str], source: str, jaccard_threshold: float = 0.8
-                        ) -> Dict[str, Set[SystemUnit]]:
-    """
-
-    Args:
-        model (Model): Model corresponding to the system searched.
-        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
-        gf2fam (Dict[str, Set[Family]]): Dictionary linking gene families to their annotations.
-        fam2source (Dict[str, str]): Dictionary linking families to their sources.
-        source (str): Name of the annotation source
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
-
-    Returns:
-        Dict[str, Set[SystemUnit]]: System unit found with their name as key and the units as value.
-    """
-    su_found = {}
-    for func_unit in model.func_units:
-        fu_families = set()
-        fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
-        scores_matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
-        check_needed, _ = check_for_needed_families(scores_matrix, md_gfs2meta, func_unit)
-        if check_needed:
-            context, combinations2orgs = compute_gene_context_graph(families=fu_families,
-                                                                    transitive=func_unit.transitivity,
-                                                                    window_size=func_unit.window,
-                                                                    disable_bar=True)
-            new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, scores_matrix,
-                                                     md_gfs2meta, acc_gfs2meta, func_unit, source,
-                                                     combinations2orgs, jaccard_threshold)
-            if len(new_detected_fu) > 0:
-                su_found[func_unit.name] = new_detected_fu
-    return su_found
 
 
 def get_system_unit_combinations(su_found: Dict[str, Set[SystemUnit]], model: Model):

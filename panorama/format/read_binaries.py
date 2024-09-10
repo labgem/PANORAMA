@@ -398,7 +398,9 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
                 metastatus = h5f.root.status._f_get_child("metastatus")
                 metasources = h5f.root.status._f_get_child("metasources")
 
-                metatype_sources = set(metasources._v_attrs[metatype]) & set(kwargs["sources"])
+                metatype_sources = set(metasources._v_attrs[metatype]) & kwargs["sources"]
+                if "meta_sources" in kwargs:
+                    metatype_sources &= kwargs["meta_sources"]
                 if metastatus._v_attrs[metatype] and len(metatype_sources) > 0:
                     logging.getLogger("PPanGGOLiN").info(
                         f"Reading the {metatype} metadata from sources {metatype_sources}...")

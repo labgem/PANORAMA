@@ -824,8 +824,6 @@ class SystemUnit:
 
     def _get_models_families(self) -> Set[GeneFamily]:
         families = set()
-        if self.system.ID == "6":
-            print("bulbi")
         for family, metainfo in self._families2metainfo.items():
             if metainfo[1] != 0:
                 families.add(family)

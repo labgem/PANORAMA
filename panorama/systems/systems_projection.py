@@ -25,9 +25,9 @@ from ppanggolin.genome import Organism, Gene
 from panorama.utils import mkdir, init_lock, conciliate_partition
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
+from panorama.systems.utils import get_metadata_to_families, dict_families_context, get_gfs_matrix_combination, greedy_algorithm
 from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Family
-from panorama.systems.detection import get_metadata_to_families, dict_families_context, check_for_needed_families
 
 
 def has_short_path(graph: nx.Graph, node_list, n):
@@ -61,7 +61,7 @@ def has_short_path(graph: nx.Graph, node_list, n):
 
 
 def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organism,
-                              gene_fam2mod_fam: Dict[str, Set[Family]], association: List[str] = None
+                              gene_fam2mod_fam: Dict[GeneFamily, Set[Family]], association: List[str] = None
                               ) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system onto an organism's pangenome.
@@ -131,30 +131,22 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
                 counter[2] += 1
                 sys_state_in_org = "split"
             for cc_gene in cc:
-                if cc_gene.family.name in gene_fam2mod_fam:
+                fam_annot = ""
+                if cc_gene.family in gene_fam2mod_fam:
                     metasource, metaid = unit.get_metainfo(cc_gene.family)
                     if metaid != 0:
-                        for mod_family in gene_fam2mod_fam[cc_gene.family.name]:
+                        for mod_family in gene_fam2mod_fam[cc_gene.family]:
                             avail_name = {mod_family.name}.union(mod_family.exchangeable)
                             metadata = cc_gene.family.get_metadata(metasource, metaid)
                             if metadata.protein_name in avail_name:
                                 fam_annot = metadata.protein_name
-                                break
                             elif "secondary_name" in metadata.fields:
-                                found = False
                                 fam_annot = []
                                 for name in metadata.secondary_name.split(","):
                                     if name in avail_name:
-                                        found = True
                                         fam_annot.append(name)
                                 fam_annot = ",".join(fam_annot)
-                                if found:
-                                    break
                         partitions.add(cc_gene.family.named_partition)
-                    else:
-                        fam_annot = ""
-                else:
-                    fam_annot = ""
                 projection.append(write_projection_line(cc_gene))
             sub_id += 1
     return projection, counter, conciliate_partition(partitions)
@@ -170,6 +162,7 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
         organism (Organism): The organism of interest.
         t (int, optional): The transitive value (default is 0).
         w (int, optional): The window size for gene connection (default is 1).
+        same_strand (bool, optional): Create edge between genes belonging to the same strand only (default is False).
 
     Returns:
         nx.Graph: A genomic context graph for the given organism.
@@ -206,7 +199,7 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
     return genes_graph
 
 
-def unit_projection(unit: SystemUnit, gf2fam: Dict[str, set[Family]], fam2source: Dict[str, str],
+def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam2source: Dict[str, str],
                     fam_index: Dict[GeneFamily, int], association: List[str] = None
                     ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
@@ -226,11 +219,12 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[str, set[Family]], fam2source
     for organism in unit.models_organisms:
         org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
-        check_needed, _ = check_for_needed_families(org_mod_fam, gf2fam, fam2source, unit.functional_unit)
-        if check_needed:
+        matrix, _, _ = get_gfs_matrix_combination(org_mod_fam, gf2fam, fam2source)
+        solution, _ = greedy_algorithm(matrix, unit.functional_unit)
+        if solution:
             pan_proj = [unit.name, organism.name]
             genes_graph = compute_genes_graph(org_fam, organism, unit.functional_unit.transitivity,
-                                              unit.functional_unit.window)
+                                              unit.functional_unit.window, unit.functional_unit.same_strand)
             org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, gf2fam,
                                                                      association)
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(unit)] + counter)
@@ -271,8 +265,7 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
     organisms_projection = pd.DataFrame()
     gene_families, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
     gene_families &= set(system.families)
-    gene_families_name = {gf.name for gf in gene_families}
-    gf2fam = {gf: fam for gf, fam in gf2fam.items() if gf in gene_families_name}
+    gf2fam = {gf: fam for gf, fam in gf2fam.items() if gf in gene_families}
 
     for unit in system.units:
         unit_pan_proj, unit_org_proj = unit_projection(unit, gf2fam, fam2source, fam_index, association)
@@ -286,8 +279,6 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
         organisms_projection = pd.concat([pd.DataFrame([[system.ID] * organisms_projection.shape[0],
                                                         [system.name] * organisms_projection.shape[0]]).T,
                                           organisms_projection], axis=1, ignore_index=True)
-    else:
-        pass
     logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
     return pangenome_projection.drop_duplicates(), organisms_projection.drop_duplicates()
 
