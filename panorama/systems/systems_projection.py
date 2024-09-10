@@ -25,7 +25,8 @@ from ppanggolin.genome import Organism, Gene
 from panorama.utils import mkdir, init_lock, conciliate_partition
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
-from panorama.systems.utils import get_metadata_to_families, dict_families_context, get_gfs_matrix_combination, greedy_algorithm
+from panorama.systems.utils import (get_metadata_to_families, dict_families_context,
+                                    get_gfs_matrix_combination, check_needed_families)
 from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Family
 
@@ -216,12 +217,12 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
     pangenome_projection, organisms_projection = [], []
+    matrix, _, _ = get_gfs_matrix_combination(set(unit.models_families), gf2fam, fam2source)
     for organism in unit.models_organisms:
         org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
-        matrix, _, _ = get_gfs_matrix_combination(org_mod_fam, gf2fam, fam2source)
-        solution, _ = greedy_algorithm(matrix, unit.functional_unit)
-        if solution:
+        filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
+        if check_needed_families(filtered_matrix, unit.functional_unit):
             pan_proj = [unit.name, organism.name]
             genes_graph = compute_genes_graph(org_fam, organism, unit.functional_unit.transitivity,
                                               unit.functional_unit.window, unit.functional_unit.same_strand)
