@@ -108,13 +108,21 @@ def parse_meta_padloc(meta: Path) -> pd.DataFrame:
     Returns:
         pd.DataFrame: A pandas DataFrame containing the metadata.
     """
+    def merge_columns(row):
+        if pd.isna(row['temp']) and pd.isna(row['secondary.name']):
+            return ''
+        elif pd.isna(row['temp']):
+            return row['secondary.name']
+        elif pd.isna(row['secondary.name']):
+            return row['temp']
+        else:
+            return f"{row['temp']},{row['secondary.name']}"
+
     meta_col_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",
                       "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
     df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
     df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
-    df['temp'].fillna('', inplace=True)
-    df['secondary.name'].fillna('', inplace=True)
-    df['secondary_name'] = df['temp'] + df['secondary.name']
+    df['secondary_name'] = df.apply(merge_columns, axis=1)
     df = df.drop('protein.name', axis=1)
     df = df.drop('secondary.name', axis=1)
     df = df.drop('temp', axis=1)
@@ -163,19 +171,28 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
         """
         fam_list = []
         for fam_name in families_list:
-            if fam_name == "cas_adaptation":
-                filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                for filter_fam in filter_df['protein_name'].dropna().unique().tolist():
-                    fam_dict = {'name': filter_fam,
-                                'presence': fam_type}
-                    fam_list.append(fam_dict)
-            elif fam_name != 'NA':
-                fam_dict = {'name': fam_name,
-                            'presence': fam_type}
-                if fam_name in sec_names:
+            if fam_name not in seen_fam:
+                if fam_name == "cas_adaptation":
                     filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                    fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
-                fam_list.append(fam_dict)
+                    for filter_fam in filter_df['protein_name'].dropna().unique().tolist():
+                        if filter_fam not in seen_fam:
+                            fam_dict = {'name': filter_fam,
+                                        'presence': fam_type}
+                            seen_fam.add(filter_fam)
+                            if filter_fam in sec_names:
+                                filter_df = meta.loc[meta['secondary_name'] == fam_name]
+                                fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
+                            fam_list.append(fam_dict)
+                elif fam_name == "cas_accessory":
+                    pass
+                elif fam_name != 'NA':
+                    fam_dict = {'name': fam_name,
+                                'presence': fam_type}
+                    seen_fam.add(fam_name)
+                    if fam_name in sec_names:
+                        filter_df = meta.loc[meta['secondary_name'] == fam_name]
+                        fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
+                    fam_list.append(fam_dict)
         return fam_list
 
     padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "force_strand",
@@ -200,14 +217,16 @@ def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame 
                          "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
                      }
                  }
-
     family_list = list()
+    seen_fam = set()
     family_list += add_families(families_list=data_yaml["core_genes"], sec_names=secondary_names,
                                 fam_type='mandatory')
     family_list += add_families(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
                                 sec_names=secondary_names, fam_type='accessory')
     family_list += add_families(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
                                 sec_names=secondary_names, fam_type='forbidden')
+    family_list += add_families(families_list=data_yaml["neutral_genes"] if "neutral_genes" in data_yaml else [],
+                                sec_names=secondary_names, fam_type='neutral')
     func_unit["families"] = family_list
     data_json['func_units'].append(func_unit)
     return data_json
