@@ -247,16 +247,19 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
     return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
 
 
-def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]],
-                      fam_index: Dict[GeneFamily, int], association: List[str] = None
+def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_families: Set[GeneFamily],
+                      gene_family2family: Dict[GeneFamily, Set[Family]], fam2source: Dict[str, str],
+                      association: List[str] = None
                       ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project a system onto all organisms in a pangenome.
 
     Args:
         system (System): The system to project.
-        annot2fam (Dict[str, Dict[str, Set[GeneFamily]]]): Dictionary mapping annotations to gene families.
         fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
+        gene_families (Set[GeneFamily]): The set of gene families that code for the model corresponding to system.
+        gene_family2family (Dict[GeneFamily, Set[Family]]): Dictionary linking a gene family to model families.
+        fam2source (Dict[str, str]): Dictionary linking a model family to his source.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
@@ -264,9 +267,8 @@ def system_projection(system: System, annot2fam: Dict[str, Dict[str, Set[GeneFam
     """
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    gene_families, gf2fam, fam2source = dict_families_context(system.model, annot2fam)
-    gene_families &= set(system.families)
-    gf2fam = {gf: fam for gf, fam in gf2fam.items() if gf in gene_families}
+    gfs = gene_families & set(system.families)
+    gf2fam = {gf: fam for gf, fam in gene_family2family.items() if gf in gfs}
 
     for unit in system.units:
         unit_pan_proj, unit_org_proj = unit_projection(unit, gf2fam, fam2source, fam_index, association)
@@ -304,13 +306,22 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, associat
     organisms_projection = pd.DataFrame()
     meta2fam = get_metadata_to_families(pangenome, pangenome.systems_sources_to_metadata_source()[system_source])
     fam_index = pangenome.compute_org_bitarrays()
+    sys2fam_context = {}
+
+    for system in pangenome.systems:  # Search association now to don't repeat for same model and different system
+        if system.model.name not in sys2fam_context:
+            gene_families, gf2fam, fam2source = dict_families_context(system.model, meta2fam)
+            sys2fam_context[system.model.name] = (gene_families, gf2fam, fam2source)
+
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
         with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=False), unit='system',
                   disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(system_source):
-                future = executor.submit(system_projection, system, meta2fam, fam_index, association)
+                gene_families, gf2fam, fam2source = sys2fam_context[system.model.name]
+                future = executor.submit(system_projection, system, fam_index, gene_families,
+                                         gf2fam, fam2source, association)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
