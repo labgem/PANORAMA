@@ -162,7 +162,6 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
                      gf in families}
     accessory_gfs = {gf for gf2metadata in accessory_gfs2metadata.values() for gf in gf2metadata.keys() if
                      gf in families}
-    t2 = time.time()
     while len(combinations) > 0:
         # Continue if there is combination
         context_combination = combinations.pop(0)  # combination found when searching contex
@@ -184,9 +183,7 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
                     families_in_cc = context_combination.intersection(cc)
                     final_matrix = filtered_matrix[list({gf.name for gf in families_in_cc} & context_gfs_name)]
                     if not check_for_forbidden_families(families_in_cc, gene_fam2mod_fam, func_unit):
-                        t1 = time.time()
                         working_combs = find_combinations(final_matrix, func_unit)
-                        # print(f"find combs : {time.time() - t1}")
                         for working_comb, fam2gf in working_combs:
                             detected_su.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
                                                        families_to_metainfo=get_gf2metainfo()))
@@ -195,7 +192,6 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
             # We can remove all sub-combinations because the bigger one does not have the needed
             get_subcombinations(context_combination, combinations)
 
-    # print(f"search fu: {time.time() - t2}")
     return detected_su
 
 
@@ -300,19 +296,12 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
         fu_families = set()
         fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
         if len(fu_families) >= func_unit.min_total:
-            t2 = time.time()
             matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
-            # print(f"Gen matrix: {time.time() - t2}")
-            t0 = time.time()
-            solution = check_needed_families(matrix, func_unit)
-            # print(f"first check : {time.time() - t0}")
-            if solution:
-                t1 = time.time()
+            if check_needed_families(matrix, func_unit):
                 context, combinations2orgs = compute_gene_context_graph(families=fu_families,
                                                                         transitive=func_unit.transitivity,
                                                                         window_size=func_unit.window,
                                                                         disable_bar=True)
-                # print(f"Context: {time.time() - t1}")
                 combinations2orgs = {combs: org for combs, org in combinations2orgs.items() if len(combs) >= func_unit.min_total}
                 new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, matrix, md_gfs2meta,
                                                          acc_gfs2meta, func_unit, source, combinations2orgs,
