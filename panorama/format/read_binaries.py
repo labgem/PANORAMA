@@ -85,7 +85,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
         unit.add_family(pangenome.get_gene_family(unit_row["geneFam"].decode()),
                         unit_row["metadata_source"].decode(), int(unit_row["metadata_id"]))
 
-    def read_system(sys_row: tables.Table.row, sys_dict: Dict[str, System]) -> System:
+    def read_system(sys_row: tables.Table.row, sys_dict: Dict[str, System], unit_dict: Dict[str, SystemUnit]) -> System:
         """
         Global function to read a line in system table
 
@@ -100,7 +100,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
             sys_dict[sys_id] = sys
         else:
             sys = sys_dict[sys_id]
-        sys.add_unit(units[sys_row["unit"]])
+        sys.add_unit(unit_dict[sys_row["unit"]])
         return sys
 
     source = source_group._v_name
@@ -115,7 +115,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
             read_system_unit(row, units)
             progress.update()
         for row in read_chunks(system_table):
-            read_system(row, systems)
+            read_system(row, systems, units)
     logging.getLogger("PANORAMA").debug(f"Number of systems read: {len(systems)}")
     if read_canonical:
         canonic = {}
@@ -131,7 +131,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
                 progress.update()
 
             for row in read_chunks(canon_table):
-                read_system(row, canonic)
+                read_system(row, canonic, canon_units)
                 progress.update()
 
             for row in read_chunks(sys2canonical_table):
@@ -166,7 +166,7 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], s
         source_group = h5f.get_node(systems_group, source)
         metadata_sources |= source_group._v_attrs.metadata_sources
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, source_group, models[index], disable_bar)
+        read_systems_by_source(pangenome, source_group, models[index], disable_bar=disable_bar)
         logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
     return metadata_sources
