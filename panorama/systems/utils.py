@@ -15,7 +15,6 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 import networkx as nx
-# from pulp import LpMaximize, LpProblem, LpVariable, lpSum, LpBinary, PULP_CBC_CMD
 from ppanggolin.genome import Organism
 from ppanggolin.metadata import Metadata
 
@@ -97,8 +96,7 @@ def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fa
 
 def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
                                mod_fam2meta_source: Dict[str, str]
-                               ) -> Tuple[
-    pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]], Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
+                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]], Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
     """
     Build a matrix of association between gene families and families.
 
@@ -164,51 +162,62 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
             mandatory_gfs2metadata, accessory_gfs2metadata)
 
 
-# def greedy_algorithm(matrix: pd.DataFrame, func_unit: FuncUnit) -> Tuple[Set[str], Set[str]]:
-#     """
-#     Find a working combination of gene families covering the needed mandatory and accessory families
-#
-#     Args:
-#         matrix: The association matrix between gene families and families
-#         func_unit: The functional unit to search for.
-#
-#     Returns:
-#         Set[str]: Set of selected gene families name that correspond to a working combination
-#         Set[str]: Set of covered families names that correspond to a working combination
-#     """
-#     covered_families = set()
-#     selected_gfs = set()
-#
-#     mandatory = {fam.name for fam in func_unit.mandatory}
-#     min_needed = False
-#     while not min_needed:
-#         best_gf = None
-#         best_coverage = 0
-#
-#         for gf in matrix.columns:
-#             if gf in selected_gfs:
-#                 continue
-#             coverage = len([family for family in matrix.index
-#                             if matrix.loc[family, gf] == 1 and family not in covered_families])
-#
-#             if coverage > best_coverage:
-#                 best_coverage = coverage
-#                 best_gf = gf
-#
-#         if best_gf is None:
-#             break
-#
-#         selected_gfs.add(best_gf)
-#         for family in matrix.index:
-#             if matrix.loc[family, best_gf] == 1:
-#                 covered_families.add(family)
-#         if (len(covered_families) >= func_unit.min_total and
-#                 len(covered_families.intersection(mandatory)) >= func_unit.min_mandatory):
-#             min_needed = True
-#     if min_needed:
-#         return selected_gfs, covered_families
-#     else:
-#         return set(), set()
+def bitset_from_row(row) -> int:
+    """
+    Converts a row of the binary matrix into an integer bitset.
+    Each bit represents the presence of an individual for that characteristic.
+    Args:
+        row: A row of the binary matrix
+
+    Returns:
+        int: integer bitset representing the presence of an individual for that characteristic
+    """
+    bitset = 0
+    for i, val in enumerate(row):
+        if val == 1:
+            bitset |= (1 << i)  # Met le i-ème bit à 1
+    return bitset
+
+
+def search_comb(comb: Tuple[int, ...], mandatory_bitsets: List[int],
+                accessory_bitsets: List[int]) -> Tuple[Dict[int, int], int, int]:
+    """
+    Search for a working combination in bitsets
+
+    Args:
+        comb (Tuple[int, ...]): Combination of gene families index
+        mandatory_bitsets (List[int]): Bitsets with index of mandatory families
+        accessory_bitsets (List[int]): Bitsets with index of accessory families
+
+    Returns:
+        Dict[int, int]: Association between gene families and families
+        Integer: Number of mandatory families covered
+        Integer: Number of accessory families covered
+    """
+    covered_families = set()
+    gf2fam = {}
+
+    covered_mandatory = 0
+    for family_index, bitset in enumerate(mandatory_bitsets):
+        covering_gfs = set(ind for ind in comb if (1 << ind) & bitset)
+        if len(covering_gfs) >= 1:
+            for gf in covering_gfs:
+                gf2fam[gf] = family_index
+            if family_index not in covered_families:
+                covered_mandatory += 1
+                covered_families.add(family_index)
+
+    covered_accessory = 0
+    for family_index, bitset in enumerate(accessory_bitsets, start=len(mandatory_bitsets)):
+        covering_gfs = set(ind for ind in comb if (1 << ind) & bitset)
+        if len(covering_gfs) >= 1:
+            for gf in covering_gfs:
+                gf2fam[gf] = family_index
+            if family_index not in covered_families:
+                covered_accessory += 1
+                covered_families.add(family_index)
+
+    return gf2fam, covered_mandatory, covered_accessory
 
 
 def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[Set[str], Dict[str, str]]]:
@@ -225,25 +234,6 @@ def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[S
             Dict[str, str]: Association between gene families and families for the combination.
     """
 
-    def bitset_from_row(row) -> int:
-        """
-        Converts a row of the binary matrix into an integer bitset.
-        Each bit represents the presence of an individual for that characteristic.
-        Args:
-            row: A row of the binary matrix
-
-        Returns:
-            int: integer bitset representing the presence of an individual for that characteristic
-        """
-        bset = 0
-        for i, val in enumerate(row):
-            if val == 1:
-                bset |= (1 << i)  # Met le i-ème bit à 1
-        return bset
-
-    num_individuals = matrix.shape[1]
-    num_features = matrix.shape[0]
-
     mandatory = {fam.name for fam in func_unit.mandatory}
     mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
 
@@ -252,38 +242,16 @@ def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[S
 
     bitsets = [bitset_from_row(matrix.iloc[i, :]) for i in range(matrix.shape[0])]
     mandatory_bitsets = [bitsets[i] for i in mandatory_indices]
-    accessory_bitsets = [bitsets[i] for i in range(num_features) if i not in mandatory_indices]
+    accessory_bitsets = [bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices]
 
     solutions = []
-    for size in sorted(range(func_unit.min_total, num_individuals + 1), reverse=True):
-        for comb in combinations(range(num_individuals), size):
-            covered_features = set()
-            association = {}
-
-            covered_mandatory = 0
-            for feature_index, bitset in enumerate(mandatory_bitsets):
-                covering_individuals = set(ind for ind in comb if (1 << ind) & bitset)
-                if len(covering_individuals) >= 1:
-                    for ind in covering_individuals:
-                        association[ind] = feature_index
-                    if feature_index not in covered_features:
-                        covered_mandatory += 1
-                        covered_features.add(feature_index)
-
-            covered_accessory = 0
-            for feature_index, bitset in enumerate(accessory_bitsets, start=len(mandatory_bitsets)):
-                covering_individuals = set(ind for ind in comb if (1 << ind) & bitset)
-                if len(covering_individuals) >= 1:
-                    for ind in covering_individuals:
-                        association[ind] = feature_index
-                    if feature_index not in covered_features:
-                        covered_accessory += 1
-                        covered_features.add(feature_index)
-
+    for size in sorted(range(func_unit.min_total, matrix.shape[1] + 1), reverse=True):
+        for comb in combinations(range(matrix.shape[1]), size):
+            gf2fam, covered_mandatory, covered_accessory = search_comb(comb, mandatory_bitsets, accessory_bitsets)
             if (covered_mandatory >= func_unit.min_mandatory and
                     covered_mandatory + covered_accessory >= func_unit.min_total):
                 solutions.append(({matrix.columns[i] for i in comb},
-                                  {matrix.columns[j]: matrix.index[i] for j, i in association.items()}))
+                                  {matrix.columns[j]: matrix.index[i] for j, i in gf2fam.items()}))
 
     return solutions
 
@@ -300,27 +268,18 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
         Boolean: True if it exists, False otherwise
     """
 
-    def is_subset(comb1, comb2):
+    def is_subset(comb1: Tuple[int, ...], comb2: Tuple[int, ...]) -> bool:
         """
-        Vérifie si comb1 est un sous-ensemble de comb2.
-        """
-        return set(comb1).issubset(comb2)
+        Check if a combination of gene families is subset of another one
 
-    def bitset_from_row(row) -> int:
-        """
-        Converts a row of the binary matrix into an integer bitset.
-        Each bit represents the presence of an individual for that characteristic.
         Args:
-            row: A row of the binary matrix
+            comb1 (Tuple[int, ...]): Combination to check if it's a subset
+            comb2 (Tuple[int, ...]): Combination supposed bigger
 
         Returns:
-            int: integer bitset representing the presence of an individual for that characteristic
+            Boolean: True if first combination is a subset of the second one, False otherwise
         """
-        bset = 0
-        for i, val in enumerate(row):
-            if val == 1:
-                bset |= (1 << i)  # Met le i-ème bit à 1
-        return bset
+        return set(comb1).issubset(comb2)
 
     mandatory = {fam.name for fam in func_unit.mandatory}
     mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
@@ -337,29 +296,8 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
         for comb in combinations(range(matrix.shape[1]), size):
             # If a larger comb can't respect presence absence rules, so a tinier can not too.
             if not any(is_subset(comb, larger_comb) for larger_comb in not_valid):
-                covered_features = set()
-                association = {}
-
-                covered_mandatory = 0
-                for feature_index, bitset in enumerate(mandatory_bitsets):
-                    covering_individuals = set(ind for ind in comb if (1 << ind) & bitset)
-                    if len(covering_individuals) >= 1:
-                        for ind in covering_individuals:
-                            association[ind] = feature_index
-                        if feature_index not in covered_features:
-                            covered_mandatory += 1
-                            covered_features.add(feature_index)
-
-                covered_accessory = 0
-                for feature_index, bitset in enumerate(accessory_bitsets, start=len(mandatory_bitsets)):
-                    covering_individuals = set(ind for ind in comb if (1 << ind) & bitset)
-                    if len(covering_individuals) >= 1:
-                        for ind in covering_individuals:
-                            association[ind] = feature_index
-                        if feature_index not in covered_features:
-                            covered_accessory += 1
-                            covered_features.add(feature_index)
-
+                _, covered_mandatory, covered_accessory = search_comb(comb, mandatory_bitsets,
+                                                                      accessory_bitsets)
                 if (covered_mandatory >= func_unit.min_mandatory and
                         covered_mandatory + covered_accessory >= func_unit.min_total):
                     return True
@@ -367,65 +305,6 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
                     not_valid.append(comb)
     return False
 
-
-# def ilp_optimization(matrix: pd.DataFrame, func_unit: FuncUnit):
-#     """
-#     Integer Linear Programming (ILP) to find an optimal combination of families that maximizes fam coverage
-#     while satisfying constraints on mandatory and total annotations.
-#
-#     Args:
-#         matrix (pd.DataFrame): A binary matrix where rows represent annotations and columns represent families.
-#         func_unit (int): Minimum total number of annotations (mandatory + accessory) that must be covered.
-#
-#     Returns:
-#         tuple: A tuple containing:
-#             - list: Selected families that maximize coverage.
-#             - set: Covered annotations based on the selected families.
-#             - float: Execution time of the ILP optimization.
-#     """
-#     # Create a linear programming problem with the objective to maximize
-#     model = LpProblem(name="gf-selection", sense=LpMaximize)
-#
-#     # Decision variables: 1 if the gf is selected, 0 otherwise
-#     x = {gf: LpVariable(f"x_{gf}", cat=LpBinary) for gf in matrix.columns}
-#
-#     mandatory = matrix.index.values.tolist()
-#     # Constraint: Each mandatory fam must be covered by at least one gf
-#     for family in mandatory:
-#         model += (lpSum(matrix.loc[family, gf] * x[gf] for gf in matrix.columns) >= 1, f"mandatory_{family}")
-#
-#     # Constraint: The total number of covered mandatory annotations must be at least min_mandatory
-#     model += (
-#         lpSum(matrix.loc[fam, gf] * x[gf] for fam in mandatory for gf in matrix.columns) >= func_unit.min_mandatory,
-#         "min_mandatory")
-#
-#     # Constraint: The total number of covered annotations (mandatory + accessory) must be at least min_total
-#     model += (
-#         lpSum(matrix.loc[fam, gf] * x[gf] for fam in matrix.index for gf in matrix.columns) >= func_unit.min_total,
-#         "min_total")
-#
-#     # Constraint: Ensure each annotation is covered by at most one family
-#     # for fam in matrix.index:
-#     #     model += (lpSum(matrix.loc[fam, gf] * x[gf] for gf in matrix.columns) <= 1, f"unique_cover_{fam}")
-#
-#     # Objective function: Maximize the total number of covered annotations
-#     model += lpSum(matrix.loc[fam, gf] * x[gf] for fam in matrix.index for gf in matrix.columns)
-#
-#     # Solve the ILP problem
-#     model.solve(PULP_CBC_CMD(msg=False))
-#
-#     # Extract the selected families from the solution
-#     selected_gfs = [gf for gf in matrix.columns if x[gf].value() == 1]
-#
-#     # Determine the annotations covered by the selected families
-#     coverage = {fam for fam in matrix.index if any(matrix.loc[fam, gf] == 1 for gf in selected_gfs)}
-#
-#     # Create a mapping of annotations to families that cover them
-#     fam_gf_map = {}
-#     for family in coverage:
-#         covering_families = [gf for gf in selected_gfs if matrix.loc[family, gf] == 1]
-#         fam_gf_map[family] = covering_families
-#     return selected_gfs, fam_gf_map
 
 def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
     """
@@ -476,9 +355,8 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                     gene_families.add(gf)
                     gf2fam[gf].add(fam_model)
                     if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning(
-                            "Two families have the same protein name for different "
-                            "sources. First source encountered will be used.")
+                        logging.getLogger("PANORAMA").warning("Two families have the same protein name for different "
+                                                              "sources. First source encountered will be used.")
                     else:
                         fam2source[fam_model.name] = source
 
