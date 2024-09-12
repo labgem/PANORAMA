@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Set, Tuple, Union, Generator
 
+import numpy as np
 # installed libraries
 from ppanggolin.metadata import MetaFeatures
 from ppanggolin.genome import Organism
@@ -324,7 +325,7 @@ class System(MetaFeatures):
         """
         model_families = set()
         for unit in self.units:
-            model_families |= unit.models_families
+            model_families |= set(unit.models_families)
         yield from model_families
 
     @property
@@ -842,6 +843,10 @@ class SystemUnit:
         yield from self._models_families
 
     @property
+    def nb_model_families(self) -> int:
+        return len(set(self.models_families))
+
+    @property
     def organisms(self) -> Generator[Organism, None, None]:
         """
         Retrieves the organisms where the system unit families belongs.
@@ -855,17 +860,26 @@ class SystemUnit:
         yield from organisms
 
     @property
+    def nb_organisms(self) -> int:
+        return len(set(self.organisms))
+
+    @property
     def models_organisms(self) -> Generator[Organism, None, None]:
         """
         Retrieves the organisms where the system belongs, considering only families in the model.
 
         Yields:
             Organism: Generator of organisms in the model.
+        todo: Try to use organisms bitarray
         """
-        organisms = set()
-        for family in self.models_families:
-            organisms |= set(family.organisms)
-        yield from organisms
+        matrix = np.zeros((self.nb_organisms, self.nb_model_families))
+        org2idx = {org: i for i, org in enumerate(self.organisms)}
+        for j, family in enumerate(self.models_families):
+            for org in family.organisms:
+                matrix[org2idx[org], j] = 1
+        idx2org = {i: org for org, i in org2idx.items()}
+
+        yield from {idx2org[i] for i in np.nonzero(np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total)[0]}
 
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
         """

@@ -508,9 +508,11 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
         lock (Lock, optional): Global lock for multiprocessing execution. Default is None.
         disable_bar (bool, optional): If True, disables the progress bar. Default is False.
     """
+    logging.getLogger("PANORAMA").debug(f"Begin systems detection with {threads} threads in {pangenome.name}")
+    begin = time.time()
+
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
 
-    logging.getLogger("PANORAMA").debug(f"Begin systems detection with {threads} threads in {pangenome.name}")
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=models.size, unit='model', disable=disable_bar) as progress:
             futures = []
@@ -530,7 +532,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
         system.ID = str(idx)
         pangenome.add_system(system)
     logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
-    logging.getLogger("PANORAMA").info(f"Systems prediction done in pangenome {pangenome.name}")
+    logging.getLogger("PANORAMA").info(f"Systems prediction done for {pangenome.name} in {time.time() - begin} seconds")
 
 
 def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, metadata_sources: List[str],

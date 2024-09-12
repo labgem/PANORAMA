@@ -14,6 +14,7 @@ import logging
 from typing import Dict, List, Set, Tuple
 from multiprocessing import Lock
 from pathlib import Path
+import time
 
 # installed libraries
 from tqdm import tqdm
@@ -62,8 +63,8 @@ def has_short_path(graph: nx.Graph, node_list, n):
 
 
 def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organism,
-                              gene_fam2mod_fam: Dict[GeneFamily, Set[Family]], association: List[str] = None
-                              ) -> Tuple[List[List[str]], List[int], str]:
+                              model_genes: Set[Gene], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+                              association: List[str] = None) -> Tuple[List[List[str]], List[int], str]:
     """
     Project a system onto an organism's pangenome.
 
@@ -91,8 +92,9 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
         Returns:
             List[str]: List of elements representing the projection for the gene.
         """
-        line_projection = [gene.family.name, gene.family.named_partition, fam_annot, gene.ID, gene.local_identifier,
-                           gene.start, gene.stop, gene.strand, gene.is_fragment, sys_state_in_org, gene.product]
+        line_projection = [gene.family.name, gene.family.named_partition, fam_annot, fam_sec, gene.ID,
+                           gene.local_identifier, gene.start, gene.stop, gene.strand, gene.is_fragment,
+                           sys_state_in_org, gene.product]
 
         if 'RGPs' in association:
             rgp = gene.RGP
@@ -116,7 +118,6 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
     partitions = set()
     counter = [0, 0, 0]  # count strict, extended, and split CC
 
-    model_genes = {gene for gene in graph.nodes if gene.family in unit.models_families}
     sub_id = 1
     for cc in nx.connected_components(graph):
         model_cc = cc.intersection(model_genes)
@@ -133,6 +134,7 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
                 sys_state_in_org = "split"
             for cc_gene in cc:
                 fam_annot = ""
+                fam_sec = []
                 if cc_gene.family in gene_fam2mod_fam:
                     metasource, metaid = unit.get_metainfo(cc_gene.family)
                     if metaid != 0:
@@ -142,28 +144,25 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
                             if metadata.protein_name in avail_name:
                                 fam_annot = metadata.protein_name
                             elif "secondary_name" in metadata.fields:
-                                fam_annot = []
                                 for name in metadata.secondary_name.split(","):
                                     if name in avail_name:
-                                        fam_annot.append(name)
-                                fam_annot = ",".join(fam_annot)
+                                        fam_sec.append(name)
                         partitions.add(cc_gene.family.named_partition)
+                fam_sec = ",".join(fam_sec)
                 projection.append(write_projection_line(cc_gene))
             sub_id += 1
     return projection, counter, conciliate_partition(partitions)
 
 
-def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 0,
-                        w: int = 1, same_strand: bool = False) -> nx.Graph:
+def compute_genes_graph(families: Set[GeneFamily], organism: Organism,
+                        unit: SystemUnit) -> Tuple[nx.Graph, Set[Gene]]:
     """
     Compute the genes graph for a given genomic context in an organism.
 
     Args:
         families (Set[GeneFamily]): Set of gene families.
         organism (Organism): The organism of interest.
-        t (int, optional): The transitive value (default is 0).
-        w (int, optional): The window size for gene connection (default is 1).
-        same_strand (bool, optional): Create edge between genes belonging to the same strand only (default is False).
+        unit (SystemUnit): The unit of interest.
 
     Returns:
         nx.Graph: A genomic context graph for the given organism.
@@ -171,33 +170,40 @@ def compute_genes_graph(families: Set[GeneFamily], organism: Organism, t: int = 
     genes_graph = nx.Graph()
     for family in families:
         genes_graph.add_nodes_from({gene for gene in family.genes if gene.organism == organism})
-    for gene in genes_graph.nodes:
+    mod_fam = set(unit.models_families)
+    model_genes = set()
+    for gene in sorted(genes_graph.nodes, key=lambda x: x.position):
+        if gene.family in mod_fam:
+            model_genes.add(gene)
         if gene.position < gene.contig.number_of_genes:
-            right_genes = gene.contig.get_genes(begin=gene.position, end=gene.position + w + 1, outrange_ok=True)
+            right_genes = gene.contig.get_genes(begin=gene.position,
+                                                end=gene.position + unit.functional_unit.window + 1,
+                                                outrange_ok=True)
         else:
             right_genes = [gene]
 
-        left_genes = gene.contig.get_genes(begin=gene.position - w, end=gene.position + 1, outrange_ok=True)
+        left_genes = gene.contig.get_genes(begin=gene.position - unit.functional_unit.window, end=gene.position + 1,
+                                           outrange_ok=True)
         for l_idx, l_gene in enumerate(left_genes, start=1):
-            if l_gene in genes_graph.nodes:
-                for t_gene in left_genes[l_idx:t + 1]:
-                    if t_gene in genes_graph.nodes:
-                        if same_strand:
-                            if t_gene.strand == l_gene.strand:
-                                genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
-                        else:
-                            genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+            # if l_gene in genes_graph.nodes:
+            for t_gene in left_genes[l_idx:unit.functional_unit.window]:
+                # if t_gene in genes_graph.nodes:
+                if unit.functional_unit.same_strand:
+                    if t_gene.strand == l_gene.strand:
+                        genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+                else:
+                    genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
 
         for r_idx, r_gene in enumerate(right_genes, start=1):
-            if r_gene in genes_graph.nodes:
-                for t_gene in right_genes[r_idx:t + 1]:
-                    if t_gene in genes_graph.nodes:
-                        if same_strand:
-                            if t_gene.strand == r_gene.strand:
-                                genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
-                        else:
-                            genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
-    return genes_graph
+            # if r_gene in genes_graph.nodes:
+            for t_gene in right_genes[r_idx:unit.functional_unit.window]:
+                # if t_gene in genes_graph.nodes:
+                if unit.functional_unit.same_strand:
+                    if t_gene.strand == r_gene.strand:
+                        genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
+                else:
+                    genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
+    return genes_graph, model_genes
 
 
 def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam2source: Dict[str, str],
@@ -222,12 +228,20 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
         filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
+        t0 = time.time()
         if check_needed_families(filtered_matrix, unit.functional_unit):
+            if time.time() - t0 > 1:
+                print(f"check : {time.time() - t0}")
             pan_proj = [unit.name, organism.name]
-            genes_graph = compute_genes_graph(org_fam, organism, unit.functional_unit.transitivity,
-                                              unit.functional_unit.window, unit.functional_unit.same_strand)
-            org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, gf2fam,
-                                                                     association)
+            t1 = time.time()
+            genes_graph, model_genes = compute_genes_graph(org_mod_fam, organism, unit)
+            # if time.time() - t1 > 1:
+            #     print(f"compute gene graph : {time.time() - t1}")
+            t2 = time.time()
+            org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, model_genes,
+                                                                     gf2fam, association)
+            if time.time() - t2 > 1:
+                print(f"project : {time.time() - t2}")
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(unit)] + counter)
             if 'RGPs' in association:
                 rgps = {rgp.name for rgp in unit.regions if rgp.organism == organism}
@@ -265,6 +279,8 @@ def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_fam
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
+    logging.getLogger("PANORAMA").debug(f"Begin search for systems: {system.name}")
+    begin = time.time()
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
     gfs = gene_families & set(system.families)
@@ -282,18 +298,20 @@ def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_fam
         organisms_projection = pd.concat([pd.DataFrame([[system.ID] * organisms_projection.shape[0],
                                                         [system.name] * organisms_projection.shape[0]]).T,
                                           organisms_projection], axis=1, ignore_index=True)
-    logging.getLogger("PANORAMA").debug(f"System projection done for systems: {system.name}")
+    logging.getLogger("PANORAMA").debug(f"System projection done for {system.name} in {time.time() - begin} seconds")
     return pangenome_projection.drop_duplicates(), organisms_projection.drop_duplicates()
 
 
-def project_pangenome_systems(pangenome: Pangenome, system_source: str, association: List[str] = None, threads: int = 1,
-                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_index: Dict[GeneFamily, int],
+                              association: List[str] = None, threads: int = 1, lock: Lock = None,
+                              disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project systems onto all organisms in a pangenome.
 
     Args:
         pangenome (Pangenome): The pangenome to project.
         system_source (str): Source of the systems to project.
+        fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
         threads (int, optional): Number of threads available (default is 1).
         lock (Lock, optional): Global lock for multiprocessing execution (default is None).
@@ -305,7 +323,6 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, associat
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
     meta2fam = get_metadata_to_families(pangenome, pangenome.systems_sources_to_metadata_source()[system_source])
-    fam_index = pangenome.compute_org_bitarrays()
     sys2fam_context = {}
 
     for system in pangenome.systems:  # Search association now to don't repeat for same model and different system
@@ -332,8 +349,8 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, associat
     pan_cols_name = ["system number", "system name", "functional unit name", "organism",
                      "partition", "completeness", "strict", "extended", "split"]
     org_cols_name = ["system number", "system name", "functional unit name", "subsystem number", "organism",
-                     "gene family", "partition", "annotation", "gene.ID", "gene.name", "start", "stop", "strand",
-                     "is_fragment", "genomic organization", "product"]
+                     "gene family", "partition", "annotation", "secondary_names", "gene.ID", "gene.name", "start",
+                     "stop", "strand", "is_fragment", "genomic organization", "product"]
     if 'RGPs' in association:
         pan_cols_name += ['RGPs']
         org_cols_name += ['RGPs']

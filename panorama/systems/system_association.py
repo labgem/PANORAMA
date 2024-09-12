@@ -422,20 +422,28 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
     spot2sys_df.to_csv(output / 'spot_to_systems.tsv', sep='\t')
     mod2sys_df.to_csv(output / 'module_to_systems.tsv', sep='\t')
     for asso in association:
+        write_corr = False
         if asso == "RGPs":
-            coverage = rgp2sys_df.set_index("name")
-            frequency = None
+            if not rgp2sys_df.empty:
+                coverage = rgp2sys_df.set_index("name")
+                frequency = None
+                write_corr = True
         elif asso == "spots":
-            coverage = spot2sys_df.set_index("name")
-            coverage.index = coverage.index.str.replace("spot_", "")
-            frequency = coverage.loc[:, coverage.columns != "coverage"]
-            coverage = coverage.loc[:, coverage.columns != "frequency"]
+            if not spot2sys_df.empty:
+                coverage = spot2sys_df.set_index("name")
+                coverage.index = coverage.index.str.replace("spot_", "")
+                frequency = coverage.loc[:, coverage.columns != "coverage"]
+                coverage = coverage.loc[:, coverage.columns != "frequency"]
+                write_corr = True
         elif asso == "modules":
-            coverage = mod2sys_df.set_index("name")
-            coverage.index = coverage.index.str.replace("module_", "")
-            frequency = coverage.loc[:, coverage.columns != "coverage"]
-            coverage = coverage.loc[:, coverage.columns != "frequency"]
+            if not mod2sys_df.empty:
+                coverage = mod2sys_df.set_index("name")
+                coverage.index = coverage.index.str.replace("module_", "")
+                frequency = coverage.loc[:, coverage.columns != "coverage"]
+                coverage = coverage.loc[:, coverage.columns != "frequency"]
+                write_corr = True
         else:
             raise Exception("Unexpected error")
-        write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
-                                 asso, coverage, output, frequency, out_format)
+        if write_corr:
+            write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
+                                     asso, coverage, output, frequency, out_format)

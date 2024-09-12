@@ -9,6 +9,7 @@ This module provides functions to write information into the pangenome file
 from __future__ import annotations
 import argparse
 import logging
+import time
 from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
@@ -108,12 +109,14 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
         NotImplementedError: If Proksee integration is requested but not implemented.
 
     """
-    logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
+    logging.getLogger("PANORAMA").info(f"Begin write systems for {pangenome.name}")
+    begin = time.time()
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
+    fam_index = pangenome.compute_org_bitarrays()
     for system_source in pangenome.systems_sources:
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
                                             f"on system source: {system_source}")
-        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
+        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, fam_index,
                                                                    association=association, threads=threads,
                                                                    lock=lock, disable_bar=disable_bar)
         source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
@@ -128,6 +131,7 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
             association_pangenome_systems(pangenome, association, source_res_output)
         if proksee:
             raise NotImplementedError("Proksee not implemented")
+    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin} seconds")
 
 
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,

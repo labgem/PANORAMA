@@ -324,7 +324,7 @@ def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Di
             if metadata is not None:
                 for meta in metadata.values():
                     meta2fam[source][meta.protein_name].add(gf)
-                    if "secondary_name" in meta.fields:
+                    if "secondary_name" in meta.fields and meta.secondary_name != "":
                         for secondary_name in meta.secondary_name.split(','):
                             meta2fam[source][secondary_name].add(gf)
     return meta2fam
