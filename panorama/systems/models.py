@@ -421,7 +421,7 @@ class _ModFuFeatures:
         self.forbidden = forbidden if forbidden is not None else set()
         self.neutral = neutral if neutral is not None else set()
         self.same_strand = same_strand
-        self._child_type = _FuFamFeatures
+        self._child_type = "Functional unit" if isinstance(self, Model) else "Family"
         self._child_getter = None
 
     @property
@@ -485,14 +485,14 @@ class _ModFuFeatures:
             Exception: If the model is not consistent.
         """
         if self.min_mandatory > len(self.mandatory) + sum([child.duplicate for child in self._duplicate("mandatory")]):
-            raise Exception(f"There are less mandatory {self.child_type} than the minimum mandatory")
+            raise Exception(f"There are less mandatory {self._child_type} than the minimum mandatory")
         if self.min_total > len(list(self._children)) + sum([child.duplicate for child in self._duplicate()]):
-            raise Exception(f"There are less {self.child_type} than the minimum total")
+            raise Exception(f"There are less {self._child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
-            raise Exception(f"Minimum mandatory {self.child_type} value is greater than minimum total.")
+            raise Exception(f"Minimum mandatory {self._child_type} value is greater than minimum total.")
         if len(self.mandatory) == 0:
-            raise Exception(f"There are no mandatory {self.child_type}. "
-                            f"You should have at least one mandatory {self.child_type} with mandatory presence.")
+            raise Exception(f"There are no mandatory {self._child_type}. "
+                            f"You should have at least one mandatory {self._child_type} with mandatory presence.")
 
     def add(self, child: Union[FuncUnit, Family]):
         """
@@ -511,7 +511,6 @@ class _ModFuFeatures:
             self.forbidden.add(child)
         else:
             self.neutral.add(child)
-        child._parent = self
 
     def _mk_child_getter(self):
         self._child_getter = {}
@@ -536,13 +535,9 @@ class _ModFuFeatures:
         try:
             child = self._child_getter[name]
         except KeyError:
-            raise KeyError(f"No such {self.child_type} with {name} in {type(self)}")
+            raise KeyError(f"No such {self._child_type} with {name} in {type(self)}")
         else:
             return child
-
-    @property
-    def child_type(self):
-        return "_FuFamFeature"
 
 
 class Model(_BasicFeatures, _ModFuFeatures):
@@ -588,15 +583,7 @@ class Model(_BasicFeatures, _ModFuFeatures):
         super(_BasicFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
                                              forbidden=forbidden, same_strand=same_strand)
-        self._child_type = FuncUnit
         self.canonical = canonical if canonical is not None else []
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
 
     @property
     def func_units(self) -> Generator[FuncUnit, None, None]:
@@ -718,10 +705,6 @@ class Model(_BasicFeatures, _ModFuFeatures):
         model.read(data_model)
         return model
 
-    @property
-    def child_type(self):
-        return "FuncUnit"
-
 
 class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     """
@@ -782,27 +765,6 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         super(_FuFamFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
                                              forbidden=forbidden, same_strand=same_strand)
-        self._child_type = Family
-
-    def __hash__(self) -> int:
-        return hash((self.name, self.presence, self.min_mandatory, self.min_total, self.duplicate,
-                     self.multi_system, self.multi_model, self.same_strand))
-
-    def __eq__(self, other: FuncUnit) -> bool:
-        if not isinstance(other, FuncUnit):
-            raise TypeError(f"A FuncUnit object is expected, you give a {type(other)}")
-        if hash(self) == hash(other):
-            return set(self.families) == set(other.families)
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['_parent'] = self._parent.name if self._parent is not None else None
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-        for family in self.families:
-            family.func_unit = self
 
     @property
     def model(self) -> Model:
@@ -822,8 +784,6 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         Args:
             model (Model): Model in which is the functional unit.
         """
-        if not isinstance(model, Model):
-            raise TypeError(f'A Model object is expected to be added to FuncUnit, you give {type(model)}')
         self._parent = model
 
     @model.deleter
@@ -940,10 +900,6 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         func_unit.read(data_fu)
         return func_unit
 
-    @property
-    def child_type(self):
-        return "Family"
-
 
 class Family(_BasicFeatures, _FuFamFeatures):
     """
@@ -984,30 +940,6 @@ class Family(_BasicFeatures, _FuFamFeatures):
                                              exchangeable=exchangeable, multi_system=multi_system,
                                              multi_model=multi_model)
 
-    def __hash__(self) -> int:
-        return hash((self.name, self.presence, self.transitivity, self.window, self.duplicate,
-                     self.multi_model, self.multi_system))
-
-    def __eq__(self, other: Family) -> bool:
-        if not isinstance(other, Family):
-            raise TypeError("A Family instance can only be compared to another Family instance.")
-        return (self.name == other.name and
-                self.presence == other.presence and
-                self.transitivity == other.transitivity and
-                self.window == other.window and
-                self.duplicate == other.duplicate and
-                self.multi_model == other.multi_model and
-                self.multi_system == other.multi_system and
-                self.exchangeable == other.exchangeable)
-
-    def __getstate__(self):
-        state = self.__dict__.copy()
-        state['_parent'] = self._parent.name if self._parent is not None else None
-        return state
-
-    def __setstate__(self, state):
-        self.__dict__.update(state)
-
     @property
     def func_unit(self) -> FuncUnit:
         """
@@ -1019,16 +951,14 @@ class Family(_BasicFeatures, _FuFamFeatures):
         return self._parent
 
     @func_unit.setter
-    def func_unit(self, func_unit: FuncUnit):
+    def func_unit(self, model: FuncUnit):
         """
         Set the functional unit in which is the family.
 
         Args:
-            func_unit (FuncUnit): Functional unit in which is the family.
+            model (FuncUnit): Functional unit in which is the family.
         """
-        if not isinstance(func_unit, FuncUnit):
-            raise TypeError(f"An object of type FuncUnit is expected, you give a {type(func_unit)}")
-        self._parent = func_unit
+        self._parent = model
 
     @func_unit.deleter
     def func_unit(self):
