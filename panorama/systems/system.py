@@ -7,11 +7,11 @@ This module provides System class which represent a biological system
 
 # default libraries
 from __future__ import annotations
-
 from typing import Dict, List, Set, Tuple, Union, Generator
 
-import numpy as np
+
 # installed libraries
+import numpy as np
 from ppanggolin.metadata import MetaFeatures
 from ppanggolin.genome import Organism
 from ppanggolin.region import Region
@@ -47,23 +47,57 @@ class System(MetaFeatures):
         super().__init__()
         System._id_counter += 1
         self.ID = str(system_id) if system_id is not None else str(System._id_counter)
-        self.model = model
+        self.model = model  # Ensure Model is pickable
         self.source = source
-        self._unit_getter = {}
+        self._unit_getter = {}  # Ensure SystemUnit is pickable
         self.canonical = set()
-        self._fam2unit = None
+        self._gf2unit = None
         if units is not None:
             for fu in units:
                 self.add_unit(fu)
 
+    def __getstate__(self):
+        """Return the state of the object to be pickled."""
+        state = self.__dict__.copy()
+        state["_gf2unit"] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore the state of the object from pickling."""
+        self.__dict__.update(state)
+        for unit in self.units:
+            unit.system = self
+        for gf in self.gene_families:
+            gf.add_system(self)
+
+    # Other methods (add_unit, __eq__, etc.) remain unchanged.
+
     def __hash__(self) -> int:
         """
-        Creates a hash value for the region.
+        Creates a hash value for the system.
 
         Returns:
             int: Hash value.
         """
-        return hash(frozenset(self._unit_getter.items()))
+        return hash((self.ID, self.name, self.source))
+
+    def __eq__(self, other: System) -> bool:
+        """
+        Tests whether two system objects have the same units.
+
+        Args:
+            other: Another system to test equality.
+
+        Returns:
+            bool: True if equal, False otherwise.
+
+        Raises:
+            TypeError: If trying to compare a system with another type of object.
+        """
+        if not isinstance(other, System):
+            raise TypeError(f"A System object is expected. You give a {type(other)}")
+        if hash(self) == hash(other):
+            return set(self.units) == set(other.units)
 
     def __repr__(self):
         """
@@ -96,7 +130,7 @@ class System(MetaFeatures):
             KeyError: If another family with the same name already exists in the system.
         """
         if name in self._unit_getter and self[name] != SystemUnit:
-            raise KeyError("A different gene family with the same name already exist in the system")
+            raise KeyError("A different gene family with the same name already exists in the system")
         self._unit_getter[name] = unit
 
     def __getitem__(self, name: str) -> SystemUnit:
@@ -131,23 +165,6 @@ class System(MetaFeatures):
             self._unit_getter.pop(name)
         except KeyError:
             raise KeyError(f"There isn't any unit with the name {name} in the system")
-
-    def __eq__(self, other: System) -> bool:
-        """
-        Tests whether two system objects have the same units.
-
-        Args:
-            other: Another system to test equality.
-
-        Returns:
-            bool: True if equal, False otherwise.
-
-        Raises:
-            TypeError: If trying to compare a system with another type of object.
-        """
-        if not isinstance(other, System):
-            raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
-        return set(self._unit_getter.items()) == set(other._unit_getter.items())
 
     @property
     def name(self) -> str:
@@ -204,17 +221,17 @@ class System(MetaFeatures):
         return self[name]
 
     @property
-    def families(self) -> Generator[GeneFamily, None, None]:
+    def gene_families(self) -> Generator[GeneFamily, None, None]:
         """
-        Retrieves the families in the system.
+        Retrieves the gene families in the system.
 
         Yields:
-            GeneFamily: Generator of gene families.
+            GeneFamily: Generator of gene gene families.
         """
-        families = set()
+        gene_families = set()
         for unit in self.units:
-            families |= set(unit.families)
-        yield from families
+            gene_families |= set(unit.gene_families)
+        yield from gene_families
 
     @property
     def number_of_families(self):
@@ -383,10 +400,10 @@ class System(MetaFeatures):
             self.canonical.add(system)
 
     def _mk_fam2unit(self):
-        self._fam2unit = {}
+        self._gf2unit = {}
         for unit in self.units:
-            for fam in unit.families:
-                self._fam2unit[fam] = unit
+            for gf in unit.gene_families:
+                self._gf2unit[gf] = unit
 
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
         """
@@ -398,9 +415,9 @@ class System(MetaFeatures):
         Returns:
             Tuple[str, int]: Tuple containing annotation source and metadata identifier.
         """
-        if self._fam2unit is None:
+        if self._gf2unit is None:
             self._mk_fam2unit()
-        return self._fam2unit[gene_family].get_metainfo(gene_family)
+        return self._gf2unit[gene_family].get_metainfo(gene_family)
 
     def annotation_sources(self) -> Set[str]:
         """
@@ -543,7 +560,7 @@ class SystemUnit:
     _id_counter = 0
 
     def __init__(self, functional_unit: FuncUnit, source: str, gene_families: Set[GeneFamily] = None,
-                 families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
+                 gene_families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
         """
         Initialize a functional unit of a system detected in a pangenome.
 
@@ -551,7 +568,7 @@ class SystemUnit:
             functional_unit (FunUnit): FuncUnit model associated with the system unit.
             source (str): Source of the functional unit.
             gene_families: Set of gene families in the system.
-            families_to_metainfo: Mapping of gene families to their metadata.
+            gene_families_to_metainfo: Mapping of gene families to their metadata.
         """
         SystemUnit._id_counter += 1
         self.ID = SystemUnit._id_counter
@@ -566,8 +583,20 @@ class SystemUnit:
         self._system = None
         if gene_families:
             for family in gene_families:
-                annot_source, meta_id = families_to_metainfo.get(family, ("", 0)) if families_to_metainfo else ("", 0)
-                self.add_family(family, annot_source, meta_id)
+                annot_source, meta_id = gene_families_to_metainfo.get(family, ("", 0)) if gene_families_to_metainfo else ("", 0)
+                self.add_gene_family(family, annot_source, meta_id)
+
+    def __getstate__(self):
+        """Return the state of the object to be pickled."""
+        state = self.__dict__.copy()
+        state["_system"] = None
+        return state
+
+    def __setstate__(self, state):
+        """Restore the state of the object from pickling."""
+        self.__dict__.update(state)
+        for gf in self.gene_families:
+            gf.add_system_unit(self)
 
     def __hash__(self) -> int:
         """
@@ -576,7 +605,15 @@ class SystemUnit:
         Returns:
             int: Hash value.
         """
-        return hash(frozenset(self._families_getter.items()))
+        return hash((self.ID, self.name, self.source))
+
+    def __eq__(self, other: SystemUnit) -> bool:
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another SystemUnit is expected, you give a {type(other)}")
+        if hash(other.functional_unit) == hash(self.functional_unit):
+            return set(self.gene_families) == set(other.gene_families)
+        else:
+            return False
 
     def __repr__(self):
         """
@@ -609,7 +646,7 @@ class SystemUnit:
             KeyError: If another family with the same name already exists in the system.
         """
         if name in self._families_getter and self[name] != family:
-            raise KeyError("A different gene family with the same name already exist in the functional unit")
+            raise KeyError("A different gene family with the same name already exists in the functional unit")
         self._families_getter[name] = family
 
     def __getitem__(self, name: str) -> GeneFamily:
@@ -628,7 +665,7 @@ class SystemUnit:
         try:
             return self._families_getter[name]
         except KeyError:
-            raise KeyError(f"There isn't gene family with the name {name} in the system")
+            raise KeyError(f"There isn't a gene family with the name {name} in the system")
 
     @property
     def system(self) -> Union[System, None]:
@@ -645,7 +682,7 @@ class SystemUnit:
         assert isinstance(system, System), "System must be an instance of System."
 
         self._system = system
-        for family in system.families:
+        for family in system.gene_families:
             family.add_system(system)
 
     @property
@@ -694,7 +731,7 @@ class SystemUnit:
         return self.functional_unit.name
 
     @property
-    def families(self) -> Generator[GeneFamily, None, None]:
+    def gene_families(self) -> Generator[GeneFamily, None, None]:
         """
         Retrieves the families in the system.
 
@@ -703,7 +740,7 @@ class SystemUnit:
         """
         yield from self._families_getter.values()
 
-    def add_family(self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0):
+    def add_gene_family(self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0):
         """
         Adds a gene family to the system.
 
@@ -855,7 +892,7 @@ class SystemUnit:
             Organism: Generator of organisms.
         """
         organisms = set()
-        for family in self.families:
+        for family in self.gene_families:
             organisms |= set(family.organisms)
         yield from organisms
 
@@ -878,7 +915,6 @@ class SystemUnit:
             for org in family.organisms:
                 matrix[org2idx[org], j] = 1
         idx2org = {i: org for org, i in org2idx.items()}
-
         yield from {idx2org[i] for i in np.nonzero(np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total)[0]}
 
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
@@ -957,7 +993,7 @@ class SystemUnit:
         """
         Associates modules to the unit based on the families.
         """
-        for family in self.families:
+        for family in self.gene_families:
             if family.module is not None:
                 self.add_module(family.module)
 
@@ -1063,5 +1099,4 @@ class SystemUnit:
         else:
             if region != region_in:
                 raise Exception(
-                    f"Another region with identifier {region.name} is already associated with unit {self.ID}. "
-                    f"This is unexpected. Please report an issue on our GitHub")
+                    f"Another region with identifier {region.name} is already associated with unit {self.ID}")

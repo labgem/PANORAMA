@@ -563,10 +563,10 @@ class Model(_BasicFeatures, _ModFuFeatures):
         canonical (list, optional): List of canonical models. Defaults to None.
     """
 
-    def __init__(self, name: str = "", mandatory: Set[FuncUnit, Family] = None, accessory: Set[FuncUnit, Family] = None,
-                 forbidden: Set[FuncUnit, Family] = None, neutral: Set[FuncUnit, Family] = None, min_mandatory: int = 1,
-                 min_total: int = 1, transitivity: int = 0, window: int = 1, same_strand: bool = False,
-                 canonical: list = None):
+    def __init__(self, name: str = "", mandatory: Set[Union[FuncUnit, Family]] = None,
+                 accessory: Set[Union[FuncUnit, Family]] = None, forbidden: Set[Union[FuncUnit, Family]] = None,
+                 neutral: Set[Union[FuncUnit, Family]] = None, min_mandatory: int = 1, min_total: int = 1,
+                 transitivity: int = 0, window: int = 1, same_strand: bool = False, canonical: list = None):
         """
         Constructor method to create a Model rules which describe a biological system.
 
@@ -591,12 +591,25 @@ class Model(_BasicFeatures, _ModFuFeatures):
         self._child_type = FuncUnit
         self.canonical = canonical if canonical is not None else []
 
+    def __hash__(self) -> int:
+        return hash((self.name, self.min_mandatory, self.min_total, self.same_strand))
+
+    def __eq__(self, other: Model) -> bool:
+        if not isinstance(other, Model):
+            raise TypeError(f"A Model object is expected, you give a {type(other)}")
+        if hash(self) == hash(other):
+            return set(self.func_units) == set(other.func_units)
+        else:
+            return False
+
     def __getstate__(self):
         state = self.__dict__.copy()
         return state
 
     def __setstate__(self, state):
         self.__dict__.update(state)
+        for func_unit in self.func_units:
+            func_unit.model = self
 
     @property
     def func_units(self) -> Generator[FuncUnit, None, None]:
@@ -793,10 +806,12 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             raise TypeError(f"A FuncUnit object is expected, you give a {type(other)}")
         if hash(self) == hash(other):
             return set(self.families) == set(other.families)
+        else:
+            return False
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['_parent'] = self._parent.name if self._parent is not None else None
+        state['_parent'] = None
         return state
 
     def __setstate__(self, state):
@@ -1002,7 +1017,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
 
     def __getstate__(self):
         state = self.__dict__.copy()
-        state['_parent'] = self._parent.name if self._parent is not None else None
+        state['_parent'] = None
         return state
 
     def __setstate__(self, state):

@@ -225,7 +225,7 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
     pangenome_projection, organisms_projection = [], []
     matrix, _, _ = get_gfs_matrix_combination(set(unit.models_families), gf2fam, fam2source)
     for organism in unit.models_organisms:
-        org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
+        org_fam = {fam for fam in unit.gene_families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
         filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
         t0 = time.time()
@@ -283,7 +283,7 @@ def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_fam
     begin = time.time()
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    gfs = gene_families & set(system.families)
+    gfs = gene_families & set(system.gene_families)
     gf2fam = {gf: fam for gf, fam in gene_family2family.items() if gf in gfs}
 
     for unit in system.units:

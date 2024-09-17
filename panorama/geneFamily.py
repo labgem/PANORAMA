@@ -56,33 +56,28 @@ class GeneFamily(Fam):
         """
         return f"GF {self.ID}: {self.name}"
 
-    def __hash__(self) -> int:
-        """
-        Returns the hash of the GeneFamily instance.
+    def __hash__(self):
+        return super().__hash__()
 
-        Returns:
-            int: The hash value of the GeneFamily instance.
-        """
-        return hash((self.name, self.ID))
+    def __eq__(self, other):
+        return super().__eq__(other)
 
-    def __eq__(self, other: GeneFamily) -> bool:
-        """
-        Checks if two GeneFamily instances are equal based on their genes.
+    def __reduce__(self):
+        _, _, state = super().__reduce__()
+        state['_hmm'] = self._hmm
+        state['profile'] = self.profile
+        state['optimized_profile'] = self.optimized_profile
+        state['_akin'] = self._akin
+        return self.__class__, (self.ID, self.name,), state
 
-        Args:
-            other (GeneFamily): Another GeneFamily instance to compare.
-
-        Returns:
-            bool: True if the GeneFamily instances are equal, False otherwise.
-
-        Raises:
-            TypeError: If the other object is not a GeneFamily instance.
-        """
-        if not isinstance(other, GeneFamily):
-            raise TypeError(
-                f"Expected another GeneFamily instance for comparison, but received {type(other)}"
-            )
-        return set(self.genes) == set(other.genes)
+    def __setstate__(self, state):
+        super().__setstate__(state)
+        self._hmm = state['_hmm']
+        self.profile = state['profile']
+        self.optimized_profile = state['optimized_profile']
+        self._units_getter = {}
+        self._systems_getter = {}
+        self._akin = state['_akin']
 
     def __lt__(self, other: GeneFamily) -> bool:
         if len(self) == len(other):

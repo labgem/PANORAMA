@@ -113,7 +113,7 @@ def get_system_len(pangenome: Pangenome, source: str
         for unit in sys.units:
             if len(unit.name) > max_unit_name_len:
                 max_unit_name_len = len(unit.name)
-            for gf in unit.families:
+            for gf in unit.gene_families:
                 if len(gf.name) > max_gf_name_len:
                     max_gf_name_len = len(gf.name)
         return (max_id_len, max_sys_name_len), (max_unit_name_len, max_gf_name_len, max_annot_source_len)
@@ -154,7 +154,7 @@ def write_system_rows(system, sys_row: tables.Table.row, unit_row: tables.Table.
         if not is_canonical:
             sys_row["canonical"] = len(system.canonical)
         sys_row.append()
-        for gf in system.families:
+        for gf in system.gene_families:
             unit_row["ID"] = unit.ID
             unit_row["name"] = unit.name
             unit_row["geneFam"] = gf.name

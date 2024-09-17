@@ -26,8 +26,8 @@ from panorama.pangenomes import Pangenome
 pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
 
 
-def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
-                         jaccard_threshold: float = 0.8) -> None:
+def filter_local_context(graph: nx.Graph, organisms: Set[Organism], excluded: set[GeneFamily],
+                         jaccard_threshold: float = 0.8) -> nx.Graph:
     """
     Filters a graph based on a local Jaccard index.
 
@@ -38,71 +38,106 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
     """
 
     # Compute local Jaccard
-    edges2remove = set()
+    filtered_graph = nx.Graph()
+    fam2genome_proportion = {}
     for f1, f2, data in graph.edges(data=True):
-        f1_orgs = set(f1.organisms).intersection(organisms)
-        f2_orgs = set(f2.organisms).intersection(organisms)
-        f1_gene_proportion = len(data["genomes"]) / len(f1_orgs) if len(f1_orgs) > 0 else 0
-        f2_gene_proportion = len(data["genomes"]) / len(f2_orgs) if len(f2_orgs) > 0 else 0
+        if not (f1 in excluded or f2 in excluded):
+            filtered_graph.add_node(f1)
+            filtered_graph.add_node(f2)
+            if f1 not in fam2genome_proportion:
+                f1_orgs = set(f1.organisms).intersection(organisms)
+                fam2genome_proportion[f1] = len(data["genomes"]) / len(f1_orgs) if len(f1_orgs) > 0 else 0
+            if f2 not in fam2genome_proportion:
+                f2_orgs = set(f2.organisms).intersection(organisms)
+                fam2genome_proportion[f2] = len(data["genomes"]) / len(f2_orgs) if len(f2_orgs) > 0 else 0
 
-        data['f1'] = f1.name
-        data['f2'] = f2.name
-        data['f1_jaccard_gene'] = f1_gene_proportion
-        data['f2_jaccard_gene'] = f2_gene_proportion
+            data['f1'] = f1.name
+            data['f2'] = f2.name
+            data['f1_jaccard_gene'] = fam2genome_proportion[f1]
+            data['f2_jaccard_gene'] = fam2genome_proportion[f2]
 
-        if not ((f1_gene_proportion >= jaccard_threshold) and (f2_gene_proportion >= jaccard_threshold)):
-            edges2remove.add((f1, f2))
+            if fam2genome_proportion[f1] >= jaccard_threshold and fam2genome_proportion[f2] >= jaccard_threshold:
+                filtered_graph.add_edge(f1, f2)
 
-    graph.remove_edges_from(edges2remove)
+    return filtered_graph
 
 
-def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+# def get_number_of_mod_fam(gene_family: GeneFamily, gf2fam) -> int:
+#     """Gets the number of model families associated with the gene family.
+#
+#     Args:
+#         gene_family (GeneFamily): The gene family of interest.
+#
+#     Returns:
+#         int: The number of model families associated with the gene family.
+#     """
+#     model_families = gene_fam2mod_fam.get(gene_family.name)
+#     if model_families is not None:
+#         return len(model_families)
+#     else:
+#         return 0
+
+
+def check_for_forbidden_families(gene_families: Set[GeneFamily], gf2fam: Dict[str, Set[str]],
                                  func_unit: FuncUnit) -> bool:
     """
     Checks if there are forbidden conditions in the families.
 
     Args:
         gene_families (Set[GeneFamily]): Set of gene families.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
+        gf2fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
         func_unit (FuncUnit): Functional unit to check against.
 
     Returns:
         bool: True if forbidden conditions are encountered, False otherwise.
     """
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
-
-    def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Gets the number of model families associated with the gene family.
-
-        Args:
-            gene_family (GeneFamily): The gene family of interest.
-
-        Returns:
-            int: The number of model families associated with the gene family.
-        """
-        model_families = gene_fam2mod_fam.get(gene_family.name)
-        if model_families is not None:
-            return len(model_families)
-        else:
-            return 0
-
-    for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        if node in gene_fam2mod_fam:
-            for family in gene_fam2mod_fam[node]:
+    name2fam = {fam.name: fam for fam in func_unit.families}
+    for node in gene_families:
+        if node in gf2fam:
+            for name in gf2fam[node.name]:
+                family = name2fam[name]
                 if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
                     return True
     return False
 
 
-def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                               mod_fam2meta_source: Dict[str, str]
+def add_metadata_to_dict(gene_family: GeneFamily, family: Family, presence_gfs2metadata,
+                         mod_fam2meta_source: Dict[str, str]):
+    """
+    Associate gene families to metadata in a dictionary
+
+    Args:
+        presence_gfs2metadata: Dictionary to save gene families and their metadata
+    """
+    avail_name = {family.name}.union(family.exchangeable)
+    for meta_id, metadata in gene_family.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
+        if metadata.protein_name in avail_name:
+            if gene_family in presence_gfs2metadata[family.name]:
+                _, current_metadata = presence_gfs2metadata[family.name][gene_family]
+                if metadata.score > current_metadata.score:
+                    presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
+            else:
+                presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
+        elif "secondary_name" in metadata.fields:
+            if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                if gene_family in presence_gfs2metadata[family.name]:
+                    _, current_metadata = presence_gfs2metadata[family.name][gene_family]
+                    if metadata.score > current_metadata.score:
+                        presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
+                else:
+                    presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
+
+
+def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gf2fam: Dict[str, Set[str]],
+                               func_unit: FuncUnit, mod_fam2meta_source: Dict[str, str]
                                ) -> Tuple[pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]], Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
     """
     Build a matrix of association between gene families and families.
 
     Args:
         gene_families (Set[GeneFamily]): Set of gene families.
-        gene_fam2mod_fam (Dict[GeneFamily, Set[Family]): Dictionary linking gene families to model families.
+        gf2fam (Dict[GeneFamily, Set[Family]): Dictionary linking gene families to model families.
         mod_fam2meta_source (Dict[str, str]): Dictionary linking families to metadata sources.
 
     Returns:
@@ -110,42 +145,18 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
         Dict[GeneFamily, Tuple[int, Metadata]]: Dictionary linking gene families metadata to mandatory families
         Dict[GeneFamily, Tuple[int, Metadata]]: Dictionary linking gene families metadata to accessory families
     """
-
-    def add_metadata_to_dict(presence_gfs2metadata):
-        """
-        Associate gene families to metadata in a dictionary
-
-        Args:
-            presence_gfs2metadata: Dictionary to save gene families and their metadata
-        """
-        for meta_id, metadata in gene_family.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-            if metadata.protein_name in avail_name:
-                if gene_family in presence_gfs2metadata[family.name]:
-                    _, current_metadata = presence_gfs2metadata[family.name][gene_family]
-                    if metadata.score > current_metadata.score:
-                        presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-                else:
-                    presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-            elif "secondary_name" in metadata.fields:
-                if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                    if gene_family in presence_gfs2metadata[family.name]:
-                        _, current_metadata = presence_gfs2metadata[family.name][gene_family]
-                        if metadata.score > current_metadata.score:
-                            presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-                    else:
-                        presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-
     mandatory_gfs2metadata = defaultdict(dict)
     accessory_gfs2metadata = defaultdict(dict)
     gfs = set()
+    name2fam = {fam.name: fam for fam in func_unit.families}
     for gene_family in gene_families:
-        for family in gene_fam2mod_fam[gene_family]:
-            avail_name = {family.name}.union(family.exchangeable)
+        for name in gf2fam[gene_family.name]:
+            family = name2fam[name]
             if family.presence == "mandatory":
-                add_metadata_to_dict(mandatory_gfs2metadata)
+                add_metadata_to_dict(gene_family, family, mandatory_gfs2metadata, mod_fam2meta_source)
                 gfs.add(gene_family)
             elif family.presence == "accessory":
-                add_metadata_to_dict(accessory_gfs2metadata)
+                add_metadata_to_dict(gene_family, family, accessory_gfs2metadata, mod_fam2meta_source)
                 gfs.add(gene_family)
 
     fams = list(mandatory_gfs2metadata.keys()) + list(accessory_gfs2metadata.keys())
@@ -256,6 +267,20 @@ def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[S
     return solutions
 
 
+def is_subset(comb1: Tuple[int, ...], comb2: Tuple[int, ...]) -> bool:
+    """
+    Check if a combination of gene families is subset of another one
+
+    Args:
+        comb1 (Tuple[int, ...]): Combination to check if it's a subset
+        comb2 (Tuple[int, ...]): Combination supposed bigger
+
+    Returns:
+        Boolean: True if first combination is a subset of the second one, False otherwise
+    """
+    return set(comb1).issubset(comb2)
+
+
 def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     """
     Search if it exists a combination of gene families that respect families presence absence unit rules
@@ -267,19 +292,6 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     Returns:
         Boolean: True if it exists, False otherwise
     """
-
-    def is_subset(comb1: Tuple[int, ...], comb2: Tuple[int, ...]) -> bool:
-        """
-        Check if a combination of gene families is subset of another one
-
-        Args:
-            comb1 (Tuple[int, ...]): Combination to check if it's a subset
-            comb2 (Tuple[int, ...]): Combination supposed bigger
-
-        Returns:
-            Boolean: True if first combination is a subset of the second one, False otherwise
-        """
-        return set(comb1).issubset(comb2)
 
     mandatory = {fam.name for fam in func_unit.mandatory}
     mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
@@ -317,27 +329,27 @@ def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Di
     Returns:
         dict: A dictionary where each metadata source maps to another dictionary of metadata to sets of gene families.
     """
-    meta2fam = {source: defaultdict(set) for source in sources}
+    meta2gfs = {source: defaultdict(set) for source in sources}
     for source in sources:
         for gf in pangenome.gene_families:
             metadata = gf.get_metadata_by_source(source)
             if metadata is not None:
                 for meta in metadata.values():
-                    meta2fam[source][meta.protein_name].add(gf)
+                    meta2gfs[source][meta.protein_name].add(gf)
                     if "secondary_name" in meta.fields and meta.secondary_name != "":
                         for secondary_name in meta.secondary_name.split(','):
-                            meta2fam[source][secondary_name].add(gf)
-    return meta2fam
+                            meta2gfs[source][secondary_name].add(gf)
+    return meta2gfs
 
 
-def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
-        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]], Dict[str, str]]:
+def dict_families_context(model: Model, families2gfs: Dict[str, Dict[str, Set[GeneFamily]]]
+                          ) -> Tuple[Set[GeneFamily], Dict[str, Set[str]], Dict[str, str]]:
     """
     Retrieves all gene families associated with the families in the model.
 
     Args:
         model (Model): Model containing the families.
-        annot2fam (dict): Dictionary of annotated families.
+        families2gfs (dict): Dictionary of annotated families.
 
     Returns:
         tuple: A tuple containing:
@@ -348,28 +360,29 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
     gene_families = set()
     gf2fam = defaultdict(set)
     fam2source = {}
-    for fam_model in model.families:
-        for source, annotation2families in annot2fam.items():
-            if fam_model.name in annotation2families:
-                for gf in annotation2families[fam_model.name]:
+
+    for family in model.families:
+        for source, fam2gfs in families2gfs.items():
+            if family.name in fam2gfs:
+                for gf in fam2gfs[family.name]:
                     gene_families.add(gf)
-                    gf2fam[gf].add(fam_model)
-                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
+                    gf2fam[gf.name].add(family.name)
+                    if family.name in fam2source and fam2source[family.name] != source:
                         logging.getLogger("PANORAMA").warning("Two families have the same protein name for different "
                                                               "sources. First source encountered will be used.")
                     else:
-                        fam2source[fam_model.name] = source
+                        fam2source[family.name] = source
 
-        for exchangeable in fam_model.exchangeable:
-            for source, annotation2families in annot2fam.items():
-                if exchangeable in annotation2families:
-                    for gf in annotation2families[exchangeable]:
+        for exchangeable in family.exchangeable:
+            for source, fam2gfs in families2gfs.items():
+                if exchangeable in fam2gfs:
+                    for gf in fam2gfs[exchangeable]:
                         gene_families.add(gf)
-                        gf2fam[gf].add(fam_model)
-                        if fam_model.name in fam2source and fam2source[fam_model.name] != source:
+                        gf2fam[gf.name].add(family.name)
+                        if family.name in fam2source and fam2source[family.name] != source:
                             logging.getLogger("PANORAMA").warning(
                                 "Two families have the same protein name for different "
                                 "sources. First source encountered will be used.")
                         else:
-                            fam2source[fam_model.name] = source
+                            fam2source[family.name] = source
     return gene_families, gf2fam, fam2source
