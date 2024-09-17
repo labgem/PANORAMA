@@ -217,12 +217,12 @@ def write_systems(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, 
         for sys in tqdm(pangenome.get_system_by_source(source), unit="System", disable=True,
                         total=pangenome.number_of_systems(source, with_canonical=False)):
             sys_orgs = set()
-            for gf in sys.gene_families:
+            for gf in sys.families:
                 sys_orgs |= gf.organisms
             if organism in sys_orgs:
                 families_names = [family.name for family in sys.model.families]
-                gf_intersection = organism.families & sys.gene_families
-                completion = round(len(gf_intersection) / len(sys.gene_families), 2)
+                gf_intersection = organism.families & sys.families
+                completion = round(len(gf_intersection) / len(sys.families), 2)
                 for gf in gf_intersection:
                     for gene in gf2genes[gf.name]:
                         annotations = []

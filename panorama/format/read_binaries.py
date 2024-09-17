@@ -82,8 +82,8 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
             units_dict[unit_id] = unit
         else:
             unit = units_dict[unit_id]
-        unit.add_gene_family(pangenome.get_gene_family(unit_row["geneFam"].decode()),
-                             unit_row["metadata_source"].decode(), int(unit_row["metadata_id"]))
+        unit.add_family(pangenome.get_gene_family(unit_row["geneFam"].decode()),
+                        unit_row["metadata_source"].decode(), int(unit_row["metadata_id"]))
 
     def read_system(sys_row: tables.Table.row, sys_dict: Dict[str, System], unit_dict: Dict[str, SystemUnit]) -> System:
         """

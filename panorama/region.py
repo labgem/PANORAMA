@@ -277,7 +277,7 @@ class Module(Mod):
                 raise Exception("Two system with same ID but with different name are trying to be added to module."
                                 "This error is unexpected. Please report on our GitHub")
             else:
-                if unit.gene_families != unit_in.gene_families:
+                if unit.families != unit_in.families:
                     raise Exception("Two system with same ID and name but with different gene families are trying to be"
                                     " added to module. This error is unexpected. Please report on our GitHub")
 

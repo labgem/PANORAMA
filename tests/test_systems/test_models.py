@@ -376,7 +376,7 @@ class TestFuncUnit:
             func_unit.add(family)
         serialized = pickle.dumps(func_unit)
         deserialized = pickle.loads(serialized)
-        assert set(deserialized.gene_families) == families
+        assert set(deserialized.families) == families
 
 
 class TestModel:

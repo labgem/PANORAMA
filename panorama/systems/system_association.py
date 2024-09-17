@@ -54,7 +54,7 @@ def get_coverage_df(asso2sys: Dict[Union[Region, Spot, Module], Set[System]],
         element_fam = set(element.families)
         sys_fam, sys_org, sys_id, sys_name = set(), set(), set(), set()
         for sys in systems:
-            sys_fam |= set(sys.gene_families)
+            sys_fam |= set(sys.families)
             sys_org |= set(sys.organisms)
             sys_id.add(sys.ID)
             sys_name.add(sys.name)
@@ -94,7 +94,7 @@ def get_association_df(pangenome: Pangenome, association: List[str]
     spot2sys = defaultdict(set)
     mod2sys = defaultdict(set)
     for system in pangenome.systems:
-        association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.gene_families])]
+        association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families])]
         if 'RGPs' in association:
             rgps = set()
             for rgp in system.regions:
