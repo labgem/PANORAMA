@@ -360,12 +360,14 @@ def write_top_hits(all_top_hits: List[TopHits], output: Path, source: str, tblou
 
     header = True
     tbl, domtbl, pfamtbl = None, None, None
+    output_path = output / f'{name}' / f'{source}'
+    output_path.mkdir(parents=True, exist_ok=True)
     if tblout:
-        tbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.tbl", "wb")
+        tbl = open(output_path / f"hmmsearch_{mode}.tbl", "wb")
     if domtblout:
-        domtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.domtbl", "wb")
+        domtbl = open(output_path / f"hmmsearch_{mode}.domtbl", "wb")
     if pfamtblout:
-        pfamtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.pfamtbl", "wb")
+        pfamtbl = open(output_path / f"hmmsearch_{mode}.pfamtbl", "wb")
     for top_hits in all_top_hits:
         if tblout:
             top_hits.write(tbl, format="targets", header=header)
