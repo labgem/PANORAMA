@@ -228,20 +228,11 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
         filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
-        t0 = time.time()
         if check_needed_families(filtered_matrix, unit.functional_unit):
-            if time.time() - t0 > 1:
-                print(f"check : {time.time() - t0}")
             pan_proj = [unit.name, organism.name]
-            t1 = time.time()
             genes_graph, model_genes = compute_genes_graph(org_mod_fam, organism, unit)
-            # if time.time() - t1 > 1:
-            #     print(f"compute gene graph : {time.time() - t1}")
-            t2 = time.time()
             org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, model_genes,
                                                                      gf2fam, association)
-            if time.time() - t2 > 1:
-                print(f"project : {time.time() - t2}")
             pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(unit)] + counter)
             if 'RGPs' in association:
                 rgps = {rgp.name for rgp in unit.regions if rgp.organism == organism}
