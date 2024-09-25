@@ -211,6 +211,6 @@ def create_hmm_list_file(hmm_path: List[Path], output: Path, metadata_df: pd.Dat
     if target_coverage is not None:
         hmm_df["target_cov_threshold"] = target_coverage
     hmm_df = hmm_df[['name', 'accession', 'path', 'length', 'protein_name', 'secondary_name', 'score_threshold',
-                     'eval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
+                     'eval_threshold', 'ieval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     logging.getLogger("PANORAMA").info("HMM list file created.")

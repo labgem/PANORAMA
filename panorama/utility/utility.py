@@ -171,7 +171,7 @@ def launch(args: argparse.Namespace):
                              binary_hmm=args.binary, force=args.force, disable_bar=args.target_coverage)
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force, erase=True)
-        launch_translate(db=args.translate, source=args.source, output=outdir,
+        launch_translate(db=args.translate, source=args.source, output=outdir, binary_hmm=args.binary,
                          hmm_coverage=args.hmm_coverage, target_coverage=args.target_coverage,
                          force=args.force, disable_bar=args.disable_prog_bar)
         check_models(models_list=outdir / "models_list.tsv", disable_bar=args.disable_prog_bar)

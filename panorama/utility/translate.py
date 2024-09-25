@@ -118,8 +118,8 @@ def parse_meta_padloc(meta: Path) -> pd.DataFrame:
         else:
             return f"{row['temp']},{row['secondary.name']}"
 
-    meta_col_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",
-                      "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
+    meta_col_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",  "eval_threshold",
+                      "ieval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
     df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
     df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
     df['secondary_name'] = df.apply(merge_columns, axis=1)
@@ -128,6 +128,7 @@ def parse_meta_padloc(meta: Path) -> pd.DataFrame:
     df = df.drop('temp', axis=1)
     df = df.iloc[:, [0, 1, 6, 7, 3, 4, 5, 2]]
     df.insert(4, 'score_threshold', None)
+    df.insert(5, 'eval_threshold', None)
     df.columns = meta_col_names
     df = df.set_index('accession')
     df['description'] = df["description"].fillna('unknown')
@@ -254,8 +255,8 @@ def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
     return canonical_sys
 
 
-def translate_padloc(padloc_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                     force: bool = False, disable_bar: bool = False) -> List[dict]:
+def translate_padloc(padloc_db: Path, output: Path, binary_hmm: bool = False, hmm_coverage: float = None,
+                     target_coverage: float = None, force: bool = False, disable_bar: bool = False) -> List[dict]:
     """
     Translate PADLOC models to PANORAMA models
 
@@ -273,7 +274,7 @@ def translate_padloc(padloc_db: Path, output: Path, hmm_coverage: float = None, 
     list_data = []
     meta_df = parse_meta_padloc(padloc_db / "hmm_meta.txt")
     create_hmm_list_file(hmm_path=[padloc_db / "hmm"], output=output, metadata_df=meta_df, hmm_coverage=hmm_coverage,
-                         target_coverage=target_coverage, binary_hmm=True, force=force, disable_bar=disable_bar)
+                         target_coverage=target_coverage, binary_hmm=binary_hmm, force=force, disable_bar=disable_bar)
     logging.getLogger("PANORAMA").info("Begin to translate padloc models...")
     model_path = padloc_db / "sys"
     for model in tqdm(list(model_path.rglob("*.yaml")), unit="file", disable=disable_bar):
@@ -447,8 +448,8 @@ def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> D
     Returns:
         List[Dict[str, Union[str, int, float]]]: List of dictionaries with all necessary information to write HMM metadata
     """
-    hmm_dict = {"name": "", 'accession': "", "length": len(hmm.consensus), 'protein_name': "",
-                'secondary_name': "", "score_threshold": nan, "eval_threshold": nan, "hmm_cov_threshold": 0.4,
+    hmm_dict = {"name": "", 'accession': "", "length": len(hmm.consensus), 'protein_name': "", 'secondary_name': "",
+                "score_threshold": nan, "eval_threshold": 0.1, "ieval_threshold": 0.001, "hmm_cov_threshold": 0.4,
                 "target_cov_threshold": nan, "description": ""}
 
     name = hmm.name.decode('UTF-8').split()
@@ -476,7 +477,7 @@ def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> D
     return hmm_dict
 
 
-def create_macsyfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: float = None,
+def create_macsyfinder_hmm_list(hmms_path: Path, output: Path, binary_hmm: bool = False, hmm_coverage: float = None,
                                 target_coverage: float = None, force: bool = False,
                                 disable_bar: bool = False) -> pd.DataFrame:
     """
@@ -501,13 +502,13 @@ def create_macsyfinder_hmm_list(hmms_path: Path, output: Path, hmm_coverage: flo
         hmm_list = read_hmm(hmm_path=hmm_file)
         for hmm in hmm_list:
             hmm_dict = parse_macsyfinder_hmm(hmm, hmm_file, panorama_acc)
-            hmm_dict["path"] = write_hmm(hmm, hmm_dir, True).absolute().as_posix()
+            hmm_dict["path"] = write_hmm(hmm, hmm_dir, binary_hmm).absolute().as_posix()
             hmm_info_list.append(hmm_dict)
 
     hmm_df = pd.DataFrame(hmm_info_list)
     hmm_df = hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=[True, True, True])
     hmm_df = hmm_df[['name', 'accession', 'path', 'length', 'protein_name', 'secondary_name', 'score_threshold',
-                     'eval_threshold', 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
+                     'eval_threshold', "ieval_threshold", 'hmm_cov_threshold', 'target_cov_threshold', 'description']]
     if hmm_coverage is not None:
         logging.getLogger("PANORAMA").warning("HMM coverage threshold will be overwritten")
         hmm_df["hmm_cov_threshold"] = hmm_coverage
@@ -589,8 +590,8 @@ def get_models_path(models: Path, source: str) -> Dict[str, Path]:
     return model2path
 
 
-def translate_macsyfinder(macsy_db: Path, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                          source: str = "", force: bool = False, disable_bar: bool = False) -> List[dict]:
+def translate_macsyfinder(macsy_db: Path, output: Path, binary_hmm: bool = False, hmm_coverage: float = None,
+                          target_coverage: float = None, source: str = "", force: bool = False, disable_bar: bool = False) -> List[dict]:
     """
     Translate MacSyFinder models into PANORAMA models and write all necessary file for PANORAMA steps
 
@@ -606,8 +607,8 @@ def translate_macsyfinder(macsy_db: Path, output: Path, hmm_coverage: float = No
     Returns:
          List[dict]: List of dictionaries containing translated models
     """
-    hmm_df = create_macsyfinder_hmm_list(macsy_db / "profiles", output, hmm_coverage, target_coverage, force,
-                                         disable_bar)
+    hmm_df = create_macsyfinder_hmm_list(macsy_db / "profiles", output, binary_hmm, hmm_coverage, target_coverage,
+                                         force, disable_bar)
     list_data = []
     logging.getLogger('PANORAMA').info(f"Begin to translate {source} models")
     model_path = macsy_db / "definitions"
@@ -623,8 +624,8 @@ def translate_macsyfinder(macsy_db: Path, output: Path, hmm_coverage: float = No
     return list_data
 
 
-def launch_translate(db: Path, source: str, output: Path, hmm_coverage: float = None, target_coverage: float = None,
-                     force: bool = False, disable_bar: bool = False):
+def launch_translate(db: Path, source: str, output: Path,  binary_hmm: bool = False, hmm_coverage: float = None,
+                     target_coverage: float = None, force: bool = False, disable_bar: bool = False):
     """
     Launch models translation process and write results for PANORAMA
 
@@ -639,10 +640,10 @@ def launch_translate(db: Path, source: str, output: Path, hmm_coverage: float = 
     """
 
     if source == "padloc":
-        list_data = translate_padloc(padloc_db=db, output=output, hmm_coverage=hmm_coverage,
+        list_data = translate_padloc(padloc_db=db, output=output, binary_hmm=binary_hmm, hmm_coverage=hmm_coverage,
                                      target_coverage=target_coverage, force=force, disable_bar=disable_bar)
     elif source in ["defense-finder", "CONJScan", "TXSScan", "TFFscan"]:
-        list_data = translate_macsyfinder(macsy_db=db, output=output, hmm_coverage=hmm_coverage,
+        list_data = translate_macsyfinder(macsy_db=db, output=output, binary_hmm=binary_hmm, hmm_coverage=hmm_coverage,
                                           target_coverage=target_coverage, source=source,
                                           force=force, disable_bar=disable_bar)
     else:

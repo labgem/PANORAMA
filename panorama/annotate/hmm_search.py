@@ -29,12 +29,13 @@ from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
 res_col_names = ['families', 'Accession', 'protein_name', 'e_value',
-                 'score', 'bias', 'secondary_name', 'Description']
+                 'score', 'bias', 'i_e_value', 'secondary_name', 'Description']
 meta_col_names = ["name", "accession", "path", "length", "protein_name", "secondary_name", "score_threshold",
-                  "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
+                  "eval_threshold", "ieval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
 meta_dtype = {"accession": "string", "name": "string", "path": "string", "length": "int", "description": "string",
               "protein_name": "string", "secondary_name": "string", "score_threshold": "float",
-              "eval_threshold": "float", "hmm_cov_threshold": "float", "target_cov_threshold": "float"}
+              "eval_threshold": "float", "ieval_threshold": "float", "hmm_cov_threshold": "float",
+              "target_cov_threshold": "float"}
 
 
 def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = None, keep_tmp: bool = False,
@@ -78,9 +79,11 @@ def digit_family_sequences(pangenome: Pangenome,
     for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
                        desc="Digitalized gene families sequences", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
-        seq = TextSequence(name=bit_name,
-                           sequence=family.sequence if family.HMM is None else family.HMM.consensus.upper() + '*')
-        sequences.append(seq.digitize(Alphabet.amino()))
+        bit_acc = str(family.ID).encode('UTF-8')
+        sequence = family.sequence if family.HMM is None else family.HMM.consensus.upper()
+        sequence = sequence.replace('*', '')
+        text_seq = TextSequence(name=bit_name, accession=bit_acc, sequence=sequence)
+        sequences.append(text_seq.digitize(Alphabet.amino()))
     available_memory = psutil.virtual_memory().available
     return sequences, True if sys.getsizeof(sequences) < available_memory else False
 
@@ -224,7 +227,7 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[H
     return hmms, hmm_df
 
 
-def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float, float, float, str, str], None]:
+def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float, float, float, float, str, str], None]:
     """
     Check if a hit can be assigned to a target
 
@@ -237,26 +240,24 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
     """
     cog = hit.best_domain.alignment
     hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-    target_coverage = (cog.target_to - cog.target_from + 1) / cog.target_length
-    hmm_coverage = (cog.hmm_to - cog.hmm_from + 1) / cog.hmm_length
-    add_res = False
-    if ((target_coverage >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"]))
-            and (hmm_coverage >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
-        if pd.isna(hmm_info['score_threshold']):
-            if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
-                add_res = True
-        else:
-            if hit.score > hmm_info['score_threshold']:
-                add_res = True
-    if add_res:
+    target_coverage = (cog.target_to - cog.target_from) / cog.target_length
+    hmm_coverage = (cog.hmm_to - cog.hmm_from) / cog.hmm_length
+
+    check_target_cov = target_coverage >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])
+    check_hmm_cov = hmm_coverage >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"])
+    check_score = hit.score >= hmm_info['score_threshold'] or pd.isna(hmm_info['score_threshold'])
+    check_e_value = hit.evalue <= hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold'])
+    check_ie_value = hit.best_domain.i_evalue <= hmm_info['ieval_threshold'] or pd.isna(hmm_info['ieval_threshold'])
+
+    if check_target_cov and check_hmm_cov and check_score and check_e_value and check_ie_value:
         secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
         return (hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name, hit.evalue,
-                hit.score, hit.bias, secondary_name, hmm_info.description)
+                hit.score, hit.bias, hit.best_domain.i_evalue, secondary_name, hmm_info.description)
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
                        meta: pd.DataFrame = None, threads: int = 1, tmp: Path = None, disable_bar: bool = False
-                       ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
+                       ) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -302,7 +303,7 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
                          threads: int = 1, disable_bar: bool = False
-                         ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
+                         ) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -339,6 +340,7 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
+
     return res, all_top_hits
 
 
