@@ -56,8 +56,25 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
     graph.remove_edges_from(edges2remove)
 
 
-def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                                 func_unit: FuncUnit) -> bool:
+def get_number_of_mod_fam(gene_family: GeneFamily, gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]) -> int:
+    """Gets the number of model families associated with the gene family.
+
+    Args:
+        gene_family (GeneFamily): The gene family of interest.
+
+    Returns:
+        int: The number of model families associated with the gene family.
+    """
+    model_families = gene_fam2mod_fam.get(gene_family.name)
+    if model_families is not None:
+        return len(model_families)
+    else:
+        return 0
+
+
+def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+                       mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
+                       ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
     Checks if there are forbidden conditions in the families.
 
@@ -69,34 +86,68 @@ def check_for_forbidden_families(gene_families: Set[GeneFamily], gene_fam2mod_fa
     Returns:
         bool: True if forbidden conditions are encountered, False otherwise.
     """
+    mandatory_list = list(map(lambda x: x.name, func_unit.mandatory))
+    accessory_list = list(map(lambda x: x.name, func_unit.accessory))
     forbidden_list = list(map(lambda x: x.name, func_unit.forbidden))
 
-    def get_number_of_mod_fam(gene_family: GeneFamily) -> int:
-        """Gets the number of model families associated with the gene family.
+    gf2fam2meta_info = defaultdict(dict)
 
-        Args:
-            gene_family (GeneFamily): The gene family of interest.
+    for gf in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n, gene_fam2mod_fam)):
+        for family in gene_fam2mod_fam[gf]:
+            avail_name = {family.name}.union(family.exchangeable)
+            if ((family.presence == 'mandatory' and family.name in mandatory_list) or
+                    (family.presence == 'accessory' and family.name in accessory_list) or
+                    (family.presence == 'forbidden' and family.name in forbidden_list)):
+                for meta_id, metadata in gf.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
+                    if metadata.protein_name in avail_name:
+                        gf2fam2meta_info[gf][family] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+                    elif "secondary_name" in metadata.fields:
+                        if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                            gf2fam2meta_info[gf][family] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
 
-        Returns:
-            int: The number of model families associated with the gene family.
-        """
-        model_families = gene_fam2mod_fam.get(gene_family.name)
-        if model_families is not None:
-            return len(model_families)
+    gf2meta_info = {}
+    mandatory_seen = set()
+    accessory_seen = set()
+    found_forbidden = False
+    for gf, fam2meta_info in sorted(gf2fam2meta_info.items(), key=lambda x: len(x[1])):
+        sorted_fam2meta_info = list(sorted(fam2meta_info.items(), key=lambda x: x[1][2], reverse=True))
+        add = False
+        for family, meta_info in sorted_fam2meta_info:
+            if family.presence == "mandatory" and family.name not in mandatory_seen:
+                mandatory_seen.add(family)
+                add = True
+            elif family.presence == "accessory" and family.name not in accessory_seen:
+                accessory_seen.add(family)
+                add = True
+            elif family.presence == "forbidden" and family.name in forbidden_list:
+                found_forbidden = True
+
+            if add:
+                gf2meta_info[gf] = meta_info[:-1]
+                break
+            elif found_forbidden:
+                break
+
+        if found_forbidden:
+            break
+        elif not add:
+            _, meta_info = sorted_fam2meta_info.pop(0)
+            gf2meta_info[gf] = meta_info[:-1]
+
+    if found_forbidden:
+        return False, {}
+    else:
+        if ((len(mandatory_seen) >= func_unit.min_mandatory or func_unit.min_mandatory == -1) and
+                (len(mandatory_seen | accessory_seen) >= func_unit.min_total or func_unit.min_total == -1)):
+            return True, gf2meta_info
         else:
-            return 0
-
-    for node in sorted(gene_families, key=lambda n: get_number_of_mod_fam(n)):
-        if node in gene_fam2mod_fam:
-            for family in gene_fam2mod_fam[node]:
-                if family.presence == 'forbidden' and family.name in forbidden_list:  # if node is forbidden
-                    return True
-    return False
+            return False, {}
 
 
 def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
                                mod_fam2meta_source: Dict[str, str]
-                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]], Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
+                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
+                                          Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
     """
     Build a matrix of association between gene families and families.
 
@@ -147,7 +198,6 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
             elif family.presence == "accessory":
                 add_metadata_to_dict(accessory_gfs2metadata)
                 gfs.add(gene_family)
-
     fams = list(mandatory_gfs2metadata.keys()) + list(accessory_gfs2metadata.keys())
     score_matrix = np.zeros((len(fams), len(gfs)))
     gfs = list(gfs)

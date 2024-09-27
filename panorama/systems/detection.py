@@ -28,7 +28,7 @@ from ppanggolin.metadata import Metadata
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.systems.utils import (filter_local_context, check_for_forbidden_families, get_metadata_to_families,
+from panorama.systems.utils import (filter_local_context, check_for_families, get_metadata_to_families,
                                     get_gfs_matrix_combination, dict_families_context, find_combinations,
                                     check_needed_families)
 from panorama.systems.models import Models, Model, FuncUnit, Family
@@ -216,47 +216,19 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
                                  key=lambda c: (len(c), sorted(c)), reverse=True):
                     cc: Set[GeneFamily]
                     gfs_in_cc = context_combination.intersection(cc)
-                    final_matrix = filtered_matrix[list({gf.name for gf in gfs_in_cc} & context_gfs_name)]
-                    if (check_needed_families(final_matrix, func_unit) and
-                            not check_for_forbidden_families(gfs_in_cc.difference(mandatory_gfs, accessory_gfs),
-                                                             gene_fam2mod_fam, func_unit)):
-                            gf2meta_info = get_gf2metainfo(gfs_in_cc, gene_fam2mod_fam,
-                                                           mod_fam2meta_source, func_unit)
-                            new_unit = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
-                                                  families_to_metainfo=gf2meta_info)
-                            is_subset = False
-                            for unit in sorted(detected_su, key=len, reverse=True):
-                                if new_unit.is_subset(unit):
-                                    unit.merge(new_unit)
-                                    is_subset = True
-                                    print("cara")
-                                elif new_unit.is_superset(unit):
-                                    print("pikapi")
-                            if not is_subset:
-                                detected_su.add(new_unit)
-                            get_subcombinations(gfs_in_cc, combinations)
-                    # working_combs = find_combinations(final_matrix, func_unit)
-                    # seen_combs = set()
-                    # while working_combs:
-                    #     working_comb, fam2gf = working_combs.pop(0)
-                    #     if not any(working_comb.issubset(seen_comb) for seen_comb in seen_combs):
-                    #         working_gfs = {name2gf[name] for name in working_comb}
-                    #         cc -= gfs_in_cc.difference(working_gfs)
-                    #         if not check_for_forbidden_families(working_gfs, gene_fam2mod_fam, func_unit):
-                    #             seen_combs.add(frozenset(working_comb))
-                    #             new_unit = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
-                    #                                   families_to_metainfo=get_gf2metainfo())
-                    #             is_subset = False
-                    #             for unit in sorted(detected_su, key=len, reverse=True):
-                    #                 if new_unit.is_subset(unit):
-                    #                     unit.merge(new_unit)
-                    #                     is_subset = True
-                    #                     print("cara")
-                    #                 elif new_unit.is_superset(unit):
-                    #                     print("pikapi")
-                    #             if not is_subset:
-                    #                 detected_su.add(new_unit)
-                    #             get_subcombinations(working_gfs, combinations)
+                    check, gf2meta_info = check_for_families(gfs_in_cc, gene_fam2mod_fam,
+                                                             mod_fam2meta_source, func_unit)
+                    if check:
+                        new_unit = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                                              families_to_metainfo=gf2meta_info)
+                        is_subset = False
+                        for unit in sorted(detected_su, key=len, reverse=True):
+                            if new_unit.is_subset(unit):
+                                unit.merge(new_unit)
+                                is_subset = True
+                        if not is_subset:
+                            detected_su.add(new_unit)
+                        get_subcombinations(gfs_in_cc, combinations)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
             get_subcombinations(context_combination, combinations)
