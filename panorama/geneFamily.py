@@ -174,74 +174,53 @@ class GeneFamily(Fam):
         panorama_fam._getattr_from_ppanggolin(family)
         return panorama_fam
 
-    def add_system_unit(self, unit):
-        """
-        Adds a system unit to the GeneFamily.
-
-        Args:
-            unit: The system unit to add.
-
-        Raises:
-            KeyError: If a different system unit with the same ID already exists.
-        """
-        if unit in self._systems_getter and self.get_system(unit.ID) != unit:
-            logging.getLogger("PANORAMA").error(
-                f"System unit {unit.ID}: {unit.name} can't be added to family "
-                f"because the same ID is known for {self.get_system(unit.ID).name} "
-            )
-            raise KeyError(
-                f"A different system with the same name already exists in the gene family {self}"
-            )
-        self._units_getter[unit.ID] = unit
-
-    def get_system_unit(self, identifier: int):
-        """
-        Gets a system unit by its identifier.
-
-        Args:
-            identifier (int): The ID of the system unit to retrieve.
-
-        Returns:
-            System: The system unit with the specified identifier.
-
-        Raises:
-            KeyError: If the system unit with the given ID does not exist.
-        """
-        try:
-            return self._units_getter[identifier]
-        except KeyError:
-            raise KeyError(
-                f"No system with ID {identifier} found in the gene family."
-            )
-
-    def add_system(self, system):
-        """
-        Adds a system to the GeneFamily.
-
-        Args:
-            system: The system to add.
-        """
-        self._systems_getter[system.ID] = system
-
-    def get_system(self, identifier: int):
-        """
-        Gets a system by its identifier.
-
-        Args:
-            identifier (int): The ID of the system to retrieve.
-
-        Returns:
-            System: The system with the specified identifier.
-
-        Raises:
-            KeyError: If the system with the given ID does not exist.
-        """
-        try:
-            return self._systems_getter[identifier]
-        except KeyError:
-            raise KeyError(
-                f"No system with ID {identifier} found in the gene family."
-            )
+    # def add_system_unit(self, unit):
+    #     """
+    #     Adds a system unit to the GeneFamily.
+    #
+    #     Args:
+    #         unit: The system unit to add.
+    #
+    #     Raises:
+    #         KeyError: If a different system unit with the same ID already exists.
+    #     """
+    #     if unit in self._systems_getter and self.get_system_unit(unit.ID) != unit:
+    #         logging.getLogger("PANORAMA").error(
+    #             f"System unit {unit.ID}: {unit.name} can't be added to family "
+    #             f"because the same ID is known for {self.get_system_unit(unit.ID).name} "
+    #         )
+    #         raise KeyError(
+    #             f"A different system with the same name already exists in the gene family {self}"
+    #         )
+    #     self._units_getter[unit.ID] = unit
+    #
+    # def get_system_unit(self, identifier: int):
+    #     """
+    #     Gets a system unit by its identifier.
+    #
+    #     Args:
+    #         identifier (int): The ID of the system unit to retrieve.
+    #
+    #     Returns:
+    #         System: The system unit with the specified identifier.
+    #
+    #     Raises:
+    #         KeyError: If the system unit with the given ID does not exist.
+    #     """
+    #     try:
+    #         return self._units_getter[identifier]
+    #     except KeyError:
+    #         raise KeyError(
+    #             f"No system with ID {identifier} found in the gene family."
+    #         )
+    #
+    # def del_system_unit(self, identifier: int):
+    #     try:
+    #         del self._units_getter[identifier]
+    #     except KeyError:
+    #         raise KeyError(
+    #             f"No system with ID {identifier} found in the gene family."
+    #         )
 
     def is_multigenic(self) -> bool:
         """

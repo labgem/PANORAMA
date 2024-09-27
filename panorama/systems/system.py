@@ -241,13 +241,20 @@ class System(MetaFeatures):
         if not isinstance(other, System):
             raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
 
-        for name, unit in other._unit_getter.items():
-            if name not in self._unit_getter or not self.get_unit(name).is_superset(unit):
+        for self_unit in self.units:
+            is_superset = False
+            for other_unit in other.units:
+                if self_unit.is_superset(other_unit):
+                    is_superset = True
+                    break
+            if not is_superset:
                 return False
         return True
 
     def is_subset(self, other: System) -> bool:
-        """Checks if the current System is included in another System.
+        """
+        Checks if the current System is included in another System.
+
 
         Args:
             other (System): The other System to check inclusion against.
@@ -260,8 +267,13 @@ class System(MetaFeatures):
         if not isinstance(other, System):
             raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
 
-        for name, unit in other._unit_getter.items():
-            if name not in self._unit_getter or not self.get_unit(name).is_subset(unit):
+        for self_unit in self.units:
+            is_subset = False
+            for other_unit in other.units:
+                if self_unit.is_subset(other_unit):
+                    is_subset = True
+                    break
+            if not is_subset:
                 return False
         return True
 
@@ -289,31 +301,20 @@ class System(MetaFeatures):
                     intersected_unit_getter.add(o_unit)
         return intersected_unit_getter
 
-    def difference(self, other: System) -> Dict[str, SystemUnit]:
-        """Find the unit that are in other but not in self.
-
-        Args:
-            other (System): The other System to compute the difference with.
-
-        Returns:
-            Set[SystemUnit]: Set of all unit that are not in self
-
-        Raises:
-            TypeError: If trying to compare a system with another type of object.
-        """
+    def merge(self, other: System):
         if not isinstance(other, System):
-            raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
+            raise TypeError(f"Another system is expected to be merged with the first one. You gave a {type(other)}")
 
-        if self.model.name == other.model.name:
-            difference_unit_getter = {}
-            for name in other._unit_getter.keys():
+        unit_names = {unit.name for unit in set(self.units).union(other.units)}
+        for name in unit_names:
+            if name in other._unit_getter:
+                other_unit = other.get_unit(name)
                 if name in self._unit_getter:
-                    if (not self.get_unit(name).is_superset(other.get_unit(name)) or
-                            not self.get_unit(name).is_subset(other.get_unit(name))):
-                        difference_unit_getter[name] = other.get_unit(name)
+                    self.get_unit(name).merge(other_unit)
+                    other_unit.system = self
                 else:
-                    difference_unit_getter[name] = other.get_unit(name)
-            return difference_unit_getter
+                    self.add_unit(other_unit)
+
 
     @property
     def models_families(self) -> Generator[GeneFamily, None, None]:
@@ -373,9 +374,11 @@ class System(MetaFeatures):
         already_in = False
         for canon in self.canonical:
             if system.is_subset(canon):
+                canon.merge(system)
                 already_in = True
             elif system.is_superset(canon):
                 system.ID = canon.ID
+                system.merge(canon)
                 self.canonical.remove(canon)
                 self.canonical.add(system)
                 already_in = True
@@ -585,7 +588,7 @@ class SystemUnit:
         Returns:
             str: String representation.
         """
-        return f"System unit name: {self.name}, model: {self.model.name}"
+        return f"System unit {self.ID}, name: {self.name}, model: {self.model.name}"
 
     def __len__(self):
         """
@@ -645,8 +648,8 @@ class SystemUnit:
         assert isinstance(system, System), "System must be an instance of System."
 
         self._system = system
-        for family in system.families:
-            family.add_system(system)
+        # for family in system.families:
+        #     family.add_system(system)
 
     @property
     def functional_unit(self) -> FuncUnit:
@@ -718,7 +721,7 @@ class SystemUnit:
         assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"
         self._families_getter[gene_family.name] = gene_family
         self._families2metainfo[gene_family] = (annotation_source, metadata_id)
-        gene_family.add_system_unit(self)
+        # gene_family.add_system_unit(self)
 
     def __eq__(self, other: SystemUnit) -> bool:
         """
@@ -736,9 +739,9 @@ class SystemUnit:
         if not isinstance(other, SystemUnit):
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
-        return set(self._families_getter.items()) == set(other._families_getter.items())
+        return set(self.models_families) == set(other.models_families)
 
-    def is_superset(self, other):
+    def is_superset(self, other: SystemUnit):
         """Checks if the current unit includes another one.
 
         Args:
@@ -754,15 +757,11 @@ class SystemUnit:
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
 
-        if len(other) > len(self):
-            return False
-        else:
-            for name, family in other._families_getter.items():
-                if name not in self._families_getter or self._families_getter[name] != family:
-                    return False
+        if set(self.models_families).issuperset(other.models_families):
             return True
+        return False
 
-    def is_subset(self, other):
+    def is_subset(self, other: SystemUnit):
         """Checks if the current unit is included in another one.
 
         Args:
@@ -777,15 +776,11 @@ class SystemUnit:
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
 
-        if len(other) < len(self):
-            return False
-        else:
-            for name, family in self._families_getter.items():
-                if name not in other._families_getter or other._families_getter[name] != family:
-                    return False
+        if set(self.models_families).issubset(other.models_families):
             return True
+        return False
 
-    def intersection(self, other) -> Dict[str, GeneFamily]:
+    def intersection(self, other: SystemUnit) -> Set[GeneFamily]:
         """Computes the intersection of gene families between two units.
 
         Args:
@@ -799,13 +794,10 @@ class SystemUnit:
         if not isinstance(other, SystemUnit):
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
-        return {
-            name: self._families_getter[name] for name in self._families_getter
-            if name in other._families_getter and self._families_getter[name] == other._families_getter[name]
-        }
+        return set(other.models_families).intersection(set(self.models_families))
 
-    def difference(self, other) -> Dict[str, GeneFamily]:
-        """Computes the difference between two units.
+    def difference(self, other: SystemUnit) -> Set[GeneFamily]:
+        """Computes the difference between two units (i. e. all gene families that are in this unit but not the others.)
 
         Args:
             other (SystemUnit): The other SystemUnit to compute the difference with.
@@ -818,10 +810,33 @@ class SystemUnit:
         if not isinstance(other, SystemUnit):
             raise TypeError(f"Another system unit is expected to be compared to the first one. "
                             f"You gave a {type(other)}")
-        return {
-            name: self._families_getter[name] for name in self._families_getter
-            if name not in other._families_getter or self._families_getter[name] != other._families_getter[name]
-        }
+
+        return set(self.families).difference(set(other.families))
+
+    def symmetric_difference(self, other: SystemUnit) -> Set[GeneFamily]:
+        """Computes the difference between two units. (i. e. all gene families that are in exactly one of the units.)
+
+        Args:
+            other (SystemUnit): The other SystemUnit to compute the difference with.
+
+        Returns:
+            Dict[str, GeneFamily]: A Dictionary of non-common gene families
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+
+        return set(other.families).symmetric_difference(set(self.families))
+
+    def merge(self, other: SystemUnit):
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be merged with. You gave a {type(other)}")
+
+        for family in other.difference(self):
+            self.add_family(family)
+            # family.del_system_unit(other.ID)
 
     def _get_models_families(self) -> Set[GeneFamily]:
         families = set()

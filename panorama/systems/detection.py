@@ -10,6 +10,7 @@ from __future__ import annotations
 import argparse
 import itertools
 import time
+from collections import defaultdict
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
@@ -110,6 +111,59 @@ def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[Gen
     return remove_combinations
 
 
+def get_gf2metainfo(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+                              mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
+                              ) -> Dict[GeneFamily, Tuple[str, int]]:
+    """
+    Checks if the presence/absence rules for needed families are respected.
+
+    Args:
+        gene_families (Set[GeneFamily]): Set of gene families.
+        gene_fam2mod_fam (Dict[GeneFamily, Set[Family]]): Dictionary linking gene families to model families.
+        mod_fam2meta_source (Dict[str, str]): Dictionary linking model families to metadata sources.
+        func_unit (FuncUnit): Functional unit to check against.
+
+    Returns:
+        tuple: A tuple containing:
+            - bool: True if the needed conditions are met, False otherwise.
+            - dict: Dictionary linking gene families to their metadata information.
+    """
+    mandatory_list, accessory_list = (list(map(lambda x: x.name, func_unit.mandatory)),
+                                      list(map(lambda x: x.name, func_unit.accessory)))
+
+    gf2fam2meta_info = defaultdict(dict)
+
+    for gf in gene_families:
+        if gf in gene_fam2mod_fam:
+            for family in gene_fam2mod_fam[gf]:
+                avail_name = {family.name}.union(family.exchangeable)
+                if ((family.presence == 'mandatory' and family.name in mandatory_list) or
+                        (family.presence == 'accessory' and family.name in accessory_list)):
+                    for meta_id, metadata in gf.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
+                        if metadata.protein_name in avail_name:
+                            gf2fam2meta_info[gf][family.name] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+                        elif "secondary_name" in metadata.fields:
+                            if any(name in avail_name for name in metadata.secondary_name.split(",")):
+                                gf2fam2meta_info[gf][family.name] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+
+    gf2meta_info = {}
+    seen = set()
+    for gf, fam2meta_info in sorted(gf2fam2meta_info.items(), key=lambda x: len(x[1])):
+        sorted_fam2meta_info = list(sorted(fam2meta_info.items(), key=lambda x: x[1][2], reverse=True))
+        added = False
+        for fam, meta_info in sorted_fam2meta_info:
+            if fam not in seen:
+                gf2meta_info[gf] = meta_info[:-1]
+                seen.add(fam)
+                added = True
+                break
+        if not added:
+            _, meta_info = sorted_fam2meta_info.pop(0)
+            gf2meta_info[gf] = meta_info[:-1]
+
+    return gf2meta_info
+
+
 def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
                     mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit, source: str, matrix: pd.DataFrame,
                     mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
@@ -138,26 +192,7 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
         Set[SystemUnit]: Set of all detected functional unit in the graph.
     """
 
-    def get_gf2metainfo() -> Dict[GeneFamily, Tuple[str, int]]:
-        """
-        Build a dictionary of gene families link to the metadata coding for the unit.
-
-        Returns:
-            Dict[GeneFamily, Tuple[str, int]]: Dictionary with gene families as key and a tuple of metadata source and id as value
-        """
-        gf2meta_info = {}
-        for gf_name, fam in fam2gf.items():
-            if fam in mandatory_gfs2metadata:
-                gf2metadata = mandatory_gfs2metadata[fam]
-            else:
-                gf2metadata = accessory_gfs2metadata[fam]
-            gf = name2gf[gf_name]
-            meta_id, _ = gf2metadata[gf]
-            gf2meta_info[gf] = (mod_fam2meta_source[fam], meta_id)
-        return gf2meta_info
-
-    detected_su = set()
-    name2gf = {gf.name: gf for gf in families}
+    detected_su: Set[SystemUnit] = set()
     mandatory_gfs = {gf for gf2metadata in mandatory_gfs2metadata.values() for gf in gf2metadata.keys() if
                      gf in families}
     accessory_gfs = {gf for gf2metadata in accessory_gfs2metadata.values() for gf in gf2metadata.keys() if
@@ -170,8 +205,7 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
         context_gfs_name = {gf.name for gf in context_combination} & {gf.name for gf in mandatory_gfs | accessory_gfs}
         if len(context_gfs_name) >= func_unit.min_total:
             filtered_matrix = matrix[list(context_gfs_name)]
-            solutions = check_needed_families(filtered_matrix, func_unit)
-            if solutions:
+            if check_needed_families(filtered_matrix, func_unit):
                 local_graph = graph.copy()
                 # Keep only mandatory and accessory of current combination and eventual forgiven and neutral families.
                 node2remove = families.difference(context_combination)
@@ -180,14 +214,49 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
                 for cc in sorted([cc for cc in nx.connected_components(local_graph)
                                   if len(cc.intersection(context_combination)) >= func_unit.min_total],
                                  key=lambda c: (len(c), sorted(c)), reverse=True):
-                    families_in_cc = context_combination.intersection(cc)
-                    final_matrix = filtered_matrix[list({gf.name for gf in families_in_cc} & context_gfs_name)]
-                    if not check_for_forbidden_families(families_in_cc, gene_fam2mod_fam, func_unit):
-                        working_combs = find_combinations(final_matrix, func_unit)
-                        for working_comb, fam2gf in working_combs:
-                            detected_su.add(SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
-                                                       families_to_metainfo=get_gf2metainfo()))
-                            get_subcombinations(families_in_cc, combinations)
+                    cc: Set[GeneFamily]
+                    gfs_in_cc = context_combination.intersection(cc)
+                    final_matrix = filtered_matrix[list({gf.name for gf in gfs_in_cc} & context_gfs_name)]
+                    if (check_needed_families(final_matrix, func_unit) and
+                            not check_for_forbidden_families(gfs_in_cc.difference(mandatory_gfs, accessory_gfs),
+                                                             gene_fam2mod_fam, func_unit)):
+                            gf2meta_info = get_gf2metainfo(gfs_in_cc, gene_fam2mod_fam,
+                                                           mod_fam2meta_source, func_unit)
+                            new_unit = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                                                  families_to_metainfo=gf2meta_info)
+                            is_subset = False
+                            for unit in sorted(detected_su, key=len, reverse=True):
+                                if new_unit.is_subset(unit):
+                                    unit.merge(new_unit)
+                                    is_subset = True
+                                    print("cara")
+                                elif new_unit.is_superset(unit):
+                                    print("pikapi")
+                            if not is_subset:
+                                detected_su.add(new_unit)
+                            get_subcombinations(gfs_in_cc, combinations)
+                    # working_combs = find_combinations(final_matrix, func_unit)
+                    # seen_combs = set()
+                    # while working_combs:
+                    #     working_comb, fam2gf = working_combs.pop(0)
+                    #     if not any(working_comb.issubset(seen_comb) for seen_comb in seen_combs):
+                    #         working_gfs = {name2gf[name] for name in working_comb}
+                    #         cc -= gfs_in_cc.difference(working_gfs)
+                    #         if not check_for_forbidden_families(working_gfs, gene_fam2mod_fam, func_unit):
+                    #             seen_combs.add(frozenset(working_comb))
+                    #             new_unit = SystemUnit(functional_unit=func_unit, source=source, gene_families=cc,
+                    #                                   families_to_metainfo=get_gf2metainfo())
+                    #             is_subset = False
+                    #             for unit in sorted(detected_su, key=len, reverse=True):
+                    #                 if new_unit.is_subset(unit):
+                    #                     unit.merge(new_unit)
+                    #                     is_subset = True
+                    #                     print("cara")
+                    #                 elif new_unit.is_superset(unit):
+                    #                     print("pikapi")
+                    #             if not is_subset:
+                    #                 detected_su.add(new_unit)
+                    #             get_subcombinations(working_gfs, combinations)
         else:
             # We can remove all sub-combinations because the bigger one does not have the needed
             get_subcombinations(context_combination, combinations)
@@ -221,7 +290,7 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
     Returns:
         Set[SystemUnit]: Set of detected systems in the pangenomic context.
     """
-    detected_fu = set()
+    detected_su: Set[SystemUnit] = set()
     families_in_context, neutral_families_in_context = get_functional_unit_gene_families(func_unit, families,
                                                                                          gene_fam2mod_fam)
     combinations = sorted(combinations2orgs.keys(), key=lambda fs: (len(fs), sorted(fs)), reverse=True)
@@ -235,12 +304,19 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
             families_in_cc |= neutral_families
             combinations_in_cc = get_subcombinations(families_in_cc, combinations)
             if len(combinations_in_cc) > 0:
-                new_detected_fu = search_fu_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
+                new_detected_su = search_fu_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
                                                   func_unit, source, matrix, mandatory_gfs2metadata,
                                                   accessory_gfs2metadata, combinations_in_cc,
                                                   combinations2orgs, jaccard_threshold)
-                detected_fu |= new_detected_fu
-    return detected_fu
+                for new_su in new_detected_su:
+                    is_subset = False
+                    for unit in sorted(detected_su, key=len, reverse=True):
+                        if new_su.is_subset(unit):
+                            is_subset = True
+                            unit.merge(new_su)
+                    if not is_subset:
+                        detected_su.add(new_su)
+    return detected_su
 
 
 def get_functional_unit_gene_families(func_unit: FuncUnit, gene_families: Set[GeneFamily],
@@ -306,11 +382,11 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
                                                                         disable_bar=True)
                 combinations2orgs = {combs: org for combs, org in combinations2orgs.items() if
                                      len(combs) >= func_unit.min_total}
-                new_detected_fu = search_unit_in_context(context, fu_families, gf2fam, fam2source, matrix, md_gfs2meta,
-                                                         acc_gfs2meta, func_unit, source, combinations2orgs,
-                                                         jaccard_threshold)
-                if len(new_detected_fu) > 0:
-                    su_found[func_unit.name] = new_detected_fu
+                detected_su = search_unit_in_context(context, fu_families, gf2fam, fam2source, matrix, md_gfs2meta,
+                                                     acc_gfs2meta, func_unit, source, combinations2orgs,
+                                                     jaccard_threshold)
+                if len(detected_su) > 0:
+                    su_found[func_unit.name] = detected_su
     return su_found
 
 
