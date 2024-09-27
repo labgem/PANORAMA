@@ -294,8 +294,8 @@ def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_fam
 
 
 def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_index: Dict[GeneFamily, int],
-                              association: List[str] = None, threads: int = 1, lock: Lock = None,
-                              disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+                              association: List[str] = None, canonical: bool = False, threads: int = 1,
+                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project systems onto all organisms in a pangenome.
 
@@ -320,10 +320,15 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
         if system.model.name not in sys2fam_context:
             gene_families, gf2fam, fam2source = dict_families_context(system.model, meta2fam)
             sys2fam_context[system.model.name] = (gene_families, gf2fam, fam2source)
+        if canonical:
+            for canonic in system.canonical:
+                if canonic.model.name not in sys2fam_context:
+                    gene_families, gf2fam, fam2source = dict_families_context(canonic.model, meta2fam)
+                    sys2fam_context[canonic.model.name] = (gene_families, gf2fam, fam2source)
 
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
-        with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=False), unit='system',
+        with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=canonical), unit='system',
                   disable=disable_bar) as progress:
             futures = []
             for system in pangenome.get_system_by_source(system_source):
@@ -332,6 +337,13 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
                                          gf2fam, fam2source, association)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
+                if canonical:
+                    for canonic in system.canonical:
+                        gene_families, gf2fam, fam2source = sys2fam_context[canonic.model.name]
+                        future = executor.submit(system_projection, system, fam_index, gene_families,
+                                                 gf2fam, fam2source, association)
+                        future.add_done_callback(lambda p: progress.update())
+                        futures.append(future)
 
             for future in futures:
                 result = future.result()

@@ -149,7 +149,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
 
 
 def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], sources: List[str],
-                 disable_bar: bool = False):
+                 read_canonical: bool = False, disable_bar: bool = False):
     """
     Read information about systems in the pangenome HDF5 file and add them to the pangenome object.
 
@@ -166,7 +166,8 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], s
         source_group = h5f.get_node(systems_group, source)
         metadata_sources |= source_group._v_attrs.metadata_sources
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, source_group, models[index], disable_bar=disable_bar)
+        read_systems_by_source(pangenome, source_group, models[index], read_canonical=read_canonical,
+                               disable_bar=disable_bar)
         logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
     return metadata_sources
@@ -384,7 +385,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
 
     if systems:
         metadata = True
-        metadata_sources = read_systems(pangenome, h5f, kwargs["models"], kwargs["systems_sources"], disable_bar)
+        metadata_sources = read_systems(pangenome, h5f, models=kwargs["models"], sources=kwargs["systems_sources"],
+                                        read_canonical=kwargs["read_canonical"], disable_bar=disable_bar)
         if "meta_sources" in kwargs:
             kwargs["metatypes"].add("families")
             kwargs["meta_sources"] |= metadata_sources
@@ -412,8 +414,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
 
 
 def check_pangenome_info(pangenome, need_families_info: bool = False, need_families_sequences: bool = False,
-                         need_systems: bool = False, models: List[Models] = None,
-                         systems_sources: List[str] = None, disable_bar: bool = False, **kwargs):
+                         need_systems: bool = False, models: List[Models] = None, systems_sources: List[str] = None,
+                         read_canonical: bool = False, disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`.
@@ -444,6 +446,7 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
         need_info["systems"] = True
         need_info["models"] = models
         need_info["systems_sources"] = systems_sources
+        need_info["read_canonical"] = read_canonical
 
     logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
 
