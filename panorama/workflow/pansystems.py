@@ -283,6 +283,10 @@ def parser_pansystems(parser):
     hmm_param.add_argument("--save_hits", required=False, type=str, default=None, nargs='*',
                            choices=['tblout', 'domtblout', 'pfamtblout'],
                            help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
+    hmm_param.add_argument("-Z", "--Z", required=False, type=int, nargs='?', default=4000,
+                           help="From HMMER: Assert that the total number of targets in your searches is <x>, "
+                                "for the purposes of per-sequence E-value calculations, "
+                                "rather than the actual number of targets seen.")
     detection = parser.add_argument_group(title="Systems detection arguments",
                                           description="All of the following arguments are used "
                                                       "for systems detection step:")

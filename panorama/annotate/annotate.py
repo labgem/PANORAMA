@@ -77,7 +77,9 @@ def check_annotate_args(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
         hmm_kwgs["msa"] = args.msa
         hmm_kwgs["msa_format"] = args.msa_format
-
+        if args.Z is not None and not isinstance(args.Z, int):
+            raise TypeError('Z arguments must be an integer')
+        hmm_kwgs["Z"] = args.Z
         if args.k_best_hit is not None:
             if args.k_best_hit < 1:
                 raise argparse.ArgumentTypeError("k_best_hit must be greater than 1.")
@@ -417,6 +419,10 @@ def parser_annot(parser):
                            help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
     hmm_param.add_argument("-o", "--output", required=False, type=Path, nargs='?',
                            help="Output directory to write HMM results")
+    hmm_param.add_argument("-Z", "--Z", required=False, type=int, nargs='?', default=None,
+                           help="From HMMER: Assert that the total number of targets in your searches is <x>, "
+                                "for the purposes of per-sequence E-value calculations, "
+                                "rather than the actual number of targets seen.")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads.")

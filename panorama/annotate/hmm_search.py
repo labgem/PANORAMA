@@ -256,7 +256,8 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
-                       meta: pd.DataFrame = None, threads: int = 1, tmp: Path = None, disable_bar: bool = False
+                       meta: pd.DataFrame = None, Z: int = 4000, threads: int = 1, tmp: Path = None,
+                       disable_bar: bool = False
                        ) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
@@ -288,7 +289,7 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
         models = hmm_db.optimized_profiles()
         logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
         with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
-            options = {"Z": sum(len(hmm_list) for hmm_list in hmms.values())}
+            options = {"Z": Z}
             for cutoff, hmm_list in hmms.items():
                 if cutoff != "other":
                     options["bit_cutoffs"] = cutoff
@@ -302,8 +303,7 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
 
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         threads: int = 1, disable_bar: bool = False
-                         ) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
+                         Z: int = 4000, threads: int = 1, disable_bar: bool = False) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -331,7 +331,7 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
               desc="Align target to HMM", disable=disable_bar) as bar:
         all_top_hits = []
         for cutoff, hmm_list in hmms.items():
-            options = {}
+            options = {"Z": Z}
             if cutoff != "other":
                 options["bit_cutoffs"] = cutoff
             for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
@@ -423,7 +423,7 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None, source: str = "",
-                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", tblout: bool = False,
+                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", tblout: bool = False, Z: int = 4000,
                    domtblout: bool = False, pfamtblout: bool = False, output: Path = None,
                    threads: int = 1, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
@@ -464,10 +464,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res, all_top_hits = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequences.read_block(), meta, Z, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, Z, threads, tmp, disable_bar)
 
     else:
         if mode == "profile":
@@ -485,10 +485,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
             sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
-            res, all_top_hits = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequence_block, meta, Z, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, Z, threads, tmp, disable_bar)
 
     if tblout or domtblout or pfamtblout:
         write_top_hits(all_top_hits, output, source, tblout, domtblout, pfamtblout, pangenome.name, mode)
