@@ -114,24 +114,25 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
         add = False
         for family, meta_info in sorted_fam2meta_info:
             if family.presence == "mandatory" and family.name not in mandatory_seen:
-                mandatory_seen.add(family)
+                mandatory_seen.add(family.name)
+                gf2meta_info[gf] = meta_info[:-1]
                 add = True
+                break
             elif family.presence == "accessory" and family.name not in accessory_seen:
-                accessory_seen.add(family)
+                accessory_seen.add(family.name)
+                gf2meta_info[gf] = meta_info[:-1]
                 add = True
+                break
             elif family.presence == "forbidden" and family.name in forbidden_list:
                 found_forbidden = True
-
-            if add:
-                gf2meta_info[gf] = meta_info[:-1]
-                break
-            elif found_forbidden:
-                break
+                break  # No need to continue if a forbidden family is found
 
         if found_forbidden:
             break
-        elif not add:
-            _, meta_info = sorted_fam2meta_info.pop(0)
+
+        if not add:
+            # If nothing was added and no forbidden family was found, default to first family
+            _, meta_info = sorted_fam2meta_info[0]
             gf2meta_info[gf] = meta_info[:-1]
 
     if found_forbidden:
