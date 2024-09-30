@@ -555,7 +555,7 @@ def search_canonical_macsyfinder(model_name: str, models: Path) -> List[str]:
             if re.search(f"{base_class}_Type_{base_type}_{subtype}", name_canon) and name_canon != model_name:
                 logging.getLogger("PANORAMA").debug("")
                 canonical_sys.append(name_canon)
-    elif model_name in ["CAS_Cluster", "CBASS", "Wadjet"]:
+    elif model_name in ["CAS_Cluster", "CBASS", "Wadjet", "BREX"]:
         for canon_file in models.rglob(f"{model_name}*.xml"):
             if canon_file.stem != model_name:
                 canonical_sys.append(canon_file.stem)
