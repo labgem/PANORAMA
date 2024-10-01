@@ -579,7 +579,7 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                     detected_systems |= result
 
     for idx, system in enumerate(sorted(detected_systems,
-                                        key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)),
+                                        key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_model_gene_families)),
                                  start=1):
         system.ID = str(idx)
         pangenome.add_system(system)

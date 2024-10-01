@@ -226,6 +226,16 @@ class System(MetaFeatures):
         """
         return sum(len(unit) for unit in self.units)
 
+    @property
+    def number_of_model_gene_families(self):
+        """
+        Get the number of families in the system
+
+        Returns:
+            int: Number of families.
+        """
+        return sum(unit.nb_model_families for unit in self.units)
+
     def is_superset(self, other: System) -> bool:
         """Checks if the current System includes another System.
 
