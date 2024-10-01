@@ -18,6 +18,7 @@ import time
 
 # installed libraries
 from tqdm import tqdm
+import numpy as np
 import pandas as pd
 import networkx as nx
 from ppanggolin.genome import Organism, Gene
@@ -229,7 +230,8 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         org_mod_fam = org_fam & set(unit.models_families)
         filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
         if check_needed_families(filtered_matrix, unit.functional_unit):
-            pan_proj = [unit.name, organism.name]
+            pan_proj = [unit.name, organism.name, ", ".join(sorted([x.name for x in org_mod_fam])),
+                        ", ".join(sorted([x.name for x in org_fam - org_mod_fam]))]
             genes_graph, model_genes = compute_genes_graph(org_mod_fam, organism, unit)
             org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, model_genes,
                                                                      gf2fam, association)
@@ -349,7 +351,7 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
                 result = future.result()
                 pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
                 organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
-    pan_cols_name = ["system number", "system name", "functional unit name", "organism",
+    pan_cols_name = ["system number", "system name", "functional unit name", "organism", "model_GF", "context_GF",
                      "partition", "completeness", "strict", "extended", "split"]
     org_cols_name = ["system number", "system name", "functional unit name", "subsystem number", "organism",
                      "gene family", "partition", "annotation", "secondary_names", "gene.ID", "gene.name", "start",
@@ -374,8 +376,128 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
     return pangenome_projection, organisms_projection
 
 
+def custom_agg(series: pd.Series):
+    """
+    Aggregate a column
+
+    Args:
+        series: series to aggregate
+
+    Returns:
+        The aggregated series
+    """
+    # if all value are identical, first is chosen
+    if series.nunique() == 1:
+        return series.iloc[0]
+    # else, all values are joined
+    else:
+        return ', '.join(series.dropna())
+
+
+def get_partition(series: pd.Series):
+    """
+
+    Args:
+        series:
+
+    Returns:
+
+    """
+
+    final_partition = ""
+    for partition in series.unique().tolist():
+        if partition != final_partition:
+            if final_partition == "":
+                final_partition = partition
+            else:
+                if final_partition == "persistent":
+                    if partition == "shell":
+                        final_partition = "persistent/shell"
+                    elif partition == "cloud":
+                        final_partition = "persistent/cloud"
+                    elif partition == "accessory":
+                        final_partition = "persistent/accessory"
+                elif final_partition == "shell":
+                    if partition == "persistent":
+                        final_partition = "persistent/shell"
+                    elif partition == "cloud":
+                        final_partition = "accessory"
+                    elif partition == "persistent/cloud":
+                        final_partition = "persistent/accessory"
+                elif final_partition == "cloud":
+                    if partition == "persistent":
+                        final_partition = "persistent/cloud"
+                    elif partition == "shell":
+                        final_partition = "accessory"
+                    elif partition == "persistent/shell":
+                        final_partition = "persistent/accessory"
+                elif final_partition == "accessory":
+                    if partition == "persistent":
+                        final_partition = "persistent/accessory"
+                elif final_partition == "persistent/shell":
+                    if partition == "cloud":
+                        final_partition = "persistent/accessory"
+                elif final_partition == "persistent/cloud":
+                    if partition == "shell":
+                        final_partition = "persistent/accessory"
+    return final_partition
+
+
+def extract_numeric_for_sorting(val) -> float:
+    """
+    Function to extract the numeric value for sorting while keeping the original value
+
+    Args:
+        val: the value
+
+    Returns:
+        float: the numeric value
+    """
+    try:
+        # If it's a simple number, return it for sorting
+        return float(val)
+    except ValueError:
+        # If it's a list of numbers separated by commas, return the smallest number for sorting
+        if ',' in val:
+            parts = [float(x) for x in val.replace('"', '').split(',')]
+            return min(parts)  # Take the minimum for sorting
+        return float('inf')  # If it cannot be converted, place it at the end
+
+
+def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Get the reformated projection dataframe for an organism
+
+    Args:
+        org_df: Dataframe for the corresponding organism
+
+    Returns:
+        pd.DataFrame: Dataframe reformated for an organism
+    """
+    org_df = org_df.drop(columns=["organism"])
+    org_df_cols = org_df.columns.tolist()
+    org_df_grouped = org_df.groupby(["gene family", "system name", "functional unit name"],
+                                    as_index=False)
+    org_df_grouped = org_df_grouped.agg({"system number": ','.join, "subsystem number": custom_agg,
+                                         "partition": 'first', "annotation": custom_agg, "gene.ID": custom_agg,
+                                         "gene.name": custom_agg, "secondary_names": custom_agg,
+                                         "start": custom_agg,
+                                         "stop": custom_agg, "strand": custom_agg, "is_fragment": custom_agg,
+                                         "genomic organization": custom_agg, "product": custom_agg,
+                                         "RGPs": custom_agg, "spots": custom_agg})
+    org_df_grouped = org_df_grouped[org_df_cols]
+
+    # Create a temporary column for sorting based on the numeric values extracted
+    org_df_grouped["sort_key"] = org_df_grouped["system number"].apply(extract_numeric_for_sorting)
+
+    # Sort the DataFrame using the temporary column, but keep the original values
+    org_df_sorted = org_df_grouped.sort_values(by=["sort_key", "system name", "start", "stop"],
+                                               ascending=[True, True, True, True]).drop(columns=["sort_key"])
+    return org_df_sorted
+
+
 def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, organisms_projection: pd.DataFrame,
-                             organisms: List[str] = None, force: bool = False):
+                             organisms: List[str] = None, force: bool = False, disable_bar: bool = False):
     """
     Write the projected systems to output files.
 
@@ -389,15 +511,30 @@ def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, o
     Returns:
         None
     """
+
     proj_dir = mkdir(output / "projection", force=force)
     if organisms is not None:
         pangenome_projection = pangenome_projection[~pangenome_projection["organism"].isin(organisms)]
         organisms_projection = organisms_projection[~organisms_projection["organism"].isin(organisms)]
 
-    for organism_name in pangenome_projection["organism"].unique():
+    for organism_name in tqdm(pangenome_projection["organism"].unique(), unit='organisms', disable=disable_bar):
         org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]
-        org_df = org_df.drop(columns=["organism"])
-        org_df.sort_values(by=["system number", "system name", "start", "stop"],
-                           ascending=[True, True, True, True], inplace=True)
-        org_df.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
-    pangenome_projection.to_csv(output / 'systems.tsv', sep="\t", index=False)
+        result = get_org_df(org_df)
+        result.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
+
+    pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)
+    pangenome_grouped = pangenome_grouped.agg({"functional unit name": custom_agg, "organism": custom_agg,
+                                               "model_GF": custom_agg, "context_GF": custom_agg,
+                                               "partition": get_partition, "completeness": np.mean,
+                                               "strict": sum, "extended": sum, "split": sum,
+                                               "RGPs": custom_agg, "spots": custom_agg})
+    pangenome_grouped = pangenome_grouped[pangenome_projection.columns.tolist()]
+
+    # Create a temporary column for sorting based on the numeric values extracted
+    pangenome_grouped["sort_key"] = pangenome_grouped["system number"].apply(extract_numeric_for_sorting)
+
+    # Sort the DataFrame using the temporary column, but keep the original values
+    pangenome_sorted = pangenome_grouped.sort_values(by=["sort_key", "system name", "organism"],
+                                                     ascending=[True, True, True]).drop(columns=["sort_key"])
+
+    pangenome_sorted.to_csv(output / 'systems.tsv', sep="\t", index=False)
