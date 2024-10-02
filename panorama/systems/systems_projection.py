@@ -376,6 +376,28 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
     return pangenome_projection, organisms_projection
 
 
+def _custom_agg(series: pd.Series, unique: bool = False):
+    """
+    Aggregate a column
+
+    Args:
+        series: series to aggregate
+        unique: whether to return unique values or not
+
+    Returns:
+        The aggregated series
+    """
+    # if all value are identical, first is chosen
+    if series.nunique() == 1:
+        return series.iloc[0]
+    # else, all values are joined
+    else:
+        if unique:
+            return ', '.join(series.dropna().unique())
+        else:
+            return ', '.join(series.replace('', pd.NA).dropna())
+
+
 def custom_agg(series: pd.Series):
     """
     Aggregate a column
@@ -386,12 +408,20 @@ def custom_agg(series: pd.Series):
     Returns:
         The aggregated series
     """
-    # if all value are identical, first is chosen
-    if series.nunique() == 1:
-        return series.iloc[0]
-    # else, all values are joined
-    else:
-        return ', '.join(series.dropna())
+    return _custom_agg(series, unique=False)
+
+
+def custom_agg_unique(series: pd.Series):
+    """
+    Aggregate a column
+
+    Args:
+        series: series to aggregate
+
+    Returns:
+        The aggregated series
+    """
+    return _custom_agg(series, unique=True)
 
 
 def get_partition(series: pd.Series):
@@ -476,24 +506,35 @@ def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
     """
     org_df = org_df.drop(columns=["organism"])
     org_df_cols = org_df.columns.tolist()
-    org_df_grouped = org_df.groupby(["gene family", "system name", "functional unit name"],
-                                    as_index=False)
-    org_df_grouped = org_df_grouped.agg({"system number": ','.join, "subsystem number": custom_agg,
-                                         "partition": 'first', "annotation": custom_agg, "gene.ID": custom_agg,
-                                         "gene.name": custom_agg, "secondary_names": custom_agg,
-                                         "start": custom_agg,
-                                         "stop": custom_agg, "strand": custom_agg, "is_fragment": custom_agg,
-                                         "genomic organization": custom_agg, "product": custom_agg,
-                                         "RGPs": custom_agg, "spots": custom_agg})
+
+    # Create a temporary column for sorting based on the numeric values extracted
+    org_df["sort_key"] = org_df["system number"].apply(extract_numeric_for_sorting)
+
+    # Sort the DataFrame using the temporary column, but keep the original values
+    org_df_sorted = org_df.sort_values(by=["sort_key", "system name", "start", "stop"],
+                                       ascending=[True, True, True, True]).drop(columns=["sort_key"])
+
+    org_df_grouped = org_df_sorted.groupby(["gene family", "system name", "functional unit name"],
+                                           as_index=False)
+
+    org_df_grouped = org_df_grouped.agg({"system number": custom_agg_unique, "subsystem number": custom_agg,
+                                         "partition": custom_agg_unique, "annotation": custom_agg,
+                                         "gene.ID": custom_agg,
+                                         "gene.name": custom_agg_unique, "secondary_names": custom_agg,
+                                         "start": custom_agg, "stop": custom_agg, "strand": custom_agg,
+                                         "is_fragment": custom_agg, "genomic organization": custom_agg,
+                                         "product": custom_agg, "RGPs": custom_agg_unique,
+                                         "spots": custom_agg_unique})
     org_df_grouped = org_df_grouped[org_df_cols]
 
     # Create a temporary column for sorting based on the numeric values extracted
     org_df_grouped["sort_key"] = org_df_grouped["system number"].apply(extract_numeric_for_sorting)
 
     # Sort the DataFrame using the temporary column, but keep the original values
-    org_df_sorted = org_df_grouped.sort_values(by=["sort_key", "system name", "start", "stop"],
-                                               ascending=[True, True, True, True]).drop(columns=["sort_key"])
-    return org_df_sorted
+    org_df_grouped_sorted = org_df_grouped.sort_values(by=["sort_key", "system name", "start", "stop"],
+                                                       ascending=[True, True, True, True]).drop(columns=["sort_key"])
+
+    return org_df_grouped_sorted
 
 
 def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, organisms_projection: pd.DataFrame,
@@ -523,11 +564,11 @@ def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, o
         result.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
 
     pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)
-    pangenome_grouped = pangenome_grouped.agg({"functional unit name": custom_agg, "organism": custom_agg,
-                                               "model_GF": custom_agg, "context_GF": custom_agg,
+    pangenome_grouped = pangenome_grouped.agg({"functional unit name": custom_agg_unique, "organism": custom_agg_unique,
+                                               "model_GF": custom_agg_unique, "context_GF": custom_agg_unique,
                                                "partition": get_partition, "completeness": np.mean,
                                                "strict": sum, "extended": sum, "split": sum,
-                                               "RGPs": custom_agg, "spots": custom_agg})
+                                               "RGPs": custom_agg_unique, "spots": custom_agg_unique})
     pangenome_grouped = pangenome_grouped[pangenome_projection.columns.tolist()]
 
     # Create a temporary column for sorting based on the numeric values extracted
