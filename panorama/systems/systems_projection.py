@@ -566,8 +566,8 @@ def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, o
     pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)
     pangenome_grouped = pangenome_grouped.agg({"functional unit name": custom_agg_unique, "organism": custom_agg_unique,
                                                "model_GF": custom_agg_unique, "context_GF": custom_agg_unique,
-                                               "partition": get_partition, "completeness": np.mean,
-                                               "strict": sum, "extended": sum, "split": sum,
+                                               "partition": get_partition, "completeness": 'mean',
+                                               "strict": 'sum', "extended": 'sum', "split": 'sum',
                                                "RGPs": custom_agg_unique, "spots": custom_agg_unique})
     pangenome_grouped = pangenome_grouped[pangenome_projection.columns.tolist()]
 
