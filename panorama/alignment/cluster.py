@@ -215,8 +215,8 @@ def launch(args):
                                  check_function=check_pangenome_cluster, max_workers=args.threads,
                                  lock=lock, disable_bar=args.disable_prog_bar)
     tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
-    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, lock=lock,
-                                                                 threads=args.threads,
+    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir,
+                                                                 threads=args.threads, lock=lock,
                                                                  disable_bar=args.disable_prog_bar)
     clust_res = cluster_gene_families(families_seq=list(pangenome2families_seq.values()), method=args.method,
                                       mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir, threads=args.threads)

@@ -38,6 +38,8 @@ def check_align_parameters(args: argparse.Namespace):
     if not args.tmpdir.exists() or not args.tmpdir.is_dir():
         raise NotADirectoryError("The given path for temporary directory is not found or not a directory."
                                  "Please check your path and try again.")
+    if args.identity > 1 or args.coverage > 1:
+        raise argparse.ArgumentError(message="Identity and coverage must be between 0 and 1", argument=None)
 
 
 def check_pangenome_align(pangenome: Pangenome) -> None:
@@ -208,7 +210,7 @@ def inter_pangenome_align(pangenome2families_seq: Dict[str, Path], output: Path,
     align_results = align_pangenomes(pangenome2db, tmpdir=tmpdir, identity=identity, coverage=coverage,
                                      cov_mode=cov_mode, threads=threads, disable_bar=disable_bar)
     logging.getLogger("PANORAMA").info("Merging pangenomes gene families alignment...")
-    outfile = output / "pangenome_gf_similarities.tsv"
+    outfile = output / "inter_pangenomes.tsv"
     merge_aln_res(align_results, outfile)
 
 
@@ -240,7 +242,7 @@ def all_against_all(families_seq: List[Path], output: Path, identity: float = 0.
     write_alignment(query_db=merge_db, target_db=merge_db, aln_db=aln_db, outfile=aln_res, threads=threads)
     logging.getLogger("PANORAMA").debug("Write alignment done")
     align_df = pd.read_csv(aln_res, sep="\t", names=align_column)
-    outfile = output / "pangenome_gf_similarities.tsv"
+    outfile = output / "all_against_all.tsv"
     align_df.to_csv(outfile, sep="\t", header=True, index=False)
     logging.getLogger("PANORAMA").info(f"Pangenomes gene families similarities are saved here: "
                                        f"{outfile.absolute().as_posix()}")
@@ -264,7 +266,6 @@ def launch(args):
                                  lock=lock, disable_bar=args.disable_prog_bar)
     tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
     pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, lock=lock,
-                                                                 threads=args.threads,
                                                                  disable_bar=args.disable_prog_bar)
     if args.inter_pangenomes:
         inter_pangenome_align(pangenome2families_seq=pangenome2families_seq, output=args.output, identity=args.identity,
@@ -324,7 +325,7 @@ def parser_align(parser):
     mmseqs.add_argument('--coverage', required=False, type=float, default=0.8,
                         help="min coverage percentage threshold")
     mmseqs.add_argument('--cov_mode', required=False, type=int, default=0,
-                        help="covery_mode")
+                        help="covery_mode", choices=[0, 1, 2, 3, 4, 5])
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--tmpdir", required=False, type=Path, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
