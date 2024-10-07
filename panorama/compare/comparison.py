@@ -52,8 +52,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
     :return : parser arguments for align command
     """
-    parser = sub_parser.add_parser("compare", formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-                                   description='Comparison of modules and gene contexts among pangenomes')
+    parser = sub_parser.add_parser("compare", description='Comparison of modules and gene contexts among pangenomes')
 
     parser_comparison(parser)
 

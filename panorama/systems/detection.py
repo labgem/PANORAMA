@@ -686,7 +686,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: Parser with arguments for the 'systems' command.
     """
-    parser = sub_parser.add_parser("systems", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("systems")
     parser_detection(parser)
     return parser
 

@@ -419,7 +419,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: parser arguments for annot command
     """
-    parser = sub_parser.add_parser("write", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("write")
     parser_write(parser)
     return parser
 

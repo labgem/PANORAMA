@@ -238,7 +238,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
         argparse.ArgumentParser: parser arguments for cluster command
     """
 
-    parser = sub_parser.add_parser("cluster", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("cluster")
     parser_clust(parser)
     return parser
 

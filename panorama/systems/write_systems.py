@@ -200,7 +200,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: Parser arguments for align command.
     """
-    parser = sub_parser.add_parser("write_systems", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("write_systems")
     parser_write(parser)
     return parser
 

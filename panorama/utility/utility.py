@@ -192,7 +192,7 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
     Returns:
         argparse.ArgumentParser: The parser for the utils command.
     """
-    parser = sub_parser.add_parser("utils", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("utils")
     parser_utils(parser)
     return parser
 

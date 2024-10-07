@@ -108,7 +108,7 @@ def cmd_line():
             sub.print_help()
             exit(1)
         sub.formatter_class = RawTextArgumentDefaultsHelpFormatter
-        sub.description = opening
+        sub.description = opening + "\n\n" + sub.description if sub.description else opening
         sub.epilog = epilog
 
     args = parser.parse_args()
