@@ -12,7 +12,7 @@ import argparse
 from importlib.metadata import distribution
 
 # local modules
-from panorama.utils import set_verbosity_level, add_common_arguments
+from panorama.utils import set_verbosity_level, add_common_arguments, RawTextArgumentDefaultsHelpFormatter
 import panorama.utility
 import panorama.info
 import panorama.annotate
@@ -22,8 +22,27 @@ import panorama.compare
 import panorama.workflow
 import panorama.format.write_flat
 
-
 version = distribution("panorama").version
+opening = """
+    ____     ___     _   __   ____     ____     ___     __  ___    ___ 
+   / __ \   /   |   / | / /  / __ \   / __ \   /   |   /  |/  /   /   |
+  / /_/ /  / /| |  /  |/ /  / / / /  / /_/ /  / /| |  / /|_/ /   / /| |
+ / ____/  / ___ | / /|  /  / /_/ /  / _, _/  / ___ | / /  / /   / ___ |
+/_/      /_/  |_|/_/ |_/   \____/  /_/ |_|  /_/  |_|/_/  /_/   /_/  |_|
+"""
+opening_full = opening + """
+   ______                                       __  _               ____                                               _     
+  / ________  ____ ___  ____  ____ __________ _/ /_(__   _____     / __ \____ _____  ____ ____  ____  ____  ____ ___  (______
+ / /   / __ \/ __ `__ \/ __ \/ __ `/ ___/ __ `/ __/ | | / / _ \   / /_/ / __ `/ __ \/ __ `/ _ \/ __ \/ __ \/ __ `__ \/ / ___/
+/ /___/ /_/ / / / / / / /_/ / /_/ / /  / /_/ / /_/ /| |/ /  __/  / ____/ /_/ / / / / /_/ /  __/ / / / /_/ / / / / / / / /__  
+\____/\____/_/ /_/ /_/ .___/\__,_/_/   \__,_/\__/_/ |___/\___/  /_/    \__,_/_/ /_/\__, /\___/_/ /_/\____/_/ /_/ /_/_/\___/  
+                    /__                        __              __     __          /____/                                     
+  ____ _____  ____ _/ __  __________  _____   / /_____  ____  / _____/ /_  ____  _  __                                       
+ / __ `/ __ \/ __ `/ / / / / ___/ _ \/ ___/  / __/ __ \/ __ \/ / ___/ __ \/ __ \| |/_/                                       
+/ /_/ / / / / /_/ / / /_/ (__  /  __(__  )  / /_/ /_/ / /_/ / (__  / /_/ / /_/ _>  <                                         
+\__,_/_/ /_/\__,_/_/\__, /____/\___/____/   \__/\____/\____/_/____/_.___/\____/_/|_|                                         
+                   /____/                                                                                                                                                                   
+"""
 epilog = f"""
 By Jérôme Arnoux <jarnoux@genoscope.cns.fr> 
 PANORAMA ({version}) is an opensource bioinformatic tools under CeCILL FREE SOFTWARE LICENSE AGREEMENT
@@ -31,30 +50,36 @@ LABGeM
 """
 
 
+
 def cmd_line():
     # need to manually write the description so that it's displayed into groups of subcommands ....
     desc = "\n"
     desc += "All of the following subcommands have their own set of options. To see them for a given subcommand," \
             " use it with -h or --help, as such:\n"
-    desc += "  panorama <subcommand> -h\n"
+    desc += "panorama <subcommand> -h\n"
     desc += "\n"
-    desc += "  Global:\n"
-    desc += "       info            Provide and compare information through pangenomes\n"
-    desc += "       annotation      Annotate pangenome gene families with HMM or TSV file\n"
-    desc += "       systems       Detect systems in pangenome based on one annotation source\n"
-    desc += "       compare         Pangenome comparison methods\n"
-    desc += "       align           Align gene families from multiple pangenomes\n"
-    desc += "       cluster         Cluster gene families from multiple pangenomes\n"
-    desc += "       compare         Compare contexts and modules across multiple pangenomes\n"    
-    desc += "       write           Writes 'flat' files representing pangenomes that can be used with other software\n"
-    desc += "       utility         Some utility command to run analyses more easily\n"
-    desc += "       write_systems   Writes 'flat' files about systems detected in pangenomes\n"
-    desc += "       utils           Some utility command to run analyses more easily\n"
-    desc += "       pansystems      A workflow to annotate gene families, detect systems and write flat files associated\n"
+    desc += "     Analyzes:\n"
+    desc += "         annotation          Annotate pangenome gene families with HMM or TSV file\n"
+    desc += "         systems             Detect systems in pangenome based on one annotation source\n"
+    desc += "         write               Writes 'flat' files representing pangenomes that can be used with other software\n"
+    desc += "         utility             Some utility command to run analyses more easily\n"
+    desc += "         write_systems       Writes 'flat' files about systems detected in pangenomes\n"
+    desc += "         pansystems          A workflow to annotate gene families, detect systems and write flat files associated\n"
+    desc += "\n"
+    desc += "     Compare:\n"
+    desc += "         align               Align gene families from multiple pangenomes\n"
+    desc += "         cluster             Cluster gene families from multiple pangenomes\n"
+    desc += "         compare_context     Compare contexts among pangenomes\n"
+    desc += "         compare_systems     Compare contexts among pangenomes\n"
+    desc += "         compare_spots       Compare spots among pangenomes\n"
+    desc += "\n"
+    desc += "     Utils:\n"
+    desc += "         info                Provide and compare information through pangenomes\n"
+    desc += "         utils               Some utility command to run analyses more easily\n"
     desc += "\n"
 
     parser = argparse.ArgumentParser(
-        description="Comparative Pangenomic analyses toolsbox",
+        description=opening_full,
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=epilog)
     parser.add_argument('-v', '--version', action='version',
@@ -66,7 +91,6 @@ def cmd_line():
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(0)
-
     subs = [panorama.info.subparser(subparsers),
             panorama.annotate.subparser(subparsers),
             panorama.systems.detection.subparser(subparsers),
@@ -79,16 +103,13 @@ def cmd_line():
             panorama.utility.subparser(subparsers)]
 
     for sub in subs:  # add options common to all subcommands
-        # common = sub._action_groups.pop(1)  # get the 'optional arguments' action group.
         add_common_arguments(sub)
-        # launch help when no argument is given except the command
-        # sub.prog content examples that trigger print_help:
-        # panorama compare
-        # panorama info
-        # panorama compare context
         if sub.prog.split()[1:] == sys.argv[1:]:
             sub.print_help()
             exit(1)
+        sub.formatter_class = RawTextArgumentDefaultsHelpFormatter
+        sub.description = opening
+        sub.epilog = epilog
 
     args = parser.parse_args()
     return args

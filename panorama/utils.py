@@ -18,6 +18,14 @@ from typing import Dict, Union
 from multiprocessing import Manager, Lock
 from importlib.metadata import distribution
 
+import argparse
+
+
+# Create a custom formatter that combines both
+class RawTextArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter,
+                                           argparse.RawDescriptionHelpFormatter):
+    pass
+
 
 def check_log(name: str) -> TextIO:
     """Check if the output log is writable
