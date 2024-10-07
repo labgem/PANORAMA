@@ -3,15 +3,16 @@
 
 # default libraries
 from __future__ import annotations
+import argparse
 from typing import Dict, Tuple, Union
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import Manager, Lock
+from multiprocessing import Lock
 import logging
 from typing import Dict, Union, List, Set, Iterator
 from itertools import combinations
 import networkx as nx
-
+from shutil import rmtree
 from itertools import product
 from collections import defaultdict
 
@@ -19,17 +20,18 @@ from collections import defaultdict
 from tqdm import tqdm
 import pandas as pd
 from ppanggolin.utils import restricted_float
-from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome, parser_context
+from ppanggolin.context.searchGeneContext import search_gene_context_in_pangenome, check_pangenome_for_context_search
 from ppanggolin.cluster.cluster import read_tsv as read_clustering_table
 
 # local libraries
-from panorama.utils import mkdir, init_lock
+from panorama.utils import mkdir
 from panorama.format.read_binaries import load_pangenome
-from panorama.pangenomes import Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.region import GeneContext
+from panorama.compare.utils import parser_comparison, common_launch
 
 
-def check_context_comparison(kwargs):
+def check_context_comparison(args):
     """
     Checks the provided keyword arguments to ensure either 'sequences' or 'family' is present.
 
@@ -39,14 +41,13 @@ def check_context_comparison(kwargs):
     Raises:
         Exception: If neither 'sequences' nor 'family' is present in kwargs.
     """
-    if "sequences" not in kwargs and "family" not in kwargs:
-        raise Exception("At least one of --sequences or --family option must be given")
-
-
-def check_run_context_arguments(ppanggolin_context_args):
-    if ppanggolin_context_args["sequences"] is None and ppanggolin_context_args["families"] is None:
-        raise Exception(
-            "When searching for context with ppanggolin, at least one of --sequences or --family option must be given")
+    if args.context_results:
+        if args.identity > 1 or args.coverage > 1:
+            raise argparse.ArgumentError(message="Identity and coverage must be between 0 and 1", argument=None)
+        if args.transitive < 0 or args.window < 0:
+            raise argparse.ArgumentError(message="Transitivity and window must be positif", argument=None)
+        if args.jaccard > 1:
+            raise argparse.ArgumentError(message="Jaccard must be between 0 and 1", argument=None)
 
 
 def launch_ppanggolin_context(pangenome_to_path: dict, ppanggolin_context_args: dict, output, tmpdir, max_workers: int,
@@ -517,7 +518,7 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
         cgc_graphs.append(nx.union(graphA_cgc, graphB_cgc))
 
         cgc_score = (len(gA_nodes) / (1 + sum_transitivity_edges_A) + len(gB_nodes) / (
-                    1 + sum_transitivity_edges_B)) / 2
+                1 + sum_transitivity_edges_B)) / 2
         cgc_mean_size_in_both_graph = (len(gA_nodes) + len(gB_nodes)) / 2
 
         for meta_node in meta_nodes:
@@ -700,9 +701,9 @@ def compare_gene_contexts_graph_mp(gene_contexts: List[GeneContext],
     return context_graph
 
 
-def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_results: Path, family_clusters: bool,
-                       synteny_score: float,
-                       lock: Lock, output: Path, tmpdir: Path, task: int = 1, threads_per_task: int = 1,
+def context_comparison(pangenomes: Pangenomes, family_clusters: bool,
+                       synteny_score: float, lock: Lock, output: Path, tmpdir: Path, task: int = 1,
+                       threads_per_task: int = 1,
                        disable_bar: bool = False, force: bool = False, ppanggolin_context_args: dict = None):
     """
     Perform comparison of gene contexts and cluster families.
@@ -792,55 +793,90 @@ def context_comparison(pangenome_to_path: Dict[str, Union[str, int]], contexts_r
     nx.readwrite.graphml.write_graphml(context_synteny_graph, context_graph_file)
 
 
-def context_comparison_parser(parser):
+def launch(args):
+    """
+    Launch functions to annotate pangenomes
+
+    :param args: Argument given
+    """
+    check_context_comparison(args)
+    pangenomes, tmpdir = common_launch(args, check_pangenome_for_context_search,
+                                       {"need_families": True, 'need_annotations': True})
+
+    #
+    #
+    #     context_comparison(pan_to_path, args.context_results, args.family_clusters,
+    #                        ppanggolin_context_args=run_context_args,
+    #                        synteny_score=args.synteny_score, lock=lock, output=args.output,
+    #                        tmpdir=args.tmpdir, task=args.task, threads_per_task=args.threads_per_task,
+    #                        disable_bar=args.disable_prog_bar, force=args.force)
+    #
+    # elif args.compare_subcommand == "module":
+    #     raise NotImplementedError(f"Module comparison is not yet implemented.")
+    if not args.keep_tmp:
+        rmtree(tmpdir, ignore_errors=True)
+
+
+def subparser(sub_parser) -> argparse.ArgumentParser:
+    """
+    Subparser to launch PANORAMA in Command line
+
+    :param sub_parser : sub_parser for align command
+
+    :return : parser arguments for align command
+    """
+    parser = sub_parser.add_parser("compare_context",
+                                   description='Comparison of modules and gene contexts among pangenomes')
+
+    parser_comparison_context(parser)
+    return parser
+
+
+def parser_comparison_context(parser):
+    """
+    Parser for specific argument of annot command
+
+    :param parser: parser for annot argument
+    """
+    required, compare_opt, _ = parser_comparison(parser)
+
+    compare_opt.add_argument('--synteny_score', type=int, required=False,
+                             help="minimum synteny score used to filter edges between genomic contexts.")
+
     ## PPANGGOLIN CONTEXT ARGUMENTS
-    compare_context_args = parser.add_argument_group(title="Optional contexts comparison arguments:", )
+    onereq = required.add_mutually_exclusive_group(required=True)
 
-    compare_context_args.add_argument('--synteny_score', type=int, required=False,
-                                      help="minimum synteny score used to filter edges between genomic contexts.")
-
-    fam_cluster_args = parser.add_argument_group(title="Gene families clustering arguments:",
-                                                 description="Used to create clusters of gene families.")
-
-    fam_cluster_args.add_argument('--family_clusters', type=Path, required=False,
-                                  help="A tab-separated file listing the cluster names, the family IDs,")
-
-    # use_context_arg.add_argument('--min_jaccard', type=restricted_float, required=False, default=0.5,
-    #                              help="Minimum value for jaccard index")
-
-    ## PPANGGOLIN CONTEXT ARGUMENTS
-    onereq = parser.add_argument_group(title="PPanGGoLiN context: Input file arguments",
-                                       description="One of the following argument is required :")
-
-    onereq.add_argument('--context_results', type=Path, required=False,
+    onereq.add_argument('-R', '--context_results', type=Path,
                         help="Already computed contexts: Tsv file with two columns: name of pangenome and path to the corresponding context results."
                              "Results can be a table (tsv) or a graph (graphml or gexf)")
 
-    onereq.add_argument('-S', '--sequences', required=False, type=str,
+    onereq.add_argument('-S', '--sequences', type=Path,
                         help="Fasta file with the sequences of interest")
 
-    onereq.add_argument('-F', '--family', required=False, type=str,
+    onereq.add_argument('-F', '--family', type=Path,
                         help="List of family IDs of interest from the pan")
 
-    optional = parser.add_argument_group(title="PPanGGoLiN context: optional arguments")
-    optional.add_argument('--no_defrag', required=False, action="store_true",
-                          help="DO NOT Realign gene families to link fragments with"
-                               "their non-fragmented gene family.")
+    ppanggolin_context = parser.add_argument_group(title="PPanGGOLiN search context arguments",
+                                                   description="Following arguments are used to search context "
+                                                               "with PPanGGOLiN API:")
+    ppanggolin_context.add_argument('--no_defrag', required=False, action="store_true",
+                                    help="DO NOT Realign gene families to link fragments with"
+                                         "their non-fragmented gene family.")
 
-    optional.add_argument('--identity', required=False, type=float, default=0.5,
-                          help="Minimum identity percentage threshold")
-    optional.add_argument('--coverage', required=False, type=float, default=0.8,
-                          help="Minimum coverage percentage threshold")
-    optional.add_argument("-t", "--transitive", required=False, type=int, default=4,
-                          help="Size of the transitive closure used to build the graph. This indicates the number of "
-                               "non-related genes allowed in-between two related genes. Increasing it will improve "
-                               "precision but lower sensitivity a little.")
-    optional.add_argument("-w", "--window_size", required=False, type=int, default=5,
-                          help="Number of neighboring genes that are considered on each side of "
-                               "a gene of interest when searching for conserved genomic contexts.")
+    ppanggolin_context.add_argument('--identity', required=False, type=float, default=0.5,
+                                    help="Minimum identity threshold")
+    ppanggolin_context.add_argument('--coverage', required=False, type=float, default=0.8,
+                                    help="Minimum coverage threshold")
+    ppanggolin_context.add_argument("-t", "--transitive", required=False, type=int, default=4,
+                                    help="Size of the transitive closure used to build the graph. This indicates "
+                                         "the number of non-related genes allowed in-between two related genes. "
+                                         "Increasing it will improve precision but lower sensitivity a little.")
+    ppanggolin_context.add_argument("-w", "--window", required=False, type=int, default=5,
+                                    help="Number of neighboring genes that are considered on each side of "
+                                         "a gene of interest when searching for conserved genomic contexts.")
 
-    optional.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
-                          help="Minimum Jaccard similarity used to filter edges between gene families. Increasing it "
-                               "will improve precision but lower sensitivity a lot.")
-    optional.add_argument('--graph_format', help="Format of the context graph. Can be gexf or graphml.",
-                          default='graphml')
+    ppanggolin_context.add_argument("-s", "--jaccard", required=False, type=restricted_float, default=0.85,
+                                    help="Minimum Jaccard similarity used to filter edges between gene families. "
+                                         "Increasing it will improve precision but lower sensitivity a lot.")
+    ppanggolin_context.add_argument('--graph_format', help="Format of the context graph. Can be gexf or graphml.",
+                                    default='graphml', choices=['graphml', 'gexf'])

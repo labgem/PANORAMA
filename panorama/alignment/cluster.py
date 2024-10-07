@@ -7,8 +7,8 @@ import argparse
 import logging
 from pathlib import Path
 import tempfile
-from typing import Dict, List, Union
-from multiprocessing import Manager
+from typing import Dict, Union
+from multiprocessing import Manager, Lock
 import subprocess
 from time import time
 from shutil import rmtree
@@ -18,7 +18,7 @@ import pandas as pd
 
 # local libraries
 from panorama.utils import mkdir
-from panorama.pangenomes import Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.common import write_pangenomes_families_sequences, createdb
 
@@ -160,23 +160,29 @@ def cluster_launcher(seq_db: Path, mmseqs2_opt: Dict[str, Union[int, float, str]
     return cluster_db
 
 
-def cluster_gene_families(families_seq: List[Path], method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
-                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1) -> Path:
+def cluster_gene_families(pangenomes: Pangenomes, method: str, mmseqs2_opt: Dict[str, Union[int, float, str]],
+                          tmpdir: Path = None, keep_tmp: bool = False, threads: int = 1, lock: Lock = None,
+                          disable_bar: bool = False) -> Path:
     """Cluster pangenomes gene families with MMSeqs2
 
     Args:
-        families_seq: List of path to gene families sequences
+        pangenomes: Pangenomes objects containing pangenome
         method:  Chosen method to cluster pangenomes gene families
         mmseqs2_opt: Dictionary with all the option provide by MMSeqs2
         tmpdir: Temporary directory for MMSeqs2 (Defaults user temporary directory)
-        threads: Number of available threads. (Defaults 1).
         keep_tmp: Whether to keep the temporary directory after execution. (Defaults False).
+        threads: Number of available threads. (Defaults 1).
+        lock: Lock object to write sequences in multithreading (Defaults None).
+        disable_bar: Disable progressive bar (Defaults False).
 
     Returns:
         Dataframe with clustering results
     """
     tmpdir = Path(tempfile.gettempdir()) if tmpdir is None else tmpdir
-    merge_db = createdb(families_seq, tmpdir)
+    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir, threads=threads,
+                                                                 lock=lock, disable_bar=disable_bar)
+    logging.getLogger("PANORAMA").info("Begin to cluster pangenomes gene families")
+    merge_db = createdb(list(pangenome2families_seq.values()), tmpdir)
     if method == "linclust":
         clust_db = linclust_launcher(seq_db=merge_db, mmseqs2_opt=mmseqs2_opt,
                                      tmpdir=tmpdir, keep_tmp=keep_tmp, threads=threads)
@@ -187,9 +193,9 @@ def cluster_gene_families(families_seq: List[Path], method: str, mmseqs2_opt: Di
         raise ValueError("You must choose between linclust or cluster methods for clustering. "
                          "Look at MMSeqs2 documentation for more information.")
     clust_res = Path(tempfile.NamedTemporaryFile(mode="w", dir=tmpdir.name, suffix=".tsv", delete=keep_tmp).name)
-    logging.getLogger().info("Writing clustering in tsv file")
+    logging.getLogger().debug("Writing clustering in tsv file")
     create_tsv(db=merge_db, clust=clust_db, output=clust_res, threads=threads)
-    logging.getLogger("PANORAMA").debug("Clustering done")
+    logging.getLogger("PANORAMA").info("Clustering done")
     return clust_res
 
 
@@ -214,12 +220,11 @@ def launch(args):
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_cluster, max_workers=args.threads,
                                  lock=lock, disable_bar=args.disable_prog_bar)
+
     tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
-    pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, tmpdir=tmpdir,
-                                                                 threads=args.threads, lock=lock,
-                                                                 disable_bar=args.disable_prog_bar)
-    clust_res = cluster_gene_families(families_seq=list(pangenome2families_seq.values()), method=args.method,
-                                      mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir, threads=args.threads)
+    clust_res = cluster_gene_families(pangenomes=pangenomes, method=args.method, mmseqs2_opt=mmseqs2_opt, tmpdir=tmpdir,
+                                      keep_tmp=args.keep_tmp, threads=args.threads, lock=lock,
+                                      disable_bar=args.disable_prog_bar)
 
     outfile = args.output / "pangenome_gf_clustering.tsv"
     write_clustering(clust_res, outfile)

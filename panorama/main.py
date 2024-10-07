@@ -29,8 +29,10 @@ opening = """
   / /_/ /  / /| |  /  |/ /  / / / /  / /_/ /  / /| |  / /|_/ /   / /| |
  / ____/  / ___ | / /|  /  / /_/ /  / _, _/  / ___ | / /  / /   / ___ |
 /_/      /_/  |_|/_/ |_/   \____/  /_/ |_|  /_/  |_|/_/  /_/   /_/  |_|
+
 """
 opening_full = opening + """
+
    ______                                       __  _               ____                                               _     
   / ________  ____ ___  ____  ____ __________ _/ /_(__   _____     / __ \____ _____  ____ ____  ____  ____  ____ ___  (______
  / /   / __ \/ __ `__ \/ __ \/ __ `/ ___/ __ `/ __/ | | / / _ \   / /_/ / __ `/ __ \/ __ `/ _ \/ __ \/ __ \/ __ `__ \/ / ___/
@@ -42,6 +44,7 @@ opening_full = opening + """
 / /_/ / / / / /_/ / / /_/ (__  /  __(__  )  / /_/ /_/ / /_/ / (__  / /_/ / /_/ _>  <                                         
 \__,_/_/ /_/\__,_/_/\__, /____/\___/____/   \__/\____/\____/_/____/_.___/\____/_/|_|                                         
                    /____/                                                                                                                                                                   
+
 """
 epilog = f"""
 By Jérôme Arnoux <jarnoux@genoscope.cns.fr> 
@@ -96,7 +99,7 @@ def cmd_line():
             panorama.systems.detection.subparser(subparsers),
             panorama.alignment.align.subparser(subparsers),
             panorama.alignment.cluster.subparser(subparsers),
-            panorama.compare.subparser(subparsers),
+            panorama.compare.context.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.systems.write_systems.subparser(subparsers),
             panorama.workflow.subparser(subparsers),
@@ -136,8 +139,8 @@ def main():
         panorama.alignment.align.launch(args)
     elif args.subcommand == "cluster":
         panorama.alignment.cluster.launch(args)
-    elif args.subcommand == "compare":
-        panorama.compare.launch(args)
+    elif args.subcommand == "compare_context":
+        panorama.compare.context.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
     elif args.subcommand == "write_systems":

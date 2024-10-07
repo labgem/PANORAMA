@@ -33,11 +33,13 @@ def createdb(seq_files: List[Path], tmpdir: Path, db_type: int = 0, keep_tmp: bo
     Returns:
         DB file
     """
+    logging.getLogger('PANORAMA').debug('Create MMSeqs2 database')
     seqdb = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp)
     cmd = ["mmseqs", "createdb"] + list(map(Path.as_posix, map(Path.absolute, seq_files))) + \
           [seqdb.name, "--dbtype", str(db_type)]
     logging.getLogger("PANORAMA").debug(" ".join(cmd))
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
+    logging.getLogger('PANORAMA').debug(f'MMSeqs2 database created here: {seqdb.name}')
     return Path(seqdb.name)
 
 
