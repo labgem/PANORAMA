@@ -285,6 +285,10 @@ class Pangenomes:
         for pangenome in self._pangenomes_getter.values():
             yield pangenome
 
+    def items(self):
+        for name, pangenome in self._pangenomes_getter.items():
+            yield name, pangenome
+
     def add(self, pangenome: Pangenome):
         """Add a pangenome object to the collection.
 
