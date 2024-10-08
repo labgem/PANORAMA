@@ -338,6 +338,11 @@ class Akin:
             raise KeyError(f"No gene family '{name}' found in the cluster.")
         return self._families[name]
 
+    def __eq__(self, other: Akin) -> bool:
+        if not isinstance(other, Akin):
+            raise TypeError(f"{other} is not an instance of Akin.")
+        return self.ID == other.ID
+
     def add(self, family: GeneFamily):
         """
         Adds a GeneFamily to the Akin group.

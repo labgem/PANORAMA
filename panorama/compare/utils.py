@@ -3,33 +3,42 @@
 
 # default libraries
 from __future__ import annotations
+import logging
 from pathlib import Path
 import tempfile
 from multiprocessing import Manager
 
-from sqlalchemy.testing.plugin.plugin_base import logging
-
 # installed libraries
-
+import networkx as nx
 # local libraries
 from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.cluster import cluster_gene_families, write_clustering, parser_mmseqs2_cluster
 
 
-def common_launch(args, check_func, need_info: dict):
+def cluster_on_frr(graph: nx.Graph, frr_metrics: str):
+    partitions = nx.algorithms.community.louvain_communities(graph, weight=frr_metrics)
+
+    # Add partition index in node attributes
+    for i, cluster_nodes in enumerate(partitions):
+        nx.set_node_attributes(graph, {node: f"cluster_{i}" for node in cluster_nodes}, name=f"{frr_metrics}_cluster")
+
+    logging.info(f"Graph has {len(partitions)} clusters using {frr_metrics}")
+
+
+def common_launch(args, check_func, need_info: dict, **kwargs):
     manager = Manager()
     lock = manager.Lock()
     if args.cluster is None:
         need_info["need_families_sequences"] = True
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_func, max_workers=args.cpus, lock=lock,
-                                 disable_bar=args.disable_prog_bar)
+                                 disable_bar=args.disable_prog_bar, **kwargs)
     tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
     if args.cluster is None:
         mmseqs2_opt = {"max_seqs": args.max_seqs, "min_ungapped": args.min_ungapped,
                        "comp_bias_corr": args.comp_bias_corr, "sensitivity": args.sensitivity,
                        "kmer_per_seq": args.kmer_per_seq, "identity": args.clust_identity,
-                       "coverage": args.clust_coverage, "cov_mode": args.cov_mode, "eval": args.eval,
+                       "coverage": args.clust_coverage, "cov_mode": args.clust_cov_mode, "eval": args.eval,
                        "max_seq_len": args.max_seq_len, "max_reject": args.max_reject, "align_mode": args.align_mode,
                        "clust_mode": args.clust_mode, "reassign": args.reassign}
 
@@ -66,6 +75,10 @@ def parser_comparison(parser):
 
     cluster = parser_mmseqs2_cluster(parser)
     cluster.description = "MMSeqs2 arguments to cluster gene families if no cluster result given"
+    cluster.add_argument("--method", required=False, type=str, choices=["linclust", "cluster"], default="linclust",
+                         help="Choose MMSeqs2 clustering methods:"
+                              "\t-linclust fast but less sensitive clustering"
+                              "\t-cluster slower but more sensitive clustering")
 
     optional = parser.add_argument_group(title="Optional arguments")
 
