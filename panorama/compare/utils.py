@@ -64,7 +64,8 @@ def parser_comparison(parser):
     compare_opt.add_argument('--cluster', required=False, type=Path, nargs='?', default=None,
                              help="A tab-separated file listing the cluster names, the family IDs")
 
-    parser_mmseqs2_cluster(parser)
+    cluster = parser_mmseqs2_cluster(parser)
+    cluster.description = "MMSeqs2 arguments to cluster gene families if no cluster result given"
 
     optional = parser.add_argument_group(title="Optional arguments")
 
