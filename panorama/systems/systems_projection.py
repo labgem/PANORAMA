@@ -516,15 +516,18 @@ def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
 
     org_df_grouped = org_df_sorted.groupby(["gene family", "system name", "functional unit name"],
                                            as_index=False)
-
-    org_df_grouped = org_df_grouped.agg({"system number": custom_agg_unique, "subsystem number": custom_agg,
-                                         "partition": custom_agg_unique, "annotation": custom_agg,
-                                         "gene.ID": custom_agg,
-                                         "gene.name": custom_agg_unique, "secondary_names": custom_agg,
-                                         "start": custom_agg, "stop": custom_agg, "strand": custom_agg,
-                                         "is_fragment": custom_agg, "genomic organization": custom_agg,
-                                         "product": custom_agg, "RGPs": custom_agg_unique,
-                                         "spots": custom_agg_unique})
+    agg_dict = {"system number": custom_agg_unique, "subsystem number": custom_agg,
+                "partition": custom_agg_unique, "annotation": custom_agg,
+                "gene.ID": custom_agg,
+                "gene.name": custom_agg_unique, "secondary_names": custom_agg,
+                "start": custom_agg, "stop": custom_agg, "strand": custom_agg,
+                "is_fragment": custom_agg, "genomic organization": custom_agg,
+                "product": custom_agg}
+    if "RGPs" in org_df_cols:
+        agg_dict["RGPs"] = custom_agg_unique
+    if "spots" in org_df_cols:
+        agg_dict["spots"] = custom_agg_unique
+    org_df_grouped = org_df_grouped.agg(agg_dict)
     org_df_grouped = org_df_grouped[org_df_cols]
 
     # Create a temporary column for sorting based on the numeric values extracted
@@ -563,13 +566,19 @@ def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, o
         result = get_org_df(org_df)
         result.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
 
+    pan_df_col = pangenome_projection.columns.tolist()
     pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)
-    pangenome_grouped = pangenome_grouped.agg({"functional unit name": custom_agg_unique, "organism": custom_agg_unique,
-                                               "model_GF": custom_agg_unique, "context_GF": custom_agg_unique,
-                                               "partition": get_partition, "completeness": 'mean',
-                                               "strict": 'sum', "extended": 'sum', "split": 'sum',
-                                               "RGPs": custom_agg_unique, "spots": custom_agg_unique})
-    pangenome_grouped = pangenome_grouped[pangenome_projection.columns.tolist()]
+    agg_dict = {"functional unit name": custom_agg_unique, "organism": custom_agg_unique,
+                "model_GF": custom_agg_unique, "context_GF": custom_agg_unique,
+                "partition": get_partition, "completeness": 'mean',
+                "strict": 'sum', "extended": 'sum', "split": 'sum'}
+    if "RGPs" in pan_df_col:
+        agg_dict["RGPs"] = custom_agg_unique
+    if "spots" in pan_df_col:
+        agg_dict["spots"] = custom_agg_unique
+
+    pangenome_grouped = pangenome_grouped.agg(agg_dict)
+    pangenome_grouped = pangenome_grouped[pan_df_col]
 
     # Create a temporary column for sorting based on the numeric values extracted
     pangenome_grouped["sort_key"] = pangenome_grouped["system number"].apply(extract_numeric_for_sorting)

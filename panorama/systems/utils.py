@@ -27,7 +27,7 @@ pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the
 
 
 def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
-                         jaccard_threshold: float = 0.8) -> None:
+                         jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
     """
     Filters a graph based on a local Jaccard index.
 
@@ -36,24 +36,38 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
         organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
+    def get_gene_proportion(gene_family: GeneFamily) -> float:
+        """Returns the Jaccard gene proportion for a given gene family."""
+        # Compute the proportion if not cached
+        gf_orgs = set(gene_family.organisms).intersection(organisms)
+        if len(gf_orgs) > 0:
+            return len(data["genomes"].intersection(organisms)) / len(gf_orgs)
+        else:
+            return 0
 
-    # Compute local Jaccard
-    edges2remove = set()
+    new_graph = nx.Graph()
+    # Copy all nodes from the original graph to the new graph
+    new_graph.add_nodes_from(graph.nodes(data=True))
+
     for f1, f2, data in graph.edges(data=True):
-        f1_orgs = set(f1.organisms).intersection(organisms)
-        f2_orgs = set(f2.organisms).intersection(organisms)
-        f1_gene_proportion = len(data["genomes"]) / len(f1_orgs) if len(f1_orgs) > 0 else 0
-        f2_gene_proportion = len(data["genomes"]) / len(f2_orgs) if len(f2_orgs) > 0 else 0
+        # Calculate Jaccard gene proportions for both families
+        f1_proportion = get_gene_proportion(f1)
+        f2_proportion = get_gene_proportion(f2)
 
-        data['f1'] = f1.name
-        data['f2'] = f2.name
-        data['f1_jaccard_gene'] = f1_gene_proportion
-        data['f2_jaccard_gene'] = f2_gene_proportion
+        # Update the local copy of the edge data
+        data.update({
+            'f1': f1.name,
+            'f2': f2.name,
+            'f1_jaccard_gene': f1_proportion,
+            'f2_jaccard_gene': f2_proportion
+        })
 
-        if not ((f1_gene_proportion >= jaccard_threshold) and (f2_gene_proportion >= jaccard_threshold)):
-            edges2remove.add((f1, f2))
+        # Add the edge to the new graph if it meets the Jaccard threshold
+        if f1_proportion >= jaccard_threshold and f2_proportion >= jaccard_threshold:
+            # Add the edge with the updated edge data
+            new_graph.add_edge(f1, f2, **data)
 
-    graph.remove_edges_from(edges2remove)
+    return new_graph
 
 
 def get_number_of_mod_fam(gene_family: GeneFamily, gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]) -> int:

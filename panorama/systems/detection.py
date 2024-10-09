@@ -112,8 +112,8 @@ def get_subcombinations(combi: Set[GeneFamily], combinations: List[FrozenSet[Gen
 
 
 def get_gf2metainfo(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                              mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
-                              ) -> Dict[GeneFamily, Tuple[str, int]]:
+                    mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
+                    ) -> Dict[GeneFamily, Tuple[str, int]]:
     """
     Checks if the presence/absence rules for needed families are respected.
 
@@ -141,10 +141,12 @@ def get_gf2metainfo(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneF
                         (family.presence == 'accessory' and family.name in accessory_list)):
                     for meta_id, metadata in gf.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
                         if metadata.protein_name in avail_name:
-                            gf2fam2meta_info[gf][family.name] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+                            gf2fam2meta_info[gf][family.name] = (
+                                mod_fam2meta_source[family.name], meta_id, metadata.score)
                         elif "secondary_name" in metadata.fields:
                             if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                                gf2fam2meta_info[gf][family.name] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+                                gf2fam2meta_info[gf][family.name] = (
+                                    mod_fam2meta_source[family.name], meta_id, metadata.score)
 
     gf2meta_info = {}
     seen = set()
@@ -198,6 +200,7 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
     accessory_gfs = {gf for gf2metadata in accessory_gfs2metadata.values() for gf in gf2metadata.keys() if
                      gf in families}
     while len(combinations) > 0:
+        logging.getLogger("PANORAMA").debug(f"Search in {len(combinations)}")
         # Continue if there is combination
         context_combination = combinations.pop(0)  # combination found when searching contex
         organisms_of_interest = combinations2orgs[context_combination]
@@ -205,12 +208,16 @@ def search_fu_in_cc(graph: nx.Graph, families: Set[GeneFamily], gene_fam2mod_fam
         context_gfs_name = {gf.name for gf in context_combination} & {gf.name for gf in mandatory_gfs | accessory_gfs}
         if len(context_gfs_name) >= func_unit.min_total:
             filtered_matrix = matrix[list(context_gfs_name)]
+            logging.getLogger("PANORAMA").debug("Check needed")
             if check_needed_families(filtered_matrix, func_unit):
                 local_graph = graph.copy()
                 # Keep only mandatory and accessory of current combination and eventual forgiven and neutral families.
                 node2remove = families.difference(context_combination)
                 local_graph.remove_nodes_from(node2remove)
-                filter_local_context(local_graph, organisms_of_interest, jaccard_threshold=jaccard_threshold)
+                logging.getLogger('PANORAMA').debug(f'filter context with jaccard {jaccard_threshold}')
+                local_graph = filter_local_context(local_graph, organisms_of_interest,
+                                                   jaccard_threshold=jaccard_threshold)
+                logging.getLogger('PANORAMA').debug('search unit in filtered context')
                 for cc in sorted([cc for cc in nx.connected_components(local_graph)
                                   if len(cc.intersection(context_combination)) >= func_unit.min_total],
                                  key=lambda c: (len(c), sorted(c)), reverse=True):
@@ -276,10 +283,16 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
             families_in_cc |= neutral_families
             combinations_in_cc = get_subcombinations(families_in_cc, combinations)
             if len(combinations_in_cc) > 0:
+                logging.getLogger("PANORAMA").debug("Search unit in cc")
+                t0 = time.time()
                 new_detected_su = search_fu_in_cc(cc_graph, families_in_cc, gene_fam2mod_fam, mod_fam2meta_source,
                                                   func_unit, source, matrix, mandatory_gfs2metadata,
                                                   accessory_gfs2metadata, combinations_in_cc,
                                                   combinations2orgs, jaccard_threshold)
+                logging.getLogger("PANORAMA").debug(
+                    f"{len(detected_su)} unit found in cc in {time.time() - t0} seconds.")
+                logging.getLogger("PANORAMA").debug("filter unit in cc")
+                t1 = time.time()
                 for new_su in new_detected_su:
                     is_subset = False
                     for unit in sorted(detected_su, key=len, reverse=True):
@@ -288,6 +301,8 @@ def search_unit_in_context(graph: nx.Graph, families: Set[GeneFamily], gene_fam2
                             unit.merge(new_su)
                     if not is_subset:
                         detected_su.add(new_su)
+                logging.getLogger("PANORAMA").debug(
+                    f"{len(detected_su)} unit found after filtering in {time.time() - t1} seconds.")
     return detected_su
 
 
@@ -348,15 +363,22 @@ def search_system_units(model: Model, gene_families: Set[GeneFamily], gf2fam: Di
         if len(fu_families) >= func_unit.min_total:
             matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
             if check_needed_families(matrix, func_unit):
+                logging.getLogger("PANORAMA").debug("Extract Genomic context")
+                t0 = time.time()
                 context, combinations2orgs = compute_gene_context_graph(families=fu_families,
                                                                         transitive=func_unit.transitivity,
                                                                         window_size=func_unit.window,
                                                                         disable_bar=True)
                 combinations2orgs = {combs: org for combs, org in combinations2orgs.items() if
                                      len(combs) >= func_unit.min_total}
+                logging.getLogger("PANORAMA").debug(f"Genomic context extracted in {time.time() - t0} seconds."
+                                                    f"{len(combinations2orgs)} combinations found")
+                t1 = time.time()
+                logging.getLogger("PANORAMA").debug("Search unit in context")
                 detected_su = search_unit_in_context(context, fu_families, gf2fam, fam2source, matrix, md_gfs2meta,
                                                      acc_gfs2meta, func_unit, source, combinations2orgs,
                                                      jaccard_threshold)
+                logging.getLogger("PANORAMA").debug(f"{len(detected_su)} unit found in {time.time() - t1} seconds.")
                 if len(detected_su) > 0:
                     su_found[func_unit.name] = detected_su
     return su_found
@@ -579,7 +601,8 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
                     detected_systems |= result
 
     for idx, system in enumerate(sorted(detected_systems,
-                                        key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_model_gene_families)),
+                                        key=lambda x: (
+                                                len(x.model.canonical), -len(x), -x.number_of_model_gene_families)),
                                  start=1):
         system.ID = str(idx)
         pangenome.add_system(system)
