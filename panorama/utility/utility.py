@@ -235,6 +235,9 @@ def parser_utils(parser: argparse.ArgumentParser):
                      help="Set the coverage threshold on the target. "
                           "The same threshold will be used for all target. "
                           "It's Not recommended for PADLOC, defensefinder or macsyfinder.")
+
+    #TODO See to add score, evalue and ievalue cutoff
+
     translate = parser.add_argument_group(title="Translate arguments",
                                           description="Arguments to translate systems models from different sources")
     translate.add_argument("--translate", required=False, type=Path, default=None,

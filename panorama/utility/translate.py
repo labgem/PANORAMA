@@ -9,7 +9,7 @@ This module provides function to translate models from different databases
 import re
 from random import choice
 from string import digits
-from typing import Dict, List, Set, Union
+from typing import Callable, Dict, List, Set, Union
 import logging
 from pathlib import Path
 from lxml import etree as et
@@ -17,6 +17,7 @@ import lxml.etree
 import yaml
 import json
 
+from networkx.algorithms.cluster import transitivity
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
@@ -284,7 +285,7 @@ def translate_padloc(padloc_db: Path, output: Path, binary_hmm: bool = False, hm
     return list_data
 
 
-def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -> dict:
+def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, transitivity_mut: Callable) -> dict:
     """ Translate a gene from Defense-finder or MacSyFinder models into PANORAMA family models
 
     Args:
@@ -312,7 +313,7 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -
             if attrib == 'presence':
                 dict_elem['presence'] = value
             elif attrib == 'inter_gene_max_space':
-                dict_elem['parameters']['transitivity'] = int(value)
+                dict_elem['parameters']['transitivity'] = transitivity_mut(int(value))
             elif attrib == 'multi_system' and (value == 1 or value == "True"):
                 dict_elem['parameters']['multi_system'] = True
             elif attrib == "loner" and (value == 1 or value == "True"):
@@ -347,7 +348,7 @@ def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame) -
         return dict_elem
 
 
-def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
+def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, transitivity_mut: Callable):
     """ Translate a gene from Defense-finder or MacSyFinder models into PANORAMA functional unit models
 
     Args:
@@ -374,7 +375,7 @@ def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
             elif attrib == 'min_genes_required':
                 dict_elem['parameters']['min_total'] = int(value)
             elif attrib == 'inter_gene_max_space':
-                dict_elem['parameters']['transitivity'] = int(value)
+                dict_elem['parameters']['transitivity'] = transitivity_mut(int(value))
             elif attrib == 'multi_system' and value == 1:
                 dict_elem['parameters']['multi_system'] = True
             elif attrib == "loner" and (value == 1 or value is True):
@@ -388,7 +389,7 @@ def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame):
 
 
 def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.DataFrame,
-                                canonical: List[str]) -> dict:
+                                canonical: List[str], transitivity_mut: Callable) -> dict:
     """
     Translate macsyfinder model into PANORAMA model
 
@@ -407,7 +408,7 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     if root.attrib is not None:  # Read attributes root
         for parameter, value in root.attrib.items():
             if parameter == 'inter_gene_max_space':
-                data_json['parameters']['transitivity'] = int(value)
+                data_json['parameters']['transitivity'] = transitivity_mut(int(value))
             elif parameter == 'min_mandatory_genes_required':
                 data_json['parameters']['min_mandatory'] = int(value)
             elif parameter == 'min_genes_required':
@@ -423,9 +424,9 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     fam_list = []
     for elem in root:
         if elem.tag == "gene":
-            fam_list.append(translate_gene(elem, data_json, hmm_df))
+            fam_list.append(translate_gene(elem, data_json, hmm_df, transitivity_mut))
         elif elem.tag == "functional_unit":
-            fu_list.append(translate_fu(elem, data_json, hmm_df))
+            fu_list.append(translate_fu(elem, data_json, hmm_df, transitivity_mut))
     if len(fu_list) == 0:  # only genes
         data_json["func_units"].append({'name': data_json["name"], 'presence': 'mandatory',
                                         "families": fam_list, 'parameters': data_json["parameters"]})
@@ -449,7 +450,7 @@ def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> D
         List[Dict[str, Union[str, int, float]]]: List of dictionaries with all necessary information to write HMM metadata
     """
     hmm_dict = {"name": "", 'accession': "", "length": len(hmm.consensus), 'protein_name': "", 'secondary_name': "",
-                "score_threshold": nan, "eval_threshold": 0.1, "ieval_threshold": 0.001, "hmm_cov_threshold": 0.4,
+                "score_threshold": nan, "eval_threshold": 0.1, "ieval_threshold": 0.001, "hmm_cov_threshold": nan,
                 "target_cov_threshold": nan, "description": ""}
 
     name = hmm.name.decode('UTF-8').split()
@@ -591,7 +592,8 @@ def get_models_path(models: Path, source: str) -> Dict[str, Path]:
 
 
 def translate_macsyfinder(macsy_db: Path, output: Path, binary_hmm: bool = False, hmm_coverage: float = None,
-                          target_coverage: float = None, source: str = "", force: bool = False, disable_bar: bool = False) -> List[dict]:
+                          target_coverage: float = None, source: str = "", force: bool = False,
+                          disable_bar: bool = False) -> List[dict]:
     """
     Translate MacSyFinder models into PANORAMA models and write all necessary file for PANORAMA steps
 
@@ -607,17 +609,33 @@ def translate_macsyfinder(macsy_db: Path, output: Path, binary_hmm: bool = False
     Returns:
          List[dict]: List of dictionaries containing translated models
     """
+    def default_transitivity_mut(x: int):
+        return x
+
+    def CONJScan_transitivity_mut(x: int):
+        return int(x/2) if int(x/2) >= x/2 else int(x/2) + 1
+
+    if hmm_coverage is None:
+        if source == "defense-finder":
+            hmm_coverage = 0.4
+        else:
+            hmm_coverage = 0.5
+
     hmm_df = create_macsyfinder_hmm_list(macsy_db / "profiles", output, binary_hmm, hmm_coverage, target_coverage,
                                          force, disable_bar)
     list_data = []
     logging.getLogger('PANORAMA').info(f"Begin to translate {source} models")
     model_path = macsy_db / "definitions"
+    if source == "CONJScan":
+        transitivity_mut = CONJScan_transitivity_mut
+    else:
+        transitivity_mut = default_transitivity_mut
     for name, path in tqdm(get_models_path(model_path, source).items(), unit='file',
                            desc='Translate models', disable=disable_bar):
         try:
             canonical_sys = search_canonical_macsyfinder(name, model_path)
             root = read_xml(path)
-            list_data.append(translate_macsyfinder_model(root, name, hmm_df, canonical_sys))
+            list_data.append(translate_macsyfinder_model(root, name, hmm_df, canonical_sys, transitivity_mut))
         except Exception as error:
             logging.getLogger('PANORAMA').error(f"Error translating {path.as_posix()}")
             raise Exception(f"Error translating {name} due to error: {error}")
