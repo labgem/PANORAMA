@@ -91,9 +91,9 @@ def check_pangenome_pansystems(pangenome: Pangenome, source: str, force: bool = 
 
 def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, table: Path = None,
                          hmms: Dict[str, List[HMM]] = None, k_best_hit: int = None, jaccard_threshold: float = 0.8,
-                         projection: bool = False, association: List[str] = None, partition: bool = False,
-                         proksee: str = None, threads: int = 1, force: bool = False, disable_bar: bool = False,
-                         **hmm_kwgs: Any) -> None:
+                         sensitivity: int = 1, projection: bool = False, association: List[str] = None,
+                         partition: bool = False, proksee: str = None, threads: int = 1, force: bool = False,
+                         disable_bar: bool = False, **hmm_kwgs: Any) -> None:
     """
     Detects systems in a single pangenome.
 
@@ -120,14 +120,15 @@ def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, tabl
         metadata_df = annot_with_hmm(pangenome, hmms, source=source, threads=threads,
                                      disable_bar=disable_bar, **hmm_kwgs)
     write_annotations_to_pangenome(pangenome, metadata_df, source, k_best_hit, force, disable_bar)
-    search_systems(models, pangenome, source, [source], jaccard_threshold, threads=threads, disable_bar=disable_bar)
+    search_systems(models, pangenome, source, [source], jaccard_threshold, sensitivity,
+                   threads=threads, disable_bar=disable_bar)
     write_systems_to_pangenome(pangenome, source, disable_bar=disable_bar)
     write_flat_systems_to_pangenome(pangenome, hmm_kwgs["output"], projection, association, partition, proksee,
                                     threads=threads, force=force, disable_bar=disable_bar)
 
 
 def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[str, List[HMM]] = None,
-               table: pd.DataFrame = None, k_best_hit: int = None, jaccard_threshold: float = 0.8,
+               table: pd.DataFrame = None, k_best_hit: int = None, jaccard_threshold: float = 0.8, sensitivity: int = 1,
                projection: bool = False, association: List[str] = None, partition: bool = False, proksee: str = None,
                threads: int = 1, force: bool = False, disable_bar: bool = False, **hmm_kwgs: Any) -> None:
     """
@@ -159,7 +160,7 @@ def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[st
             metadata_file = table.loc[table["Pangenome"] == pangenome.name]["path"].squeeze()
         else:
             metadata_file = None
-        pansystems_pangenome(pangenome, source, models, metadata_file, hmm, k_best_hit, jaccard_threshold,
+        pansystems_pangenome(pangenome, source, models, metadata_file, hmm, k_best_hit, jaccard_threshold, sensitivity,
                              projection, association, partition, proksee, threads, force, disable_bar, **hmm_kwgs)
 
 
@@ -210,7 +211,7 @@ def launch(args):
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_pansystems, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
-    pansystems(pangenomes, args.source, models, hmms, table, args.k_best_hit, args.jaccard,
+    pansystems(pangenomes, args.source, models, hmms, table, args.k_best_hit, args.jaccard, args.sensitivity,
                args.projection, args.association, args.partition, args.proksee, args.threads,
                args.force, args.disable_prog_bar, **hmm_kwgs)
 
@@ -296,6 +297,8 @@ def parser_pansystems(parser):
     detection.add_argument('--jaccard', required=False, type=float, default=0.8,
                            help="minimum jaccard similarity used to filter edges between gene families. "
                                 "Increasing it will improve precision but lower sensitivity a lot.")
+    detection.add_argument('--sensitivity', required=False, type=int, default=3, choices=[1, 2, 3],
+                           help=argparse.SUPPRESS)
     write = parser.add_argument_group(title="Optional arguments")
     write.add_argument("--projection", required=False, action="store_true",
                        help="Project the systems on organisms. If organisms are specified, "

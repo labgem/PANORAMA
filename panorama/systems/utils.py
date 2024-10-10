@@ -26,6 +26,33 @@ from panorama.pangenomes import Pangenome
 pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
 
 
+def filter_global_context(graph: nx.Graph, jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
+
+    new_graph = nx.Graph()
+    # Copy all nodes from the original graph to the new graph
+    new_graph.add_nodes_from(graph.nodes(data=True))
+
+    for f1, f2, data in graph.edges(data=True):
+        # Calculate Jaccard gene proportions for both families
+        f1_proportion = len(data["genomes"]) / len(set(f1.organisms))
+        f2_proportion = len(data["genomes"]) / len(set(f2.organisms))
+
+        # Update the local copy of the edge data
+        data.update({
+            'f1': f1.name,
+            'f2': f2.name,
+            'f1_jaccard_gene': f1_proportion,
+            'f2_jaccard_gene': f2_proportion
+        })
+
+        # Add the edge to the new graph if it meets the Jaccard threshold
+        if f1_proportion >= jaccard_threshold and f2_proportion >= jaccard_threshold:
+            # Add the edge with the updated edge data
+            new_graph.add_edge(f1, f2, **data)
+
+    return new_graph
+
+
 def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
                          jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
     """
