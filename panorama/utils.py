@@ -9,17 +9,15 @@ This module contains functions for managing files and directories, and checking 
 import sys
 import argparse
 import logging
-from typing import TextIO, Set
+from typing import Dict, TextIO, Set, Union
 import shutil
 from pathlib import Path
-import numpy as np
-import pandas as pd
-from typing import Dict, Union
 from multiprocessing import Manager, Lock
 from importlib.metadata import distribution
 
-import argparse
-
+# installed libraries
+import numpy as np
+import pandas as pd
 
 # Create a custom formatter that combines both
 class RawTextArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter,
