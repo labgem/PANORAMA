@@ -10,6 +10,8 @@ from __future__ import annotations
 import argparse
 import logging
 import time
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
@@ -128,10 +130,10 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
             systems_partition(pangenome.name, pangenome_proj, source_res_output)
         if association:
             logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-            association_pangenome_systems(pangenome, association, source_res_output)
+            association_pangenome_systems(pangenome, association, source_res_output, disable_bar=disable_bar)
         if proksee:
             raise NotImplementedError("Proksee not implemented")
-    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin} seconds")
+    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
 
 
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,
@@ -154,9 +156,11 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
         force (bool, optional): Flag to allow overwriting files. Defaults to False.
         disable_bar (bool, optional): Flag to disable the progress bar. Defaults to False.
     """
+    t0 = time.time()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         write_flat_systems_to_pangenome(pangenome, output, projection, association, partition, proksee, organisms,
                                         canonical, threads, lock, force, disable_bar)
+    logging.getLogger("PANORAMA").info(f"Done write system for all pangenomes in {time.time() - t0:2f} seconds")
 
 
 def launch(args):

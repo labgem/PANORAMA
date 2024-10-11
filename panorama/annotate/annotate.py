@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
+import time
 from typing import Any, Dict, Tuple
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -347,9 +348,11 @@ def launch(args: argparse.Namespace) -> None:
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_annotation, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
+    t0 = time.time()
     annot_pangenomes(pangenomes=pangenomes, source=args.source, table=args.table, hmm=args.hmm, threads=args.threads,
                      k_best_hit=args.k_best_hit, lock=lock, force=args.force, disable_bar=args.disable_prog_bar,
                      **hmm_kwgs)
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation done in {time.time() -t0:2f} seconds")
     if not args.keep_tmp:
         shutil.rmtree(hmm_kwgs["tmp"])
     else:

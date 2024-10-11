@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple, Union
 
 # installed libraries
+from tqdm import tqdm
 import pandas as pd
 from bokeh.io import output_file, save, export_png
 from bokeh.layouts import gridplot, row
@@ -401,7 +402,7 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, coverage: pd.Da
 
 
 def association_pangenome_systems(pangenome: Pangenome, association: List[str], output: Path,
-                                  out_format: List[str] = None):
+                                  out_format: List[str] = None, disable_bar: bool = False):
     """
     Write the association between systems and pangenome objects.
 
@@ -421,7 +422,7 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
     rgp2sys_df.to_csv(output / 'rgp_to_systems.tsv', sep='\t')
     spot2sys_df.to_csv(output / 'spot_to_systems.tsv', sep='\t')
     mod2sys_df.to_csv(output / 'module_to_systems.tsv', sep='\t')
-    for asso in association:
+    for asso in tqdm(association, unit='asso', desc='Write system association', disable=disable_bar):
         write_corr = False
         if asso == "RGPs":
             if not rgp2sys_df.empty:

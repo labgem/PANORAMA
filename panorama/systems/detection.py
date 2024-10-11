@@ -634,7 +634,8 @@ def search_systems(models: Models, pangenome: Pangenome, source: str, metadata_s
         system.ID = str(idx)
         pangenome.add_system(system)
     logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
-    logging.getLogger("PANORAMA").info(f"Systems prediction done for {pangenome.name} in {time.time() - begin} seconds")
+    logging.getLogger("PANORAMA").info(f"Systems prediction done for {pangenome.name} in "
+                                       f"{time.time() - begin:.2f} seconds")
 
 
 def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source: str, metadata_sources: List[str],
@@ -653,10 +654,13 @@ def search_systems_in_pangenomes(models: Models, pangenomes: Pangenomes, source:
         lock (Lock, optional): Global lock for multiprocessing execution. Default is None.
         disable_bar (bool, optional): If True, disables the progress bar. Default is False.
     """
+    t0 = time.time()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
         search_systems(models, pangenome, source, metadata_sources, jaccard_threshold,
                        sensitivity, threads, lock, disable_bar)
+    logging.getLogger("PANORAMA").info(f"Systems prediction in all pangenomes done "
+                                       f"in {time.time() - t0:.2f} seconds")
 
 
 def write_systems_to_pangenome(pangenome: Pangenome, source: str, disable_bar: bool = False):

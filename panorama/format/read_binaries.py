@@ -7,14 +7,14 @@ This module provides functions to read and load pangenome data from HDF5 files.
 
 # default libraries
 import logging
-
-from tqdm import tqdm
+import time
 from typing import Callable, Dict, List
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
 
 # installed libraries
+from tqdm import tqdm
 import tables
 from ppanggolin.formats import (
     read_chunks, read_annotation, read_graph, read_rgp,
@@ -480,6 +480,7 @@ def load_pangenome(name: str, path: Path, taxid: int, need_info: Dict[str, bool]
     Raises:
         Exception: If an error occurs during the pangenome check.
     """
+    t0 = time.time()
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
     if check_function is not None:
@@ -489,6 +490,7 @@ def load_pangenome(name: str, path: Path, taxid: int, need_info: Dict[str, bool]
             logging.getLogger("PANORAMA").error(f"Pangenome {pangenome.name} reading return the below error")
             raise error
     check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
+    logging.getLogger("PANORAMA").info(f"Pangenome {pangenome.name} load done in {time.time() - t0:.2f} seconds")
     return pangenome
 
 
@@ -514,6 +516,7 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
     Returns:
         Pangenomes: List of loaded pangenomes with required information.
     """
+    t0 = time.time()
     pangenomes = Pangenomes()
     pan_to_path = check_tsv_sanity(pangenome_list)
     with ThreadPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
@@ -529,4 +532,5 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
             for future in futures:
                 with lock:
                     pangenomes.add(future.result())
+    logging.getLogger("PANORAMA").info(f"Pangenomes load done in {time.time() - t0:.2f} seconds")
     return pangenomes
