@@ -161,6 +161,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with metadata link to pangenome by its name
     """
+    t0 = time.time()
     path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
@@ -176,6 +177,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
             for future in futures:
                 res = future.result()
                 results[res[1]] = res[0]
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation ridden from TSV file in {time.time() -t0:2f} seconds")
     return results
 
 
@@ -287,11 +289,8 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, source: 
 
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
-
-    Todo:
-        - Use the methods in pangenomes object to align all families to HMM and annot after
-        - look at pyhmmer doc for tips to improve implementation
     """
+    t0 = time.time()
     logging.getLogger("PANORAMA").info("Begin HMM searching")
     # Get list of HMM with Plan7 data model
     pangenome2annot = {}
@@ -300,7 +299,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, source: 
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
         pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, source, mode, threads=threads,
                                                          disable_bar=disable_bar, **hmm_kwgs)
-
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
     return pangenome2annot
 
 
@@ -352,7 +351,6 @@ def launch(args: argparse.Namespace) -> None:
     annot_pangenomes(pangenomes=pangenomes, source=args.source, table=args.table, hmm=args.hmm, threads=args.threads,
                      k_best_hit=args.k_best_hit, lock=lock, force=args.force, disable_bar=args.disable_prog_bar,
                      **hmm_kwgs)
-    logging.getLogger("PANORAMA").info(f"Pangenomes annotation done in {time.time() -t0:2f} seconds")
     if not args.keep_tmp:
         shutil.rmtree(hmm_kwgs["tmp"])
     else:
