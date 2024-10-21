@@ -216,7 +216,7 @@ def launch(args):
                    "clust_mode": args.clust_mode, "reassign": args.reassign}
     manager = Manager()
     lock = manager.Lock()
-    need_info = {"need_families": True, 'need_families_sequences': True}
+    need_info = {"need_families": True, 'need_families_sequences': False}
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_cluster, max_workers=args.threads,
                                  lock=lock, disable_bar=args.disable_prog_bar)

@@ -13,7 +13,7 @@ import subprocess
 
 # installed libraries
 from tqdm import tqdm
-from ppanggolin.formats.writeSequences import write_fasta_prot_fam
+from ppanggolin.formats.writeSequences import write_fasta_prot_fam_from_pangenome_file
 
 # local libraries
 from panorama.pangenomes import Pangenomes, Pangenome
@@ -73,7 +73,7 @@ def write_pangenomes_families_sequences(pangenomes: Pangenomes, tmpdir: Path, th
         add in the begin of sequence name the pangenome_name to be sure that there is no duplicate families
         between pangenomes
         """
-        write_fasta_prot_fam(pan, **kwargs)
+        write_fasta_prot_fam_from_pangenome_file(pan.file, **kwargs)
         return pan.name, kwargs["output"] / "all_protein_families.faa.gz"
 
     logging.getLogger("PANORAMA").info("Writing pangenomes families sequences...")
@@ -81,7 +81,7 @@ def write_pangenomes_families_sequences(pangenomes: Pangenomes, tmpdir: Path, th
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
             for pangenome in pangenomes:
-                args = {"output": mkdir(tmpdir / f"{pangenome.name}"), "prot_families": "all",
+                args = {"output": mkdir(tmpdir / f"{pangenome.name}"), "family_filter": "all",
                         "compress": True, "disable_bar": True}
                 future = executor.submit(write_protein_families_sequences, pangenome, **args)
                 future.add_done_callback(lambda p: progress.update())

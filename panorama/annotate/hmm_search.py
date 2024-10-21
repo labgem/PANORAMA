@@ -54,7 +54,7 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
         List[pyhmmer.easel.Sequence]: list of digitalised gene family sequences
     """
 
-    write_gene_protein_sequences(pangenome, tmp, "all", cpu=threads, keep_tmp=keep_tmp,
+    write_gene_protein_sequences(pangenome.file, tmp, "all", cpu=threads, keep_tmp=keep_tmp,
                                  tmp=tmp, disable_bar=disable_bar)
     available_memory = psutil.virtual_memory().available
     target_size = os.stat(tmp / "all_protein_genes.fna").st_size
@@ -85,7 +85,7 @@ def digit_family_sequences(pangenome: Pangenome,
         text_seq = TextSequence(name=bit_name, accession=bit_acc, sequence=sequence)
         sequences.append(text_seq.digitize(Alphabet.amino()))
     available_memory = psutil.virtual_memory().available
-    return sequences, True if sys.getsizeof(sequences) < available_memory else False
+    return sequences, True if sum(map(sys.getsizeof, sequences)) < available_memory else False
 
 
 def get_msa(pangenome: Pangenome, tmpdir: Path, threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
