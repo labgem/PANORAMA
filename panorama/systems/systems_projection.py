@@ -8,17 +8,17 @@ This module provides functions to project systems onto genomes.
 # default libraries
 from __future__ import annotations
 
+import itertools
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import logging
 from typing import Dict, List, Set, Tuple
-from multiprocessing import Lock
+from multiprocessing import Lock, get_context
 from pathlib import Path
 import time
 
 # installed libraries
 from tqdm import tqdm
-import numpy as np
 import pandas as pd
 import networkx as nx
 from ppanggolin.genome import Organism, Gene
@@ -94,7 +94,7 @@ def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organ
             List[str]: List of elements representing the projection for the gene.
         """
         line_projection = [gene.family.name, gene.family.named_partition, fam_annot, fam_sec, gene.ID,
-                           gene.local_identifier, gene.start, gene.stop, gene.strand, gene.is_fragment,
+                           gene.local_identifier, gene.contig.name, gene.start, gene.stop, gene.strand, gene.is_fragment,
                            sys_state_in_org, gene.product]
 
         if 'RGPs' in association:
@@ -230,8 +230,8 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         org_mod_fam = org_fam & set(unit.models_families)
         filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
         if check_needed_families(filtered_matrix, unit.functional_unit):
-            pan_proj = [unit.name, organism.name, ", ".join(sorted([x.name for x in org_mod_fam])),
-                        ", ".join(sorted([x.name for x in org_fam - org_mod_fam]))]
+            pan_proj = [unit.name, organism.name, ",".join(sorted([x.name for x in org_mod_fam])),
+                        ",".join(sorted([x.name for x in org_fam - org_mod_fam]))]
             genes_graph, model_genes = compute_genes_graph(org_mod_fam, organism, unit)
             org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, model_genes,
                                                                      gf2fam, association)
@@ -354,8 +354,8 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
     pan_cols_name = ["system number", "system name", "functional unit name", "organism", "model_GF", "context_GF",
                      "partition", "completeness", "strict", "extended", "split"]
     org_cols_name = ["system number", "system name", "functional unit name", "subsystem number", "organism",
-                     "gene family", "partition", "annotation", "secondary_names", "gene.ID", "gene.name", "start",
-                     "stop", "strand", "is_fragment", "genomic organization", "product"]
+                     "gene family", "partition", "annotation", "secondary_names", "gene.ID", "gene.name", "contig",
+                     "start", "stop", "strand", "is_fragment", "genomic organization", "product"]
     if 'RGPs' in association:
         pan_cols_name += ['RGPs']
         org_cols_name += ['RGPs']
@@ -369,8 +369,9 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
         inplace=True)  # TODO Try to order system number numerically
     organisms_projection.columns = org_cols_name
     organisms_projection.sort_values(
-        by=["system name", "system number", "subsystem number", "functional unit name", "organism", "start", "stop"],
-        ascending=[True, True, False, True, True, True, True],
+        by=["system name", "system number", "subsystem number", "functional unit name",
+            "organism", "contig", "start", "stop"],
+        ascending=[True, True, False, True, True, True, True, True],
         inplace=True)
     logging.getLogger("PANORAMA").debug('System projection done')
     return pangenome_projection, organisms_projection
@@ -387,15 +388,18 @@ def _custom_agg(series: pd.Series, unique: bool = False):
     Returns:
         The aggregated series
     """
-    # if all value are identical, first is chosen
-    if series.nunique() == 1:
-        return series.iloc[0]
-    # else, all values are joined
+    if unique:
+        values = [set(x) for x in series.replace('', pd.NA).dropna().str.split(',')]
+        if len(values) == 0:
+            return ''
+        else:  # len(values) >1
+            return ', '.join(sorted(set().union(*values)))
     else:
-        if unique:
-            return ', '.join(series.dropna().unique())
-        else:
-            return ', '.join(series.replace('', pd.NA).dropna())
+        values = list(itertools.chain(*[x for x in series.replace('', pd.NA).dropna().str.split(',')]))
+        if len(values) == 0:
+            return ''
+        else:  # len(values) >=1
+            return ', '.join(sorted(values))
 
 
 def custom_agg(series: pd.Series):
@@ -494,7 +498,7 @@ def extract_numeric_for_sorting(val) -> float:
         return float('inf')  # If it cannot be converted, place it at the end
 
 
-def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
+def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     """
     Get the reformated projection dataframe for an organism
 
@@ -504,6 +508,7 @@ def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
     Returns:
         pd.DataFrame: Dataframe reformated for an organism
     """
+    org_name = org_df["organism"].unique()[0]
     org_df = org_df.drop(columns=["organism"])
     org_df_cols = org_df.columns.tolist()
 
@@ -514,22 +519,18 @@ def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
     org_df_sorted = org_df.sort_values(by=["sort_key", "system name", "start", "stop"],
                                        ascending=[True, True, True, True]).drop(columns=["sort_key"])
 
-    org_df_grouped = org_df_sorted.groupby(["gene family", "system name", "functional unit name"],
+    org_df_grouped = org_df_sorted.groupby(["gene family", "system name", "functional unit name", "gene.ID", "start"],
                                            as_index=False)
-    agg_dict = {"system number": custom_agg_unique, "subsystem number": custom_agg,
-                "partition": custom_agg_unique, "annotation": custom_agg,
-                "gene.ID": custom_agg,
-                "gene.name": custom_agg_unique, "secondary_names": custom_agg,
-                "start": custom_agg, "stop": custom_agg, "strand": custom_agg,
-                "is_fragment": custom_agg, "genomic organization": custom_agg,
-                "product": custom_agg}
+    agg_dict = {"system number": custom_agg_unique, "subsystem number": custom_agg, "partition": custom_agg_unique,
+                "annotation": custom_agg, "secondary_names": custom_agg, "contig": custom_agg_unique,
+                "gene.name": custom_agg_unique, "stop": custom_agg_unique, "strand": custom_agg_unique,
+                "is_fragment": custom_agg_unique, "genomic organization": custom_agg, "product": custom_agg}
     if "RGPs" in org_df_cols:
         agg_dict["RGPs"] = custom_agg_unique
     if "spots" in org_df_cols:
         agg_dict["spots"] = custom_agg_unique
     org_df_grouped = org_df_grouped.agg(agg_dict)
     org_df_grouped = org_df_grouped[org_df_cols]
-
     # Create a temporary column for sorting based on the numeric values extracted
     org_df_grouped["sort_key"] = org_df_grouped["system number"].apply(extract_numeric_for_sorting)
 
@@ -537,11 +538,11 @@ def get_org_df(org_df: pd.DataFrame) -> pd.DataFrame:
     org_df_grouped_sorted = org_df_grouped.sort_values(by=["sort_key", "system name", "start", "stop"],
                                                        ascending=[True, True, True, True]).drop(columns=["sort_key"])
 
-    return org_df_grouped_sorted
+    return org_df_grouped_sorted, org_name
 
 
 def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, organisms_projection: pd.DataFrame,
-                             organisms: List[str] = None, force: bool = False, disable_bar: bool = False):
+                             organisms: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False):
     """
     Write the projected systems to output files.
 
@@ -561,10 +562,17 @@ def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, o
         pangenome_projection = pangenome_projection[~pangenome_projection["organism"].isin(organisms)]
         organisms_projection = organisms_projection[~organisms_projection["organism"].isin(organisms)]
 
-    for organism_name in tqdm(pangenome_projection["organism"].unique(), unit='organisms', disable=disable_bar):
-        org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]
-        result = get_org_df(org_df)
-        result.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
+    with ProcessPoolExecutor(max_workers=threads, mp_context=get_context("fork")) as executor:
+        futures = []
+        for organism_name in pangenome_projection["organism"].unique():
+            org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]
+            future = executor.submit(get_org_df, org_df)
+            futures.append(future)
+
+        for future in tqdm(as_completed(futures), total=len(pangenome_projection["organism"].unique()),
+                           unit='organisms', disable=disable_bar, desc="System projection on organisms"):
+            organism_df, organim_name = future.result()
+            organism_df.to_csv(proj_dir / f"{organim_name}.tsv", sep="\t", index=False)
 
     pan_df_col = pangenome_projection.columns.tolist()
     pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)

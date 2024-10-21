@@ -124,13 +124,15 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
         source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
         if projection:
             logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms, force, disable_bar)
+            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms,
+                                     threads, force, disable_bar)
         if partition:
             logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
             systems_partition(pangenome.name, pangenome_proj, source_res_output)
         if association:
             logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-            association_pangenome_systems(pangenome, association, source_res_output, disable_bar=disable_bar)
+            association_pangenome_systems(pangenome, association, source_res_output,
+                                          threads=threads, disable_bar=disable_bar)
         if proksee:
             raise NotImplementedError("Proksee not implemented")
     logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
