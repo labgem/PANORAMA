@@ -7,12 +7,14 @@ This module provides functions to detect biological systems in pangenomes all in
 
 # default libraries
 from __future__ import annotations
+import logging
 import argparse
 from typing import List
 from pathlib import Path
 from multiprocessing import Manager
 import tempfile
 from typing import Any, Dict, Tuple
+import time
 
 # installed libraries
 from tqdm import tqdm
@@ -117,8 +119,10 @@ def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, tabl
     if table is not None:
         metadata_df, _ = read_families_metadata(pangenome, table)
     else:
+        t0 = time.time()
         metadata_df = annot_with_hmm(pangenome, hmms, source=source, threads=threads,
                                      disable_bar=disable_bar, **hmm_kwgs)
+        logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
     write_annotations_to_pangenome(pangenome, metadata_df, source, k_best_hit, force, disable_bar)
     search_systems(models, pangenome, source, [source], jaccard_threshold, sensitivity,
                    threads=threads, disable_bar=disable_bar)
