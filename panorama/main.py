@@ -101,6 +101,7 @@ def cmd_line():
             panorama.alignment.cluster.subparser(subparsers),
             panorama.compare.context.subparser(subparsers),
             panorama.compare.systems.subparser(subparsers),
+            panorama.compare.spots.subparser(subparsers),
             panorama.format.write_flat.subparser(subparsers),
             panorama.systems.write_systems.subparser(subparsers),
             panorama.workflow.subparser(subparsers),
@@ -144,6 +145,8 @@ def main():
         panorama.compare.context.launch(args)
     elif args.subcommand == "compare_systems":
         panorama.compare.systems.launch(args)
+    elif args.subcommand == "compare_spots":
+        panorama.compare.spots.launch(args)
     elif args.subcommand == "write":
         panorama.format.write_flat.launch(args)
     elif args.subcommand == "write_systems":

@@ -22,7 +22,7 @@ from panorama.utils import mkdir
 from panorama.utility.utility import check_models
 from panorama.systems.system import System
 from panorama.systems.write_systems import check_pangenome_write_systems
-from panorama.compare.utils import parser_comparison, common_launch, cluster_on_frr
+from panorama.compare.utils import parser_comparison, common_launch, cluster_on_frr, compute_frr
 
 
 def check_compare_systems_args(args):
@@ -48,16 +48,6 @@ def add_info_systems(pangenomes: Pangenomes, graph: nx.graph):
 
             node_attributes = graph.nodes[sys_hash]
             node_attributes.update(sys_info)
-
-
-def compute_frr(queries: Set[GeneFamily], targets: Set[GeneFamily]) -> Tuple[float, float, int]:
-    akins = {query_gf.akin.ID for query_gf in queries for target_gf in targets if query_gf.akin == target_gf.akin}
-    min_frr = len(akins) / min(len(queries), len(targets))
-    max_frr = len(akins) / max(len(queries), len(targets))
-    if min_frr > 1 or max_frr > 1:
-        print("hello")
-
-    return min_frr, max_frr, len(akins)
 
 
 def compute_edge_metrics(query: System, target: System):
@@ -175,11 +165,11 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     parser = sub_parser.add_parser("compare_systems",
                                    description='Comparison of systems among pangenomes')
 
-    parser_comparison_context(parser)
+    parser_comparison_systems(parser)
     return parser
 
 
-def parser_comparison_context(parser):
+def parser_comparison_systems(parser):
     """
     Add argument to parser for system comparison command
 
@@ -198,14 +188,6 @@ def parser_comparison_context(parser):
     compare_opt.add_argument('--frr_metrics', required=False, type=str, default="min_frr_models",
                              choices=["min_frr_models", "max_frr_models", "min_frr", "max_frr"],
                              help="Metrics used to computed conserved systems cluster.")
-    compare_opt.add_argument('--frr_cutoff', required=False, type=tuple, default=(0.2, 0.2), nargs=2,
-                             help="The frr (Families Repertoire Relatedness) is used to assess the similarity between two "
-                                  "systems based on their gene families.\n"
-                                  "\tThe 'min_frr': Computes the number of gene families shared between the two elements "
-                                  "and divides it by the smaller number of gene families among the two elements.\n"
-                                  "\tThe 'max_frr': Computes the number of gene families shared between the two elements "
-                                  "and divides it by the larger number of gene families among the two elements."
-                             )
     compare_opt.add_argument('--frr_models_cutoff', required=False, type=tuple, default=(0.2, 0.2), nargs=2,
                              help="The frr_models (Families Repertoire Relatedness) is used to assess the similarity "
                                   "between two systems based on their gene families in the models.\n"
@@ -216,8 +198,5 @@ def parser_comparison_context(parser):
                                   "between the two systems and divides it by the larger number of models gene families "
                                   "among the two systems.\n"
                              )
-
     optional.add_argument("--canonical", required=False, action="store_true",
                           help="Write the canonical version of systems too.")
-    optional.add_argument('--graph_formats', required=False, type=str, choices=['gexf', "graphml"], nargs="+",
-                          default=['gexf', 'graphml'], help="Format of the output graph.")

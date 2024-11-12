@@ -6,16 +6,30 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 import tempfile
-from multiprocessing import Manager
+from typing import Any, List, Set, Tuple
+from multiprocessing import Manager, Lock
 
 # installed libraries
 import networkx as nx
+
 # local libraries
+from panorama.pangenomes import Pangenomes
+from panorama.geneFamily import GeneFamily
 from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.cluster import cluster_gene_families, write_clustering, parser_mmseqs2_cluster
 
 
-def cluster_on_frr(graph: nx.Graph, frr_metrics: str):
+def compute_frr(queries: Set[GeneFamily], targets: Set[GeneFamily]) -> Tuple[float, float, int]:
+    akins = {query_gf.akin.ID for query_gf in queries for target_gf in targets if query_gf.akin == target_gf.akin}
+    min_frr = len(akins) / min(len(queries), len(targets))
+    max_frr = len(akins) / max(len(queries), len(targets))
+    if min_frr > 1 or max_frr > 1:
+        print("hello")
+
+    return min_frr, max_frr, len(akins)
+
+
+def cluster_on_frr(graph: nx.Graph, frr_metrics: str) -> List[Set[Any]]:
     partitions = nx.algorithms.community.louvain_communities(graph, weight=frr_metrics)
 
     # Add partition index in node attributes
@@ -23,9 +37,10 @@ def cluster_on_frr(graph: nx.Graph, frr_metrics: str):
         nx.set_node_attributes(graph, {node: f"cluster_{i}" for node in cluster_nodes}, name=f"{frr_metrics}_cluster")
 
     logging.info(f"Graph has {len(partitions)} clusters using {frr_metrics}")
+    return partitions
 
 
-def common_launch(args, check_func, need_info: dict, **kwargs):
+def common_launch(args, check_func, need_info: dict, **kwargs) -> Tuple[Pangenomes, Path, Manager, Lock]:
     manager = Manager()
     lock = manager.Lock()
     if args.cluster is None:
@@ -72,7 +87,14 @@ def parser_comparison(parser):
     compare_opt = parser.add_argument_group(title="Comparison optional arguments")
     compare_opt.add_argument('--cluster', required=False, type=Path, nargs='?', default=None,
                              help="A tab-separated file listing the cluster names, the family IDs")
-
+    compare_opt.add_argument('--frr_cutoff', required=False, type=tuple, default=(0.5, 0.8), nargs=2,
+                             help="The frr (Families Repertoire Relatedness) is used to assess the similarity between two "
+                                  "elements based on their gene families.\n"
+                                  "\tThe 'min_frr': Computes the number of gene families shared between the two elements "
+                                  "and divides it by the smaller number of gene families among the two elements.\n"
+                                  "\tThe 'max_frr': Computes the number of gene families shared between the two elements "
+                                  "and divides it by the larger number of gene families among the two elements."
+                             )
     cluster = parser_mmseqs2_cluster(parser)
     cluster.description = "MMSeqs2 arguments to cluster gene families if no cluster result given"
     cluster.add_argument("--method", required=False, type=str, choices=["linclust", "cluster"], default="linclust",
@@ -81,7 +103,8 @@ def parser_comparison(parser):
                               "\t-cluster slower but more sensitive clustering")
 
     optional = parser.add_argument_group(title="Optional arguments")
-
+    optional.add_argument('--graph_formats', required=False, type=str, choices=['gexf', "graphml"], nargs="+",
+                          default=None, help="Format of the output graph.")
     optional.add_argument("--tmpdir", required=False, type=str, nargs='?', default=Path(tempfile.gettempdir()),
                           help="directory for storing temporary files")
     optional.add_argument("--keep_tmp", required=False, default=False, action="store_true",
