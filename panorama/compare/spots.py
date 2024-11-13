@@ -264,8 +264,8 @@ def compare_spots(pangenomes: Pangenomes, output: Path, dup_margin: float = 0.05
                 pangenome_name = spots2pangenome[spot_hash]
                 node_attributes = spots_graph.nodes[spot_hash]
                 del node_attributes[f"{frr_metrics}_cluster"]
-                node_attributes.update({"cs_id": cs_id, "spot_id": spot.ID, "pangenome": pangenome_name})
-                cs_spots.add(spothash2spot[spot_hash])
+                node_attributes.update({"cluster_spots_id": cs_id, "spot_id": spot.ID, "pangenome": pangenome_name})
+                cs_spots.add(spot)
             pangenomes.add_conserved_spots(ConservedSpots(cs_id, *cs_spots))
         else:
             spots_graph.remove_nodes_from(cluster_spots)

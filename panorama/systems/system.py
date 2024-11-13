@@ -22,6 +22,554 @@ from panorama.geneFamily import GeneFamily
 from panorama.region import Module, Spot
 
 
+class SystemUnit(MetaFeatures):
+    """
+    Represents a functional unit of a system detected in a pangenome.
+
+    Attributes:
+        functional_unit (FunUnit): FuncUnit model associated with the system unit detected.
+        source (str): Source of the functional unit.
+    """
+    _id_counter = 0
+
+    def __init__(self, functional_unit: FuncUnit, source: str, gene_families: Set[GeneFamily] = None,
+                 families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
+        """
+        Initialize a functional unit of a system detected in a pangenome.
+
+        Args:
+            functional_unit (FunUnit): FuncUnit model associated with the system unit.
+            source (str): Source of the functional unit.
+            gene_families: Set of gene families in the system.
+            families_to_metainfo: Mapping of gene families to their metadata.
+        """
+        super().__init__()
+        SystemUnit._id_counter += 1
+        self.ID = SystemUnit._id_counter
+        self.functional_unit = functional_unit
+        self.source = source
+        self._families_getter = {}
+        self._families2metainfo = {}
+        self._regions_getter = {}
+        self._spots_getter = {}
+        self._modules_getter = {}
+        self._models_families = None
+        self._system = None
+        if gene_families:
+            for family in gene_families:
+                annot_source, meta_id = families_to_metainfo.get(family, ("", 0)) if families_to_metainfo else ("", 0)
+                self.add_family(family, annot_source, meta_id)
+
+    def __hash__(self) -> int:
+        """
+        Return the hash value for the given unit.
+
+        Returns:
+            int: Hash value.
+        """
+        return hash(frozenset(self._families_getter.items()))
+
+    def __repr__(self):
+        """
+        Returns a string representation of the system.
+
+        Returns:
+            str: String representation.
+        """
+        return f"System unit {self.ID}, name: {self.name}, model: {self.model.name}"
+
+    def __len__(self):
+        """
+        Returns the number of gene families in the functional unit.
+
+        Returns:
+            int: Number of gene families.
+        """
+        return len(self._families_getter)
+
+    def __setitem__(self, name: str, family: GeneFamily):
+        """
+        Sets a gene family in the system.
+
+        Args:
+            name: Name of the family.
+            family: Gene family belonging to the system.
+
+        Raises:
+            TypeError: If the family is not an instance of GeneFamily.
+            KeyError: If another family with the same name already exists in the system.
+        """
+        if name in self._families_getter and self[name] != family:
+            raise KeyError("A different gene family with the same name already exist in the functional unit")
+        self._families_getter[name] = family
+
+    def __getitem__(self, name: str) -> GeneFamily:
+        """
+        Gets the gene family for the given name in the system.
+
+        Args:
+            name: Name of the gene family.
+
+        Returns:
+            GeneFamily: Gene family with the given name.
+
+        Raises:
+            KeyError: If the family with the given name does not exist in the system.
+        """
+        try:
+            return self._families_getter[name]
+        except KeyError:
+            raise KeyError(f"There isn't gene family with the name {name} in the system")
+
+    @property
+    def system(self) -> Union[System, None]:
+        """
+        Get the system in which the unit belongs if it has been associated with a system.
+
+        Returns:
+            System: System associated with the unit.
+        """
+        return self._system
+
+    @system.setter
+    def system(self, system: System):
+        assert isinstance(system, System), "System must be an instance of System."
+
+        self._system = system
+        # for family in system.families:
+        #     family.add_system(system)
+
+    @property
+    def functional_unit(self) -> FuncUnit:
+        """
+        Get the Functional unit representing the system unit
+
+        Returns:
+            FuncUnit: The Functional unit from the model
+        """
+        return self._fu
+
+    @functional_unit.setter
+    def functional_unit(self, func_unit: FuncUnit):
+        """
+        Set the Functional unit representing the system unit.
+
+        Args:
+            func_unit: The Functional unit to be set
+
+        Raises:
+            TypeError: If the functional unit is not an instance of FuncUnit.
+        """
+        if not isinstance(func_unit, FuncUnit):
+            raise TypeError("A FuncUnit instance is expected")
+        self._fu = func_unit
+
+    @property
+    def model(self) -> Model:
+        """
+        Get the model from where coming the functional unit representing the system unit.
+
+        Returns:
+
+        """
+        return self.functional_unit.model
+
+    @property
+    def name(self) -> str:
+        """
+        Name of the system unit inherited by the functional unit.
+
+        Returns:
+            str: Name of the system unit.
+        """
+        return self.functional_unit.name
+
+    @property
+    def families(self) -> Generator[GeneFamily, None, None]:
+        """
+        Retrieves the families in the system.
+
+        Yields:
+            GeneFamily: Generator of gene families.
+        """
+        yield from self._families_getter.values()
+
+    def add_family(self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0):
+        """
+        Adds a gene family to the system.
+
+        Args:
+            gene_family: Gene family to be added.
+            annotation_source: Source of the annotation.
+            metadata_id: Metadata identifier.
+
+        Raises:
+            AssertionError: If the gene family is not an instance of GeneFamily.
+        """
+        assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"
+        self._families_getter[gene_family.name] = gene_family
+        self._families2metainfo[gene_family] = (annotation_source, metadata_id)
+        # gene_family.add_system_unit(self)
+
+    def __eq__(self, other: SystemUnit) -> bool:
+        """
+        Tests whether two system objects have the same gene families.
+
+        Args:
+            other: Another system to test equality.
+
+        Returns:
+            bool: True if equal, False otherwise.
+
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+        return set(self.models_families) == set(other.models_families)
+
+    def is_superset(self, other: SystemUnit):
+        """Checks if the current unit includes another one.
+
+        Args:
+            other (SystemUnit): The other SysUnit to check inclusion for.
+
+        Returns:
+            bool: True if all families in 'other' are included in 'self',
+                  False otherwise.
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+
+        if set(self.models_families).issuperset(other.models_families):
+            return True
+        return False
+
+    def is_subset(self, other: SystemUnit):
+        """Checks if the current unit is included in another one.
+
+        Args:
+            other (SystemUnit): The other unit to check inclusion against.
+
+        Returns:
+            bool: True if 'self' is included in 'other', False otherwise.
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+
+        if set(self.models_families).issubset(other.models_families):
+            return True
+        return False
+
+    def intersection(self, other: SystemUnit) -> Set[GeneFamily]:
+        """Computes the intersection of gene families between two units.
+
+        Args:
+            other (SystemUnit): The other unit to intersect with.
+
+        Returns:
+            Dict[str, GeneFamily]: A Dictionary of common gene families
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+        return set(other.models_families).intersection(set(self.models_families))
+
+    def difference(self, other: SystemUnit) -> Set[GeneFamily]:
+        """Computes the difference between two units (i.e. all gene families that are in this unit but not the others.)
+
+        Args:
+            other (SystemUnit): The other SystemUnit to compute the difference with.
+
+        Returns:
+            Dict[str, GeneFamily]: A Dictionary of non-common gene families
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+
+        return set(self.families).difference(set(other.families))
+
+    def symmetric_difference(self, other: SystemUnit) -> Set[GeneFamily]:
+        """Computes the difference between two units. (i.e. all gene families that are in exactly one of the units.)
+
+        Args:
+            other (SystemUnit): The other SystemUnit to compute the difference with.
+
+        Returns:
+            Dict[str, GeneFamily]: A Dictionary of non-common gene families
+        Raises:
+            TypeError: If trying to compare a unit with another type of object.
+        """
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be compared to the first one. "
+                            f"You gave a {type(other)}")
+
+        return set(other.families).symmetric_difference(set(self.families))
+
+    def merge(self, other: SystemUnit):
+        if not isinstance(other, SystemUnit):
+            raise TypeError(f"Another system unit is expected to be merged with. You gave a {type(other)}")
+
+        for family in other.difference(self):
+            self.add_family(family)
+            # family.del_system_unit(other.ID)
+
+    def _get_models_families(self) -> Set[GeneFamily]:
+        families = set()
+        for family, metainfo in self._families2metainfo.items():
+            if metainfo[1] != 0:
+                families.add(family)
+        return families
+
+    @property
+    def models_families(self) -> Generator[GeneFamily, None, None]:
+        """
+        Retrieves the gene families described in the model.
+
+        Yields:
+            GeneFamily: Generator of gene families in the model.
+        """
+        if self._models_families is None:
+            self._models_families = self._get_models_families()
+        yield from self._models_families
+
+    @property
+    def nb_model_families(self) -> int:
+        return len(set(self.models_families))
+
+    @property
+    def organisms(self) -> Generator[Organism, None, None]:
+        """
+        Retrieves the organisms where the system unit families belongs.
+
+        Yields:
+            Organism: Generator of organisms.
+        """
+        organisms = set()
+        for family in self.families:
+            organisms |= set(family.organisms)
+        yield from organisms
+
+    @property
+    def nb_organisms(self) -> int:
+        return len(set(self.organisms))
+
+    @property
+    def models_organisms(self) -> Generator[Organism, None, None]:
+        """
+        Retrieves the organisms where the system belongs, considering only families in the model.
+
+        Yields:
+            Organism: Generator of organisms in the model.
+        todo: Try to use organisms bitarray
+        """
+        matrix = np.zeros((self.nb_organisms, self.nb_model_families))
+        org2idx = {org: i for i, org in enumerate(self.organisms)}
+        for j, family in enumerate(self.models_families):
+            for org in family.organisms:
+                matrix[org2idx[org], j] = 1
+        idx2org = {i: org for org, i in org2idx.items()}
+
+        yield from {idx2org[i] for i in np.nonzero(np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total)[0]}
+
+    def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
+        """
+        Retrieves metadata for a gene family.
+
+        Args:
+            gene_family: Gene family for which metadata is retrieved.
+
+        Returns:
+            Tuple[str, int]: Tuple containing annotation source and metadata identifier.
+        """
+        return self._families2metainfo[gene_family]
+
+    def annotation_sources(self) -> Set[str]:
+        """
+        Returns the set of annotation sources.
+
+        Returns:
+            Set[str]: Set of annotation sources.
+        """
+        return {metainfo[0] for metainfo in self._families2metainfo.values() if metainfo[0] != ''}
+
+    @property
+    def modules(self) -> Generator[Module, None, None]:
+        """
+        Retrieves the modules associated with the unit.
+
+        Yields:
+            Module: Generator of modules.
+        """
+        if not self._modules_getter:
+            self._asso_modules()
+        yield from self._modules_getter.values()
+
+    def get_module(self, identifier: int) -> Module:
+        """
+        Retrieves a module by its identifier.
+
+        Args:
+            identifier: Identifier of the module.
+
+        Returns:
+            Module: Module with the given identifier.
+
+        Raises:
+            KeyError: If the module with the given identifier is not associated with the unit.
+        """
+        try:
+            return self._modules_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Module with identifier {identifier} is not associated with unit {self.ID}")
+
+    def add_module(self, module: Module):
+        """
+        Adds a module to the unit.
+
+        Args:
+            module: Module to be added.
+
+        Raises:
+            Exception: If another module with the same identifier is already associated with the unit.
+        """
+        try:
+            mod_in = self.get_module(identifier=module.ID)
+        except KeyError:
+            self._modules_getter[module.ID] = module
+            module.add_unit(self)
+        else:
+            if module != mod_in:
+                raise Exception(
+                    f"Another module with identifier {module.ID} is already associated with unit {self.ID}. "
+                    f"This is unexpected. Please report an issue on our GitHub")
+
+    def _asso_modules(self):
+        """
+        Associates modules to the unit based on the families.
+        """
+        for family in self.families:
+            if family.module is not None:
+                self.add_module(family.module)
+
+    @property
+    def spots(self) -> Generator[Spot, None, None]:
+        """
+        Retrieves the spots associated with the unit.
+
+        Yields:
+            Spot: Generator of spots.
+        """
+        if not self._spots_getter:
+            self._make_spot_getter()
+        yield from self._spots_getter.values()
+
+    def _make_spot_getter(self):
+        """
+        Creates the spot getter.
+        """
+        for region in self.regions:
+            if region.spot is not None:
+                self.add_spot(region.spot)
+
+    def get_spot(self, identifier: int) -> Spot:
+        """
+        Retrieves a spot by its identifier.
+
+        Args:
+            identifier: Identifier of the spot.
+
+        Returns:
+            Spot: Spot with the given identifier.
+
+        Raises:
+            KeyError: If the spot with the given identifier is not associated with the unit.
+        """
+        try:
+            return self._spots_getter[identifier]
+        except KeyError:
+            raise KeyError(f"Spot with identifier {identifier} is not associated with unit {self.ID}")
+
+    def add_spot(self, spot: Spot):
+        """
+        Adds a spot to the unit.
+
+        Args:
+            spot: Spot to be added.
+
+        Raises:
+            Exception: If another spot with the same identifier is already associated with the unit.
+        """
+        try:
+            spot_in = self.get_spot(identifier=spot.ID)
+        except KeyError:
+            self._spots_getter[spot.ID] = spot
+        else:
+            if spot != spot_in:
+                raise Exception(f"Another spot with identifier {spot.ID} is already associated with unit {self.ID}. "
+                                f"This is unexpected. Please report an issue on our GitHub")
+
+    @property
+    def regions(self) -> Generator[Region, None, None]:
+        """
+        Retrieves the regions associated with the unit.
+
+        Yields:
+            Region: Generator of regions.
+        """
+        yield from self._regions_getter.values()
+
+    def get_region(self, name: str) -> Region:
+        """
+        Retrieves a region by its name.
+
+        Args:
+            name: Name of the region.
+
+        Returns:
+            Region: Region with the given name.
+
+        Raises:
+            KeyError: If the region with the given name is not associated with the unit.
+        """
+        try:
+            return self._regions_getter[name]
+        except KeyError:
+            raise KeyError(f"Region with identifier {name} is not associated with unit {self.ID}")
+
+    def add_region(self, region: Region):
+        """
+        Adds a region to the unit.
+
+        Args:
+            region: Region to be added.
+
+        Raises:
+            Exception: If another region with the same identifier is already associated with the unit.
+        """
+        try:
+            region_in = self.get_region(name=region.name)
+        except KeyError:
+            self._regions_getter[region.name] = region
+        else:
+            if region != region_in:
+                raise Exception(
+                    f"Another region with identifier {region.name} is already associated with unit {self.ID}. "
+                    f"This is unexpected. Please report an issue on our GitHub")
+
+
 class System(MetaFeatures):
     """
     Represents a biological system detected in a pangenome.
@@ -52,6 +600,8 @@ class System(MetaFeatures):
         self._unit_getter = {}
         self.canonical = set()
         self._fam2unit = None
+        self.pangenome = None
+        self.cluster_id = None
         if units is not None:
             for fu in units:
                 self.add_unit(fu)
@@ -325,7 +875,6 @@ class System(MetaFeatures):
                 else:
                     self.add_unit(other_unit)
 
-
     @property
     def models_families(self) -> Generator[GeneFamily, None, None]:
         """
@@ -545,548 +1094,87 @@ class System(MetaFeatures):
             raise KeyError(f"Region with name {name} is not associated with system {self.ID}")
 
 
-class SystemUnit:
+class ClusterSystems:
     """
-    Represents a functional unit of a system detected in a pangenome.
-
-    Attributes:
-        functional_unit (FunUnit): FuncUnit model associated with the system unit detected.
-        source (str): Source of the functional unit.
+    Represents a set of systems clustered by similarity across multiple pangenomes.
     """
-    _id_counter = 0
 
-    def __init__(self, functional_unit: FuncUnit, source: str, gene_families: Set[GeneFamily] = None,
-                 families_to_metainfo: Dict[GeneFamily, Tuple[str, int]] = None):
+    def __init__(self, identifier: int, *systems: System):
         """
-        Initialize a functional unit of a system detected in a pangenome.
+        Constructor method.
 
         Args:
-            functional_unit (FunUnit): FuncUnit model associated with the system unit.
-            source (str): Source of the functional unit.
-            gene_families: Set of gene families in the system.
-            families_to_metainfo: Mapping of gene families to their metadata.
+            identifier (int): The identifier of the conserved systems set.
+            *systems (System): The systems to add to the conserved set.
         """
-        SystemUnit._id_counter += 1
-        self.ID = SystemUnit._id_counter
-        self.functional_unit = functional_unit
-        self.source = source
-        self._families_getter = {}
-        self._families2metainfo = {}
-        self._regions_getter = {}
-        self._spots_getter = {}
-        self._modules_getter = {}
-        self._models_families = None
-        self._system = None
-        if gene_families:
-            for family in gene_families:
-                annot_source, meta_id = families_to_metainfo.get(family, ("", 0)) if families_to_metainfo else ("", 0)
-                self.add_family(family, annot_source, meta_id)
+        self.ID = identifier
+        self._systems_getter = {}
+        for system in systems:
+            self.add(system)
 
-    def __hash__(self) -> int:
-        """
-        Return the hash value for the given unit.
-
-        Returns:
-            int: Hash value.
-        """
-        return hash(frozenset(self._families_getter.items()))
-
-    def __repr__(self):
-        """
-        Returns a string representation of the system.
-
-        Returns:
-            str: String representation.
-        """
-        return f"System unit {self.ID}, name: {self.name}, model: {self.model.name}"
-
-    def __len__(self):
-        """
-        Returns the number of gene families in the functional unit.
-
-        Returns:
-            int: Number of gene families.
-        """
-        return len(self._families_getter)
-
-    def __setitem__(self, name: str, family: GeneFamily):
-        """
-        Sets a gene family in the system.
-
-        Args:
-            name: Name of the family.
-            family: Gene family belonging to the system.
-
-        Raises:
-            TypeError: If the family is not an instance of GeneFamily.
-            KeyError: If another family with the same name already exists in the system.
-        """
-        if name in self._families_getter and self[name] != family:
-            raise KeyError("A different gene family with the same name already exist in the functional unit")
-        self._families_getter[name] = family
-
-    def __getitem__(self, name: str) -> GeneFamily:
-        """
-        Gets the gene family for the given name in the system.
-
-        Args:
-            name: Name of the gene family.
-
-        Returns:
-            GeneFamily: Gene family with the given name.
-
-        Raises:
-            KeyError: If the family with the given name does not exist in the system.
-        """
+    def __setitem__(self, key: Tuple[str, str], value: System):
         try:
-            return self._families_getter[name]
+            self._systems_getter[key]
         except KeyError:
-            raise KeyError(f"There isn't gene family with the name {name} in the system")
-
-    @property
-    def system(self) -> Union[System, None]:
-        """
-        Get the system in which the unit belongs if it has been associated with a system.
-
-        Returns:
-            System: System associated with the unit.
-        """
-        return self._system
-
-    @system.setter
-    def system(self, system: System):
-        assert isinstance(system, System), "System must be an instance of System."
-
-        self._system = system
-        # for family in system.families:
-        #     family.add_system(system)
-
-    @property
-    def functional_unit(self) -> FuncUnit:
-        """
-        Get the Functional unit representing the system unit
-
-        Returns:
-            FuncUnit: The Functional unit from the model
-        """
-        return self._fu
-
-    @functional_unit.setter
-    def functional_unit(self, func_unit: FuncUnit):
-        """
-        Set the Functional unit representing the system unit.
-
-        Args:
-            func_unit: The Functional unit to be set
-
-        Raises:
-            TypeError: If the functional unit is not an instance of FuncUnit.
-        """
-        if not isinstance(func_unit, FuncUnit):
-            raise TypeError("A FuncUnit instance is expected")
-        self._fu = func_unit
-
-    @property
-    def model(self) -> Model:
-        """
-        Get the model from where coming the functional unit representing the system unit.
-
-        Returns:
-
-        """
-        return self.functional_unit.model
-
-    @property
-    def name(self) -> str:
-        """
-        Name of the system unit inherited by the functional unit.
-
-        Returns:
-            str: Name of the system unit.
-        """
-        return self.functional_unit.name
-
-    @property
-    def families(self) -> Generator[GeneFamily, None, None]:
-        """
-        Retrieves the families in the system.
-
-        Yields:
-            GeneFamily: Generator of gene families.
-        """
-        yield from self._families_getter.values()
-
-    def add_family(self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0):
-        """
-        Adds a gene family to the system.
-
-        Args:
-            gene_family: Gene family to be added.
-            annotation_source: Source of the annotation.
-            metadata_id: Metadata identifier.
-
-        Raises:
-            AssertionError: If the gene family is not an instance of GeneFamily.
-        """
-        assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"
-        self._families_getter[gene_family.name] = gene_family
-        self._families2metainfo[gene_family] = (annotation_source, metadata_id)
-        # gene_family.add_system_unit(self)
-
-    def __eq__(self, other: SystemUnit) -> bool:
-        """
-        Tests whether two system objects have the same gene families.
-
-        Args:
-            other: Another system to test equality.
-
-        Returns:
-            bool: True if equal, False otherwise.
-
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-        return set(self.models_families) == set(other.models_families)
-
-    def is_superset(self, other: SystemUnit):
-        """Checks if the current unit includes another one.
-
-        Args:
-            other (SystemUnit): The other SysUnit to check inclusion for.
-
-        Returns:
-            bool: True if all families in 'other' are included in 'self',
-                  False otherwise.
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-
-        if set(self.models_families).issuperset(other.models_families):
-            return True
-        return False
-
-    def is_subset(self, other: SystemUnit):
-        """Checks if the current unit is included in another one.
-
-        Args:
-            other (SystemUnit): The other unit to check inclusion against.
-
-        Returns:
-            bool: True if 'self' is included in 'other', False otherwise.
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-
-        if set(self.models_families).issubset(other.models_families):
-            return True
-        return False
-
-    def intersection(self, other: SystemUnit) -> Set[GeneFamily]:
-        """Computes the intersection of gene families between two units.
-
-        Args:
-            other (SystemUnit): The other unit to intersect with.
-
-        Returns:
-            Dict[str, GeneFamily]: A Dictionary of common gene families
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-        return set(other.models_families).intersection(set(self.models_families))
-
-    def difference(self, other: SystemUnit) -> Set[GeneFamily]:
-        """Computes the difference between two units (i. e. all gene families that are in this unit but not the others.)
-
-        Args:
-            other (SystemUnit): The other SystemUnit to compute the difference with.
-
-        Returns:
-            Dict[str, GeneFamily]: A Dictionary of non-common gene families
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-
-        return set(self.families).difference(set(other.families))
-
-    def symmetric_difference(self, other: SystemUnit) -> Set[GeneFamily]:
-        """Computes the difference between two units. (i. e. all gene families that are in exactly one of the units.)
-
-        Args:
-            other (SystemUnit): The other SystemUnit to compute the difference with.
-
-        Returns:
-            Dict[str, GeneFamily]: A Dictionary of non-common gene families
-        Raises:
-            TypeError: If trying to compare a unit with another type of object.
-        """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be compared to the first one. "
-                            f"You gave a {type(other)}")
-
-        return set(other.families).symmetric_difference(set(self.families))
-
-    def merge(self, other: SystemUnit):
-        if not isinstance(other, SystemUnit):
-            raise TypeError(f"Another system unit is expected to be merged with. You gave a {type(other)}")
-
-        for family in other.difference(self):
-            self.add_family(family)
-            # family.del_system_unit(other.ID)
-
-    def _get_models_families(self) -> Set[GeneFamily]:
-        families = set()
-        for family, metainfo in self._families2metainfo.items():
-            if metainfo[1] != 0:
-                families.add(family)
-        return families
-
-    @property
-    def models_families(self) -> Generator[GeneFamily, None, None]:
-        """
-        Retrieves the gene families described in the model.
-
-        Yields:
-            GeneFamily: Generator of gene families in the model.
-        """
-        if self._models_families is None:
-            self._models_families = self._get_models_families()
-        yield from self._models_families
-
-    @property
-    def nb_model_families(self) -> int:
-        return len(set(self.models_families))
-
-    @property
-    def organisms(self) -> Generator[Organism, None, None]:
-        """
-        Retrieves the organisms where the system unit families belongs.
-
-        Yields:
-            Organism: Generator of organisms.
-        """
-        organisms = set()
-        for family in self.families:
-            organisms |= set(family.organisms)
-        yield from organisms
-
-    @property
-    def nb_organisms(self) -> int:
-        return len(set(self.organisms))
-
-    @property
-    def models_organisms(self) -> Generator[Organism, None, None]:
-        """
-        Retrieves the organisms where the system belongs, considering only families in the model.
-
-        Yields:
-            Organism: Generator of organisms in the model.
-        todo: Try to use organisms bitarray
-        """
-        matrix = np.zeros((self.nb_organisms, self.nb_model_families))
-        org2idx = {org: i for i, org in enumerate(self.organisms)}
-        for j, family in enumerate(self.models_families):
-            for org in family.organisms:
-                matrix[org2idx[org], j] = 1
-        idx2org = {i: org for org, i in org2idx.items()}
-
-        yield from {idx2org[i] for i in np.nonzero(np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total)[0]}
-
-    def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
-        """
-        Retrieves metadata for a gene family.
-
-        Args:
-            gene_family: Gene family for which metadata is retrieved.
-
-        Returns:
-            Tuple[str, int]: Tuple containing annotation source and metadata identifier.
-        """
-        return self._families2metainfo[gene_family]
-
-    def annotation_sources(self) -> Set[str]:
-        """
-        Returns the set of annotation sources.
-
-        Returns:
-            Set[str]: Set of annotation sources.
-        """
-        return {metainfo[0] for metainfo in self._families2metainfo.values() if metainfo[0] != ''}
-
-    @property
-    def modules(self) -> Generator[Module, None, None]:
-        """
-        Retrieves the modules associated with the unit.
-
-        Yields:
-            Module: Generator of modules.
-        """
-        if not self._modules_getter:
-            self._asso_modules()
-        yield from self._modules_getter.values()
-
-    def get_module(self, identifier: int) -> Module:
-        """
-        Retrieves a module by its identifier.
-
-        Args:
-            identifier: Identifier of the module.
-
-        Returns:
-            Module: Module with the given identifier.
-
-        Raises:
-            KeyError: If the module with the given identifier is not associated with the unit.
-        """
-        try:
-            return self._modules_getter[identifier]
-        except KeyError:
-            raise KeyError(f"Module with identifier {identifier} is not associated with unit {self.ID}")
-
-    def add_module(self, module: Module):
-        """
-        Adds a module to the unit.
-
-        Args:
-            module: Module to be added.
-
-        Raises:
-            Exception: If another module with the same identifier is already associated with the unit.
-        """
-        try:
-            mod_in = self.get_module(identifier=module.ID)
-        except KeyError:
-            self._modules_getter[module.ID] = module
-            module.add_unit(self)
+            self._systems_getter[key] = value
         else:
-            if module != mod_in:
-                raise Exception(
-                    f"Another module with identifier {module.ID} is already associated with unit {self.ID}. "
-                    f"This is unexpected. Please report an issue on our GitHub")
+            raise KeyError(f"System {key} already exists in conserved systems with ID {self.ID}")
 
-    def _asso_modules(self):
-        """
-        Associates modules to the unit based on the families.
-        """
-        for family in self.families:
-            if family.module is not None:
-                self.add_module(family.module)
+    def __getitem__(self, key: Tuple[str, str]) -> System:
+        try:
+            return self._systems_getter[key]
+        except KeyError:
+            raise KeyError(f"System {key} is not in conserved system with ID {self.ID}")
 
-    @property
-    def spots(self) -> Generator[Spot, None, None]:
+    def add(self, system: System) -> None:
         """
-        Retrieves the spots associated with the unit.
-
-        Yields:
-            Spot: Generator of spots.
-        """
-        if not self._spots_getter:
-            self._make_spot_getter()
-        yield from self._spots_getter.values()
-
-    def _make_spot_getter(self):
-        """
-        Creates the spot getter.
-        """
-        for region in self.regions:
-            if region.spot is not None:
-                self.add_spot(region.spot)
-
-    def get_spot(self, identifier: int) -> Spot:
-        """
-        Retrieves a spot by its identifier.
+        Add a system to the conserved set of systems.
 
         Args:
-            identifier: Identifier of the spot.
+            system (System): The system to add to the object.
+
+        Raises:
+            AssertionError: If the system is not an instance of the System class.
+            KeyError: If the system already exists in the conserved systems with the same ID.
+        """
+        assert isinstance(system, System), f"System object is expected, given type is {type(system)}"
+        self[(system.pangenome.name, system.ID)] = system
+        system.cluster_id = self.ID
+
+    def get(self, system_id: str, pangenome_name: str) -> System:
+        """
+        Get a system from the conserved set of systems.
+
+        Args:
+            system_id (int): The identifier of the system.
+            pangenome_name (str): The name of the pangenome from which the system belongs.
 
         Returns:
-            Spot: Spot with the given identifier.
+            System: The system with the given id and pangenome.
 
         Raises:
-            KeyError: If the spot with the given identifier is not associated with the unit.
+            AssertionError: If the system id is not an integer.
+            KeyError: If the system is not in the conserved set of systems.
         """
-        try:
-            return self._spots_getter[identifier]
-        except KeyError:
-            raise KeyError(f"Spot with identifier {identifier} is not associated with unit {self.ID}")
-
-    def add_spot(self, spot: Spot):
-        """
-        Adds a spot to the unit.
-
-        Args:
-            spot: Spot to be added.
-
-        Raises:
-            Exception: If another spot with the same identifier is already associated with the unit.
-        """
-        try:
-            spot_in = self.get_spot(identifier=spot.ID)
-        except KeyError:
-            self._spots_getter[spot.ID] = spot
-        else:
-            if spot != spot_in:
-                raise Exception(f"Another spot with identifier {spot.ID} is already associated with unit {self.ID}. "
-                                f"This is unexpected. Please report an issue on our GitHub")
+        assert isinstance(system_id, str), f"System id should be a string, given type is {type(system_id)}"
+        return self[(pangenome_name, system_id)]
 
     @property
-    def regions(self) -> Generator[Region, None, None]:
+    def systems(self) -> Generator[System, None, None]:
         """
-        Retrieves the regions associated with the unit.
+        Generator of the systems in the conserved object.
 
         Yields:
-            Region: Generator of regions.
+            System: The next system in the conserved object.
         """
-        yield from self._regions_getter.values()
+        for system in self._systems_getter.values():
+            yield system
 
-    def get_region(self, name: str) -> Region:
+    def pangenomes(self) -> List[str]:
         """
-        Retrieves a region by its name.
-
-        Args:
-            name: Name of the region.
+        Get the list of pangenomes where the conserved system belongs.
 
         Returns:
-            Region: Region with the given name.
-
-        Raises:
-            KeyError: If the region with the given name is not associated with the unit.
+            List[str]: The list of pangenome names.
         """
-        try:
-            return self._regions_getter[name]
-        except KeyError:
-            raise KeyError(f"Region with identifier {name} is not associated with unit {self.ID}")
-
-    def add_region(self, region: Region):
-        """
-        Adds a region to the unit.
-
-        Args:
-            region: Region to be added.
-
-        Raises:
-            Exception: If another region with the same identifier is already associated with the unit.
-        """
-        try:
-            region_in = self.get_region(name=region.name)
-        except KeyError:
-            self._regions_getter[region.name] = region
-        else:
-            if region != region_in:
-                raise Exception(
-                    f"Another region with identifier {region.name} is already associated with unit {self.ID}. "
-                    f"This is unexpected. Please report an issue on our GitHub")
+        return [k[0] for k in self._systems_getter.keys()]

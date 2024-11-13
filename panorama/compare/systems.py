@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Dict, List, Set, Tuple
 from shutil import rmtree
 from itertools import combinations
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Lock
 
 # installed libraries
 from tqdm import tqdm
@@ -18,9 +20,9 @@ import networkx as nx
 # local libraries
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
-from panorama.utils import mkdir
+from panorama.utils import mkdir, init_lock
 from panorama.utility.utility import check_models
-from panorama.systems.system import System
+from panorama.systems.system import System, ClusterSystems
 from panorama.systems.write_systems import check_pangenome_write_systems
 from panorama.compare.utils import parser_comparison, common_launch, cluster_on_frr, compute_frr
 
@@ -46,83 +48,114 @@ def add_info_systems(pangenomes: Pangenomes, graph: nx.graph):
                         "families_count": system.number_of_families}
             sys_hash = hash((name, system.name, system.ID))
 
-            node_attributes = graph.nodes[sys_hash]
-            node_attributes.update(sys_info)
+            if graph.has_node(sys_hash):
+                node_attributes = graph.nodes[sys_hash]
+                node_attributes.update(sys_info)
 
 
-def compute_edge_metrics(query: System, target: System):
-    min_frr_models, max_frr_models, shared_models_gf = compute_frr(set(query.models_families),
-                                                                   set(target.models_families))
-    min_frr, max_frr, shared_gf = compute_frr(set(query.families), set(target.families))
-
-    return {"min_frr_models": min_frr_models,
-            "max_frr_models": max_frr_models,
-            "shared_model_families": shared_models_gf,
-            "min_frr": min_frr,
-            "max_frr": max_frr,
-            "shared_families": shared_gf}
-
-
-def compare_pangenomes_pair_system(query: Pangenome, target: Pangenome, system2id: Dict[str, Set[int]],
-                                   graph: nx.Graph[int], min_frr_cutoff: float = 0.5, max_frr_cutoff: float = 0.8,
-                                   min_frr_models_cutoff: float = 0.5, max_frr_models_cutoff: float = 0.8):
-    for query_sys in query.systems:
-        query_hash = hash((query.name, query_sys.name, query_sys.ID))
-        if query_sys.name in system2id:
-            for sys_id in system2id[query_sys.name]:
-                target_sys = target.get_system(sys_id)
-                target_hash = hash((target.name, target_sys.name, target_sys.ID))
-                if not graph.has_edge(query_hash, target_hash):
-                    edges_metrics = compute_edge_metrics(query_sys, target_sys)
-                    if (edges_metrics["min_frr_models"] > min_frr_models_cutoff and edges_metrics[
-                        "max_frr_models"] > max_frr_models_cutoff
-                            and edges_metrics["min_frr"] > min_frr_cutoff and edges_metrics[
-                                "max_frr"] > max_frr_cutoff):
-                        graph.add_edge(query_hash, target_hash, **edges_metrics)
+def create_pangenome_system_graph(pangenome):
+    graph = nx.Graph()
+    sys2pangenome = {}
+    syshash2sys = {}
+    for system in pangenome.systems:
+        sys_hash = hash((pangenome.name, system.name, system.ID))
+        graph.add_node(sys_hash, system_id=system.ID, system_name=system.name, pangenome=pangenome.name)
+        sys2pangenome[sys_hash] = pangenome.name
+        syshash2sys[sys_hash] = system
+    return graph, sys2pangenome, syshash2sys
 
 
-def compare_systems(pangenomes: Pangenomes, output: Path, tmpdir: Path, graph_formats: List[str],
-                    frr_metrics: str = "min_frr_models", frr_cutoff: Tuple[float, float] = (0.8, 0.8),
-                    frr_models_cutoff: Tuple[float, float] = (0.8, 0.8), cpus: int = 1, disable_bar: bool = False):
-    def search_sys_id(target_pan):
-        system2id[target_pan.name] = defaultdict(set)
-        for system in target_pan.systems:
-            system2id[target_pan.name][system.name].add(system.ID)
+def create_systems_graph(pangenomes: Pangenomes, threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="Pangenome", disable=disable_bar) as pbar:
+            futures = []
+            for pangenome in pangenomes:
+                logging.getLogger("PANORAMA").debug(f"Add spots for pangenome {pangenome.name}")
+                future = executor.submit(create_pangenome_system_graph, pangenome)
+                future.add_done_callback(lambda p: pbar.update())
+                futures.append(future)
+            systems_graph = nx.Graph()
+            systems2pangenome = {}
+            systemhash2system = {}
+            for future in futures:
+                res = future.result()
+                systems_graph.add_nodes_from(res[0])
+                systems2pangenome.update(res[1])
+                systemhash2system.update(res[2])
+    return systems_graph, systems2pangenome, systemhash2system
 
-    system2id = {}
-    conserved_systems_graph = nx.Graph()
-    for pangenome in pangenomes:
-        conserved_systems_graph.add_nodes_from({hash((pangenome.name, system.name, system.ID))
-                                                for system in pangenome.systems})
 
-    for query, target in tqdm(combinations(pangenomes, 2), total=(len(pangenomes)*(len(pangenomes)-1)/2),
-                              unit="pair", disable=disable_bar):
-        if target.name not in system2id:
-            search_sys_id(target)
-        compare_pangenomes_pair_system(query, target, system2id[target.name], conserved_systems_graph,
-                                       min_frr_cutoff=frr_cutoff[0], max_frr_cutoff=frr_cutoff[1],
-                                       min_frr_models_cutoff=frr_models_cutoff[0],
-                                       max_frr_models_cutoff=frr_models_cutoff[1])
+def compute_frr_edges(graph: nx.Graph, sys2pangenome: Dict[int, str], systemhash2system: Dict[int, System],
+                      frr_cutoff: Tuple[float, float] = (0.8, 0.8), frr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+                      disable_bar: bool = False):
+    """
+    Compute spots graph edges with frr score
 
-    cluster_on_frr(conserved_systems_graph, frr_metrics)
+    Args:
+        graph: Spots graph with node only
+        spots2pangenome: Dictionary of spot to pangenome from which they belong
+        frr_cutoff: frr cutoff for frr score (default: 0.8)
+        disable_bar: Flag to disable progress bar (default: False)
+    """
+    sys_pair = [(sys1_hash, sys2_hash) for sys1_hash, sys2_hash in combinations(graph.nodes, 2)
+                if sys2pangenome[sys1_hash] != sys2pangenome[sys2_hash]]
+    with tqdm(total=len(sys_pair), unit='system pair', desc="Compute frr", disable=disable_bar) as pbar:
+        for sys1_hash, sys2_hash in sys_pair:
+            if not graph.has_edge(sys1_hash, sys2_hash):
+                sys1, sys2 = systemhash2system[sys1_hash], systemhash2system[sys2_hash]
+                min_frr_models, max_frr_models, shared_models_gf = compute_frr(set(sys1.models_families),
+                                                                               set(sys2.models_families))
+                if min_frr_models > frr_models_cutoff[0] and max_frr_models > frr_models_cutoff[1]:
+                    min_frr, max_frr, shared_gf = compute_frr(set(sys1.families), set(sys2.families))
+                    if min_frr > frr_cutoff[0] and max_frr > frr_cutoff[1]:
+                        graph.add_edge(sys1_hash, sys2_hash, min_frr_models=min_frr_models, max_frr_models=max_frr_models,
+                                       shared_model_families=shared_models_gf, min_frr=min_frr, max_frr=max_frr,
+                                       shared_families=shared_gf)
+            pbar.update()
 
-    add_info_systems(pangenomes, conserved_systems_graph)
+
+def write_conserved_systems(pangenomes: Pangenomes, output: Path, cs_graph: nx.Graph, graph_formats: List[str]):
+    add_info_systems(pangenomes, cs_graph)
 
     if "gexf" in graph_formats:
         # writing graph in gexf format
         graph_file_name = output / "conserved_systems.gexf"
         logging.info(f"Writing graph in gexf format in {graph_file_name}.")
-        nx.readwrite.gexf.write_gexf(conserved_systems_graph, graph_file_name)
+        nx.readwrite.gexf.write_gexf(cs_graph, graph_file_name)
 
     if "graphml" in graph_formats:
         graph_file_name = output / "conserved_systems.graphml"
         logging.info(f"Writing graph in graphml format in {graph_file_name}.")
-        nx.readwrite.graphml.write_graphml(conserved_systems_graph, graph_file_name)
+        nx.readwrite.graphml.write_graphml(cs_graph, graph_file_name)
 
     outfile = output / "conserved_systems.tsv"
     logging.info(f"Writing rgp clusters in tsv format in {outfile}")
 
-    # write_conserved_systems(outfile, conserved_systems_graph, rgps_in_graph, grr_metric, rgp_to_spot)
+
+def compare_systems(pangenomes: Pangenomes, frr_metrics: str = "min_frr_models",
+                    frr_cutoff: Tuple[float, float] = (0.8, 0.8), frr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+                    threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+    systems_graph, systems2pangenome, systemhash2system = create_systems_graph(pangenomes, threads, lock, disable_bar)
+
+    compute_frr_edges(systems_graph, systems2pangenome, systemhash2system, frr_cutoff, frr_models_cutoff)
+
+    partitions = cluster_on_frr(systems_graph, frr_metrics)
+    for cs_id, cluster_sys in enumerate(partitions, start=1):
+        if len(cluster_sys) > 1:
+            cs_sys = set()
+            for sys_hash in cluster_sys:
+                sys = systemhash2system[sys_hash]
+                pangenome_name = systems2pangenome[sys_hash]
+                node_attributes = systems_graph.nodes[sys_hash]
+                del node_attributes[f"{frr_metrics}_cluster"]
+                node_attributes.update({"cluster_systems_id": cs_id, "system_id": sys.ID, "system_name": sys.name,
+                                        "pangenome": pangenome_name})
+                cs_sys.add(sys)
+            pangenomes.add_cluster_systems(ClusterSystems(cs_id, *cs_sys))
+        else:
+            systems_graph.remove_nodes_from(cluster_sys)
+
+    return systems_graph
 
 
 def launch(args):
@@ -144,9 +177,10 @@ def launch(args):
 
     output = mkdir(args.output, force=args.force)
 
-    compare_systems(pangenomes, output, tmpdir=args.tmpdir, graph_formats=args.graph_formats,
-                    frr_metrics=args.frr_metrics, frr_cutoff=args.frr_cutoff, frr_models_cutoff=args.frr_models_cutoff,
-                    cpus=args.cpus, disable_bar=args.disable_prog_bar)
+    cs_graph = compare_systems(pangenomes, frr_metrics=args.frr_metrics, frr_cutoff=args.frr_cutoff,
+                               frr_models_cutoff=args.frr_models_cutoff, disable_bar=args.disable_prog_bar)
+
+    write_conserved_systems(pangenomes, output, cs_graph, args.graph_formats)
 
     if not args.keep_tmp:
         rmtree(tmpdir, ignore_errors=True)
