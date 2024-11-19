@@ -245,15 +245,18 @@ def read_spots(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False
     """
     table = h5f.root.spots
     spots = {}
+    curr_spot_id = None
     for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="spot", disable=disable_bar):
-        curr_spot = spots.get(int(row["spot"]))
-        if curr_spot is None:
-            curr_spot = Spot(int(row["spot"]))
-            spots[row["spot"]] = curr_spot
+        if curr_spot_id != int(row["spot"]):
+            curr_spot_id = int(row["spot"])
+            curr_spot = spots.get(curr_spot_id)
+            if curr_spot is None:
+                curr_spot = Spot(int(row["spot"]))
+                spots[row["spot"]] = curr_spot
         region = pangenome.get_region(row["RGP"].decode())
         curr_spot.add(region)
-        curr_spot.spot_2_families()
     for spot in spots.values():
+        spot.spot_2_families()
         pangenome.add_spot(spot)
     pangenome.status["spots"] = "Loaded"
 
@@ -370,7 +373,9 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
     if spots:
         if h5f.root.status._v_attrs.spots:
             logging.getLogger("PPanGGOLiN").info("Reading the spots...")
+            t0 = time.time()
             read_spots(pangenome, h5f, disable_bar=disable_bar)
+            logging.getLogger("PPanGGOLiN").debug(f"Load spots took: {time.time() - t0}")
         else:
             raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have spots information, "
                                  f"or has been improperly filled")

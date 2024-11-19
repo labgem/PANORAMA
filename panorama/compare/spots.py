@@ -16,6 +16,7 @@ from multiprocessing import Lock
 # installed libraries
 from tqdm import tqdm
 import networkx as nx
+import numpy as np
 import pandas as pd
 
 # local libraries
@@ -30,19 +31,25 @@ from panorama.utility.utility import check_models
 def check_compare_spots_args(args):
     need_info = {"need_annotations": True, "need_families": True, "need_families_info": True,  # "need_graph": True,
                  "need_rgp": True, "need_spots": True}
-    if args.models is not None:
-        if args.sources is None:
-            raise argparse.ArgumentError(argument=None, message="You provide models without sources")
+    if args.systems:
+        if args.models is not None:
+            if args.sources is None:
+                raise argparse.ArgumentError(argument=None, message="You required to add systems to comparison but "
+                                                                    "did not provide sources")
+            else:
+                models_list = []
+                for models in args.models:
+                    models_list.append(check_models(models, disable_bar=args.disable_prog_bar))
+                need_info.update({"need_metadata": True, "metatypes": ["families"], "need_systems": True,
+                                  "systems_sources": args.sources, "models": models_list,
+                                  "read_canonical": args.canonical})
         else:
-            models_list = []
-            for models in args.models:
-                models_list.append(check_models(models, disable_bar=args.disable_prog_bar))
-            need_info.update({"need_metadata": True, "metatypes": ["families"], "need_systems": True,
-                              "systems_sources": args.sources, "models": models_list,
-                              "read_canonical": args.canonical})
-    else:
-        if args.sources is not None:
-            raise argparse.ArgumentError(argument=None, message="You provide sources without models")
+            if args.sources is not None:
+                raise argparse.ArgumentError(argument=None, message="You required to add systems to comparison but "
+                                                                    "did not provide models")
+            else:
+                raise argparse.ArgumentError(argument=None, message="You required to add systems to comparison but "
+                                                                    "did not provide models and sources")
     return need_info
 
 
@@ -192,6 +199,124 @@ def add_systems_info(pangenomes, cs_graph):
         nodes_attributes["#systems"] = node2nbsys[node]
 
 
+def graph_systems_link_with_conserved_spots(pangenomes: Pangenomes, output: Path,
+                                            graph_formats: List[str] = None, threads: int = 1,
+                                            lock: Lock = None,
+                                            disable_bar: bool = False):
+    from panorama.compare.systems import create_systems_graph
+
+    systems_graph, system2pangenome, systemhash2system = create_systems_graph(pangenomes, threads, lock, disable_bar)
+    systemhash2conserved_spots = defaultdict(set)
+    for pangenome in pangenomes:
+        for system in pangenome.systems:
+            system_hash = hash((pangenome.name, system.name, system.ID))
+            for gf in system.models_families:
+                systemhash2conserved_spots[system_hash] |= {spot.conserved_id for spot in gf.spots}
+            if None in systemhash2conserved_spots[system_hash]:
+                systemhash2conserved_spots[system_hash].remove(None)
+
+    for sys_hash1, sys_hash2 in combinations(systems_graph.nodes, 2):
+        common_cs = systemhash2conserved_spots[sys_hash1].intersection(systemhash2conserved_spots[sys_hash2])
+        if len(common_cs) > 0:
+            if system2pangenome[sys_hash1] != system2pangenome[sys_hash2]:
+                systems_graph.add_edge(sys_hash1, sys_hash2, cluster_spots=",".join(map(str, sorted(common_cs))),
+                                       weight=len(common_cs))
+                node_attr1, node_attr2 = systems_graph.nodes[sys_hash1], systems_graph.nodes[sys_hash2]
+                pangenome1, pangenome2 = system2pangenome[sys_hash1], system2pangenome[sys_hash2]
+                sys1, sys2 = systemhash2system[sys_hash1], systemhash2system[sys_hash2]
+                node_attr1.update({"system_name": sys1.name, "pangenome": pangenome1})
+                node_attr2.update({"system_name": sys2.name, "pangenome": pangenome2})
+                if "spots" in node_attr1:
+                    node_attr1["spots"] |= {spot.ID for cs in common_cs
+                                            for spot in pangenomes.get_conserved_spots(cs).spots
+                                            if spot.pangenome.name == pangenome1}
+                else:
+                    node_attr1["spots"] = {spot.ID for cs in common_cs for spot in
+                                           pangenomes.get_conserved_spots(cs).spots
+                                           if spot.pangenome.name == pangenome1}
+                if "spots" in node_attr2:
+                    node_attr2["spots"] |= {spot.ID for cs in common_cs
+                                            for spot in pangenomes.get_conserved_spots(cs).spots
+                                            if spot.pangenome.name == pangenome2}
+                else:
+                    node_attr2["spots"] = {spot.ID for cs in common_cs for spot in
+                                           pangenomes.get_conserved_spots(cs).spots
+                                           if spot.pangenome.name == pangenome2}
+
+    systems_graph.remove_nodes_from(list(nx.isolates(systems_graph)))
+
+    for node in systems_graph.nodes:
+        node_attr = systems_graph.nodes[node]
+        if "spots" in node_attr:
+            node_attr["spots"] = ",".join(map(str, sorted(node_attr["spots"])))
+
+    louvain_graph = systems_graph.copy()
+    partitions = nx.algorithms.community.louvain_communities(louvain_graph, weight="weight")
+
+    for cluster_id, cluster_systems in enumerate(partitions, start=1):
+        if len(cluster_systems) > 1:
+            for sys_hash in cluster_systems:
+                node_attr = louvain_graph.nodes[sys_hash]
+                pangenome = system2pangenome[sys_hash]
+                sys = systemhash2system[sys_hash]
+                node_attr.update({"system_ID": sys.ID, "system_name": sys.name,
+                                  "pangenome": pangenome, "cluster_id": cluster_id})
+        else:
+            louvain_graph.remove_nodes_from(cluster_systems)
+
+    if graph_formats is not None:
+        # add_info_spots(pangenomes, cs_graph)
+        if "gexf" in graph_formats:
+            # writing graph in gexf format
+            graph_file_name = output / "systems_link_with_conserved_spots_louvain.gexf"
+            logging.info(f"Writing graph in gexf format in {graph_file_name}.")
+            nx.readwrite.gexf.write_gexf(louvain_graph, graph_file_name)
+
+        if "graphml" in graph_formats:
+            graph_file_name = output / "systems_link_with_conserved_spots_louvain.graphml"
+            logging.info(f"Writing graph in graphml format in {graph_file_name}.")
+            nx.readwrite.graphml.write_graphml(louvain_graph, graph_file_name)
+
+    # Build the Minimum Spanning Tree (MST)
+    mst = nx.minimum_spanning_tree(systems_graph, weight="weight")
+
+    # Extract edge weights from the MST
+    weights = np.array([d['weight'] for _, _, d in mst.edges(data=True)])
+
+    # Analyze weights to determine an automatic threshold
+    sorted_weights = np.sort(weights)  # Sort the weights
+    diffs = np.diff(sorted_weights)  # Compute differences between consecutive weights
+    max_jump_index = np.argmax(diffs)  # Identify the largest jump in weights
+    threshold = sorted_weights[max_jump_index]  # Define the threshold as the weight before the largest jump
+
+    # Remove edges heavier than the threshold
+    to_remove = [(u, v) for u, v, d in mst.edges(data=True) if d["weight"] > threshold]
+    mst.remove_edges_from(to_remove)
+
+    for cluster_id, cluster_systems in enumerate(nx.connected_components(mst), start=1):
+        if len(cluster_systems) > 1:
+            for sys_hash in cluster_systems:
+                node_attr = mst.nodes[sys_hash]
+                pangenome = system2pangenome[sys_hash]
+                sys = systemhash2system[sys_hash]
+                node_attr.update({"system_name": sys.name, "pangenome": pangenome, "cluster_id": cluster_id})
+        else:
+            mst.remove_nodes_from(cluster_systems)
+
+    if graph_formats is not None:
+        # add_info_spots(pangenomes, cs_graph)
+        if "gexf" in graph_formats:
+            # writing graph in gexf format
+            graph_file_name = output / "systems_link_with_conserved_spots_mst.gexf"
+            logging.info(f"Writing graph in gexf format in {graph_file_name}.")
+            nx.readwrite.gexf.write_gexf(mst, graph_file_name)
+
+        if "graphml" in graph_formats:
+            graph_file_name = output / "systems_link_with_conserved_spots_mst.graphml"
+            logging.info(f"Writing graph in graphml format in {graph_file_name}.")
+            nx.readwrite.graphml.write_graphml(mst, graph_file_name)
+
+
 def write_conserved_spots(pangenomes, output: Path, graph_formats: List[str] = None, cs_graph: nx.Graph = None,
                           force: bool = False, disable_bar: bool = False):
     """
@@ -236,7 +361,7 @@ def write_conserved_spots(pangenomes, output: Path, graph_formats: List[str] = N
             nx.readwrite.graphml.write_graphml(cs_graph, graph_file_name)
 
 
-def compare_spots(pangenomes: Pangenomes, output: Path, dup_margin: float = 0.05, frr_metrics: str = "min_frr",
+def compare_spots(pangenomes: Pangenomes, dup_margin: float = 0.05, frr_metrics: str = "min_frr",
                   frr_cutoff: Tuple[float, float] = (0.8, 0.8), threads: int = 1,
                   lock: Lock = None, disable_bar: bool = False):
     """
@@ -286,13 +411,16 @@ def launch(args):
 
     output = mkdir(args.output, force=args.force)
 
-    spots_graph = compare_spots(pangenomes=pangenomes, output=output, dup_margin=args.dup_margin,
-                                frr_metrics=args.frr_metrics, frr_cutoff=args.frr_cutoff, threads=args.cpus,
-                                lock=lock, disable_bar=args.disable_prog_bar)
+    spots_graph = compare_spots(pangenomes=pangenomes, dup_margin=args.dup_margin, frr_metrics=args.frr_metrics,
+                                frr_cutoff=args.frr_cutoff, threads=args.cpus, lock=lock,
+                                disable_bar=args.disable_prog_bar)
 
     write_conserved_spots(pangenomes, output, cs_graph=spots_graph, graph_formats=args.graph_formats,
                           force=args.force, disable_bar=args.disable_prog_bar)
 
+    if args.systems:
+        graph_systems_link_with_conserved_spots(pangenomes=pangenomes, output=output, graph_formats=args.graph_formats,
+                                                threads=args.cpus, lock=lock, disable_bar=args.disable_prog_bar)
     if not args.keep_tmp:
         rmtree(tmpdir, ignore_errors=True)
 
@@ -328,13 +456,16 @@ def parser_comparison_spots(parser):
     optional.add_argument("--dup_margin", required=False, type=float, default=0.05,
                           help="minimum ratio of genomes in which the family must have multiple genes "
                                "for it to be considered 'duplicated'")
-    optional.add_argument('-m', '--models', required=False, type=Path, nargs="+", default=None,
-                          help="Path to model list file. You can specify multiple models from different source. "
-                               "For that separate the model list files by a space and "
-                               "make sure you give them in the same order as the sources.")
-    optional.add_argument("-s", "--sources", required=False, type=str, nargs="+", default=None,
-                          help="Name of the systems sources. You can specify multiple sources. "
-                               "For that separate names by a space and "
-                               "make sure you give them in the same order as the models.")
-    optional.add_argument("--canonical", required=False, action="store_true",
-                          help="Write the canonical version of systems too.")
+    systems = parser.add_argument_group(title="Add systems to conserved spots analyses")
+    systems.add_argument('--systems', required=False, action='store_true', default=False,
+                         help="Add systems to conserved spots analyses")
+    systems.add_argument('-m', '--models', required=False, type=Path, nargs="+", default=None,
+                         help="Path to model list file. You can specify multiple models from different source. "
+                              "For that separate the model list files by a space and "
+                              "make sure you give them in the same order as the sources.")
+    systems.add_argument("-s", "--sources", required=False, type=str, nargs="+", default=None,
+                         help="Name of the systems sources. You can specify multiple sources. "
+                              "For that separate names by a space and "
+                              "make sure you give them in the same order as the models.")
+    systems.add_argument("--canonical", required=False, action="store_true",
+                         help="Write the canonical version of systems too.")
