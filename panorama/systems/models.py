@@ -12,8 +12,8 @@ from typing import Dict, List, Generator, Set, Tuple, Union
 import json
 
 # TODO Try to add those variable in class
-suprules_params = ['min_mandatory', 'max_forbidden', 'min_total', "max_mandatory", "max_total"]
-keys_param = suprules_params + ['max_separation']
+suprules_params = ['min_mandatory', 'min_total']
+keys_param = suprules_params + ['transitivity', 'window']
 rule_keys = ['name', 'parameters', 'presence']
 accept_type = ['mandatory', 'accessory', 'forbidden', 'neutral']
 
@@ -57,13 +57,13 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: List[str]):
         raise Exception(f"Unexpected Error: {error} to get parameters")
     else:
         for key, value in param_dict.items():
-            if key in ["min_mandatory", "min_total", "max_mandatory", "max_total", "max_separation"]:
+            if key in ["min_mandatory", "min_total", "transitivity", 'window']:
                 if not isinstance(value, int):
                     raise TypeError(f"The {key} value is not an integer")
                 if value < -1:
                     raise ValueError(f"The {key} value is not positive. "
                                      "You can also use -1 value to skip the check on this parameter.")
-            elif key in ["duplicate", "max_forbidden"]:
+            elif key in ["duplicate"]:
                 if not isinstance(value, int):
                     raise TypeError(f"The {key} value is not an integer")
                 if value < 0:
@@ -309,19 +309,22 @@ class _BasicFeatures:
 
     Args:
         name (str, optional): Name of the element. Defaults to "".
-        max_separation (int, optional): Maximum separation. Defaults to 0.
+        transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+        window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
     """
 
-    def __init__(self, name: str = "", max_separation: int = 0):
+    def __init__(self, name: str = "", transitivity: int = 0, window: int = 1):
         """
         Constructor method to create a Basic features object
 
         Args:
             name (str, optional): Name of the element. Defaults to "".
-            max_separation (int, optional): Maximum separation. Defaults to 0.
+            transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+            window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
         """
         self.name = name
-        self.max_separation = max_separation
+        self.transitivity = transitivity
+        self.window = window
 
     def __repr__(self):
         return f"{self.__class__.__name__} name: {self.name}"
@@ -389,49 +392,40 @@ class _ModFuFeatures:
     Args:
         mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
         min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-        max_mandatory (int, optional): Maximum number of mandatory sub-elements. Defaults to None.
         accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
         min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-        max_total (int, optional): Maximum number of total sub-elements. Defaults to None.
         forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
-        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
         neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
         same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
     """
 
-    def __init__(self, mandatory: Set[FuncUnit, Family] = None, min_mandatory: int = 1, max_mandatory: int = None,
-                 accessory: Set[FuncUnit, Family] = None, min_total: int = 1, max_total: int = None,
-                 forbidden: Set[FuncUnit, Family] = None, max_forbidden: int = 0,
-                 neutral: Set[FuncUnit, Family] = None, same_strand: bool = False):
+    def __init__(self, mandatory: Set[FuncUnit, Family] = None, accessory: Set[FuncUnit, Family] = None,
+                 forbidden: Set[FuncUnit, Family] = None, neutral: Set[FuncUnit, Family] = None,
+                 min_mandatory: int = 1, min_total: int = 1, same_strand: bool = False):
         """
         Constructor method to create a ModFuFeatures object.
 
         Args:
             mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
             min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-            max_mandatory (int, optional): Maximum number of mandatory sub-elements. Defaults to None.
             accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
             min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-            max_total (int, optional): Maximum number of total sub-elements. Defaults to None.
             forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
-            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
             neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
             same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
         """
         self.mandatory = mandatory if mandatory is not None else set()
         self.min_mandatory = min_mandatory
-        self.max_mandatory = max_mandatory if max_mandatory is not None else len(self.mandatory)
         self.accessory = accessory if accessory is not None else set()
         self.min_total = min_total
-        self.max_total = max_total if max_total is not None else len(self.mandatory) + len(self.accessory)
         self.forbidden = forbidden if forbidden is not None else set()
-        self.max_forbidden = max_forbidden
         self.neutral = neutral if neutral is not None else set()
         self.same_strand = same_strand
         self._child_type = "Functional unit" if isinstance(self, Model) else "Family"
+        self._child_getter = None
 
     @property
-    def _children(self):
+    def _children(self) -> Generator[Union[FuncUnit, Family], None, None]:
         """
         Get all child elements.
 
@@ -492,8 +486,6 @@ class _ModFuFeatures:
         """
         if self.min_mandatory > len(self.mandatory) + sum([child.duplicate for child in self._duplicate("mandatory")]):
             raise Exception(f"There are less mandatory {self._child_type} than the minimum mandatory")
-        if self.max_forbidden > len(self.forbidden) + sum([child.duplicate for child in self._duplicate("forbidden")]):
-            raise Exception(f"There are less forbidden {self._child_type} than the maximum forbidden accepted")
         if self.min_total > len(list(self._children)) + sum([child.duplicate for child in self._duplicate()]):
             raise Exception(f"There are less {self._child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
@@ -520,6 +512,33 @@ class _ModFuFeatures:
         else:
             self.neutral.add(child)
 
+    def _mk_child_getter(self):
+        self._child_getter = {}
+        for child in self._children:
+            self._child_getter[child.name] = child
+
+    def get(self, name: str) -> Union[FuncUnit, Family]:
+        """
+        Get a child from his name
+
+        Args:
+            name: name of the child to get.
+
+        Returns:
+            Union[FuncUnit, Family]: The child element
+
+        Raises:
+            KeyError: If the child is not found.
+        """
+        if self._child_getter is None:
+            self._mk_child_getter()
+        try:
+            child = self._child_getter[name]
+        except KeyError:
+            raise KeyError(f"No such {self._child_type} with {name} in {type(self)}")
+        else:
+            return child
+
 
 class Model(_BasicFeatures, _ModFuFeatures):
     """
@@ -527,40 +546,43 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
     Args:
         name (str, optional): Name of the element. Defaults to "".
-        mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+        mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
         min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-        accessory (set, optional): Set of accessory sub-elements. Defaults to None.
-        neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+        accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
         min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-        forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
-        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
-        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+        forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+        neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+        same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
+        transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+        window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
         canonical (list, optional): List of canonical models. Defaults to None.
     """
 
-    def __init__(self, name: str = "", mandatory: set = None, min_mandatory: int = 1, accessory: set = None,
-                 neutral: set = None, min_total: int = 1, forbidden: set = None, max_forbidden: int = 0,
-                 max_separation: int = 0, canonical: list = None):
+    def __init__(self, name: str = "", mandatory: Set[FuncUnit, Family] = None, accessory: Set[FuncUnit, Family] = None,
+                 forbidden: Set[FuncUnit, Family] = None, neutral: Set[FuncUnit, Family] = None, min_mandatory: int = 1,
+                 min_total: int = 1, transitivity: int = 0, window: int = 1, same_strand: bool = False,
+                 canonical: list = None):
         """
         Constructor method to create a Model rules which describe a biological system.
 
         Args:
             name (str, optional): Name of the element. Defaults to "".
-            mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+            mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
             min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-            accessory (set, optional): Set of accessory sub-elements. Defaults to None.
-            neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+            accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
             min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-            forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
-            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
-            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+            forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+            neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+            same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
+            transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+            window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
             canonical (list, optional): List of canonical models. Defaults to None.
         """
 
-        super().__init__(name=name, max_separation=max_separation)
+        super().__init__(name=name, transitivity=transitivity, window=window)
         super(_BasicFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
-                                             forbidden=forbidden, max_forbidden=max_forbidden)
+                                             forbidden=forbidden, same_strand=same_strand)
         self.canonical = canonical if canonical is not None else []
 
     @property
@@ -618,6 +640,21 @@ class Model(_BasicFeatures, _ModFuFeatures):
         """
         yield from self._duplicate(filter_type)
 
+    def get(self, name: str) -> Union[FuncUnit]:
+        """
+        Get a functional unit in the model with his name
+
+        Args:
+            name: name of the functional unit to get.
+
+        Returns:
+            FuncUnit: The functional unit element
+
+        Raises:
+            KeyError: If the functional unit with the name is not found.
+        """
+        return super().get(name)
+
     def check_model(self):
         """
         Check model consistency.
@@ -638,13 +675,13 @@ class Model(_BasicFeatures, _ModFuFeatures):
             data_model (dict): JSON data dictionary.
         """
         mandatory_key = ['name', 'parameters', 'func_units']
-        param_mandatory = ['max_separation', 'min_mandatory', 'max_forbidden', 'min_total', "max_mandatory",
-                           "max_total"]
+        param_mandatory = ['transitivity', 'min_mandatory', 'min_total']
 
         check_dict(data_model, mandatory_keys=mandatory_key, param_keys=param_mandatory)
 
         self.name = data_model["name"]
         self.read_parameters(data_model["parameters"], param_keys=param_mandatory)
+        self.window = data_model["window"] if "window" in data_model else self.transitivity + 1
         for dict_fu in data_model["func_units"]:
             func_unit = FuncUnit()
             func_unit.model = self
@@ -676,14 +713,16 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     Args:
         name (str, optional): Name of the element. Defaults to "".
         presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
-        mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+        mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
         min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-        accessory (set, optional): Set of accessory sub-elements. Defaults to None.
-        neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+        accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
         min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
-        forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
-        max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+        forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+        neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+        same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
+        min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+        transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+        window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
         duplicate (int, optional): Number of duplicates. Defaults to 0.
         model (Model, optional): Model in which is the functional unit. Defaults to None.
         exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
@@ -691,38 +730,41 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         multi_model (bool, optional): If the functional unit can be present in multiple models. Defaults to False.
     """
 
-    def __init__(self, name: str = "", presence: str = "", mandatory: set = None, min_mandatory: int = 1,
-                 accessory: set = None, neutral: set = None, min_total: int = 1, max_separation: int = 0,
-                 forbidden: set = None, max_forbidden: int = 0, duplicate: int = 0, model: Model = None,
-                 exchangeable: Set[str] = None, multi_system: bool = False, multi_model: bool = False
-                 ):
+    def __init__(self, name: str = "", presence: str = "", mandatory: Set[FuncUnit, Family] = None,
+                 accessory: Set[FuncUnit, Family] = None, forbidden: Set[FuncUnit, Family] = None,
+                 neutral: Set[FuncUnit, Family] = None, min_mandatory: int = 1, min_total: int = 1,
+                 same_strand: bool = False, transitivity: int = 0, window: int = 1,
+                 duplicate: int = 0, model: Model = None, exchangeable: Set[str] = None,
+                 multi_system: bool = False, multi_model: bool = False):
         """
         Constructor method to create a functional unit definition rule.
 
         Args:
             name (str, optional): Name of the element. Defaults to "".
             presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
-            mandatory (set, optional): Set of mandatory sub-elements. Defaults to None.
+            mandatory (Set[FuncUnit, Family], optional): Set of mandatory sub-elements. Defaults to None.
             min_mandatory (int, optional): Minimum number of mandatory sub-elements. Defaults to 1.
-            accessory (set, optional): Set of accessory sub-elements. Defaults to None.
-            neutral (set, optional): Set of neutral sub-elements. Defaults to None.
+            accessory (Set[FuncUnit, Family], optional): Set of accessory sub-elements. Defaults to None.
             min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
-            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
-            forbidden (set, optional): Set of forbidden sub-elements. Defaults to None.
-            max_forbidden (int, optional): Maximum number of forbidden sub-elements. Defaults to 0.
+            forbidden (Set[FuncUnit, Family], optional): Set of forbidden sub-elements. Defaults to None.
+            neutral (Set[FuncUnit, Family], optional): Set of neutral sub-elements. Defaults to None.
+            same_strand (bool, optional): If the sub-elements must be on the same strand. Defaults to False.
+            min_total (int, optional): Minimum number of total sub-elements. Defaults to 1.
+            transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+            window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
             duplicate (int, optional): Number of duplicates. Defaults to 0.
             model (Model, optional): Model in which is the functional unit. Defaults to None.
             exchangeable (Set[str], optional): List of exchangeable families. Defaults to None.
             multi_system (bool, optional): If the functional unit can be present in multiple systems. Defaults to False.
             multi_model (bool, optional): If the functional unit can be present in multiple models. Defaults to False.
         """
-        super().__init__(name=name, max_separation=max_separation)
+        super().__init__(name=name, transitivity=transitivity, window=window)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=model,
                                              exchangeable=exchangeable, multi_system=multi_system,
                                              multi_model=multi_model)
         super(_FuFamFeatures, self).__init__(mandatory=mandatory, min_mandatory=min_mandatory,
                                              accessory=accessory, neutral=neutral, min_total=min_total,
-                                             forbidden=forbidden, max_forbidden=max_forbidden)
+                                             forbidden=forbidden, same_strand=same_strand)
 
     @property
     def model(self) -> Model:
@@ -760,6 +802,21 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             Family: All families.
         """
         yield from self._children
+
+    def get(self, name: str) -> Union[Family]:
+        """
+        Get a family in the functional unit with his name
+
+        Args:
+            name: name of the family to get.
+
+        Returns:
+            FuncUnit: The family element
+
+        Raises:
+            KeyError: If the family with the name is not found.
+        """
+        return super().get(name)
 
     def families_names(self, presence: str = None):
         """
@@ -815,13 +872,13 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             data_fu (dict): Data JSON file of all functional units.
         """
         mandatory_key = ['name', 'families', 'presence']
-        fu_params = ['duplicate', 'min_total', 'min_mandatory', "max_forbidden", 'max_separation',
-                     'max_mandatory', 'max_total', "multi_system", "multi_model"]
+        fu_params = ['duplicate', 'min_total', 'min_mandatory', 'transitivity', "multi_system", "multi_model"]
         check_dict(data_fu, mandatory_keys=mandatory_key)
 
         self.name = data_fu["name"]
         self.presence = data_fu["presence"]
         self.read_parameters(data_fu["parameters"] if "parameters" in data_fu else {}, param_keys=fu_params)
+        self.window = data_fu["window"] if "window" in data_fu else self.transitivity + 1
         for fam_dict in data_fu["families"]:
             family = Family()
             family.func_unit = self
@@ -850,7 +907,8 @@ class Family(_BasicFeatures, _FuFamFeatures):
 
     Args:
         name (str, optional): Name of the element. Defaults to "".
-        max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+        transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+        window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
         presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
         func_unit (FuncUnit, optional): Functional unit in which is the family. Defaults to None.
         duplicate (int, optional): Number of duplicates. Defaults to 0.
@@ -859,7 +917,8 @@ class Family(_BasicFeatures, _FuFamFeatures):
         multi_model (bool, optional): If the family can be present in multiple models. Defaults to False.
     """
 
-    def __init__(self, name: str = "", max_separation: int = 0, presence: str = "", func_unit: FuncUnit = None,
+    def __init__(self, name: str = "", transitivity: int = 0, window: int = 1, presence: str = "",
+                 func_unit: FuncUnit = None,
                  duplicate: int = 0, exchangeable: Set[str] = None, multi_system: bool = False,
                  multi_model: bool = False):
         """
@@ -867,7 +926,8 @@ class Family(_BasicFeatures, _FuFamFeatures):
 
         Args:
             name (str, optional): Name of the element. Defaults to "".
-            max_separation (int, optional): Maximum inter-gene distance. Defaults to 0.
+            transitivity (int, optional): Size of the transitive closure used to build the graph. Defaults to 0.
+            window (int, optional): Number of neighboring genes that are considered on each side of a gene of interest when searching for conserved genomic contexts. Defaults to 1.
             presence (str, optional): Type of the rule (mandatory, accessory, forbidden or neutral). Defaults to "".
             func_unit (FuncUnit, optional): Functional unit in which is the family. Defaults to None.
             duplicate (int, optional): Number of duplicates. Defaults to 0.
@@ -875,7 +935,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
             multi_system (bool, optional): If the family can be present in multiple systems. Defaults to False.
             multi_model (bool, optional): If the family can be present in multiple models. Defaults to False.
         """
-        super().__init__(name=name, max_separation=max_separation)
+        super().__init__(name=name, transitivity=transitivity, window=window)
         super(_BasicFeatures, self).__init__(presence=presence, duplicate=duplicate, parent=func_unit,
                                              exchangeable=exchangeable, multi_system=multi_system,
                                              multi_model=multi_model)
@@ -924,12 +984,13 @@ class Family(_BasicFeatures, _FuFamFeatures):
         Args:
             data_fam (dict): Data JSON file with families.
         """
-        fam_param = ['max_separation', "duplicate", "multi_system", "multi_model"]
+        fam_param = ['transitivity', "duplicate", "multi_system", "multi_model"]
 
         check_dict(data_fam, mandatory_keys=['name', 'presence'])
         self.name = data_fam['name']
         self.presence = data_fam['presence']
         self.read_parameters(data_fam["parameters"] if "parameters" in data_fam else {}, param_keys=fam_param)
+        self.window = data_fam["window"] if "window" in data_fam else self.transitivity + 1
         if 'exchangeable' in data_fam:
             self.exchangeable = set(data_fam["exchangeable"])
 

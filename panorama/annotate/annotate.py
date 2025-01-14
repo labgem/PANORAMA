@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
+import time
 from typing import Any, Dict, Tuple
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
@@ -77,7 +78,9 @@ def check_annotate_args(args) -> Tuple[Dict[str, Any], Dict[str, Any]]:
 
         hmm_kwgs["msa"] = args.msa
         hmm_kwgs["msa_format"] = args.msa_format
-
+        if args.Z is not None and not isinstance(args.Z, int):
+            raise TypeError('Z arguments must be an integer')
+        hmm_kwgs["Z"] = args.Z
         if args.k_best_hit is not None:
             if args.k_best_hit < 1:
                 raise argparse.ArgumentTypeError("k_best_hit must be greater than 1.")
@@ -158,6 +161,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with metadata link to pangenome by its name
     """
+    t0 = time.time()
     path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
     with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
@@ -173,6 +177,7 @@ def read_families_metadata_mp(pangenomes: Pangenomes, table: Path, threads: int 
             for future in futures:
                 res = future.result()
                 results[res[1]] = res[0]
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation ridden from TSV file in {time.time() -t0:2f} seconds")
     return results
 
 
@@ -284,11 +289,8 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, source: 
 
     Returns:
         Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe containing families metadata given by HMM
-
-    Todo:
-        - Use the methods in pangenomes object to align all families to HMM and annot after
-        - look at pyhmmer doc for tips to improve implementation
     """
+    t0 = time.time()
     logging.getLogger("PANORAMA").info("Begin HMM searching")
     # Get list of HMM with Plan7 data model
     pangenome2annot = {}
@@ -297,7 +299,7 @@ def annot_pangenomes_with_hmm(pangenomes: Pangenomes, hmm: Path = None, source: 
         logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
         pangenome2annot[pangenome.name] = annot_with_hmm(pangenome, hmms, hmm_df, source, mode, threads=threads,
                                                          disable_bar=disable_bar, **hmm_kwgs)
-
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
     return pangenome2annot
 
 
@@ -345,6 +347,7 @@ def launch(args: argparse.Namespace) -> None:
     pangenomes = load_pangenomes(pangenome_list=args.pangenomes, need_info=need_info,
                                  check_function=check_pangenome_annotation, max_workers=args.threads, lock=lock,
                                  disable_bar=args.disable_prog_bar, source=args.source, force=args.force)
+    t0 = time.time()
     annot_pangenomes(pangenomes=pangenomes, source=args.source, table=args.table, hmm=args.hmm, threads=args.threads,
                      k_best_hit=args.k_best_hit, lock=lock, force=args.force, disable_bar=args.disable_prog_bar,
                      **hmm_kwgs)
@@ -364,7 +367,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: parser arguments for annot command
     """
-    parser = sub_parser.add_parser("annotation", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("annotation")
     parser_annot(parser)
     return parser
 
@@ -417,6 +420,10 @@ def parser_annot(parser):
                            help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
     hmm_param.add_argument("-o", "--output", required=False, type=Path, nargs='?',
                            help="Output directory to write HMM results")
+    hmm_param.add_argument("-Z", "--Z", required=False, type=int, nargs='?', default=None,
+                           help="From HMMER: Assert that the total number of targets in your searches is <x>, "
+                                "for the purposes of per-sequence E-value calculations, "
+                                "rather than the actual number of targets seen.")
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument("--threads", required=False, nargs='?', type=int, default=1,
                           help="Number of available threads.")

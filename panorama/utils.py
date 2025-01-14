@@ -9,14 +9,20 @@ This module contains functions for managing files and directories, and checking 
 import sys
 import argparse
 import logging
-from typing import TextIO
+from typing import Dict, TextIO, Set, Union
 import shutil
 from pathlib import Path
-import numpy as np
-import pandas as pd
-from typing import Dict, Union
 from multiprocessing import Manager, Lock
 from importlib.metadata import distribution
+
+# installed libraries
+import numpy as np
+import pandas as pd
+
+# Create a custom formatter that combines both
+class RawTextArgumentDefaultsHelpFormatter(argparse.ArgumentDefaultsHelpFormatter,
+                                           argparse.RawDescriptionHelpFormatter):
+    pass
 
 
 def check_log(name: str) -> TextIO:
@@ -200,3 +206,22 @@ def init_lock(lock: Lock = None):
     if lock is None:
         manager = Manager()
         return manager.Lock()
+
+
+def conciliate_partition(partition: Set[str]) -> str:
+    """
+    Conciliate  a set of partition
+
+    Args:
+        partition (Set[str]): All partitions.
+
+    Returns:
+        str: The reconciled partition.
+    """
+    if len(partition) == 1:
+        return partition.pop()
+    else:
+        if "persistent" in partition:
+            return "persistent|accessory"
+        else:
+            return 'accessory'

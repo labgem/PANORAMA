@@ -171,7 +171,7 @@ def launch(args: argparse.Namespace):
                              binary_hmm=args.binary, force=args.force, disable_bar=args.target_coverage)
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force, erase=True)
-        launch_translate(db=args.translate, source=args.source, output=outdir,
+        launch_translate(db=args.translate, source=args.source, output=outdir, binary_hmm=args.binary,
                          hmm_coverage=args.hmm_coverage, target_coverage=args.target_coverage,
                          force=args.force, disable_bar=args.disable_prog_bar)
         check_models(models_list=outdir / "models_list.tsv", disable_bar=args.disable_prog_bar)
@@ -192,7 +192,7 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
     Returns:
         argparse.ArgumentParser: The parser for the utils command.
     """
-    parser = sub_parser.add_parser("utils", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("utils")
     parser_utils(parser)
     return parser
 
@@ -235,6 +235,9 @@ def parser_utils(parser: argparse.ArgumentParser):
                      help="Set the coverage threshold on the target. "
                           "The same threshold will be used for all target. "
                           "It's Not recommended for PADLOC, defensefinder or macsyfinder.")
+
+    #TODO See to add score, evalue and ievalue cutoff
+
     translate = parser.add_argument_group(title="Translate arguments",
                                           description="Arguments to translate systems models from different sources")
     translate.add_argument("--translate", required=False, type=Path, default=None,

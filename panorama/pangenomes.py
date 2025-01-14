@@ -1,10 +1,14 @@
 #!/usr/bin/env python3
 # coding: utf8
 
+"""
+This module provides classes to represent a pangenome or a set of pangenomes
+"""
+
 # default libraries
 import logging
 from pathlib import Path
-from typing import Dict, Generator, List, Set, Union
+from typing import Dict, Generator, List, Set, Tuple, Union
 from collections import defaultdict
 
 # install libraries
@@ -14,7 +18,7 @@ from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
-from panorama.systems.system import System
+from panorama.systems.system import System, ClusterSystems
 from panorama.geneFamily import GeneFamily, Akin
 from panorama.region import Spot, ConservedSpots
 
@@ -35,7 +39,6 @@ class Pangenome(Pan):
         super().__init__()
         self._system_getter = {}
         self._name2system = {}
-        self._max_id_system = 0
         self._systems_sources = None
         self._systems_sources2metada_sources = None
         self.name = name
@@ -216,47 +219,35 @@ class Pangenome(Pan):
 
         Args:
             system (System): Detected system to be added.
-
-        TODO:
-            Merge systems.
         """
         same_sys = False
         canonical_systems = []
         drop_sys_key = []
         for system_in in self.get_system_by_source(system.source):
             if system_in.name == system.name:
-                if system_in.is_subset(system):
+                if system_in.is_superset(system):
+                    system_in.merge(system)
+                    same_sys = True
+                elif system_in.is_subset(system):
                     # A system with this name already exist and system in pangenome is subset of new system
-                    system.ID = system_in.ID
-                    self._system_getter[system.ID] = system
-                    same_sys = True
-                    for family in system.difference(system_in):
-                        family.add_system(system)
-                elif system_in.is_superset(system):
-                    same_sys = True
+                    system.merge(system_in)
+                    del self._system_getter[system_in.ID]
             elif system.name in system_in.canonical_models():
                 # System in pangenome is a canonical system for new system
-                if len(system.intersection(system_in)) > 0:
+                if system.is_subset(system_in):
                     canonical_systems.append(system_in)
                     drop_sys_key.append(system_in.ID)
             elif system_in.name in system.canonical_models():
                 # New system is a canonical system for a system in pangenome
-                if len(system.intersection(system_in)) > 0:
+                if system_in.is_subset(system):
                     system_in.add_canonical(system)
-                    self._max_id_system += 1
-                    system.ID = str(self._max_id_system)
                     same_sys = True
-                    for family in system.families:
-                        family.add_system(system)
 
         if not same_sys:
-            self._max_id_system += 1
-            system.ID = str(self._max_id_system)
             self._system_getter[system.ID] = system
+            system.pangenome = self
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)
-            for family in system.families:
-                family.add_system(system)
         self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
 
     def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:
@@ -285,6 +276,7 @@ class Pangenomes:
         self._clusters = {}
         self._families2pangenome = {}
         self._conserved_spots_getter = {}
+        self._cluster_systems_getter = {}
 
     def __len__(self):
         """Get the number of pangenomes in the collection."""
@@ -294,6 +286,13 @@ class Pangenomes:
         """Iterate over the pangenomes in the collection."""
         for pangenome in self._pangenomes_getter.values():
             yield pangenome
+
+    def items(self) -> Generator[Tuple[str, Pangenome], None, None]:
+        """
+        Generator of pangenome name as key and pangenome object as value
+        """
+        for name, pangenome in self._pangenomes_getter.items():
+            yield name, pangenome
 
     def add(self, pangenome: Pangenome):
         """Add a pangenome object to the collection.
@@ -448,7 +447,7 @@ class Pangenomes:
 
     def add_conserved_spots(self, conserved_spots: ConservedSpots):
         """
-        Add a set of conserved spots between pangenomes
+        Add a conserved spots between pangenomes
 
         Args:
             conserved_spots: Conserved spots object
@@ -463,6 +462,23 @@ class Pangenomes:
         else:
             raise KeyError(f"Conserved spots {conserved_spots.ID} already exists between pangenomes")
 
+    def get_conserved_spots(self, cs_id: int):
+        """
+        Get a conserved spots by its ID
+
+        Args:
+            cs_id: Conserved spots ID
+
+        Raises:
+            KeyError: if conserved_spots does not exist in pangenomes.
+        """
+        try:
+            conserved_spots = self._conserved_spots_getter[cs_id]
+        except KeyError:
+            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes")
+        else:
+            return conserved_spots
+
     @property
     def number_of_conserved_spots(self) -> int:
         """Get the number of conserved spots
@@ -471,3 +487,55 @@ class Pangenomes:
             Number of conserved spots
         """
         return len(self._conserved_spots_getter)
+
+    @property
+    def cluster_systems(self) -> Generator[ClusterSystems, None, None]:
+        """Generator of conserved spots between pangenomes
+        Yields:
+            ConservedSpots: a set of spots conserved between pangenomes
+        """
+        for conserved_spot in self._cluster_systems_getter.values():
+            yield conserved_spot
+
+    def add_cluster_systems(self, cluster_systems: ClusterSystems):
+        """
+        Add a set of conserved spots between pangenomes
+
+        Args:
+            cluster_systems: Conserved spots object
+
+        Raises:
+            KeyError: if cluster_systems identifier already exist in pangenomes.
+        """
+        try:
+            _ = self._cluster_systems_getter[cluster_systems.ID]
+        except KeyError:
+            self._cluster_systems_getter[cluster_systems.ID] = cluster_systems
+        else:
+            raise KeyError(f"Conserved spots {cluster_systems.ID} already exists between pangenomes")
+
+    def get_cluster_systems(self, cs_id: str):
+        """
+        Get a cluster systems by its ID
+
+        Args:
+            cs_id: Cluster systems ID
+
+        Raises:
+            KeyError: if conserved_spots identifier does not exist in pangenomes.
+        """
+        try:
+            cluster_systems = self._cluster_systems_getter[cs_id]
+        except KeyError:
+            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes")
+        else:
+            return cluster_systems
+
+    @property
+    def number_of_cluster_systems(self) -> int:
+        """Get the number of conserved spots
+
+        Returns:
+            Number of conserved spots
+        """
+        return len(self._cluster_systems_getter)

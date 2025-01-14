@@ -7,15 +7,14 @@ This module provides functions to read and load pangenome data from HDF5 files.
 
 # default libraries
 import logging
-from collections import defaultdict
-
-from tqdm import tqdm
+import time
 from typing import Callable, Dict, List
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
 
 # installed libraries
+from tqdm import tqdm
 import tables
 from ppanggolin.formats import (
     read_chunks, read_annotation, read_graph, read_rgp,
@@ -25,7 +24,7 @@ from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
 
 # local libraries
-from panorama.systems.system import System
+from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Models
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.geneFamily import GeneFamily
@@ -53,7 +52,8 @@ def get_status(pangenome, pangenome_file: Path):
     h5f.close()
 
 
-def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, models: Models, disable_bar: bool = False):
+def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, models: Models,
+                           read_canonical: bool = True, disable_bar: bool = False):
     """
     Read systems for one source and add them to the pangenome.
 
@@ -61,58 +61,86 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
         pangenome (Pangenome): Pangenome containing systems.
         source_group: Source group with 3 tables to read systems.
         models (Models): Models associated with systems.
-        disable_bar (bool): Whether to disable the progress bar.
+        read_canonical (bool, optional): Read canonical systems (default True)
+        disable_bar (bool, optional): Whether to disable the progress bar (default False).
     """
-    systems = {}
-    canonic = {}
-    system2canon = defaultdict(set)
-    source = source_group._v_name
 
-    def read_system_line(line, sys_dict) -> System:
+    def read_system_unit(unit_row: tables.Table.row, units_dict: Dict[str, SystemUnit]):
+        """
+        Global function to read a line in unit table
+
+        Args:
+            unit_row: the row with unit information to read
+            units_dict: Dictionary of read units, with identifier as key and unit as value
+        """
+        unit_id = unit_row["ID"]
+        if unit_id not in units_dict:
+            fu_name = unit_row["name"].decode()
+            model = models.get_model(fu2model[fu_name])
+            unit = SystemUnit(functional_unit=model.get(fu_name), source=source)
+            unit.ID = unit_id
+            units_dict[unit_id] = unit
+        else:
+            unit = units_dict[unit_id]
+        unit.add_family(pangenome.get_gene_family(unit_row["geneFam"].decode()),
+                        unit_row["metadata_source"].decode(), int(unit_row["metadata_id"]))
+
+    def read_system(sys_row: tables.Table.row, sys_dict: Dict[str, System], unit_dict: Dict[str, SystemUnit]) -> System:
         """
         Global function to read a line in system table
 
         Args:
-            line: The line to read.
-            sys_dict: System dictionary
-
-        Returns:
-            A system object
+            sys_row: the row with system information to read
+            sys_dict: Dictionary of read systems, with identifier as key and system as value
         """
-        identifier = line["ID"].decode()
-        if identifier not in sys_dict:
-            model = models.get_model(line["name"].decode())
-            sys = System(system_id=identifier, model=model, source=source)
-            sys_dict[identifier] = sys
+        sys_id = sys_row["ID"].decode()
+        if sys_id not in sys_dict:
+            model = models.get_model(sys_row["name"].decode())
+            sys = System(system_id=sys_id, model=model, source=source)
+            sys_dict[sys_id] = sys
         else:
-            sys = sys_dict[identifier]
-        sys.add_family(pangenome.get_gene_family(line["geneFam"].decode()),
-                       line["metadata_source"].decode(), int(line["metadata_id"]))
+            sys = sys_dict[sys_id]
+        sys.add_unit(unit_dict[sys_row["unit"]])
         return sys
 
-    system_table = source_group.system
-    canonical_table = source_group.canonic
-    sys2canonical_table = source_group.system_to_canonical
-    with tqdm(total=system_table.nrows + canonical_table.nrows + sys2canonical_table.nrows,
-              unit="line", desc="Read pangenome systems", disable=disable_bar) as progress:
-        for row in read_chunks(sys2canonical_table):
-            system2canon[row["system"].decode()].add(row["canonic"].decode())
+    source = source_group._v_name
+    fu2model = {fu.name: model.name for model in models for fu in model.func_units}
+    system_table = source_group.systems
+    unit_table = source_group.units
+    systems = {}
+    with tqdm(total=system_table.nrows + unit_table.nrows, unit="line",
+              desc="Read pangenome systems", disable=disable_bar) as progress:
+        units = {}
+        for row in read_chunks(unit_table):
+            read_system_unit(row, units)
             progress.update()
-
-        for row in read_chunks(canonical_table):
-            read_system_line(row, canonic)
-            progress.update()
-
         for row in read_chunks(system_table):
-            system = read_system_line(row, systems)
-            for canon_id in system2canon.pop(system.ID, []):
-                system.add_canonical(canonic[canon_id])
-            progress.update()
+            read_system(row, systems, units)
+    logging.getLogger("PANORAMA").debug(f"Number of systems read: {len(systems)}")
+    if read_canonical:
+        canonic = {}
+        canon_table = source_group.canonic
+        canon_unit_table = source_group.canonic_units
+        sys2canonical_table = source_group.system_to_canonical
+
+        with tqdm(total=canon_table.nrows + canon_unit_table.nrows + sys2canonical_table.nrows,
+                  unit="line", desc="Read pangenome canonical systems", disable=disable_bar) as progress:
+            canon_units = {}
+            for row in read_chunks(canon_unit_table):
+                read_system_unit(row, canon_units)
+                progress.update()
+
+            for row in read_chunks(canon_table):
+                read_system(row, canonic, canon_units)
+                progress.update()
+
+            for row in read_chunks(sys2canonical_table):
+                systems[row["system"].decode()].add_canonical(canonic[row["canonic"].decode()])
+                progress.update()
+            logging.getLogger("PANORAMA").debug(f"Number of canonical system: {len(canonic)}")
 
     logging.getLogger("PANORAMA").info(f"Add system from {source} to pangenome...")
-    logging.getLogger("PANORAMA").debug(f"Number of systems found: {len(systems)} "
-                                        f"with {len(canonic)} canonical system")
-    for system in tqdm(sorted(systems.values(), key=lambda x: (len(x.model.canonical), -len(x))),
+    for system in tqdm(sorted(systems.values(), key=lambda x: (len(x.model.canonical), -len(x), -x.number_of_families)),
                        disable=False if logging.getLogger().level == logging.DEBUG else True,
                        desc="Add system to pangenome"):
         pangenome.add_system(system)
@@ -121,7 +149,7 @@ def read_systems_by_source(pangenome: Pangenome, source_group: tables.Group, mod
 
 
 def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], sources: List[str],
-                 disable_bar: bool = False):
+                 read_canonical: bool = False, disable_bar: bool = False):
     """
     Read information about systems in the pangenome HDF5 file and add them to the pangenome object.
 
@@ -138,7 +166,8 @@ def read_systems(pangenome: Pangenome, h5f: tables.File, models: List[Models], s
         source_group = h5f.get_node(systems_group, source)
         metadata_sources |= source_group._v_attrs.metadata_sources
         logging.getLogger("PANORAMA").info(f"Read system from {source}...")
-        read_systems_by_source(pangenome, source_group, models[index], disable_bar)
+        read_systems_by_source(pangenome, source_group, models[index], read_canonical=read_canonical,
+                               disable_bar=disable_bar)
         logging.getLogger("PANORAMA").debug(f"{source} has been read and added")
     pangenome.status["systems"] = "Loaded"
     return metadata_sources
@@ -216,15 +245,18 @@ def read_spots(pangenome: Pangenome, h5f: tables.File, disable_bar: bool = False
     """
     table = h5f.root.spots
     spots = {}
+    curr_spot_id = None
     for row in tqdm(read_chunks(table, chunk=20000), total=table.nrows, unit="spot", disable=disable_bar):
-        curr_spot = spots.get(int(row["spot"]))
-        if curr_spot is None:
-            curr_spot = Spot(int(row["spot"]))
-            spots[row["spot"]] = curr_spot
+        if curr_spot_id != int(row["spot"]):
+            curr_spot_id = int(row["spot"])
+            curr_spot = spots.get(curr_spot_id)
+            if curr_spot is None:
+                curr_spot = Spot(int(row["spot"]))
+                spots[row["spot"]] = curr_spot
         region = pangenome.get_region(row["RGP"].decode())
         curr_spot.add(region)
-        curr_spot.spot_2_families()
     for spot in spots.values():
+        spot.spot_2_families()
         pangenome.add_spot(spot)
     pangenome.status["spots"] = "Loaded"
 
@@ -341,7 +373,9 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
     if spots:
         if h5f.root.status._v_attrs.spots:
             logging.getLogger("PPanGGOLiN").info("Reading the spots...")
+            t0 = time.time()
             read_spots(pangenome, h5f, disable_bar=disable_bar)
+            logging.getLogger("PPanGGOLiN").debug(f"Load spots took: {time.time() - t0}")
         else:
             raise AttributeError(f"The pangenome in file '{pangenome.file}' does not have spots information, "
                                  f"or has been improperly filled")
@@ -356,7 +390,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
 
     if systems:
         metadata = True
-        metadata_sources = read_systems(pangenome, h5f, kwargs["models"], kwargs["systems_sources"], disable_bar)
+        metadata_sources = read_systems(pangenome, h5f, models=kwargs["models"], sources=kwargs["systems_sources"],
+                                        read_canonical=kwargs["read_canonical"], disable_bar=disable_bar)
         if "meta_sources" in kwargs:
             kwargs["metatypes"].add("families")
             kwargs["meta_sources"] |= metadata_sources
@@ -370,7 +405,9 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
                 metastatus = h5f.root.status._f_get_child("metastatus")
                 metasources = h5f.root.status._f_get_child("metasources")
 
-                metatype_sources = set(metasources._v_attrs[metatype]) & set(kwargs["sources"])
+                metatype_sources = set(metasources._v_attrs[metatype]) & kwargs["sources"]
+                if "meta_sources" in kwargs:
+                    metatype_sources &= kwargs["meta_sources"]
                 if metastatus._v_attrs[metatype] and len(metatype_sources) > 0:
                     logging.getLogger("PPanGGOLiN").info(
                         f"Reading the {metatype} metadata from sources {metatype_sources}...")
@@ -382,8 +419,8 @@ def read_pangenome(pangenome: Pangenome, annotation: bool = False, gene_families
 
 
 def check_pangenome_info(pangenome, need_families_info: bool = False, need_families_sequences: bool = False,
-                         need_systems: bool = False, models: List[Models] = None,
-                         systems_sources: List[str] = None, disable_bar: bool = False, **kwargs):
+                         need_systems: bool = False, models: List[Models] = None, systems_sources: List[str] = None,
+                         read_canonical: bool = False, disable_bar: bool = False, **kwargs):
     """
     Defines what needs to be read depending on what is needed, and automatically checks if the required elements
     have been computed with regard to the `pangenome.status`.
@@ -414,6 +451,7 @@ def check_pangenome_info(pangenome, need_families_info: bool = False, need_famil
         need_info["systems"] = True
         need_info["models"] = models
         need_info["systems_sources"] = systems_sources
+        need_info["read_canonical"] = read_canonical
 
     logging.getLogger("PANORAMA").debug(f"need_info: {need_info}")
 
@@ -447,6 +485,7 @@ def load_pangenome(name: str, path: Path, taxid: int, need_info: Dict[str, bool]
     Raises:
         Exception: If an error occurs during the pangenome check.
     """
+    t0 = time.time()
     pangenome = Pangenome(name=name, taxid=taxid)
     pangenome.add_file(path)
     if check_function is not None:
@@ -456,6 +495,7 @@ def load_pangenome(name: str, path: Path, taxid: int, need_info: Dict[str, bool]
             logging.getLogger("PANORAMA").error(f"Pangenome {pangenome.name} reading return the below error")
             raise error
     check_pangenome_info(pangenome, disable_bar=disable_bar, **need_info)
+    logging.getLogger("PANORAMA").info(f"Pangenome {pangenome.name} load done in {time.time() - t0:.2f} seconds")
     return pangenome
 
 
@@ -481,6 +521,7 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
     Returns:
         Pangenomes: List of loaded pangenomes with required information.
     """
+    t0 = time.time()
     pangenomes = Pangenomes()
     pan_to_path = check_tsv_sanity(pangenome_list)
     with ThreadPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
@@ -496,4 +537,5 @@ def load_pangenomes(pangenome_list: Path, need_info: dict, check_function: calla
             for future in futures:
                 with lock:
                     pangenomes.add(future.result())
+    logging.getLogger("PANORAMA").info(f"Pangenomes load done in {time.time() - t0:.2f} seconds")
     return pangenomes

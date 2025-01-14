@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 # coding:utf-8
+
+# default libraries
 import logging
-import numpy as np
 from typing import List, Set
-from bokeh.models import BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter
-from bokeh.palettes import Magma256
-import pandas as pd
-from bokeh.io import output_file, export_png
-from bokeh.plotting import figure, save
 from pathlib import Path
 
+# installed libraries
+from tqdm import tqdm
+import numpy as np
+import pandas as pd
+from bokeh.models import BasicTicker, ColorBar, LinearColorMapper, CategoricalColorMapper, PrintfTickFormatter
+from bokeh.palettes import Magma256
+from bokeh.io import output_file, export_png
+from bokeh.plotting import figure, save
 
-def systems_partition(name: str, system_projection: pd.DataFrame, output: Path) -> None:
+
+def systems_partition(name: str, system_projection: pd.DataFrame, output: Path, disable_bar: bool = False) -> None:
     """
     Call functions to draw heatmap figures for the pangenome.
 
@@ -27,7 +32,8 @@ def systems_partition(name: str, system_projection: pd.DataFrame, output: Path) 
     organism_names.sort(key=str.casefold)
 
     matrix_genomes_systems = np.zeros((len(organism_names), len(system_names)))
-    for i, organism in enumerate(organism_names):
+    for i, organism in tqdm(enumerate(organism_names), unit='organisms', desc="Write system partition",
+                            disable=disable_bar):
         data_genome = data_systems[data_systems['organism'] == organism]
         dict_defense_genome = pd.Series(data_genome['system name'].values, index=data_genome['system number']).to_dict()
         for j, system in enumerate(system_names):

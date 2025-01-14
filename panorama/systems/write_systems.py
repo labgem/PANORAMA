@@ -9,6 +9,9 @@ This module provides functions to write information into the pangenome file
 from __future__ import annotations
 import argparse
 import logging
+import time
+from concurrent.futures import ProcessPoolExecutor
+from multiprocessing import get_context
 from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
@@ -39,7 +42,7 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
     """
     need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
                  "need_metadata": True, "metatypes": ["families"], "need_systems": True,
-                 "systems_sources": args.sources}
+                 "systems_sources": args.sources, "read_canonical": args.canonical}
     if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
         raise argparse.ArgumentError(argument=None, message="You should at least choose one type of systems writing "
                                                             "between: projection, partition, association or proksee.")
@@ -86,8 +89,8 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
 
 def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projection: bool = False,
                                     association: List[str] = None, partition: bool = False, proksee: str = None,
-                                    organisms: List[str] = None, threads: int = 1, lock: Lock = None,
-                                    force: bool = False, disable_bar: bool = False):
+                                    organisms: List[str] = None, canonical: bool = False, threads: int = 1,
+                                    lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
     Write detected systems from a pangenome to an output directory in a flat format.
 
@@ -108,32 +111,37 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
         NotImplementedError: If Proksee integration is requested but not implemented.
 
     """
-    logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name}")
+    logging.getLogger("PANORAMA").info(f"Begin write systems for {pangenome.name}")
+    begin = time.time()
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
+    fam_index = pangenome.compute_org_bitarrays()
     for system_source in pangenome.systems_sources:
         logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
                                             f"on system source: {system_source}")
-        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source,
-                                                                   association=association, threads=threads,
-                                                                   lock=lock, disable_bar=disable_bar)
+        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, fam_index,
+                                                                   association=association, canonical=canonical,
+                                                                   threads=threads, lock=lock, disable_bar=disable_bar)
         source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
         if projection:
             logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms, force)
+            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms,
+                                     threads, force, disable_bar)
         if partition:
             logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
             systems_partition(pangenome.name, pangenome_proj, source_res_output)
         if association:
             logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-            association_pangenome_systems(pangenome, association, source_res_output)
+            association_pangenome_systems(pangenome, association, source_res_output,
+                                          threads=threads, disable_bar=disable_bar)
         if proksee:
             raise NotImplementedError("Proksee not implemented")
+    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
 
 
 def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,
                              association: List[str] = None, partition: bool = False, proksee: str = None,
-                             organisms: List[str] = None, threads: int = 1, lock: Lock = None, force: bool = False,
-                             disable_bar: bool = False):
+                             organisms: List[str] = None, canonical: bool = False, threads: int = 1,
+                             lock: Lock = None, force: bool = False, disable_bar: bool = False):
     """
     Write flat files about systems for all pangenomes.
 
@@ -150,9 +158,11 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
         force (bool, optional): Flag to allow overwriting files. Defaults to False.
         disable_bar (bool, optional): Flag to disable the progress bar. Defaults to False.
     """
+    t0 = time.time()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         write_flat_systems_to_pangenome(pangenome, output, projection, association, partition, proksee, organisms,
-                                        threads, lock, force, disable_bar)
+                                        canonical, threads, lock, force, disable_bar)
+    logging.getLogger("PANORAMA").info(f"Done write system for all pangenomes in {time.time() - t0:2f} seconds")
 
 
 def launch(args):
@@ -182,7 +192,8 @@ def launch(args):
 
     write_pangenomes_systems(pangenomes, outdir, projection=args.projection, proksee=args.proksee,
                              association=args.association, partition=args.partition, organisms=args.organisms,
-                             threads=args.threads, lock=lock, force=args.force, disable_bar=args.disable_prog_bar)
+                             canonical=args.canonical, threads=args.threads, lock=lock, force=args.force,
+                             disable_bar=args.disable_prog_bar)
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -195,7 +206,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Returns:
         argparse.ArgumentParser: Parser arguments for align command.
     """
-    parser = sub_parser.add_parser("write_systems", formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser = sub_parser.add_parser("write_systems")
     parser_write(parser)
     return parser
 
@@ -236,5 +247,7 @@ def parser_write(parser):
                           help="Write a proksee file with systems. "
                                "If you only want the systems with genes, gene families and partition, use base value."
                                "Write RGPs, spots or modules -split by `,'- if you want them.")
+    optional.add_argument("--canonical", required=False, action="store_true",
+                          help="Write the canonical version of systems too.")
     optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
     optional.add_argument("--threads", required=False, type=int, default=1)

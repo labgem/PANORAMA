@@ -8,11 +8,14 @@ This module allows the association of systems to other pangenome elements.
 # default libraries
 from __future__ import annotations
 import logging
+import time
 from collections import defaultdict, namedtuple
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Set, Tuple, Union
 
 # installed libraries
+from tqdm import tqdm
 import pandas as pd
 from bokeh.io import output_file, save, export_png
 from bokeh.layouts import gridplot, row
@@ -20,10 +23,11 @@ from bokeh.plotting import figure
 from bokeh.transform import linear_cmap
 from bokeh.palettes import Colorblind, Reds256, Blues256, linear_palette
 from bokeh.models import BasicTicker, ColumnDataSource, LinearColorMapper, ColorBar, GlyphRenderer, FactorRange
+from ppanggolin.region import Region
 
 # local libraries
 from panorama.pangenomes import Pangenome
-from panorama.region import Region, Spot, Module
+from panorama.region import Spot, Module
 from panorama.systems.system import System
 
 total_width, total_height = 1780, 920
@@ -45,11 +49,21 @@ def get_coverage_df(asso2sys: Dict[Union[Region, Spot, Module], Set[System]],
     Returns:
         pd.DataFrame: DataFrame describing the coverage and, if applicable, frequency of systems by pangenome elements.
     """
+    def get_frequency_region(elem: Region) -> float:
+        return 1 / pangenome.number_of_organisms
+
+    def get_frequency(elem: Union[Spot, Module]) -> float:
+        element_org = set(elem.organisms)
+        return len(element_org.intersection(sys_org)) / pangenome.number_of_organisms
+
     field = ["name", "systems_ID", "systems_name", "coverage"]
     if pangenome is not None:
         field.append("frequency")
     elem_out = namedtuple("Elem", field)
     out = []
+
+    get_freq = get_frequency_region if isinstance(list(asso2sys.keys())[0], Region) else get_frequency
+
     for element, systems in asso2sys.items():
         element_fam = set(element.families)
         sys_fam, sys_org, sys_id, sys_name = set(), set(), set(), set()
@@ -60,64 +74,96 @@ def get_coverage_df(asso2sys: Dict[Union[Region, Spot, Module], Set[System]],
             sys_name.add(sys.name)
         coverage = len(element_fam.intersection(sys_fam)) / len(element_fam)
         if pangenome is not None:
-            element_org = set(element.organisms)
-            freq = len(element_org.intersection(sys_org)) / pangenome.number_of_organisms
+            freq = get_freq(element)
             out.append(elem_out(str(element), ",".join(sys_id), ','.join(sys_name), coverage, freq))
         else:
             out.append(elem_out(str(element), ",".join(sys_id), ','.join(sys_name), coverage))
     return pd.DataFrame(out)
 
 
-def get_association_df(pangenome: Pangenome, association: List[str]
-                       ) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
+def process_system(system, association, rgp2sys, spot2sys, mod2sys):
+    """
+    Process a single system and return the system's data. Updates shared defaultdicts for RGPs, spots, and modules.
+    """
+    system_data = [system.name, ",".join(fam.name for fam in system.families)]
+
+    if 'RGPs' in association:
+        rgps = {rgp.name for rgp in system.regions}
+        for rgp in system.regions:
+            rgp2sys[rgp].add(system)
+        system_data.append(",".join(rgps))
+
+    if 'spots' in association:
+        spots = {str(spot.ID) for spot in system.spots}
+        for spot in system.spots:
+            spot2sys[spot].add(system)
+        system_data.append(",".join(spots))
+
+    if 'modules' in association:
+        modules = {str(mod.ID) for mod in system.modules}
+        for mod in system.modules:
+            mod2sys[mod].add(system)
+        system_data.append(",".join(modules))
+
+    return system.ID, system_data
+
+
+def get_association_df(pangenome: 'Pangenome', association: List[str], threads: int = 1,
+                       disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     """
     Get the DataFrame corresponding to the system-pangenome object association.
 
     Args:
         pangenome (Pangenome): Pangenome containing systems.
         association (List[str]): List of pangenome elements to associate.
+        threads (int): Number of threads to use for parallel processing.
+        disable_bar (bool): Whether to disable the progress bar.
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame, pd.DataFrame]:
             Tuple containing DataFrames for system-pangenome element associations and coverage for RGPs, spots, and modules.
     """
     columns = ['system number', 'system_name', 'families']
-    if 'RGPs' in association:
+    has_rgps = 'RGPs' in association
+    has_spots = 'spots' in association
+    has_modules = 'modules' in association
+
+    if has_rgps:
         columns.append('RGPs')
-    if 'spots' in association:
+    if has_spots:
         columns.append('spots')
-    if 'modules' in association:
+    if has_modules:
         columns.append('modules')
 
     association_list = {}
     rgp2sys = defaultdict(set)
     spot2sys = defaultdict(set)
     mod2sys = defaultdict(set)
-    for system in pangenome.systems:
-        association_list[system.ID] = [system.name, ",".join([fam.name for fam in system.families])]
-        if 'RGPs' in association:
-            rgps = set()
-            for rgp in system.regions:
-                rgps.add(rgp.name)
-                rgp2sys[rgp].add(system)
-            association_list[system.ID].append(",".join(rgps))
-        if 'spots' in association:
-            spots = set()
-            for spot in system.spots:
-                spots.add(str(spot.ID))
-                spot2sys[spot].add(system)
-            association_list[system.ID].append(",".join(spots))
-        if 'modules' in association:
-            modules = set()
-            for mod in system.modules:
-                modules.add(str(mod.ID))
-                mod2sys[mod].add(system)
-            association_list[system.ID].append(",".join(modules))
+
+    # Using ThreadPoolExecutor for parallel processing
+    with ThreadPoolExecutor(max_workers=threads) as executor:
+        futures = []
+        for system in pangenome.systems:
+            # Submit each system for processing in parallel
+            futures.append(executor.submit(process_system, system, association, rgp2sys, spot2sys, mod2sys))
+
+        # Use tqdm to track progress and gather results as they complete
+        for future in tqdm(as_completed(futures), total=pangenome.number_of_systems(), unit="systems",
+                           desc=f"Associate systems to: {', '.join(association)}", disable=disable_bar):
+            system_id, system_data = future.result()
+            association_list[system_id] = system_data
+
+    # Create the association DataFrame from the results
+    t0 = time.time()
     association_df = pd.DataFrame.from_dict(association_list, orient='index', columns=columns[1:])
     association_df.index.name = columns[0]
-    rgp2sys_df = get_coverage_df(rgp2sys)
-    spot2sys_df = get_coverage_df(spot2sys, pangenome)
-    mod2sys_df = get_coverage_df(mod2sys, pangenome)
+    logging.getLogger("PANORAMA").debug(f"Association df write in {time.time() - t0:.2f} seconds")
+
+    # Generate the coverage DataFrames for RGPs, spots, and modules
+    rgp2sys_df = get_coverage_df(rgp2sys, pangenome) if has_rgps else pd.DataFrame()
+    spot2sys_df = get_coverage_df(spot2sys, pangenome) if has_spots else pd.DataFrame()
+    mod2sys_df = get_coverage_df(mod2sys, pangenome) if has_modules else pd.DataFrame()
+
     return association_df, rgp2sys_df, spot2sys_df, mod2sys_df
 
 
@@ -401,7 +447,7 @@ def write_correlation_matrix(df: pd.DataFrame, association: str, coverage: pd.Da
 
 
 def association_pangenome_systems(pangenome: Pangenome, association: List[str], output: Path,
-                                  out_format: List[str] = None):
+                                  out_format: List[str] = None, threads: int = 1, disable_bar: bool = False):
     """
     Write the association between systems and pangenome objects.
 
@@ -416,26 +462,39 @@ def association_pangenome_systems(pangenome: Pangenome, association: List[str], 
     """
     out_format = out_format if out_format is not None else ['html']
 
-    association_df, rgp2sys_df, spot2sys_df, mod2sys_df = get_association_df(pangenome, association)
+    association_df, rgp2sys_df, spot2sys_df, mod2sys_df = get_association_df(pangenome, association, threads,
+                                                                             disable_bar)
     association_df.to_csv(output / 'association.tsv', sep='\t')
-    rgp2sys_df.to_csv(output / 'rgp_to_systems.tsv', sep='\t')
-    spot2sys_df.to_csv(output / 'spot_to_systems.tsv', sep='\t')
-    mod2sys_df.to_csv(output / 'module_to_systems.tsv', sep='\t')
-    for asso in association:
+    logging.getLogger("PANORAMA").info(f"Saved association dataframe in CSV format to {output}")
+    for asso in tqdm(association, unit='asso', desc='Write system association', disable=disable_bar):
+        write_corr = False
         if asso == "RGPs":
-            coverage = rgp2sys_df.set_index("name")
-            frequency = None
+            if not rgp2sys_df.empty:
+                coverage = rgp2sys_df.set_index("name")
+                rgp2sys_df.set_index("name").to_csv(output / 'rgp_to_systems.tsv', sep='\t')
+                logging.getLogger("PANORAMA").info(f"Saved RGPs to systems dataframe in CSV format to {output}")
+                frequency = None
+                write_corr = True
         elif asso == "spots":
-            coverage = spot2sys_df.set_index("name")
-            coverage.index = coverage.index.str.replace("spot_", "")
-            frequency = coverage.loc[:, coverage.columns != "coverage"]
-            coverage = coverage.loc[:, coverage.columns != "frequency"]
+            if not spot2sys_df.empty:
+                spot2sys_df.set_index("name").to_csv(output / 'spot_to_systems.tsv', sep='\t')
+                logging.getLogger("PANORAMA").info(f"Saved spots to systems dataframe in CSV format to {output}")
+                coverage = spot2sys_df.set_index("name")
+                coverage.index = coverage.index.str.replace("spot_", "")
+                frequency = coverage.loc[:, coverage.columns != "coverage"]
+                coverage = coverage.loc[:, coverage.columns != "frequency"]
+                write_corr = True
         elif asso == "modules":
-            coverage = mod2sys_df.set_index("name")
-            coverage.index = coverage.index.str.replace("module_", "")
-            frequency = coverage.loc[:, coverage.columns != "coverage"]
-            coverage = coverage.loc[:, coverage.columns != "frequency"]
+            if not mod2sys_df.empty:
+                mod2sys_df.set_index("name").to_csv(output / 'module_to_systems.tsv', sep='\t')
+                logging.getLogger("PANORAMA").info(f"Saved modules to systems dataframe in CSV format to {output}")
+                coverage = mod2sys_df.set_index("name")
+                coverage.index = coverage.index.str.replace("module_", "")
+                frequency = coverage.loc[:, coverage.columns != "coverage"]
+                coverage = coverage.loc[:, coverage.columns != "frequency"]
+                write_corr = True
         else:
             raise Exception("Unexpected error")
-        write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
-                                 asso, coverage, output, frequency, out_format)
+        if write_corr:
+            write_correlation_matrix(association_df.drop([other for other in association if other != asso], axis=1),
+                                     asso, coverage, output, frequency, out_format)

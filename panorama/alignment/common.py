@@ -13,7 +13,7 @@ import subprocess
 
 # installed libraries
 from tqdm import tqdm
-from ppanggolin.formats.writeSequences import write_fasta_prot_fam
+from ppanggolin.formats.writeSequences import write_fasta_prot_fam_from_pangenome_file
 
 # local libraries
 from panorama.pangenomes import Pangenomes, Pangenome
@@ -33,11 +33,13 @@ def createdb(seq_files: List[Path], tmpdir: Path, db_type: int = 0, keep_tmp: bo
     Returns:
         DB file
     """
+    logging.getLogger('PANORAMA').debug('Create MMSeqs2 database')
     seqdb = tempfile.NamedTemporaryFile(mode="w", dir=tmpdir, delete=keep_tmp)
     cmd = ["mmseqs", "createdb"] + list(map(Path.as_posix, map(Path.absolute, seq_files))) + \
           [seqdb.name, "--dbtype", str(db_type)]
     logging.getLogger("PANORAMA").debug(" ".join(cmd))
     subprocess.run(cmd, stdout=subprocess.DEVNULL)
+    logging.getLogger('PANORAMA').debug(f'MMSeqs2 database created here: {seqdb.name}')
     return Path(seqdb.name)
 
 
@@ -71,7 +73,7 @@ def write_pangenomes_families_sequences(pangenomes: Pangenomes, tmpdir: Path, th
         add in the begin of sequence name the pangenome_name to be sure that there is no duplicate families
         between pangenomes
         """
-        write_fasta_prot_fam(pan, **kwargs)
+        write_fasta_prot_fam_from_pangenome_file(pan.file, **kwargs)
         return pan.name, kwargs["output"] / "all_protein_families.faa.gz"
 
     logging.getLogger("PANORAMA").info("Writing pangenomes families sequences...")
@@ -79,7 +81,7 @@ def write_pangenomes_families_sequences(pangenomes: Pangenomes, tmpdir: Path, th
         with tqdm(total=len(pangenomes), unit='pangenome', disable=disable_bar) as progress:
             futures = []
             for pangenome in pangenomes:
-                args = {"output": mkdir(tmpdir / f"{pangenome.name}"), "prot_families": "all",
+                args = {"output": mkdir(tmpdir / f"{pangenome.name}"), "family_filter": "all",
                         "compress": True, "disable_bar": True}
                 future = executor.submit(write_protein_families_sequences, pangenome, **args)
                 future.add_done_callback(lambda p: progress.update())

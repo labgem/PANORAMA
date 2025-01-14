@@ -29,12 +29,13 @@ from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 
 res_col_names = ['families', 'Accession', 'protein_name', 'e_value',
-                 'score', 'bias', 'secondary_name', 'Description']
+                 'score', 'bias', 'i_e_value', 'secondary_name', 'Description']
 meta_col_names = ["name", "accession", "path", "length", "protein_name", "secondary_name", "score_threshold",
-                  "eval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
+                  "eval_threshold", "ieval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
 meta_dtype = {"accession": "string", "name": "string", "path": "string", "length": "int", "description": "string",
               "protein_name": "string", "secondary_name": "string", "score_threshold": "float",
-              "eval_threshold": "float", "hmm_cov_threshold": "float", "target_cov_threshold": "float"}
+              "eval_threshold": "float", "ieval_threshold": "float", "hmm_cov_threshold": "float",
+              "target_cov_threshold": "float"}
 
 
 def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = None, keep_tmp: bool = False,
@@ -53,7 +54,7 @@ def digit_gene_sequences(pangenome: Pangenome, threads: int = 1, tmp: Path = Non
         List[pyhmmer.easel.Sequence]: list of digitalised gene family sequences
     """
 
-    write_gene_protein_sequences(pangenome, tmp, "all", cpu=threads, keep_tmp=keep_tmp,
+    write_gene_protein_sequences(pangenome.file, tmp, "all", cpu=threads, keep_tmp=keep_tmp,
                                  tmp=tmp, disable_bar=disable_bar)
     available_memory = psutil.virtual_memory().available
     target_size = os.stat(tmp / "all_protein_genes.fna").st_size
@@ -78,11 +79,13 @@ def digit_family_sequences(pangenome: Pangenome,
     for family in tqdm(pangenome.gene_families, total=pangenome.number_of_gene_families, unit="gene families",
                        desc="Digitalized gene families sequences", disable=disable_bar):
         bit_name = family.name.encode('UTF-8')
-        seq = TextSequence(name=bit_name,
-                           sequence=family.sequence if family.HMM is None else family.HMM.consensus.upper() + '*')
-        sequences.append(seq.digitize(Alphabet.amino()))
+        bit_acc = str(family.ID).encode('UTF-8')
+        sequence = family.sequence if family.HMM is None else family.HMM.consensus.upper()
+        sequence = sequence.replace('*', '')
+        text_seq = TextSequence(name=bit_name, accession=bit_acc, sequence=sequence)
+        sequences.append(text_seq.digitize(Alphabet.amino()))
     available_memory = psutil.virtual_memory().available
-    return sequences, True if sys.getsizeof(sequences) < available_memory else False
+    return sequences, True if sum(map(sys.getsizeof, sequences)) < available_memory else False
 
 
 def get_msa(pangenome: Pangenome, tmpdir: Path, threads: int = 1, disable_bar: bool = False) -> pd.DataFrame:
@@ -224,7 +227,7 @@ def read_hmms(hmm_db: Path, disable_bar: bool = False) -> Tuple[Dict[str, List[H
     return hmms, hmm_df
 
 
-def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float, float, float, str, str], None]:
+def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float, float, float, float, str, str], None]:
     """
     Check if a hit can be assigned to a target
 
@@ -237,26 +240,25 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
     """
     cog = hit.best_domain.alignment
     hmm_info = meta.loc[cog.hmm_accession.decode('UTF-8')]
-    target_coverage = (cog.target_to - cog.target_from + 1) / cog.target_length
-    hmm_coverage = (cog.hmm_to - cog.hmm_from + 1) / cog.hmm_length
-    add_res = False
-    if ((target_coverage >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"]))
-            and (hmm_coverage >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"]))):
-        if pd.isna(hmm_info['score_threshold']):
-            if hit.evalue < hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold']):
-                add_res = True
-        else:
-            if hit.score > hmm_info['score_threshold']:
-                add_res = True
-    if add_res:
+    target_coverage = (cog.target_to - cog.target_from) / cog.target_length
+    hmm_coverage = (cog.hmm_to - cog.hmm_from) / cog.hmm_length
+
+    check_target_cov = target_coverage >= hmm_info["target_cov_threshold"] or pd.isna(hmm_info["target_cov_threshold"])
+    check_hmm_cov = hmm_coverage >= hmm_info["hmm_cov_threshold"] or pd.isna(hmm_info["hmm_cov_threshold"])
+    check_score = hit.score >= hmm_info['score_threshold'] or pd.isna(hmm_info['score_threshold'])
+    check_e_value = hit.evalue <= hmm_info['eval_threshold'] or pd.isna(hmm_info['eval_threshold'])
+    check_ie_value = hit.best_domain.i_evalue <= hmm_info['ieval_threshold'] or pd.isna(hmm_info['ieval_threshold'])
+
+    if check_target_cov and check_hmm_cov and check_score and check_e_value and check_ie_value:
         secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
         return (hit.name.decode('UTF-8'), cog.hmm_accession.decode('UTF-8'), hmm_info.protein_name, hit.evalue,
-                hit.score, hit.bias, secondary_name, hmm_info.description)
+                hit.score, hit.bias, hit.best_domain.i_evalue, secondary_name, hmm_info.description)
 
 
 def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceFile, List[DigitalSequence]],
-                       meta: pd.DataFrame = None, threads: int = 1, tmp: Path = None, disable_bar: bool = False
-                       ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
+                       meta: pd.DataFrame = None, Z: int = 4000, threads: int = 1, tmp: Path = None,
+                       disable_bar: bool = False
+                       ) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -287,7 +289,7 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
         models = hmm_db.optimized_profiles()
         logging.getLogger("PANORAMA").info("Begin alignment to HMM with HMMScan")
         with tqdm(total=len(gf_sequences), unit="target", desc="Align target to HMM", disable=disable_bar) as bar:
-            options = {"Z": sum(len(hmm_list) for hmm_list in hmms.values())}
+            options = {"Z": Z}
             for cutoff, hmm_list in hmms.items():
                 if cutoff != "other":
                     options["bit_cutoffs"] = cutoff
@@ -301,8 +303,7 @@ def annot_with_hmmscan(hmms: Dict[str, List[HMM]], gf_sequences: Union[SequenceF
 
 
 def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock, meta: pd.DataFrame = None,
-                         threads: int = 1, disable_bar: bool = False
-                         ) -> Tuple[List[Tuple[str, str, str, float, float, float, str, str]], List[TopHits]]:
+                         Z: int = 4000, threads: int = 1, disable_bar: bool = False) -> Tuple[List[Tuple[str, str, str, float, float, float, float, str, str]], List[TopHits]]:
     """
     Compute HMMer alignment between gene families sequences and HMM
 
@@ -330,7 +331,7 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
               desc="Align target to HMM", disable=disable_bar) as bar:
         all_top_hits = []
         for cutoff, hmm_list in hmms.items():
-            options = {}
+            options = {"Z": Z}
             if cutoff != "other":
                 options["bit_cutoffs"] = cutoff
             for top_hits in hmmsearch(hmm_list, gf_sequences, cpus=threads, callback=hmmsearch_callback, **options):
@@ -339,6 +340,7 @@ def annot_with_hmmsearch(hmms: Dict[str, List[HMM]], gf_sequences: SequenceBlock
                     assign = assign_hit(hit, meta)
                     if assign is not None:
                         res.append(result(*assign))
+
     return res, all_top_hits
 
 
@@ -360,12 +362,14 @@ def write_top_hits(all_top_hits: List[TopHits], output: Path, source: str, tblou
 
     header = True
     tbl, domtbl, pfamtbl = None, None, None
+    output_path = output / f'{name}' / f'{source}'
+    output_path.mkdir(parents=True, exist_ok=True)
     if tblout:
-        tbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.tbl", "wb")
+        tbl = open(output_path / f"hmmsearch_{mode}.tbl", "wb")
     if domtblout:
-        domtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.domtbl", "wb")
+        domtbl = open(output_path / f"hmmsearch_{mode}.domtbl", "wb")
     if pfamtblout:
-        pfamtbl = open(output / f"hmmsearch_{name}_{mode}{'_' if source != '' else ''}{source}.pfamtbl", "wb")
+        pfamtbl = open(output_path / f"hmmsearch_{mode}.pfamtbl", "wb")
     for top_hits in all_top_hits:
         if tblout:
             top_hits.write(tbl, format="targets", header=header)
@@ -419,7 +423,7 @@ def get_metadata_df(result: List[Tuple[str, str, str, float, float, float, str, 
 
 
 def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.DataFrame = None, source: str = "",
-                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", tblout: bool = False,
+                   mode: str = "fast", msa: Path = None, msa_format: str = "afa", tblout: bool = False, Z: int = 4000,
                    domtblout: bool = False, pfamtblout: bool = False, output: Path = None,
                    threads: int = 1, tmp: Path = None, disable_bar: bool = False) -> pd.DataFrame:
     """
@@ -460,10 +464,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
-            res, all_top_hits = annot_with_hmmsearch(hmms, sequences.read_block(), meta, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequences.read_block(), meta, Z, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, Z, threads, tmp, disable_bar)
 
     else:
         if mode == "profile":
@@ -481,10 +485,10 @@ def annot_with_hmm(pangenome: Pangenome, hmms: Dict[str, List[HMM]], meta: pd.Da
         if fit_memory:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMSearch")
             sequence_block = DigitalSequenceBlock(alphabet=Alphabet.amino(), iterable=sequences)
-            res, all_top_hits = annot_with_hmmsearch(hmms, sequence_block, meta, threads, disable_bar)
+            res, all_top_hits = annot_with_hmmsearch(hmms, sequence_block, meta, Z, threads, disable_bar)
         else:
             logging.getLogger("PANORAMA").debug("Launch pyHMMer-HMMScan")
-            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, threads, tmp, disable_bar)
+            res, all_top_hits = annot_with_hmmscan(hmms, sequences, meta, Z, threads, tmp, disable_bar)
 
     if tblout or domtblout or pfamtblout:
         write_top_hits(all_top_hits, output, source, tblout, domtblout, pfamtblout, pangenome.name, mode)
