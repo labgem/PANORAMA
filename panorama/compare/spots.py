@@ -199,49 +199,84 @@ def add_systems_info(pangenomes, cs_graph):
         nodes_attributes["#systems"] = node2nbsys[node]
 
 
+def create_pangenome_system_graph(pangenome):
+    graph = nx.Graph()
+    sys2pangenome = {}
+    syshash2sys = {}
+    systemhash2conserved_spots = defaultdict(set)
+    syshash2orgs = defaultdict(set)
+    for system in pangenome.systems:
+        for spot in system.spots:
+            sys_hash = hash((pangenome.name, system.name, spot.ID))
+            if sys_hash not in syshash2sys:
+                syshash2orgs[sys_hash] |= set(system.organisms)
+                graph.add_node(sys_hash, system_name=system.name, pangenome=pangenome.name, spot=spot.ID)
+                sys2pangenome[sys_hash] = pangenome.name
+                syshash2sys[sys_hash] = system
+            if spot.conserved_id:
+                systemhash2conserved_spots[sys_hash].add(spot.conserved_id)
+    nx.set_node_attributes(graph, {sys_hash: (len(n_orgs) / pangenome.number_of_organisms) * 100
+                                   for sys_hash, n_orgs in syshash2orgs.items()}, "percent_org")
+    return graph, sys2pangenome, syshash2sys, systemhash2conserved_spots
+
+
+def create_systems_graph(pangenomes: Pangenomes, threads: int = 1, lock: Lock = None, disable_bar: bool = False):
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="Pangenome", disable=disable_bar) as pbar:
+            futures = []
+            for pangenome in pangenomes:
+                logging.getLogger("PANORAMA").debug(f"Add spots for pangenome {pangenome.name}")
+                future = executor.submit(create_pangenome_system_graph, pangenome)
+                future.add_done_callback(lambda p: pbar.update())
+                futures.append(future)
+            systems_graph = nx.Graph()
+            systems2pangenome = {}
+            systemhash2system = {}
+            systemhash2conserved_spots = defaultdict(set)
+            for future in futures:
+                res = future.result()
+                systems_graph.add_nodes_from(res[0].nodes(data=True))
+                systems2pangenome.update(res[1])
+                systemhash2system.update(res[2])
+                systemhash2conserved_spots.update(res[3])
+    return systems_graph, systems2pangenome, systemhash2system, systemhash2conserved_spots
+
+
 def graph_systems_link_with_conserved_spots(pangenomes: Pangenomes, output: Path,
                                             graph_formats: List[str] = None, threads: int = 1,
                                             lock: Lock = None,
                                             disable_bar: bool = False):
-    from panorama.compare.systems import create_systems_graph
+    systems_graph, system2pangenome, systemhash2system, systemhash2conserved_spots = create_systems_graph(pangenomes,
+                                                                                                          threads, lock,
+                                                                                                          disable_bar)
 
-    systems_graph, system2pangenome, systemhash2system = create_systems_graph(pangenomes, threads, lock, disable_bar)
-    systemhash2conserved_spots = defaultdict(set)
-    for pangenome in pangenomes:
-        for system in pangenome.systems:
-            system_hash = hash((pangenome.name, system.name, system.ID))
-            for gf in system.models_families:
-                systemhash2conserved_spots[system_hash] |= {spot.conserved_id for spot in gf.spots}
-            if None in systemhash2conserved_spots[system_hash]:
-                systemhash2conserved_spots[system_hash].remove(None)
-
-    for sys_hash1, sys_hash2 in combinations(systems_graph.nodes, 2):
+    for sys_hash1, sys_hash2 in tqdm(combinations(systems_graph.nodes, 2),
+                                     total=len(systems_graph.nodes)*(len(systems_graph.nodes)+1)/2):
         common_cs = systemhash2conserved_spots[sys_hash1].intersection(systemhash2conserved_spots[sys_hash2])
         if len(common_cs) > 0:
-            if system2pangenome[sys_hash1] != system2pangenome[sys_hash2]:
-                systems_graph.add_edge(sys_hash1, sys_hash2, cluster_spots=",".join(map(str, sorted(common_cs))),
-                                       weight=len(common_cs))
-                node_attr1, node_attr2 = systems_graph.nodes[sys_hash1], systems_graph.nodes[sys_hash2]
-                pangenome1, pangenome2 = system2pangenome[sys_hash1], system2pangenome[sys_hash2]
-                sys1, sys2 = systemhash2system[sys_hash1], systemhash2system[sys_hash2]
-                node_attr1.update({"system_name": sys1.name, "pangenome": pangenome1})
-                node_attr2.update({"system_name": sys2.name, "pangenome": pangenome2})
-                if "spots" in node_attr1:
-                    node_attr1["spots"] |= {spot.ID for cs in common_cs
-                                            for spot in pangenomes.get_conserved_spots(cs).spots
-                                            if spot.pangenome.name == pangenome1}
-                else:
-                    node_attr1["spots"] = {spot.ID for cs in common_cs for spot in
-                                           pangenomes.get_conserved_spots(cs).spots
-                                           if spot.pangenome.name == pangenome1}
-                if "spots" in node_attr2:
-                    node_attr2["spots"] |= {spot.ID for cs in common_cs
-                                            for spot in pangenomes.get_conserved_spots(cs).spots
-                                            if spot.pangenome.name == pangenome2}
-                else:
-                    node_attr2["spots"] = {spot.ID for cs in common_cs for spot in
-                                           pangenomes.get_conserved_spots(cs).spots
-                                           if spot.pangenome.name == pangenome2}
+            systems_graph.add_edge(sys_hash1, sys_hash2, cluster_spots=",".join(map(str, sorted(common_cs))),
+                                   weight=len(common_cs))
+            node_attr1, node_attr2 = systems_graph.nodes[sys_hash1], systems_graph.nodes[sys_hash2]
+            pangenome1, pangenome2 = system2pangenome[sys_hash1], system2pangenome[sys_hash2]
+            sys1, sys2 = systemhash2system[sys_hash1], systemhash2system[sys_hash2]
+            node_attr1.update({"system_name": sys1.name, "pangenome": pangenome1})
+            node_attr2.update({"system_name": sys2.name, "pangenome": pangenome2})
+            if "spots" in node_attr1:
+                node_attr1["spots"] |= {spot.ID for cs in common_cs
+                                        for spot in pangenomes.get_conserved_spots(cs).spots
+                                        if spot.pangenome.name == pangenome1}
+            else:
+                node_attr1["spots"] = {spot.ID for cs in common_cs for spot in
+                                       pangenomes.get_conserved_spots(cs).spots
+                                       if spot.pangenome.name == pangenome1}
+            if "spots" in node_attr2:
+                node_attr2["spots"] |= {spot.ID for cs in common_cs
+                                        for spot in pangenomes.get_conserved_spots(cs).spots
+                                        if spot.pangenome.name == pangenome2}
+            else:
+                node_attr2["spots"] = {spot.ID for cs in common_cs for spot in
+                                       pangenomes.get_conserved_spots(cs).spots
+                                       if spot.pangenome.name == pangenome2}
 
     systems_graph.remove_nodes_from(list(nx.isolates(systems_graph)))
 
@@ -253,14 +288,21 @@ def graph_systems_link_with_conserved_spots(pangenomes: Pangenomes, output: Path
     louvain_graph = systems_graph.copy()
     partitions = nx.algorithms.community.louvain_communities(louvain_graph, weight="weight")
 
-    for cluster_id, cluster_systems in enumerate(partitions, start=1):
+    cluster_id = 1
+    for _, cluster_systems in enumerate(partitions, start=1):
         if len(cluster_systems) > 1:
+            pan_set = set()
             for sys_hash in cluster_systems:
                 node_attr = louvain_graph.nodes[sys_hash]
                 pangenome = system2pangenome[sys_hash]
                 sys = systemhash2system[sys_hash]
                 node_attr.update({"system_ID": sys.ID, "system_name": sys.name,
                                   "pangenome": pangenome, "cluster_id": cluster_id})
+                pan_set.add(pangenome)
+            if len(pan_set) == 1:
+                louvain_graph.remove_nodes_from(cluster_systems)
+            else:
+                cluster_id += 1
         else:
             louvain_graph.remove_nodes_from(cluster_systems)
 

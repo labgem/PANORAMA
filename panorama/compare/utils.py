@@ -23,8 +23,6 @@ def compute_frr(queries: Set[GeneFamily], targets: Set[GeneFamily]) -> Tuple[flo
     akins = {query_gf.akin.ID for query_gf in queries for target_gf in targets if query_gf.akin == target_gf.akin}
     min_frr = len(akins) / min(len(queries), len(targets))
     max_frr = len(akins) / max(len(queries), len(targets))
-    if min_frr > 1 or max_frr > 1:
-        print("hello")
 
     return min_frr, max_frr, len(akins)
 

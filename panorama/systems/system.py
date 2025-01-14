@@ -472,7 +472,7 @@ class SystemUnit(MetaFeatures):
         Yields:
             Spot: Generator of spots.
         """
-        if not self._spots_getter:
+        if len(self._spots_getter) == 0:
             self._make_spot_getter()
         yield from self._spots_getter.values()
 
@@ -480,9 +480,17 @@ class SystemUnit(MetaFeatures):
         """
         Creates the spot getter.
         """
-        for region in self.regions:
-            if region.spot is not None:
-                self.add_spot(region.spot)
+        if len(self._regions_getter) > 0:
+            for region in self.regions:
+                if region.spot is not None:
+                    self.add_spot(region.spot)
+        else:
+            spots = set()
+            for gf in self.families:
+                spots |= set(gf.spots)
+
+            for spot in spots:
+                self.add_spot(spot)
 
     def get_spot(self, identifier: int) -> Spot:
         """

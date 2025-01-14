@@ -5,26 +5,34 @@
 from __future__ import annotations
 import argparse
 import logging
-from collections import defaultdict
 from pathlib import Path
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Tuple
 from shutil import rmtree
 from itertools import combinations
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
+from collections import defaultdict
 
 # installed libraries
 from tqdm import tqdm
 import networkx as nx
+import pandas as pd
+from bokeh.io import output_file, save, export_png
+from bokeh.plotting import figure
+from bokeh.models import ColumnDataSource, ColorBar
+from bokeh.transform import linear_cmap
+from bokeh.palettes import Reds256
 
 # local libraries
-from panorama.pangenomes import Pangenomes, Pangenome
-from panorama.geneFamily import GeneFamily
+from panorama.pangenomes import Pangenomes
 from panorama.utils import mkdir, init_lock
 from panorama.utility.utility import check_models
 from panorama.systems.system import System, ClusterSystems
 from panorama.systems.write_systems import check_pangenome_write_systems
 from panorama.compare.utils import parser_comparison, common_launch, cluster_on_frr, compute_frr
+
+
+# from panorama.compare.spots import compare_spots
 
 
 def check_compare_systems_args(args):
@@ -108,7 +116,8 @@ def compute_frr_edges(graph: nx.Graph, sys2pangenome: Dict[int, str], systemhash
                 if min_frr_models > frr_models_cutoff[0] and max_frr_models > frr_models_cutoff[1]:
                     min_frr, max_frr, shared_gf = compute_frr(set(sys1.families), set(sys2.families))
                     if min_frr > frr_cutoff[0] and max_frr > frr_cutoff[1]:
-                        graph.add_edge(sys1_hash, sys2_hash, min_frr_models=min_frr_models, max_frr_models=max_frr_models,
+                        graph.add_edge(sys1_hash, sys2_hash, min_frr_models=min_frr_models,
+                                       max_frr_models=max_frr_models,
                                        shared_model_families=shared_models_gf, min_frr=min_frr, max_frr=max_frr,
                                        shared_families=shared_gf)
             pbar.update()
@@ -130,6 +139,15 @@ def write_conserved_systems(pangenomes: Pangenomes, output: Path, cs_graph: nx.G
 
     outfile = output / "conserved_systems.tsv"
     logging.info(f"Writing rgp clusters in tsv format in {outfile}")
+
+
+def get_data_dict_pangenomes2systems(pangenomes: Pangenomes):
+    data = {}
+    for pangenome in pangenomes:
+        data[pangenome.name] = defaultdict(lambda: 0)
+        for system in pangenome.systems:
+            data[pangenome.name][system.name] += 1
+    return data
 
 
 def compare_systems(pangenomes: Pangenomes, frr_metrics: str = "min_frr_models",
@@ -158,6 +176,85 @@ def compare_systems(pangenomes: Pangenomes, frr_metrics: str = "min_frr_models",
     return systems_graph
 
 
+def gen_heatmap(data: pd.DataFrame, output: Path, out_name: str, out_fmt: List[str], figsize: Tuple[float, float],
+                title: str = "Heatmap", fontsize: int = 18):
+    """
+    Generate a heatmap using Bokeh and save it as a PNG file.
+
+    Args:
+        data (pd.DataFrame): Input data for the heatmap.
+        output (Path): Path to save the heatmap as a PNG file.
+        figsize (Tuple[float, float]): Size of the figure in pixels (width, height).
+        title (str): Title of the heatmap. Defaults to "Heatmap".
+        fontsize (int): Base font size for titles and labels. Defaults to 18.
+        **kwargs: Additional arguments for customization (not used in this implementation).
+    """
+    # Create a source for the heatmap
+    source = ColumnDataSource(data.reset_index().melt(id_vars="index", var_name="columns", value_name="value"))
+
+    # Dimensions for the plot
+    plot_width, plot_height = int(figsize[0]), int(figsize[1])
+
+    # Create the figure
+    heatmap = figure(title=title, x_range=list(data.columns), y_range=list(data.index)[::-1],
+                     width=plot_width, height=plot_height,
+                     tools="hover,save,pan,box_zoom,reset,wheel_zoom", toolbar_location='above')
+
+    # Add the heatmap
+    mapper = linear_cmap(field_name="value", palette=Reds256[::-1],
+                         low=data.values.min(), high=data.values.max())
+    heatmap.rect(x="columns", y="index", width=1, height=1, source=source,
+                 fill_color=mapper, line_color=None)
+
+    # Add color bar
+    color_bar = ColorBar(color_mapper=mapper['transform'], width=8, location=(0, 0))
+    heatmap.add_layout(color_bar, 'right')
+
+    # Configure title and labels
+    heatmap.title.text_font_size = f"{fontsize + 6}px"
+    heatmap.xaxis.axis_label = "systems"
+    heatmap.yaxis.axis_label = "Species"
+    heatmap.xaxis.axis_label_text_font_size = f"{fontsize + 2}px"
+    heatmap.yaxis.axis_label_text_font_size = f"{fontsize + 2}px"
+    heatmap.xaxis.major_label_text_font_size = f"{fontsize}px"
+    heatmap.xaxis.major_label_orientation = 1
+    heatmap.yaxis.major_label_text_font_size = f"{fontsize}px"
+
+    # Save the figure
+    if "html" in out_fmt:
+        output_path = output / (out_name + ".html")
+        output_file(output_path)
+        save(heatmap)
+        logging.getLogger("PANORAMA").debug(f"Saved heatmap in HTML format to {output_path}")
+    if "png" in out_fmt:
+        output_path = output / (out_name + ".png")
+        output_file(output_path)
+        export_png(heatmap, width=1920, height=1080)
+        logging.getLogger("PANORAMA").debug(f"Saved heatmap in PNG format to {output_path}")
+
+
+def heatmap_pangenome_systems(pangenomes, output: Path):
+    """
+    Generate heatmaps for pangenome systems using Bokeh.
+
+    Args:
+        pangenomes: Data structure containing pangenomes information.
+        output (Path): Directory to save the generated heatmaps.
+    """
+    # Prepare the raw data
+    data = pd.DataFrame(get_data_dict_pangenomes2systems(pangenomes)).fillna(0)
+    figsize = (1200, 900)  # Size in pixels for Bokeh plots
+
+    # Heatmap for the raw number of systems
+    gen_heatmap(data.T, output, "heatmap_number_sys", ["html"], figsize=figsize,
+                title="#systems detected in pangenomes", fontsize=18)
+
+    # Normalize data and generate heatmap
+    data_normalized = data.div(data.sum(axis=0), axis=1) * 100
+    gen_heatmap(data_normalized.T, output, "heatmap_normalized_sys", ["html"], figsize=figsize,
+                title="Normalized percentage #systems detected in pangenomes", fontsize=18)
+
+
 def launch(args):
     """
     Launch functions to align gene families from pangenomes
@@ -173,14 +270,23 @@ def launch(args):
 
     need_info["models"] = models_list
 
-    pangenomes, tmpdir, _, _ = common_launch(args, check_pangenome_write_systems, need_info, sources=args.sources)
+    pangenomes, tmpdir, _, lock = common_launch(args, check_pangenome_write_systems, need_info, sources=args.sources)
 
     output = mkdir(args.output, force=args.force)
 
-    cs_graph = compare_systems(pangenomes, frr_metrics=args.frr_metrics, frr_cutoff=args.frr_cutoff,
-                               frr_models_cutoff=args.frr_models_cutoff, disable_bar=args.disable_prog_bar)
+    if args.heatmap:
+        heatmap_pangenome_systems(pangenomes, output)
 
-    write_conserved_systems(pangenomes, output, cs_graph, args.graph_formats)
+    if args.frr_metrics:
+        cs_graph = compare_systems(pangenomes, frr_metrics=args.frr_metrics, frr_cutoff=args.frr_cutoff,
+                                   frr_models_cutoff=args.frr_models_cutoff, threads=args.cpus,
+                                   lock=lock, disable_bar=args.disable_prog_bar)
+
+        write_conserved_systems(pangenomes, output, cs_graph, args.graph_formats)
+
+    # spots_graph = compare_spots(pangenomes, dup_margin=args.dup_margin, frr_metrics=args.frr_metrics,
+    #                             frr_cutoff=args.frr_cutoff, threads=args.threads, lock=lock,
+    #                             disable_bar=args.disable_prog_bar)
 
     if not args.keep_tmp:
         rmtree(tmpdir, ignore_errors=True)
@@ -219,7 +325,9 @@ def parser_comparison_systems(parser):
                           help="Name of the systems sources. You can specify multiple sources. "
                                "For that separate names by a space and "
                                "make sure you give them in the same order as the sources.")
-    compare_opt.add_argument('--frr_metrics', required=False, type=str, default="min_frr_models",
+    compare_opt.add_argument('--heatmap', required=False, action='store_true',
+                             help='Plot a heatmap of systems normalized presence distribution')
+    compare_opt.add_argument('--frr_metrics', required=False, type=str, default=None,
                              choices=["min_frr_models", "max_frr_models", "min_frr", "max_frr"],
                              help="Metrics used to computed conserved systems cluster.")
     compare_opt.add_argument('--frr_models_cutoff', required=False, type=tuple, default=(0.2, 0.2), nargs=2,
@@ -234,3 +342,9 @@ def parser_comparison_systems(parser):
                              )
     optional.add_argument("--canonical", required=False, action="store_true",
                           help="Write the canonical version of systems too.")
+    # spots = parser.add_argument_group(title="Add spots information to systems comparison")
+    # spots.add_argument("--use_spots", required=False, action="store_true", default=False,
+    #                    help='Generate output linking spots to systems')
+    # spots.add_argument("--dup_margin", required=False, type=float, default=0.05,
+    #                    help="minimum ratio of genomes in which the family must have multiple genes "
+    #                         "for it to be considered 'duplicated'")
