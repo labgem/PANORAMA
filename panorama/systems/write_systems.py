@@ -25,7 +25,7 @@ from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.systems.systems_projection import project_pangenome_systems, write_projection_systems
 from panorama.systems.systems_partitions import systems_partition
 from panorama.systems.system_association import association_pangenome_systems
-
+from panorama.systems.systems_proksee import write_pangenome_systems_in_proksee
 
 def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
     """Checks the provided arguments to ensure that they are valid.
@@ -134,7 +134,12 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
             association_pangenome_systems(pangenome, association, source_res_output,
                                           threads=threads, disable_bar=disable_bar)
         if proksee:
-            raise NotImplementedError("Proksee not implemented")
+            logging.getLogger("PANORAMA").debug(f"Write proksee output {pangenome.name}")
+            write_pangenome_systems_in_proksee(pangenome=pangenome, output=source_res_output, pangenome_projection=pangenome_proj, 
+                                                organisms_projection=organisms_proj, organisms=organisms ,
+                                                disable_bar=disable_bar)
+            
+            
     logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
 
 
@@ -242,8 +247,7 @@ def parser_write(parser):
     optional.add_argument("--association", required=False, type=str, default=[], nargs='+',
                           choices=["all", "modules", "RGPs", "spots"],
                           help="Write association between systems and others pangenomes elements")
-    optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                          choices=["all", "base", "modules", "RGP", "spots", "annotations"],
+    optional.add_argument("--proksee", required=False, action="store_true",
                           help="Write a proksee file with systems. "
                                "If you only want the systems with genes, gene families and partition, use base value."
                                "Write RGPs, spots or modules -split by `,'- if you want them.")
