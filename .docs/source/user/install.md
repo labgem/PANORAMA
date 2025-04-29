@@ -1,45 +1,98 @@
-(install-section)=
-# Installation
+# 🧬 PANORAMA – Installation Guide
+## 🐍 Installation via Conda
 
-## Conda install
-```{note}
-For the moment, there is no recipe available on bioconda. We hope we can add one soon
+:::{note}
+PANORAMA is not yet available on Bioconda. We hope to provide a recipe soon.
+:::
+
+> 💡 _Before starting, create and activate a Conda environment. For more information, see the [Conda documentation](https://docs.conda.io/projects/conda/en/latest/index.html)._
+
+* * *
+
+## 🚀 Installing from source code (GitHub)
+### 🐍 Within a Conda environmnent
+
+1. Clone the Repository
+
+```shell
+git clone https://github.com/labgem/PANORAMA.git
+cd PANORAMA
 ```
 
-First of all you need to create or activate your conda environment. For more information you can look at [conda documentation](https://docs.conda.io/projects/conda/en/latest/index.html)
-
-Your environment should have a python version greater than 3.8 (included)
-
-The first step is to add the required channels in your environment. 
+2. Create and Configure the Conda Environment
 ```shell
-# Configuration of conda channels
-conda config --add channels defaults
+conda create -n panorama
 conda config --add channels bioconda
 conda config --add channels conda-forge
+conda activate panorama
+conda env update --file panorama.yml
 ```
 
-You need to clone [PANORAMA GitHub repository](https://github.com/labgem/PANORAMA) localy by running the next line
+Alternatively, in one line:  
+`conda create -n panorama -c bioconda -c conda-forge --file panorama.yml`
+
+3. Install PANORAMA
 ```shell
-git clone https://github.com/labgem/PANORAMA.git 
-```
-You can now install the required packages with the as follows:
-```console
-# Requirements installation
-cd PANORAMA
-conda install --file requirements.txt
-```
-
-You will need now to use pip to install PANORAMA. There is a *pyproject.toml* file to setup the installation.
-
-```shell
-# in the git repository 
 pip install .
 ```
+    
 
-Congratulation, PANORAMA is installed !!!
-
-```{admonition} Give us feed back
-We are at the beginning of our project development. For the time we will add PANORAMA to bioconda.
-If you have any suggestion for enhancement or idear for another package repository where PANORAMA could be added
-post an issue on our GitHub.  
+4. Test the Installation
+```shell
+panorama --help
+panorama --version
 ```
+
+### 🛠️ Manual Installation (without Conda)
+
+1. Clone the Repository
+
+```shell
+git clone https://github.com/labgem/PANORAMA.git
+cd PANORAMA
+```
+
+2. Install Dependencies
+
+Install **MMSeqs2 (≥ 13.45111)** manually:
+
+* On Debian-based systems: `sudo apt install mmseqs2`
+    
+
+3. Install PANORAMA and Python Dependencies
+
+Dependencies are declared in the `pyproject.toml` file:
+
+```shell
+pip install .
+```
+    
+* * *
+
+## 🧪 Development Version
+1. Clone the `dev` Branch
+
+```shell
+git clone --branch dev https://github.com/labgem/PANORAMA.git
+```
+    
+
+2. Install Dependencies
+
+Follow the same steps as in the standard installation.
+
+3. Install the Development Version
+```shell
+pip install .
+```
+    
+* * *
+
+## 💬 Feedback & Contribution
+
+**Give us feedback**  
+PANORAMA is still in early development. We plan to submit it to Bioconda soon.  
+  
+Have suggestions, ideas, or bug reports?  
+👉 [Open an issue on GitHub](https://github.com/labgem/PANORAMA/issues)
+
