@@ -1,0 +1,7 @@
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - ppanggolin>=2.1.0
+  - pyhmmer>=0.6
+  - lxml>=4.9.2
