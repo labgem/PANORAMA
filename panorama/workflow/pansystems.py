@@ -25,7 +25,7 @@ import pandas as pd
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.format.write_binaries import erase_pangenome
 from panorama.annotate.annotate import (check_annotate_args, check_pangenome_annotation, read_families_metadata,
-                                        write_annotations_to_pangenome)
+                                        write_annotations_to_pangenome, parser_annot_hmm)
 from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.systems.models import Models
 from panorama.systems.detection import check_detection_args, search_systems, write_systems_to_pangenome
@@ -256,42 +256,14 @@ def parser_pansystems(parser):
     annotate = parser.add_argument_group(title="Annotation arguments",
                                          description="All of the following arguments are used for annotation step:")
     exclusive_mode = annotate.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--table', type=Path, default=None,  # nargs='+',
+    exclusive_mode.add_argument('--table', type=Path, default=None,
                                 help='A list of tab-separated file, containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
                                      'and path to the TSV with annotation in second column.')
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?', default=None,
                                 help="A tab-separated file with HMM information and path."
-                                     "Note: Use panorama utils --hmm to create the HMM list file")
-    hmm_param = parser.add_argument_group(title="HMM arguments",
-                                          description="All of the following arguments are required,"
-                                                      " if you're using HMM mode :")
-    hmm_param.add_argument("--mode", required=False, type=str, default=None, choices=['fast', 'profile', 'sensitive'],
-                           help="Choose the mode use to align HMM database and gene families. "
-                                "Fast will align the reference sequence of gene family against HMM."
-                                "Profile will create an HMM profile for each gene family and "
-                                "this profile will be aligned."
-                                "Sensitive will align HMM to all genes in families.")
-    hmm_param.add_argument("--k_best_hit", required=False, type=int, default=None,
-                           help="Keep the k best annotation hit per gene family."
-                                "If not specified, all hit will be kept.")
-    hmm_param.add_argument("-b", "--only_best_hit", required=False, action="store_true",
-                           help="alias to keep only the best hit for each gene family.")
-    hmm_param.add_argument("--msa", required=False, type=Path, default=None,
-                           help="To create a HMM profile for families, you can give a msa of each gene in families."
-                                "This msa could be gotten from ppanggolin (See ppanggolin msa). "
-                                "If no msa provide Panorama will launch one.")
-    hmm_param.add_argument("--msa-format", required=False, type=str, default="afa",
-                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-                                    "clustal", "clustallike", "phylip", "phylips"],
-                           help=argparse.SUPPRESS)
-    hmm_param.add_argument("--save_hits", required=False, type=str, default=None, nargs='*',
-                           choices=['tblout', 'domtblout', 'pfamtblout'],
-                           help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
-    hmm_param.add_argument("-Z", "--Z", required=False, type=int, nargs='?', default=4000,
-                           help="From HMMER: Assert that the total number of targets in your searches is <x>, "
-                                "for the purposes of per-sequence E-value calculations, "
-                                "rather than the actual number of targets seen.")
+                                 "Note: Use panorama utils --hmm to create the HMM list file")
+    parser_annot_hmm(annotate)
     detection = parser.add_argument_group(title="Systems detection arguments",
                                           description="All of the following arguments are used "
                                                       "for systems detection step:")
