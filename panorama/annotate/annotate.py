@@ -678,6 +678,20 @@ def parser_annot(parser):
         nargs="?",
         help="Output directory to write HMM results",
     )
+    hmm_param.add_argument(
+        "--keep_tmp",
+        required=False,
+        action="store_true",
+        help="Keep the temporary files. Useful for debugging in sensitive or profile mode.",
+    )
+    hmm_param.add_argument(
+        "--tmp",
+        required=False,
+        nargs="?",
+        type=Path,
+        default=None,
+        help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir()) / 'panorama'}",
+    )
     optional = parser.add_argument_group(title="Optional arguments")
     optional.add_argument(
         "--threads",
@@ -686,18 +700,4 @@ def parser_annot(parser):
         type=int,
         default=1,
         help="Number of available threads.",
-    )
-    optional.add_argument(
-        "--keep_tmp",
-        required=False,
-        action="store_true",
-        help="Keep the temporary files. Useful for debugging in sensitive or profile mode.",
-    )
-    optional.add_argument(
-        "--tmp",
-        required=False,
-        nargs="?",
-        type=Path,
-        default=None,
-        help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir()) / 'panorama'}",
     )
