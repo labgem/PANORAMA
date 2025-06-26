@@ -629,8 +629,8 @@ def get_metadata_df(
         pd.DataFrame: Cleaned and optionally merged metadata DataFrame.
     """
     metadata_df = pd.DataFrame(result).fillna(nan)
-    metadata_df.replace(to_replace="-", value=nan, inplace=True)
-    metadata_df.replace(to_replace="", value=nan, inplace=True)
+    metadata_df = metadata_df.replace(to_replace="-", value=nan)
+    metadata_df = metadata_df.replace(to_replace="", value=nan)
     if mode == "sensitive":
         assert (
             gene2family is not None
