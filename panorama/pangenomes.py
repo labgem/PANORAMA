@@ -8,7 +8,7 @@ This module provides classes to represent a pangenome or a set of pangenomes
 # default libraries
 import logging
 from pathlib import Path
-from typing import Dict, Generator, List, Set, Tuple, Union
+from typing import Dict, Generator, List, Set, Tuple, Union, TYPE_CHECKING
 from collections import defaultdict
 
 # install libraries
@@ -18,9 +18,11 @@ from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
 
 # local libraries
-from panorama.systems.system import System, ClusterSystems
 from panorama.geneFamily import GeneFamily, Akin
 from panorama.region import Spot, ConservedSpots
+
+if TYPE_CHECKING:
+    from panorama.systems.system import System, ClusterSystems  # local libraries
 
 
 class Pangenome(Pan):
@@ -126,7 +128,7 @@ class Pangenome(Pan):
         spot.pangenome = self
 
     @property
-    def systems(self) -> Generator[System, None, None]:
+    def systems(self) -> Generator["System", None, None]:
         """Get all systems in the pangenome
 
         Yields:
@@ -169,7 +171,7 @@ class Pangenome(Pan):
             self._get_systems_sources_and_related_metadata_sources()
             return self.systems_sources_to_metadata_source()
 
-    def get_system(self, system_id: str) -> System:
+    def get_system(self, system_id: str) -> "System":
         """Get a system by its ID in the pangenome
 
         Args:
@@ -201,7 +203,7 @@ class Pangenome(Pan):
         else:
             return system
 
-    def get_system_by_source(self, source: str) -> Generator[System, None, None]:
+    def get_system_by_source(self, source: str) -> Generator["System", None, None]:
         """Retrieve systems by their source.
 
         Args:
@@ -214,7 +216,7 @@ class Pangenome(Pan):
             if system.source == source:
                 yield system
 
-    def add_system(self, system: System):
+    def add_system(self, system: "System"):
         """Add a detected system to the pangenome.
 
         Args:
@@ -489,7 +491,7 @@ class Pangenomes:
         return len(self._conserved_spots_getter)
 
     @property
-    def cluster_systems(self) -> Generator[ClusterSystems, None, None]:
+    def cluster_systems(self) -> Generator["ClusterSystems", None, None]:
         """Generator of conserved spots between pangenomes
         Yields:
             ConservedSpots: a set of spots conserved between pangenomes
@@ -497,7 +499,7 @@ class Pangenomes:
         for conserved_spot in self._cluster_systems_getter.values():
             yield conserved_spot
 
-    def add_cluster_systems(self, cluster_systems: ClusterSystems):
+    def add_cluster_systems(self, cluster_systems: "ClusterSystems"):
         """
         Add a set of conserved spots between pangenomes
 
