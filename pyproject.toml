@@ -1,42 +1,44 @@
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
-py_modules=["panorama"]
 
 [project]
-name = "PANORAMA"
+name="PANORAMA"
 
 authors = [
-    {name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr"},
+    { name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr" },
 ]
 #maintainers
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
 description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
 requires-python = ">=3.8"
-license = {file="LICENCE.txt"}
-classifiers=["Development Status :: Open alpha",
-             "Environment :: Console",
-             "Intended Audience :: Science/Research",
-             "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
-             "Natural Language :: English",
-             "Operating System :: POSIX :: Linux",
-             "Programming Language :: Python :: 3",
-             "Topic :: Scientific/Engineering :: Bio-Informatics"]
-##dependencies = [
-##    "requests",
-##    'importlib-metadata; python_version<"3.8"',
-##]
+license = { file = "LICENCE.txt" }
+classifiers = ["Development Status :: Open alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"]
 dynamic = ["version"]
+dependencies = [
+    "ppanggolin>=2.1.0",
+    "pyhmmer>=0.6",
+    "lxml>=4.9.2"
+]
+
 
 [project.optional-dependencies]
 doc = [
     "sphinx==6.2.1",
     "sphinx_rtd_theme==1.2.2",
-    "readthedocs-sphinx-search==0.3.1",
+    "readthedocs-sphinx-search==0.3.2",
     "sphinx-autobuild==2021.3.14",
-    "myst-parser==1.0.0",
-    "docutils==0.18.1"
+    "myst-parser==2",
+    "docutils==0.18.1",
+    "sphinxcontrib.mermaid==0.9.2",
 ]
 dev = [
     "matplotlib>=3.8",
@@ -71,4 +73,4 @@ panorama = "panorama.main:main"
 [tool.setuptools]
 packages = ["panorama"]
 [tool.setuptools.dynamic]
-version = {file = "VERSION"}
+version = { file = "VERSION" }

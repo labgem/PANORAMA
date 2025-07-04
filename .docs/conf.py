@@ -15,11 +15,11 @@ from pathlib import Path
 # -- Project information -----------------------------------------------------
 
 project = 'PANORAMA'
-copyright = '2023, Jérôme Arnoux'
+copyright = '2023, LABGeM'
 author = 'Jérôme Arnoux'
 
 # The full version, including alpha/beta/rc tags
-release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()  # Get release number in the VERSION file
+release = open(Path(__file__).resolve().parents[1]/"VERSION").read().rstrip()  # Get release number in the VERSION file
 
 
 # -- General configuration ---------------------------------------------------
@@ -34,7 +34,14 @@ extensions = [
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autodoc",
     'sphinx_search.extension',
+    "sphinxcontrib.mermaid",
 ]
+
+source_suffix = {".md": "markdown"}
+
+# Prefix document path to section labels, to use:
+# `path/to/file:heading` instead of just `heading`
+autosectionlabel_prefix_document = True
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
@@ -44,6 +51,8 @@ templates_path = ['_templates']
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
 
+
+suppress_warning = ["myst.header", "autosectionlabel.*"]
 
 # -- Options for HTML output -------------------------------------------------
 
