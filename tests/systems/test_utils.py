@@ -118,14 +118,12 @@ def test_dict_families_context(simple_model, simple_gfs):
 def test_get_gfs_matrix_combination(simple_gfs):
     gf2fam = defaultdict(set, {simple_gfs[i]: {Family(name=f'protein{i}', presence='mandatory' 
                                                       if i < 3 else 'accessory')} for i in range(6)})
-    fam2source = {f'protein{i}': 'source1' for i in range(6)}
     fu_families = set(simple_gfs[:6])
-    result = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
-
+    result = get_gfs_matrix_combination(fu_families, gf2fam)
     # binary matrix with protein annotations as rows and GFs as columns
     assert result.sort_index(axis=0).sort_index(axis=1).equals(
         pd.DataFrame(
-            [[float(i == j) for j in range(6)] for i in range(6)],
+            [[int(i == j) for j in range(6)] for i in range(6)],
             index=[f'protein{i}' for i in range(6)],
             columns=[f'GF{i}' for i in range(6)]
             ).sort_index(axis=0).sort_index(axis=1)
@@ -142,10 +140,9 @@ def test_get_gfs_matrix_combination(simple_gfs):
                             for i in range(6)}) | {simple_gfs[0]: {Family(name='protein0', presence='mandatory'), 
                                                     Family(name='protein8', presence='mandatory')}} | {simple_gfs[8]: 
                                                     {Family(name='protein8', presence='mandatory')}}
-    fam2source = {f'protein{i}': 'source2' for i in range(6)} | {'protein8': 'source2'}
-    result = get_gfs_matrix_combination(fu_families, gf2fam, fam2source)
+    result = get_gfs_matrix_combination(fu_families, gf2fam)
     
-    annotations = list(fam2source.keys()) # rows
+    annotations = list({family.name for gf in fu_families for family in gf2fam[gf]}) # rows
     model_fams = [gf.name for gf in fu_families] # columns
     gf_lookup = {gf.name: gf for gf in fu_families}
     matrix = []
@@ -154,14 +151,15 @@ def test_get_gfs_matrix_combination(simple_gfs):
         for gf_name in model_fams:
             gf = gf_lookup[gf_name]
             found = any(fam.name == protein for fam in gf2fam.get(gf, [])) # Check if gf has protein annotation
-            row.append(1.0 if found else 0.0)
+            row.append(1 if found else 0)
         matrix.append(row)
+
     assert result.sort_index(axis=0).sort_index(axis=1).equals(
         pd.DataFrame(matrix, index=annotations, columns=model_fams).sort_index(axis=0).sort_index(axis=1))
     
 
 def test_check_needed_families(simple_model):
-    matrix = pd.DataFrame([[float(i == j) for j in range(6)] for i in range(6)],
+    matrix = pd.DataFrame([[int(i == j) for j in range(6)] for i in range(6)],
                             index=[f'protein{i}' for i in range(6)],
                             columns=[f'GF{i}' for i in range(6)])
     fu = next(simple_model.func_units) # the first functional unit of the model
