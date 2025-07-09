@@ -289,19 +289,6 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
         Boolean: True if it exists, False otherwise
     """
 
-    def is_subset(comb1: Tuple[int, ...], comb2: Tuple[int, ...]) -> bool:
-        """
-        Check if a combination of gene families is subset of another one
-
-        Args:
-            comb1 (Tuple[int, ...]): Combination to check if it's a subset
-            comb2 (Tuple[int, ...]): Combination supposed bigger
-
-        Returns:
-            Boolean: True if first combination is a subset of the second one, False otherwise
-        """
-        return set(comb1).issubset(comb2)
-
     mandatory = {fam.name for fam in func_unit.mandatory}
     mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
 
@@ -312,19 +299,11 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     mandatory_bitsets = [bitsets[i] for i in mandatory_indices]
     accessory_bitsets = [bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices]
 
-    not_valid = []
-    for size in sorted(range(func_unit.min_total, matrix.shape[1] + 1), reverse=True):
-        for comb in combinations(range(matrix.shape[1]), size):
-            # If a larger comb can't respect presence absence rules, so a tinier can not too.
-            if not any(is_subset(comb, larger_comb) for larger_comb in not_valid):
-                _, covered_mandatory, covered_accessory = search_comb(comb, mandatory_bitsets,
-                                                                      accessory_bitsets)
-                if (covered_mandatory >= func_unit.min_mandatory and
-                        covered_mandatory + covered_accessory >= func_unit.min_total):
-                    return True
-                else:
-                    not_valid.append(comb)
-    return False
+    _, covered_mandatory, covered_accessory = search_comb(tuple(range(matrix.shape[1])), 
+                                                          mandatory_bitsets, accessory_bitsets)
+
+    return (covered_mandatory >= func_unit.min_mandatory and
+            covered_mandatory + covered_accessory >= func_unit.min_total)
 
 
 def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
