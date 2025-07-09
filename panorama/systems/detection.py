@@ -281,8 +281,6 @@ def search_unit_in_context(
     gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
     mod_fam2meta_source: Dict[str, str],
     matrix: pd.DataFrame,
-    mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
-    accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
     func_unit: FuncUnit,
     source: str,
     combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
@@ -299,8 +297,6 @@ def search_unit_in_context(
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
-        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families.
-        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]], optional): The combination of gene families corresponding to the context that exists in at least one genome. Defaults to None.
         local: (bool, optional): Whether to filter the context with a local Jaccard index or not. Defaults to False.
@@ -341,8 +337,6 @@ def search_unit_in_context(
                     func_unit,
                     source,
                     matrix,
-                    mandatory_gfs2metadata,
-                    accessory_gfs2metadata,
                     combinations_in_cc,
                     combinations2orgs,
                     jaccard_threshold,
@@ -437,8 +431,8 @@ def search_system_units(
             *get_functional_unit_gene_families(func_unit, gene_families, gf2fam)
         )
         if len(fu_families) >= func_unit.min_total:
-            matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(
-                fu_families, gf2fam, fam2source
+            matrix = get_gfs_matrix_combination(
+                fu_families, gf2fam
             )
             if check_needed_families(matrix, func_unit):
                 logging.getLogger("PANORAMA").debug("Extract Genomic context")
@@ -479,8 +473,6 @@ def search_system_units(
                         gf2fam,
                         fam2source,
                         matrix,
-                        md_gfs2meta,
-                        acc_gfs2meta,
                         func_unit,
                         source,
                         combinations2orgs,
