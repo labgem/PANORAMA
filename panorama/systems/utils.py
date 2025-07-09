@@ -186,72 +186,37 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
             return False, {}
 
 
-def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                               mod_fam2meta_source: Dict[str, str]
-                               ) -> Tuple[pd.DataFrame, Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
-                                          Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]]:
+def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]) -> pd.DataFrame:
     """
     Build a matrix of association between gene families and families.
 
     Args:
         gene_families (Set[GeneFamily]): Set of gene families.
         gene_fam2mod_fam (Dict[GeneFamily, Set[Family]): Dictionary linking gene families to model families.
-        mod_fam2meta_source (Dict[str, str]): Dictionary linking families to metadata sources.
 
     Returns:
         pd.DataFrame: Matrix of association between gene families and families.
-        Dict[GeneFamily, Tuple[int, Metadata]]: Dictionary linking gene families metadata to mandatory families
-        Dict[GeneFamily, Tuple[int, Metadata]]: Dictionary linking gene families metadata to accessory families
     """
 
-    def add_metadata_to_dict(presence_gfs2metadata):
-        """
-        Associate gene families to metadata in a dictionary
-
-        Args:
-            presence_gfs2metadata: Dictionary to save gene families and their metadata
-        """
-        for meta_id, metadata in gene_family.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-            if metadata.protein_name in avail_name:
-                if gene_family in presence_gfs2metadata[family.name]:
-                    _, current_metadata = presence_gfs2metadata[family.name][gene_family]
-                    if metadata.score > current_metadata.score:
-                        presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-                else:
-                    presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-            elif "secondary_name" in metadata.fields:
-                if any(name in avail_name for name in metadata.secondary_name.split(",")):
-                    if gene_family in presence_gfs2metadata[family.name]:
-                        _, current_metadata = presence_gfs2metadata[family.name][gene_family]
-                        if metadata.score > current_metadata.score:
-                            presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-                    else:
-                        presence_gfs2metadata[family.name][gene_family] = (meta_id, metadata)
-
-    mandatory_gfs2metadata = defaultdict(dict)
-    accessory_gfs2metadata = defaultdict(dict)
     gfs = set()
-    for gene_family in gene_families:
-        for family in gene_fam2mod_fam[gene_family]:
-            avail_name = {family.name}.union(family.exchangeable)
-            if family.presence == "mandatory":
-                add_metadata_to_dict(mandatory_gfs2metadata)
-                gfs.add(gene_family)
-            elif family.presence == "accessory":
-                add_metadata_to_dict(accessory_gfs2metadata)
-                gfs.add(gene_family)
-    fams = list(mandatory_gfs2metadata.keys()) + list(accessory_gfs2metadata.keys())
-    score_matrix = np.zeros((len(fams), len(gfs)))
+    model_fams = set()
+    for gf in gene_families:
+        for fam in gene_fam2mod_fam[gf]:
+            if fam.presence in ["mandatory", "accessory"]:
+                gfs.add(gf)
+                model_fams.add(fam.name)
+                
     gfs = list(gfs)
-    for i, fam in enumerate(fams):
-        if fam in mandatory_gfs2metadata:
-            gfs2metadata = mandatory_gfs2metadata[fam]
-        else:
-            gfs2metadata = accessory_gfs2metadata[fam]
-        for j, gf in enumerate(gfs):
-            score_matrix[i, j] = 1 if gf in gfs2metadata else 0
-    return (pd.DataFrame(score_matrix, index=fams, columns=[gf.name for gf in gfs]),
-            mandatory_gfs2metadata, accessory_gfs2metadata)
+    model_fams = list(model_fams)
+    score_matrix = np.zeros((len(model_fams), len(gfs)), dtype=int)
+
+    for j, gf in enumerate(gfs):
+        annotations = [f.name for f in gene_fam2mod_fam[gf]]
+        for i, fam in enumerate(model_fams):
+            if fam in annotations:
+                score_matrix[i, j] = 1 
+                
+    return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
 
 def bitset_from_row(row) -> int:

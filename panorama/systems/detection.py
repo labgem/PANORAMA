@@ -194,8 +194,6 @@ def search_unit_in_combination(
     func_unit: FuncUnit,
     source: str,
     matrix: pd.DataFrame,
-    mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
-    accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
     combinations: List[FrozenSet[GeneFamily]],
     combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]],
     jaccard_threshold: float = 0.8,
@@ -211,8 +209,6 @@ def search_unit_in_combination(
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
-        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families.
-        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families.
         combinations (List[FrozenSet[GeneFamily]]): Existing combination of gene families in organisms.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): The combination of gene families corresponding to the context that exists in at least one genome.
@@ -224,15 +220,15 @@ def search_unit_in_combination(
     detected_su: Set[SystemUnit] = set()
     mandatory_gfs = {
         gf
-        for gf2metadata in mandatory_gfs2metadata.values()
-        for gf in gf2metadata.keys()
-        if gf in families
+        for gf in families
+        for fam in gene_fam2mod_fam[gf]
+        if fam.presence == "mandatory"
     }
     accessory_gfs = {
         gf
-        for gf2metadata in accessory_gfs2metadata.values()
-        for gf in gf2metadata.keys()
-        if gf in families
+        for gf in families
+        for fam in gene_fam2mod_fam[gf]
+        if fam.presence == "accessory"
     }
 
     while len(combinations) > 0:
