@@ -183,6 +183,100 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
     return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
 
+def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
+    """
+    Check if there are enough mandatory and total families to satisfy the functional unit rules.
+
+    Args:
+        matrix: The association matrix between gene families and families
+        func_unit: The functional unit to search for.
+
+    Returns:
+        Boolean: True if satisfied, False otherwise
+    """
+
+    matrix = matrix.loc[matrix.sum(axis=1) > 0] # Remove all-zero rows
+    
+    mandatory_fams = {fam.name for fam in func_unit.mandatory}
+    mandatory_count = sum(fam in mandatory_fams for fam in matrix.index)
+
+    return (mandatory_count >= func_unit.min_mandatory and
+            len(matrix) >= func_unit.min_total)
+
+
+def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
+    """
+    Retrieves a mapping of metadata to sets of gene families for each metadata source.
+
+    Args:
+        pangenome (Pangenome): Pangenome object containing gene families.
+        sources (iterable of str): List of metadata source names.
+
+    Returns:
+        dict: A dictionary where each metadata source maps to another dictionary of metadata to sets of gene families.
+    """
+    meta2fam = {source: defaultdict(set) for source in sources}
+    for source in sources:
+        for gf in pangenome.gene_families:
+            metadata = gf.get_metadata_by_source(source)
+            if metadata is not None:
+                for meta in metadata.values():
+                    meta2fam[source][meta.protein_name].add(gf)
+                    if "secondary_name" in meta.fields and meta.secondary_name != "":
+                        for secondary_name in meta.secondary_name.split(','):
+                            meta2fam[source][secondary_name].add(gf)
+    return meta2fam
+
+
+def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
+        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]], Dict[str, str]]:
+    """
+    Retrieves all gene families associated with the families in the model.
+
+    Args:
+        model (Model): Model containing the families.
+        annot2fam (dict): Dictionary of annotated families.
+
+    Returns:
+        tuple: A tuple containing:
+            - Set[GeneFamily]: Gene families of interest in the functional unit.
+            - dict: Dictionary linking gene families to their families.
+            - dict: Dictionary linking families to their sources.
+    """
+    gene_families = set()
+    gf2fam = defaultdict(set)
+    fam2source = {}
+    for fam_model in model.families:
+        for source, annotation2families in annot2fam.items():
+            if fam_model.name in annotation2families:
+                for gf in annotation2families[fam_model.name]:
+                    gene_families.add(gf)
+                    gf2fam[gf].add(fam_model)
+                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
+                        logging.getLogger("PANORAMA").warning("Two families have the same protein name for different "
+                                                              "sources. First source encountered will be used.")
+                    else:
+                        fam2source[fam_model.name] = source
+
+        for exchangeable in fam_model.exchangeable:
+            for source, annotation2families in annot2fam.items():
+                if exchangeable in annotation2families:
+                    for gf in annotation2families[exchangeable]:
+                        gene_families.add(gf)
+                        gf2fam[gf].add(fam_model)
+                        if fam_model.name in fam2source and fam2source[fam_model.name] != source:
+                            logging.getLogger("PANORAMA").warning(
+                                "Two families have the same protein name for different "
+                                "sources. First source encountered will be used.")
+                        else:
+                            fam2source[fam_model.name] = source
+    return gene_families, gf2fam, fam2source
+
+
+
+
+# The following functions are not used anywhere anymore
+
 def bitset_from_row(row) -> int:
     """
     Converts a row of the binary matrix into an integer bitset.
@@ -275,101 +369,3 @@ def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[S
                                   {matrix.columns[j]: matrix.index[i] for j, i in gf2fam.items()}))
 
     return solutions
-
-
-def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
-    """
-    Search if it exists a combination of gene families that respect families presence absence unit rules
-
-    Args:
-        matrix: The association matrix between gene families and families
-        func_unit: The functional unit to search for.
-
-    Returns:
-        Boolean: True if it exists, False otherwise
-    """
-
-    mandatory = {fam.name for fam in func_unit.mandatory}
-    mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
-
-    if len(mandatory_indices) < func_unit.min_mandatory or matrix.shape[0] < func_unit.min_total:
-        return False
-
-    bitsets = [bitset_from_row(matrix.iloc[i, :]) for i in range(matrix.shape[0])]
-    mandatory_bitsets = [bitsets[i] for i in mandatory_indices]
-    accessory_bitsets = [bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices]
-
-    _, covered_mandatory, covered_accessory = search_comb(tuple(range(matrix.shape[1])), 
-                                                          mandatory_bitsets, accessory_bitsets)
-
-    return (covered_mandatory >= func_unit.min_mandatory and
-            covered_mandatory + covered_accessory >= func_unit.min_total)
-
-
-def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
-    """
-    Retrieves a mapping of metadata to sets of gene families for each metadata source.
-
-    Args:
-        pangenome (Pangenome): Pangenome object containing gene families.
-        sources (iterable of str): List of metadata source names.
-
-    Returns:
-        dict: A dictionary where each metadata source maps to another dictionary of metadata to sets of gene families.
-    """
-    meta2fam = {source: defaultdict(set) for source in sources}
-    for source in sources:
-        for gf in pangenome.gene_families:
-            metadata = gf.get_metadata_by_source(source)
-            if metadata is not None:
-                for meta in metadata.values():
-                    meta2fam[source][meta.protein_name].add(gf)
-                    if "secondary_name" in meta.fields and meta.secondary_name != "":
-                        for secondary_name in meta.secondary_name.split(','):
-                            meta2fam[source][secondary_name].add(gf)
-    return meta2fam
-
-
-def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
-        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]], Dict[str, str]]:
-    """
-    Retrieves all gene families associated with the families in the model.
-
-    Args:
-        model (Model): Model containing the families.
-        annot2fam (dict): Dictionary of annotated families.
-
-    Returns:
-        tuple: A tuple containing:
-            - Set[GeneFamily]: Gene families of interest in the functional unit.
-            - dict: Dictionary linking gene families to their families.
-            - dict: Dictionary linking families to their sources.
-    """
-    gene_families = set()
-    gf2fam = defaultdict(set)
-    fam2source = {}
-    for fam_model in model.families:
-        for source, annotation2families in annot2fam.items():
-            if fam_model.name in annotation2families:
-                for gf in annotation2families[fam_model.name]:
-                    gene_families.add(gf)
-                    gf2fam[gf].add(fam_model)
-                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning("Two families have the same protein name for different "
-                                                              "sources. First source encountered will be used.")
-                    else:
-                        fam2source[fam_model.name] = source
-
-        for exchangeable in fam_model.exchangeable:
-            for source, annotation2families in annot2fam.items():
-                if exchangeable in annotation2families:
-                    for gf in annotation2families[exchangeable]:
-                        gene_families.add(gf)
-                        gf2fam[gf].add(fam_model)
-                        if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                            logging.getLogger("PANORAMA").warning(
-                                "Two families have the same protein name for different "
-                                "sources. First source encountered will be used.")
-                        else:
-                            fam2source[fam_model.name] = source
-    return gene_families, gf2fam, fam2source
