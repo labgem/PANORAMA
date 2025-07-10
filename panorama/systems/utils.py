@@ -247,29 +247,22 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
     gf2fam = defaultdict(set)
     fam2source = {}
     for fam_model in model.families:
-        for source, annotation2families in annot2fam.items():
-            if fam_model.name in annotation2families:
-                for gf in annotation2families[fam_model.name]:
-                    gene_families.add(gf)
-                    gf2fam[gf].add(fam_model)
-                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning("Two families have the same protein name for different "
-                                                              "sources. First source encountered will be used.")
-                    else:
-                        fam2source[fam_model.name] = source
-
-        for exchangeable in fam_model.exchangeable:
+        exchangeables = fam_model.exchangeable | {fam_model.name} 
+        for exchangeable in exchangeables: 
             for source, annotation2families in annot2fam.items():
                 if exchangeable in annotation2families:
+                    
+                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
+                        logging.getLogger("PANORAMA").warning(f"Protein annotation {fam_model.name} is encountered in multiple sources." 
+                                                               "All sources will be used, but only first one will be associated with " 
+                                                               "the model family.")
+                    else:
+                        fam2source[fam_model.name] = source
+                    
                     for gf in annotation2families[exchangeable]:
                         gene_families.add(gf)
-                        gf2fam[gf].add(fam_model)
-                        if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                            logging.getLogger("PANORAMA").warning(
-                                "Two families have the same protein name for different "
-                                "sources. First source encountered will be used.")
-                        else:
-                            fam2source[fam_model.name] = source
+                        gf2fam[gf].add(fam_model)     
+
     return gene_families, gf2fam, fam2source
 
 
