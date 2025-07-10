@@ -224,7 +224,7 @@ def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
     pangenome_projection, organisms_projection = [], []
-    matrix = get_gfs_matrix_combination(set(unit.models_families), gf2fam, fam2source)
+    matrix = get_gfs_matrix_combination(set(unit.models_families), gf2fam)
     for organism in unit.models_organisms:
         org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
         org_mod_fam = org_fam & set(unit.models_families)
