@@ -585,11 +585,12 @@ def get_system_unit_combinations(
                         final_combo = list(p)
                         valid_combinations.append(final_combo)
                         final_combo_with_neutral = list(final_combo)
-                        for neutral_cat in neutral_unit:
-                            final_combo_with_neutral.append(
-                                list(neutral_unit[neutral_cat])[0]
-                            )
-                        valid_combinations.append(final_combo_with_neutral)
+                        if neutral_unit:
+                            for neutral_cat in neutral_unit:
+                                final_combo_with_neutral.append(
+                                    list(neutral_unit[neutral_cat])[0]
+                                )
+                            valid_combinations.append(final_combo_with_neutral)
     return valid_combinations
 
 
@@ -628,12 +629,13 @@ def search_for_system(
             fam_list = list(su.families)
             u = fam_list.pop(0)
             for v in fam_list:
-                nx.contracted_nodes(contracted_graph, u, v)
+                nx.contracted_nodes(contracted_graph, u, v, copy=False)
+                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(v.organisms)
             fam2su[u] = su
             organisms |= set(su.organisms)
-        filter_local_context(contracted_graph, organisms, jaccard_threshold)
+        filtered_graph = filter_local_context(contracted_graph, organisms, jaccard_threshold)
         for cc in sorted(
-            nx.connected_components(contracted_graph), key=len, reverse=True
+            nx.connected_components(filtered_graph), key=len, reverse=True
         ):
             cc: Set[GeneFamily]
             su_in_cc = {fam2su[fam].name: fam2su[fam] for fam in cc if fam in fam2su}

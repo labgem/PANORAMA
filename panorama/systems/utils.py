@@ -120,7 +120,8 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
         return (-score, presence_rank, family.name) # negative score for descending order
 
     gf2meta_info = {}
-    mandatory_seen = accessory_seen = set()
+    mandatory_seen = set()
+    accessory_seen = set()
     
     for gf in sorted(gene_families, key=lambda n: len(gene_fam2mod_fam[n])):
         fam2meta_info = {}

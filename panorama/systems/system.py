@@ -229,6 +229,16 @@ class SystemUnit(MetaFeatures):
                             f"You gave a {type(other)}")
         return set(self.models_families) == set(other.models_families)
 
+    @property
+    def name(self) -> str:
+        """
+        Name of the system inherited by the model.
+
+        Returns:
+            str: Name of the system.
+        """
+        return self.functional_unit.name
+
     def is_superset(self, other: SystemUnit):
         """Checks if the current unit includes another one.
 
