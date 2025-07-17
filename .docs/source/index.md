@@ -30,6 +30,16 @@ user/report
 ```
 
 ```{toctree}
+:caption: 'Modeller Guide:'
+:maxdepth: 2
+
+modeller/overview
+modeller/modeling
+modeller/contribute
+modeller/FAQ
+```
+
+```{toctree}
 :caption: 'Developper Guide:'
 :maxdepth: 2
 
@@ -53,3 +63,5 @@ api/panorama
 - {ref}`genindex`
 - {ref}`modindex`
 - {ref}`search`
+
+[//]: # (TODO: Add the citation to MyST)
