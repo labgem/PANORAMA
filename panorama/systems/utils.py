@@ -26,8 +26,25 @@ from panorama.pangenomes import Pangenome
 pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
 
 
-def filter_global_context(graph: nx.Graph, jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
+def filter_global_context(
+    graph: nx.Graph, jaccard_threshold: float = 0.8
+) -> nx.Graph[GeneFamily]:
+    """
+    Filters the edges of a gene family graph based on a Jaccard gene proportion threshold.
 
+    Copies all nodes to a new graph and retains only those edges where both connected
+    GeneFamily nodes have a Jaccard gene proportion (shared genomes over unique organisms)
+    greater than or equal to the specified threshold. Updates edge data with Jaccard values
+    and family names.
+
+    Args:
+        graph (nx.Graph): The input graph with GeneFamily nodes and edge data containing 'genomes'.
+        jaccard_threshold (float, optional): Minimum Jaccard gene proportion required for both
+            families to retain an edge. Defaults to 0.8.
+
+    Returns:
+        nx.Graph[GeneFamily]: A new graph with filtered edges and updated edge attributes.
+    """
     new_graph = nx.Graph()
     # Copy all nodes from the original graph to the new graph
     new_graph.add_nodes_from(graph.nodes(data=True))
@@ -38,12 +55,14 @@ def filter_global_context(graph: nx.Graph, jaccard_threshold: float = 0.8) -> nx
         f2_proportion = len(data["genomes"]) / len(set(f2.organisms))
 
         # Update the local copy of the edge data
-        data.update({
-            'f1': f1.name,
-            'f2': f2.name,
-            'f1_jaccard_gene': f1_proportion,
-            'f2_jaccard_gene': f2_proportion
-        })
+        data.update(
+            {
+                "f1": f1.name,
+                "f2": f2.name,
+                "f1_jaccard_gene": f1_proportion,
+                "f2_jaccard_gene": f2_proportion,
+            }
+        )
 
         # Add the edge to the new graph if it meets the Jaccard threshold
         if f1_proportion >= jaccard_threshold and f2_proportion >= jaccard_threshold:
@@ -53,8 +72,9 @@ def filter_global_context(graph: nx.Graph, jaccard_threshold: float = 0.8) -> nx
     return new_graph
 
 
-def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
-                         jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
+def filter_local_context(
+    graph: nx.Graph, organisms: Set[Organism], jaccard_threshold: float = 0.8
+) -> nx.Graph[GeneFamily]:
     """
     Filters a graph based on a local Jaccard index.
 
@@ -63,6 +83,7 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
         organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
+
     def get_gene_proportion(gene_family: GeneFamily) -> float:
         """Returns the Jaccard gene proportion for a given gene family."""
         # Compute the proportion if not cached
@@ -82,12 +103,14 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
         f2_proportion = get_gene_proportion(f2)
 
         # Update the local copy of the edge data
-        data.update({
-            'f1': f1.name,
-            'f2': f2.name,
-            'f1_jaccard_gene': f1_proportion,
-            'f2_jaccard_gene': f2_proportion
-        })
+        data.update(
+            {
+                "f1": f1.name,
+                "f2": f2.name,
+                "f1_jaccard_gene": f1_proportion,
+                "f2_jaccard_gene": f2_proportion,
+            }
+        )
 
         # Add the edge to the new graph if it meets the Jaccard threshold
         if f1_proportion >= jaccard_threshold and f2_proportion >= jaccard_threshold:
@@ -97,16 +120,18 @@ def filter_local_context(graph: nx.Graph, organisms: Set[Organism],
     return new_graph
 
 
+
 def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
                        mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
                        ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
-    Checks if there are forbidden conditions in the families.
+    Checks gene families against a functional unit to identify forbidden, mandatory, and accessory family conditions.
 
     Args:
-        gene_families (Set[GeneFamily]): Set of gene families.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): Dictionary linking gene families to model families.
-        func_unit (FuncUnit): Functional unit to check against.
+        gene_families (Set[GeneFamily]): Set of gene families to evaluate.
+        gene_fam2mod_fam (Dict[GeneFamily, Set[Family]]): Mapping from gene families to associated model families.
+        mod_fam2meta_source (Dict[str, str]): Mapping from model family names to metadata sources.
+        func_unit (FuncUnit): Functional unit definition to check against.
 
     Returns:
         bool: True if forbidden conditions are encountered, False otherwise.
@@ -284,12 +309,13 @@ def bitset_from_row(row) -> int:
     bitset = 0
     for i, val in enumerate(row):
         if val == 1:
-            bitset |= (1 << i)  # Met le i-ème bit à 1
+            bitset |= 1 << i  # Met le i-ème bit à 1
     return bitset
 
 
-def search_comb(comb: Tuple[int, ...], mandatory_bitsets: List[int],
-                accessory_bitsets: List[int]) -> Tuple[Dict[int, int], int, int]:
+def search_comb(
+    comb: Tuple[int, ...], mandatory_bitsets: List[int], accessory_bitsets: List[int]
+) -> Tuple[Dict[int, int], int, int]:
     """
     Search for a working combination in bitsets
 
@@ -317,7 +343,9 @@ def search_comb(comb: Tuple[int, ...], mandatory_bitsets: List[int],
                 covered_families.add(family_index)
 
     covered_accessory = 0
-    for family_index, bitset in enumerate(accessory_bitsets, start=len(mandatory_bitsets)):
+    for family_index, bitset in enumerate(
+        accessory_bitsets, start=len(mandatory_bitsets)
+    ):
         covering_gfs = set(ind for ind in comb if (1 << ind) & bitset)
         if len(covering_gfs) >= 1:
             for gf in covering_gfs:

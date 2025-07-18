@@ -10,8 +10,6 @@ from __future__ import annotations
 import argparse
 import logging
 import time
-from concurrent.futures import ProcessPoolExecutor
-from multiprocessing import get_context
 from typing import Any, Dict, List
 from multiprocessing import Manager, Lock
 from pathlib import Path
@@ -22,9 +20,12 @@ from tqdm import tqdm
 # local libraries
 from panorama.utils import mkdir
 from panorama.pangenomes import Pangenomes, Pangenome
-from panorama.systems.systems_projection import project_pangenome_systems, write_projection_systems
+from panorama.systems.systems_projection import (
+    project_pangenome_systems,
+    write_projection_systems,
+)
 from panorama.systems.systems_partitions import systems_partition
-from panorama.systems.system_association import association_pangenome_systems
+from panorama.systems.systems_association import association_pangenome_systems
 
 
 def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
@@ -37,17 +38,32 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
         Dict[str, Any]: A dictionary containing the necessary information for further processing.
 
     Raises:
-        argparse.ArgumentTypeError: If the number of sources is not the same as models or if annotation are given and
-        their number is not the same as systems sources.
+        argparse.ArgumentTypeError: If the number of sources is different from models, or if annotations are given, and
+        their number is different from systems sources.
     """
-    need_info = {"need_annotations": True, "need_families": True, "need_families_info": True, "need_graph": True,
-                 "need_metadata": True, "metatypes": ["families"], "need_systems": True,
-                 "systems_sources": args.sources, "read_canonical": args.canonical}
-    if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
-        raise argparse.ArgumentError(argument=None, message="You should at least choose one type of systems writing "
-                                                            "between: projection, partition, association or proksee.")
+    need_info = {
+        "need_annotations": True,
+        "need_families": True,
+        "need_families_info": True,
+        "need_graph": True,
+        "need_metadata": True,
+        "metatypes": ["families"],
+        "need_systems": True,
+        "systems_sources": args.sources,
+        "read_canonical": args.canonical,
+    }
+    if not any(
+        arg for arg in [args.projection, args.partition, args.association, args.proksee]
+    ):
+        raise argparse.ArgumentError(
+            argument=None,
+            message="You should at least choose one type of systems writing "
+            "between: projection, partition, association or proksee.",
+        )
     if len(args.sources) != len(args.models):
-        raise argparse.ArgumentError(argument=None, message="Number of sources and models are different.")
+        raise argparse.ArgumentError(
+            argument=None, message="Number of sources and models are different."
+        )
 
     if "all" in args.association:
         args.association = ["RGPs", "spots", "modules"]
@@ -73,24 +89,40 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
     Raises:
         KeyError: If the provided systems source is not in the pangenome.
         Exception: If systems have not been detected in pangenome.
-        AttributeError: If there is no metadata associated to families.
+        AttributeError: If there is no metadata associated with families.
     """
     if pangenome.status["systems"] != "inFile":
-        raise AttributeError("Systems have not been detected."
-                             "Use 'panorama detect' subcommand to detect systems in pangenomes.")
+        raise AttributeError(
+            "Systems have not been detected."
+            "Use 'panorama detect' subcommand to detect systems in pangenomes."
+        )
     else:
         for systems_source in sources:
             if systems_source not in pangenome.status["systems_sources"]:
-                logging.getLogger("PANORAMA").error(f"Systems in pangenome {pangenome.name} are: "
-                                                    f"{pangenome.status['systems_sources']}")
-                raise KeyError(f"There is no systems in pangenome {pangenome.name}, for the source: {systems_source}."
-                               f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}.")
+                logging.getLogger("PANORAMA").error(
+                    f"Systems in pangenome {pangenome.name} are: "
+                    f"{pangenome.status['systems_sources']}"
+                )
+                raise KeyError(
+                    f"There is no systems in pangenome {pangenome.name}, for the source: {systems_source}."
+                    f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}."
+                )
 
 
-def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projection: bool = False,
-                                    association: List[str] = None, partition: bool = False, proksee: str = None,
-                                    organisms: List[str] = None, canonical: bool = False, threads: int = 1,
-                                    lock: Lock = None, force: bool = False, disable_bar: bool = False):
+def write_flat_systems_to_pangenome(
+    pangenome: Pangenome,
+    output: Path,
+    projection: bool = False,
+    association: List[str] = None,
+    partition: bool = False,
+    proksee: str = None,
+    organisms: List[str] = None,
+    canonical: bool = False,
+    threads: int = 1,
+    lock: Lock = None,
+    force: bool = False,
+    disable_bar: bool = False,
+):
     """
     Write detected systems from a pangenome to an output directory in a flat format.
 
@@ -102,10 +134,11 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
         partition (bool, optional): If True, write partition systems. Defaults to False.
         proksee (str, optional): A placeholder for future Proksee integration. Defaults to None.
         organisms (List[str], optional): List of organisms to be considered for projection. Defaults to None.
+        canonical (bool, optional): If True, write the canonical version of systems too. Defaults to False.
         threads (int, optional): Number of threads to use for parallel processing. Defaults to 1.
         lock (Lock, optional): A multiprocessing lock to synchronize access. Defaults to None.
         force (bool, optional): If True, overwrite existing files. Defaults to False.
-        disable_bar (bool, optional): If True, disable progress bar. Defaults to False.
+        disable_bar (bool, optional): If True, disable the progress bar. Defaults to False.
 
     Raises:
         NotImplementedError: If Proksee integration is requested but not implemented.
@@ -116,32 +149,73 @@ def write_flat_systems_to_pangenome(pangenome: Pangenome, output: Path, projecti
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
     fam_index = pangenome.compute_org_bitarrays()
     for system_source in pangenome.systems_sources:
-        logging.getLogger("PANORAMA").debug(f"Begin write systems for {pangenome.name} "
-                                            f"on system source: {system_source}")
-        pangenome_proj, organisms_proj = project_pangenome_systems(pangenome, system_source, fam_index,
-                                                                   association=association, canonical=canonical,
-                                                                   threads=threads, lock=lock, disable_bar=disable_bar)
-        source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
+        logging.getLogger("PANORAMA").debug(
+            f"Begin write systems for {pangenome.name} "
+            f"on system source: {system_source}"
+        )
+        pangenome_proj, organisms_proj = project_pangenome_systems(
+            pangenome,
+            system_source,
+            fam_index,
+            association=association,
+            canonical=canonical,
+            threads=threads,
+            lock=lock,
+            disable_bar=disable_bar,
+        )
+        source_res_output = mkdir(
+            pangenome_res_output / f"{system_source}", force=force
+        )
         if projection:
-            logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
-            write_projection_systems(source_res_output, pangenome_proj, organisms_proj, organisms,
-                                     threads, force, disable_bar)
+            logging.getLogger("PANORAMA").debug(
+                f"Write projection systems for {pangenome.name}"
+            )
+            write_projection_systems(
+                source_res_output,
+                pangenome_proj,
+                organisms_proj,
+                organisms,
+                threads,
+                force,
+                disable_bar,
+            )
         if partition:
-            logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
+            logging.getLogger("PANORAMA").debug(
+                f"Write partition systems for {pangenome.name}"
+            )
             systems_partition(pangenome.name, pangenome_proj, source_res_output)
         if association:
-            logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
-            association_pangenome_systems(pangenome, association, source_res_output,
-                                          threads=threads, disable_bar=disable_bar)
+            logging.getLogger("PANORAMA").debug(
+                f"Write systems association for {pangenome.name}"
+            )
+            association_pangenome_systems(
+                pangenome,
+                association,
+                source_res_output,
+                threads=threads,
+                disable_bar=disable_bar,
+            )
         if proksee:
             raise NotImplementedError("Proksee not implemented")
-    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
+    logging.getLogger("PANORAMA").info(
+        f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds"
+    )
 
 
-def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: bool = False,
-                             association: List[str] = None, partition: bool = False, proksee: str = None,
-                             organisms: List[str] = None, canonical: bool = False, threads: int = 1,
-                             lock: Lock = None, force: bool = False, disable_bar: bool = False):
+def write_pangenomes_systems(
+    pangenomes: Pangenomes,
+    output: Path,
+    projection: bool = False,
+    association: List[str] = None,
+    partition: bool = False,
+    proksee: str = None,
+    organisms: List[str] = None,
+    canonical: bool = False,
+    threads: int = 1,
+    lock: Lock = None,
+    force: bool = False,
+    disable_bar: bool = False,
+):
     """
     Write flat files about systems for all pangenomes.
 
@@ -153,16 +227,33 @@ def write_pangenomes_systems(pangenomes: Pangenomes, output: Path, projection: b
         partition (bool, optional): Flag to enable write system partition. Defaults to False.
         proksee (str, optional): Write proksee with the systems and the given pangenome object. Defaults to None.
         organisms (List[str], optional): List of organism names to write. Defaults to all organisms.
+        canonical (bool, optional): If True, write the canonical version of systems too. Defaults to False.
         threads (int, optional): Number of available threads. Defaults to 1.
         lock (Lock, optional): Global lock for multiprocessing execution. Defaults to None.
         force (bool, optional): Flag to allow overwriting files. Defaults to False.
         disable_bar (bool, optional): Flag to disable the progress bar. Defaults to False.
     """
     t0 = time.time()
-    for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
-        write_flat_systems_to_pangenome(pangenome, output, projection, association, partition, proksee, organisms,
-                                        canonical, threads, lock, force, disable_bar)
-    logging.getLogger("PANORAMA").info(f"Done write system for all pangenomes in {time.time() - t0:2f} seconds")
+    for pangenome in tqdm(
+        pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar
+    ):
+        write_flat_systems_to_pangenome(
+            pangenome,
+            output,
+            projection,
+            association,
+            partition,
+            proksee,
+            organisms,
+            canonical,
+            threads,
+            lock,
+            force,
+            disable_bar,
+        )
+    logging.getLogger("PANORAMA").info(
+        f"Done write system for all pangenomes in {time.time() - t0:2f} seconds"
+    )
 
 
 def launch(args):
@@ -186,19 +277,35 @@ def launch(args):
     manager = Manager()
     lock = manager.Lock()
 
-    pangenomes = load_pangenomes(pangenome_list=args.pangenomes, check_function=check_pangenome_write_systems,
-                                 need_info=need_info, sources=args.sources, max_workers=args.threads, lock=lock,
-                                 disable_bar=args.disable_prog_bar)
+    pangenomes = load_pangenomes(
+        pangenome_list=args.pangenomes,
+        check_function=check_pangenome_write_systems,
+        need_info=need_info,
+        sources=args.sources,
+        max_workers=args.threads,
+        lock=lock,
+        disable_bar=args.disable_prog_bar,
+    )
 
-    write_pangenomes_systems(pangenomes, outdir, projection=args.projection, proksee=args.proksee,
-                             association=args.association, partition=args.partition, organisms=args.organisms,
-                             canonical=args.canonical, threads=args.threads, lock=lock, force=args.force,
-                             disable_bar=args.disable_prog_bar)
+    write_pangenomes_systems(
+        pangenomes,
+        outdir,
+        projection=args.projection,
+        proksee=args.proksee,
+        association=args.association,
+        partition=args.partition,
+        organisms=args.organisms,
+        canonical=args.canonical,
+        threads=args.threads,
+        lock=lock,
+        force=args.force,
+        disable_bar=args.disable_prog_bar,
+    )
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
     """
-    Subparser to launch PANORAMA in Command line.
+    Subparser to launch PANORAMA in the Command line.
 
     Args:
         sub_parser (argparse.ArgumentParser): Subparser for align command.
@@ -213,41 +320,88 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
 
 def parser_write(parser):
     """
-    Parser for specific argument of annot command.
+    Parser for specific arguments of the write_systems command.
 
     Args:
         parser (argparse.ArgumentParser): Parser for annot argument.
     """
-    required = parser.add_argument_group(title="Required arguments",
-                                         description="All of the following arguments are required :")
-    required.add_argument('-p', '--pangenomes', required=True, type=Path, nargs='?',
-                          help='A list of pangenome .h5 files in .tsv file')
-    required.add_argument("-o", "--output", required=True, type=Path, nargs='?',
-                          help='Output directory')
-    required.add_argument('-m', '--models', required=True, type=Path, nargs="+",
-                          help="Path to model list file. You can specify multiple models from different source. "
-                               "For that separate the model list files by a space and "
-                               "make sure you give them in the same order as the sources.")
-    required.add_argument("-s", "--sources", required=True, type=str, nargs="+",
-                          help="Name of the systems sources. You can specify multiple sources. "
-                               "For that separate names by a space and "
-                               "make sure you give them in the same order as the sources.")
+    required = parser.add_argument_group(
+        title="Required arguments",
+        description="All of the following arguments are required :",
+    )
+    required.add_argument(
+        "-p",
+        "--pangenomes",
+        required=True,
+        type=Path,
+        nargs="?",
+        help="A list of pangenome .h5 files in .tsv file",
+    )
+    required.add_argument(
+        "-o", "--output", required=True, type=Path, nargs="?", help="Output directory"
+    )
+    required.add_argument(
+        "-m",
+        "--models",
+        required=True,
+        type=Path,
+        nargs="+",
+        help="Path to model list file. You can specify multiple models from different source. "
+        "For that separate the model list files by a space and "
+        "make sure you give them in the same order as the sources.",
+    )
+    required.add_argument(
+        "-s",
+        "--sources",
+        required=True,
+        type=str,
+        nargs="+",
+        help="Name of the systems sources. You can specify multiple sources. "
+        "For that separate names by a space and "
+        "make sure you give them in the same order as the sources.",
+    )
     optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument("--projection", required=False, action="store_true",
-                          help="Project the systems on organisms. If organisms are specified, "
-                               "projection will be done only for them.")
-    optional.add_argument("--partition", required=False, action="store_true",
-                          help="Write a heatmap file with for each organism, partition of the systems. "
-                               "If organisms are specified, heatmap will be write only for them.")
-    optional.add_argument("--association", required=False, type=str, default=[], nargs='+',
-                          choices=["all", "modules", "RGPs", "spots"],
-                          help="Write association between systems and others pangenomes elements")
-    optional.add_argument("--proksee", required=False, type=str, default=None, nargs='+',
-                          choices=["all", "base", "modules", "RGP", "spots", "annotations"],
-                          help="Write a proksee file with systems. "
-                               "If you only want the systems with genes, gene families and partition, use base value."
-                               "Write RGPs, spots or modules -split by `,'- if you want them.")
-    optional.add_argument("--canonical", required=False, action="store_true",
-                          help="Write the canonical version of systems too.")
-    optional.add_argument("--organisms", required=False, type=str, default=None, nargs='+')
+    optional.add_argument(
+        "--projection",
+        required=False,
+        action="store_true",
+        help="Project the systems on organisms. If organisms are specified, "
+        "projection will be done only for them.",
+    )
+    optional.add_argument(
+        "--partition",
+        required=False,
+        action="store_true",
+        help="Write a heatmap file with for each organism, partition of the systems. "
+        "If organisms are specified, heatmap will be write only for them.",
+    )
+    optional.add_argument(
+        "--association",
+        required=False,
+        type=str,
+        default=[],
+        nargs="+",
+        choices=["all", "modules", "RGPs", "spots"],
+        help="Write association between systems and others pangenomes elements",
+    )
+    optional.add_argument(
+        "--proksee",
+        required=False,
+        type=str,
+        default=None,
+        nargs="+",
+        choices=["all", "base", "modules", "RGP", "spots", "annotations"],
+        help="Write a proksee file with systems. "
+        "If you only want the systems with genes, gene families and partition, use base value."
+        "Write RGPs, spots or modules -split by `,'- if you want them.",
+    )
+    optional.add_argument(
+        "--canonical",
+        required=False,
+        action="store_true",
+        help="Write the canonical version of systems too.",
+    )
+    optional.add_argument(
+        "--organisms", required=False, type=str, default=None, nargs="+"
+    )
     optional.add_argument("--threads", required=False, type=int, default=1)
