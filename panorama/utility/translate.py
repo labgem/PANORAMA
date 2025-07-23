@@ -2,7 +2,20 @@
 # coding:utf-8
 
 """
-This module provides function to translate models from different databases
+Model Translation Module for PANORAMA
+
+This module provides comprehensive functionality to translate models from different
+bioinformatics databases (PADLOC, DefenseFinder, MacSyFinder-based tools) into
+PANORAMA-compatible formats. It handles HMM processing, metadata parsing and
+model structure conversion while maintaining compatibility across different
+annotation frameworks.
+
+Supported Sources:
+- PADLOC: Prokaryotic Antiviral Defense Location predictor
+- DefenseFinder: Antiviral defense systems identification
+- CONJScan: Conjugation system detection
+- TXSScan: Type secretion system detection
+- TFFScan: Type IV-A pilus detection
 """
 
 # default libraries
@@ -17,7 +30,6 @@ import lxml.etree
 import yaml
 import json
 
-from networkx.algorithms.cluster import transitivity
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
@@ -29,260 +41,485 @@ from panorama.utils import mkdir
 from panorama.utility.genInput import create_hmm_list_file, read_hmm, write_hmm, gen_acc
 
 
-known_sources = ["padloc", "defense-finder", "CONJScan", "TXSScan", "TFFscan"]
+# Constants
+KNOWN_SOURCES = ["padloc", "defense-finder", "CONJScan", "TXSScan", "TFFscan"]
+PADLOC_MODEL_KEYS = [
+    "maximum_separation", "minimum_core", "minimum_total", "force_strand",
+    "core_genes", "secondary_genes", "neutral_genes", "prohibited_genes"
+]
+DEFAULT_EVAL_THRESHOLD = 0.1
+DEFAULT_IEVAL_THRESHOLD = 0.001
+PANORAMA_ACC_PREFIX = "PAN"
+PANORAMA_ACC_SUFFIX_LENGTH = 6
 
 
-def read_yaml(model: Path) -> dict:
+class ModelTranslationError(Exception):
+    """Custom exception for model translation errors."""
+    pass
+
+
+class HMMProcessingError(Exception):
+    """Custom exception for HMM processing errors."""
+    pass
+
+
+def read_yaml(model_path: Path) -> Dict[str, Union[List[str], int, bool]]:
     """
-    Reads a YAML file and returns its contents as a Python object.
+    Read and parse a YAML file safely.
 
     Args:
-        model (str): The path to the YAML file to be read.
+        model_path (Path): Path to the YAML file to be read
+
+    Returns:
+        Dict: The contents of the YAML file as a Python dictionary
 
     Raises:
-        IOError: If there is a problem opening the file.
-        Exception: If there is an unexpected problem reading the file.
-
-    Returns:
-        dict: The contents of the YAML file, as a Python object.
+        IOError: If there is a problem opening the file
+        yaml.YAMLError: If there is a problem parsing the YAML content
+        ModelTranslationError: For any unexpected errors during file processing
     """
     try:
-        model_file = open(model, "r")
-    except IOError as ioerror:
-        raise IOError(f"Problem to open {model}. The following error is the direct cause: {ioerror}")
-    except Exception as error:
-        raise Exception(f"Unexpected problem reading {model}. The following error is the direct cause: {error}")
-    else:
-        data = yaml.safe_load(model_file)
-        model_file.close()
-        return data
+        with open(model_path, "r", encoding="utf-8") as file:
+            data = yaml.safe_load(file)
+            if data is None:
+                logging.getLogger("PANORAMA").warning(f"Empty YAML file: {model_path}")
+                return {}
+            return data
+    except IOError as e:
+        raise IOError(f"Problem opening {model_path}: {e}") from e
+    except yaml.YAMLError as e:
+        raise yaml.YAMLError(f"Problem parsing YAML file {model_path}: {e}") from e
+    except Exception as e:
+        raise ModelTranslationError(f"Unexpected error reading {model_path}: {e}") from e
 
 
-def read_xml(model: Path) -> et.Element:
+def read_xml(model_path: Path) -> et.Element:
     """
-    Reads an XML file and returns its contents as a Python object.
+    Read and parse an XML file with security considerations.
 
     Args:
-        model (str): The path to the YAML file to be read.
+        model_path (Path): Path to the XML file to be read
+
+    Returns:
+        et.Element: The root element of the parsed XML document
 
     Raises:
-        IOError: If there is a problem opening the file.
-        Exception: If there is an unexpected problem reading the file.
-
-    Returns:
-        et.Element: The contents of the YAML file, as a Python object.
+        IOError: If there is a problem opening the file
+        et.XMLSyntaxError: If there is a problem parsing the XML content
+        ModelTranslationError: For any unexpected errors during file processing
     """
     try:
-        parser = et.XMLParser(remove_comments=True, resolve_entities=False, no_network=True)
-        my_tree = et.parse(model.absolute().as_posix(), parser=parser)
-    except IOError as ioerror:
-        raise IOError(f"Problem to open {model}. The following error is direct cause\n{ioerror}")
-    except Exception as error:
-        raise Exception(f"Unexpected Problem to read {model}. The following error is direct cause\n{error}")
-    else:
-        my_root = my_tree.getroot()
-        return my_root
+        # Configure parser for security: disable external entities and comments
+        parser = et.XMLParser(
+            remove_comments=True,
+            resolve_entities=False,
+            no_network=True,
+            huge_tree=False
+        )
+        tree = et.parse(str(model_path.absolute()), parser=parser)
+        return tree.getroot()
+    except IOError as e:
+        raise IOError(f"Problem opening {model_path}: {e}") from e
+    except et.XMLSyntaxError as e:
+        raise et.XMLSyntaxError(f"Problem parsing XML file {model_path}: {e}") from e
+    except Exception as e:
+        raise ModelTranslationError(f"Unexpected error reading {model_path}: {e}") from e
 
 
-def write_model(path_output: Path, dict_data: dict) -> None:
+def write_model(output_path: Path, model_data: Dict[str, Union[str, List[Dict], Dict[str, int], List[str]]]) -> Path:
     """
-    This function writes a model to a JSON file.
+    Write a translated model to a JSON file with proper formatting.
 
     Args:
-        path_output (Path): The path to the output directory.
-        dict_data (dict): The model data to be written to the file.
+        output_path (Path): Path to the output directory
+        model_data (Dict): Dictionary containing the model data to write
 
     Returns:
-        None
+        Path: Path to the written JSON file
+
+    Raises:
+        IOError: If there is a problem writing the file
+        KeyError: If the model_data doesn't contain the required 'name' field
     """
-    with open(f"{path_output}/models/{dict_data['name']}.json", "w") as my_file:
-        json.dump(dict_data, my_file, indent=2)
+    if 'name' not in model_data:
+        raise KeyError("Model data must contain 'name' field")
+
+    output_file = output_path / f"{model_data['name']}.json"
+
+    try:
+        with open(output_file, "w", encoding="utf-8") as file:
+            json.dump(model_data, file, indent=2, ensure_ascii=False)
+        return output_file
+    except IOError as e:
+        raise IOError(f"Problem writing model {model_data['name']} to {output_file}: {e}") from e
 
 
-def parse_meta_padloc(meta: Path) -> pd.DataFrame:
+def parse_meta_padloc(meta_path: Path) -> pd.DataFrame:
     """
-    This function parses a PADLOC metadata file and returns a pandas DataFrame containing the metadata.
+    Parse the PADLOC metadata file and return a structured DataFrame.
+
+    The function processes the PADLOC hmm_meta.txt file which contains HMM metadata
+    including accession numbers, names, thresholds and descriptions. It handles
+    protein name parsing and secondary name merging.
 
     Args:
-        meta (Path): The path to the PADLOC metadata file.
+        meta_path (Path): Path to the PADLOC metadata file (hmm_meta.txt)
 
     Returns:
-        pd.DataFrame: A pandas DataFrame containing the metadata.
+        pd.DataFrame: DataFrame with parsed metadata indexed by accession number,
+                     containing columns: name, protein_name, secondary_name,
+                     score_threshold, eval_threshold, ieval_threshold,
+                     hmm_cov_threshold, target_cov_threshold, description
+
+    Raises:
+        IOError: If the metadata file cannot be read
+        ValueError: If the metadata format is unexpected
     """
-    def merge_columns(row):
-        if pd.isna(row['temp']) and pd.isna(row['secondary.name']):
+    def _merge_secondary_names(row: pd.Series) -> str:
+        """Helper function to merge secondary name columns."""
+        temp_val = row.get('temp', '')
+        secondary_val = row.get('secondary.name', '')
+
+        if pd.isna(temp_val) and pd.isna(secondary_val):
             return ''
-        elif pd.isna(row['temp']):
-            return row['secondary.name']
-        elif pd.isna(row['secondary.name']):
-            return row['temp']
+        elif pd.isna(temp_val):
+            return str(secondary_val)
+        elif pd.isna(secondary_val):
+            return str(temp_val)
         else:
-            return f"{row['temp']},{row['secondary.name']}"
+            return f"{temp_val},{secondary_val}"
 
-    meta_col_names = ["accession", "name", "protein_name", "secondary_name", "score_threshold",  "eval_threshold",
-                      "ieval_threshold", "hmm_cov_threshold", "target_cov_threshold", "description"]
-    df = pd.read_csv(meta, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
+    # Define expected column structure
+    meta_columns = [
+        "accession", "name", "protein_name", "secondary_name", "score_threshold",
+        "eval_threshold", "ieval_threshold", "hmm_cov_threshold",
+        "target_cov_threshold", "description"
+    ]
+
+    # Read the TSV file with specific columns
+    df = pd.read_csv(meta_path, sep="\t", usecols=[0, 1, 2, 3, 4, 6, 7, 8], header=0)
+
+    # Parse protein names (format: main_name|secondary_name)
     df[['protein_name', 'temp']] = df['protein.name'].str.split('|', expand=True)
-    df['secondary_name'] = df.apply(merge_columns, axis=1)
-    df = df.drop('protein.name', axis=1)
-    df = df.drop('secondary.name', axis=1)
-    df = df.drop('temp', axis=1)
-    df = df.iloc[:, [0, 1, 6, 7, 3, 4, 5, 2]]
+
+    # Merge secondary names
+    df['secondary_name'] = df.apply(_merge_secondary_names, axis=1)
+
+    # Clean up temporary columns
+    df = df.drop(columns=['protein.name', 'secondary.name', 'temp'], errors='ignore')
+
+    # Reorder columns and add missing ones
+    df = df.iloc[:, [0, 1, 6, 7, 3, 4, 5, 2]]  # Reorder existing columns
+
+    # Insert missing threshold columns
     df.insert(4, 'score_threshold', None)
     df.insert(5, 'eval_threshold', None)
-    df.columns = meta_col_names
+
+    # Set proper column names
+    df.columns = meta_columns
+
+    # Set index and handle missing descriptions
     df = df.set_index('accession')
-    df['description'] = df["description"].fillna('unknown')
+    df['description'] = df['description'].fillna('unknown')
+
     return df
 
 
-def translate_model_padloc(data_yaml: dict, model_name: str, meta: pd.DataFrame = None, canonical: list = None) -> dict:
+def _add_families_to_functional_unit(
+        families_list: List[str],
+        secondary_names: List[str],
+        family_type: str,
+        metadata_df: pd.DataFrame,
+        seen_families: Set[str]
+) -> List[Dict[str, Union[str, List[str]]]]:
     """
-    This function translates a PADLOC model from a YAML file into a JSON format that can be used by the PADLOC software.
+    Add families to a functional unit with proper metadata integration.
+
+    This helper function processes a list of family names and creates properly
+    formatted family dictionaries for PANORAMA models. It handles special cases
+    like cas_adaptation and manages exchangeable proteins.
 
     Args:
-        data_yaml (dict): The PADLOC model data in YAML format.
-        model_name (str): The name of the PADLOC model.
-        meta (pd.DataFrame, optional): The metadata associated with the model. Defaults to None.
-        canonical (list, optional): The canonical genes associated with the model. Defaults to None.
+        families_list (List[str]): List of family names to process
+        secondary_names (List[str]): List of known secondary names for exchangeable lookup
+        family_type (str): Type of family ('mandatory', 'accessory', 'forbidden', 'neutral')
+        metadata_df (pd.Dataframe): DataFrame containing family metadata
+        seen_families (Set[str]): Set to track already processed families (modified in place)
 
     Returns:
-        dict: The translated PADLOC model in JSON format.
+        List of family dictionaries with structure:
+        - name: str (family name)
+        - presence: str (family type)
+        - exchangeable: List[str] (optional, list of exchangeable proteins)
+    """
+    family_list = []
+
+    for family_name in families_list:
+        if family_name in seen_families or family_name in ['NA', 'cas_accessory']:
+            continue
+
+        # Special handling for cas_adaptation families
+        if family_name == "cas_adaptation":
+            filtered_df = metadata_df.loc[metadata_df['secondary_name'] == family_name]
+            for protein_name in filtered_df['protein_name'].dropna().unique():
+                if protein_name not in seen_families:
+                    family_dict = {
+                        'name': protein_name,
+                        'presence': family_type
+                    }
+                    seen_families.add(protein_name)
+
+                    # Add exchangeable proteins if available
+                    if protein_name in secondary_names:
+                        exchangeable_proteins = filtered_df['protein_name'].dropna().unique().tolist()
+                        if len(exchangeable_proteins) > 1:
+                            family_dict["exchangeable"] = exchangeable_proteins
+
+                    family_list.append(family_dict)
+        else:
+            # Standard family processing
+            family_dict = {
+                'name': family_name,
+                'presence': family_type
+            }
+            seen_families.add(family_name)
+
+            # Add exchangeable proteins if this family has secondary names
+            if family_name in secondary_names:
+                filtered_df = metadata_df.loc[metadata_df['secondary_name'] == family_name]
+                exchangeable_proteins = filtered_df['protein_name'].dropna().unique().tolist()
+                if exchangeable_proteins:
+                    family_dict["exchangeable"] = exchangeable_proteins
+
+            family_list.append(family_dict)
+
+    return family_list
+
+
+def translate_model_padloc(
+        data_yaml: Dict[str, Union[List[str], int, bool]],
+        model_name: str,
+        metadata_df: pd.DataFrame,
+        canonical_models: List[str] = None
+) -> Dict[str, Union[str, List[Dict], Dict[str, int], List[str]]]:
+    """
+    Translate a PADLOC model from YAML format to PANORAMA JSON format.
+
+    This function converts PADLOC defense system models into the standardized
+    PANORAMA format, handling gene categories, parameters and canonical relationships.
+
+    Args:
+        data_yaml: PADLOC model data loaded from YAML file
+        model_name: Name identifier for the model
+        metadata_df: DataFrame containing HMM metadata for gene information
+        canonical_models: List of canonical model names (optional)
+
+    Returns:
+        Dict: Translated model in PANORAMA format with structure:
+        - name: str (model name)
+        - func_units: List[Dict] (functional units with families)
+        - parameters: Dict (global model parameters)
+        - canonical: List[str] (optional, canonical model references)
 
     Raises:
-        AssertionError: if the meta argument is not a dataframe or if the canonical argument is not a list
-        KeyError: If the PADLOC model data contains unexpected keys.
+        KeyError: If required keys are missing from the PADLOC model
+        AssertionError: If input parameters are invalid
+        ModelTranslationError: For translation-specific errors
     """
-    assert canonical is not None and isinstance(canonical, list)
-    assert meta is not None and isinstance(meta, pd.DataFrame)
+    assert canonical_models is not None and isinstance(canonical_models, list), "canonical_models must be a list"
+    assert isinstance(metadata_df, pd.DataFrame), "metadata_df must be a pandas DataFrame"
 
-    def add_families(families_list: List[str], sec_names: List[str], fam_type: str) -> List[Dict[str, str]]:
-        """
-        Add a list of families to the functional unit
+    # Validate inputs
+    if canonical_models is None:
+        canonical_models = []
 
-        Args:
-            families_list: list of families to add
-            sec_names: list of known secondary names for the families
-            fam_type: type of families
+    # Validate PADLOC model structure
+    unexpected_keys = set(data_yaml.keys()) - set(PADLOC_MODEL_KEYS)
+    if unexpected_keys:
+        raise KeyError(
+            f"Unexpected keys in PADLOC model '{model_name}': {unexpected_keys}. "
+            f"Expected keys: {PADLOC_MODEL_KEYS}"
+        )
 
-        Returns:
-            List[Dict[str, str]]: list of families filled with information to be a PANORAMA model
-
-        Todo:
-            * Try to find an elegant way to manage the cas_adaptation exception
-        """
-        fam_list = []
-        for fam_name in families_list:
-            if fam_name not in seen_fam:
-                if fam_name == "cas_adaptation":
-                    filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                    for filter_fam in filter_df['protein_name'].dropna().unique().tolist():
-                        if filter_fam not in seen_fam:
-                            fam_dict = {'name': filter_fam,
-                                        'presence': fam_type}
-                            seen_fam.add(filter_fam)
-                            if filter_fam in sec_names:
-                                filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                                fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
-                            fam_list.append(fam_dict)
-                elif fam_name == "cas_accessory":
-                    pass
-                elif fam_name != 'NA':
-                    fam_dict = {'name': fam_name,
-                                'presence': fam_type}
-                    seen_fam.add(fam_name)
-                    if fam_name in sec_names:
-                        filter_df = meta.loc[meta['secondary_name'] == fam_name]
-                        fam_dict.update({"exchangeable": filter_df['protein_name'].dropna().unique().tolist()})
-                    fam_list.append(fam_dict)
-        return fam_list
-
-    padloc_keys = ["maximum_separation", "minimum_core", "minimum_total", "force_strand",
-                   "core_genes", "secondary_genes", "neutral_genes", "prohibited_genes"]
-    if not all(key in padloc_keys for key in data_yaml.keys()):
-        raise KeyError(f"Unexpected key in PADLOC model : {model_name}."
-                       f"authorized keys are : {', '.join(padloc_keys)}")
     if "core_genes" not in data_yaml:
-        raise KeyError("Core gene must be found in padloc keys")
+        raise KeyError(f"Missing required 'core_genes' key in PADLOC model '{model_name}'")
 
-    data_json = {"name": model_name, 'func_units': [],
-                 'parameters': {"transitivity": 0, "window": 1, "min_mandatory": 1, "min_total": 1}
-                 }
-    if len(canonical) > 0:
-        data_json['canonical'] = canonical
-    secondary_names = meta['secondary_name'].dropna().unique().tolist()
-    func_unit = {'name': model_name, 'presence': 'mandatory', 'same_strand': data_yaml["force_strand"],
-                 'parameters':
-                     {
-                         "transitivity": data_yaml["maximum_separation"] if "maximum_separation" in data_yaml else 0,
-                         "min_mandatory": data_yaml["minimum_core"] if "minimum_core" in data_yaml else 1,
-                         "min_total": data_yaml["minimum_total"] if "minimum_total" in data_yaml else 1
-                     }
-                 }
-    family_list = list()
-    seen_fam = set()
-    family_list += add_families(families_list=data_yaml["core_genes"], sec_names=secondary_names,
-                                fam_type='mandatory')
-    family_list += add_families(families_list=data_yaml["secondary_genes"] if "secondary_genes" in data_yaml else [],
-                                sec_names=secondary_names, fam_type='accessory')
-    family_list += add_families(families_list=data_yaml["prohibited_genes"] if "prohibited_genes" in data_yaml else [],
-                                sec_names=secondary_names, fam_type='forbidden')
-    family_list += add_families(families_list=data_yaml["neutral_genes"] if "neutral_genes" in data_yaml else [],
-                                sec_names=secondary_names, fam_type='neutral')
-    func_unit["families"] = family_list
-    data_json['func_units'].append(func_unit)
-    return data_json
+    # Initialize PANORAMA model structure
+    panorama_model = {
+        "name": model_name,
+        'func_units': [],
+        'parameters': {
+            "transitivity": 0,
+            "window": 1,
+            "min_mandatory": 1,
+            "min_total": 1
+        }
+    }
+
+    if canonical_models:
+        panorama_model['canonical'] = canonical_models
+
+    # Extract secondary names for exchangeable protein lookup
+    secondary_names = metadata_df['secondary_name'].dropna().unique().tolist()
+
+    # Create a functional unit
+    functional_unit = {
+        'name': model_name,
+        'presence': 'mandatory',
+        'same_strand': data_yaml.get("force_strand", False),
+        'parameters': {
+            "transitivity": data_yaml.get("maximum_separation", 0),
+            "min_mandatory": data_yaml.get("minimum_core", 1),
+            "min_total": data_yaml.get("minimum_total", 1)
+        }
+    }
+
+    # Process gene families by category
+    family_list = []
+    seen_families = set()
+
+    # Core genes (mandatory)
+    family_list.extend(_add_families_to_functional_unit(
+        data_yaml["core_genes"], secondary_names, 'mandatory', metadata_df, seen_families
+    ))
+
+    # Secondary genes (accessory)
+    if "secondary_genes" in data_yaml:
+        family_list.extend(_add_families_to_functional_unit(
+            data_yaml["secondary_genes"], secondary_names, 'accessory', metadata_df, seen_families
+        ))
+
+    # Prohibited genes (forbidden)
+    if "prohibited_genes" in data_yaml:
+        family_list.extend(_add_families_to_functional_unit(
+            data_yaml["prohibited_genes"], secondary_names, 'forbidden', metadata_df, seen_families
+        ))
+
+    # Neutral genes
+    if "neutral_genes" in data_yaml:
+        family_list.extend(_add_families_to_functional_unit(
+            data_yaml["neutral_genes"], secondary_names, 'neutral', metadata_df, seen_families
+        ))
+
+    functional_unit["families"] = family_list
+    panorama_model['func_units'].append(functional_unit)
+
+    return panorama_model
 
 
-def search_canonical_padloc(model_name: str, models: Path) -> List[str]:
+def search_canonical_padloc(model_name: str, models_dir: Path) -> List[str]:
     """
-    Search in PADLOC models which models is canonical of another
+    Search for canonical models related to a PADLOC model.
+
+    PADLOC uses a naming convention where models ending with '_other' are
+    variants of base models. This function identifies the canonical (base)
+    models for such variants.
 
     Args:
-        model_name: name of the currently inspected model
-        models: All other model in PADLOC model database
+        model_name: Name of the current model being processed
+        models_dir: Directory containing all PADLOC model files
 
     Returns:
-        List[str]: List of canonical models
+        List[str]: Names of canonical models related to the input model
     """
-    canonical_sys = []
-    if re.search("_other", model_name):
-        basename = re.split("_other", model_name)[0]
-        for canon_file in models.rglob("*.yaml"):
-            name_canon = canon_file.stem
-            if (re.search(f"{basename}_", name_canon) or re.search(f"{basename}$", name_canon)) \
-                    and name_canon != model_name:
-                canonical_sys.append(name_canon)
-    return canonical_sys
+    # Extract base name (everything before '_other')
+    base_name = re.split("_other", model_name)[0]
+
+    # Create regex pattern to match canonical models
+    pattern = re.compile(f"^{re.escape(base_name)}(_.*)?$")
+
+    # Filter files using both glob and regex
+    return [
+        model_file.stem
+        for model_file in models_dir.rglob(f"{base_name}*.yaml")
+        if model_file.stem != model_name and pattern.match(model_file.stem)
+    ]
 
 
-def translate_padloc(padloc_db: Path, output: Path, binary_hmm: bool = False, hmm_coverage: float = None,
-                     target_coverage: float = None, force: bool = False, disable_bar: bool = False) -> List[dict]:
+def translate_padloc(
+        padloc_db: Path,
+        output: Path,
+        binary_hmm: bool = False,
+        hmm_coverage: float = None,
+        target_coverage: float = None,
+        force: bool = False,
+        disable_bar: bool = False
+) -> List[Dict]:
     """
-    Translate PADLOC models to PANORAMA models
+    Translate all PADLOC models to PANORAMA format.
+
+    This function orchestrates the complete translation process for the PADLOC database:
+    1. Parses HMM metadata
+    2. Creates HMM list file for annotation
+    3. Translates all model files from YAML to JSON format
+    4. Handles canonical model relationships
 
     Args:
-        padloc_db: Path to the PADLOC database
-        output: Path to the directory where to write a HMM list file for PANORAMA annotation step
-        hmm_coverage: Set a global value of HMM coverage threshold for all HMM. Defaults to None
-        target_coverage: Set a global value of target coverage threshold for all target. Defaults to None
-        force: Flag to overwrite the output directory
-        disable_bar: Flag to disable the progress bar
+        padloc_db: Path to the PADLOC database directory
+        output: Path to output directory for translated files
+        binary_hmm: Whether to output HMMs in binary format
+        hmm_coverage: Global HMM coverage threshold (optional)
+        target_coverage: Global target coverage threshold (optional)
+        force: Whether to overwrite existing output files
+        disable_bar: Whether to disable progress bars
 
     Returns:
-        List[dict]: List of dictionaries containing PANORAMA model information
+        List[Dict]: List of translated PANORAMA models
+
+    Raises:
+        FileNotFoundError: If required PADLOC database files are missing
+        ModelTranslationError: If translation fails for any model
     """
-    list_data = []
-    meta_df = parse_meta_padloc(padloc_db / "hmm_meta.txt")
-    create_hmm_list_file(hmm_path=[padloc_db / "hmm"], output=output, metadata_df=meta_df, hmm_coverage=hmm_coverage,
-                         target_coverage=target_coverage, binary_hmm=binary_hmm, force=force, disable_bar=disable_bar)
-    logging.getLogger("PANORAMA").info("Begin to translate padloc models...")
-    model_path = padloc_db / "sys"
-    for model in tqdm(list(model_path.rglob("*.yaml")), unit="file", disable=disable_bar):
-        canonical_sys = search_canonical_padloc(model.stem, model_path)
-        data = read_yaml(model)
-        list_data.append(translate_model_padloc(data, model.stem, meta_df, canonical_sys))
-    return list_data
+    # Validate database structure
+    required_files = ["hmm_meta.txt", "sys", "hmm"]
+    for required_file in required_files:
+        if not (padloc_db / required_file).exists():
+            raise FileNotFoundError(f"Required PADLOC file/directory missing: {padloc_db / required_file}")
+
+    # Parse metadata
+    logging.getLogger("PANORAMA").info("Parsing PADLOC metadata...")
+    metadata_df = parse_meta_padloc(padloc_db / "hmm_meta.txt")
+
+    # Create the HMM list file
+    logging.getLogger("PANORAMA").info("Creating HMM list file...")
+    create_hmm_list_file(
+        hmm_path=[padloc_db / "hmm"],
+        output=output,
+        metadata_df=metadata_df,
+        hmm_coverage=hmm_coverage,
+        target_coverage=target_coverage,
+        binary_hmm=binary_hmm,
+        force=force,
+        disable_bar=disable_bar
+    )
+
+    # Translate models
+    logging.getLogger("PANORAMA").info("Translating PADLOC models...")
+    translated_models = []
+    models_dir = padloc_db / "sys"
+
+    model_files = list(models_dir.rglob("*.yaml"))
+
+    for model_file in tqdm(model_files, unit="file", desc="Translating models", disable=disable_bar):
+        try:
+            # Find canonical models
+            canonical_models = []
+            if re.search("_other", model_file.stem):  # Only process '_other' variant models
+                canonical_models = search_canonical_padloc(model_file.stem, models_dir)
+
+            # Load and translate model
+            model_data = read_yaml(model_file)
+            translated_model = translate_model_padloc(
+                model_data, model_file.stem, metadata_df, canonical_models
+            )
+            translated_models.append(translated_model)
+
+        except Exception as e:
+            logging.getLogger("PANORAMA").error(f"Failed to translate PADLOC model {model_file.stem}: {e}")
+            raise ModelTranslationError(f"Translation failed for {model_file.stem}") from e
+
+    logging.getLogger("PANORAMA").info(f"Successfully translated {len(translated_models)} PADLOC models")
+    return translated_models
 
 
 def translate_gene(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, transitivity_mut: Callable) -> dict:
@@ -384,7 +621,7 @@ def translate_fu(elem: lxml.etree.Element, data: dict, hmm_df: pd.DataFrame, tra
                 dict_elem['parameters']['multi_model'] = True
 
         for family in elem:
-            dict_elem["families"].append(translate_gene(family, data, hmm_df))
+            dict_elem["families"].append(translate_gene(family, data, hmm_df, transitivity_mut))
         return dict_elem
 
 
@@ -402,7 +639,7 @@ def translate_macsyfinder_model(root: et.Element, model_name: str, hmm_df: pd.Da
     Returns:
         dict: PANORAMA model information
     """
-    data_json = {"name": model_name, 'func_units': [], 'parameters': dict()}
+    data_json = {"name": model_name, "func_units": [], "parameters": {}}
     if len(canonical) > 0:
         data_json["canonical"] = canonical
     if root.attrib is not None:  # Read attributes root
@@ -669,10 +906,10 @@ def launch_translate(db: Path, source: str, output: Path,  binary_hmm: bool = Fa
                          f"Please choose between padloc, defense-finder or macsy-finder")
     logging.getLogger("PANORAMA").info("Write models for PANORAMA...")
     model_list = []
-    mkdir(output / 'models', force)
+    model_dir = mkdir(output / 'models', force)
     for data in tqdm(list_data, unit="model", desc='Write models', disable=disable_bar):
-        write_model(output, data)
-        model_list.append([data['name'], output.resolve() / f"models/{data['name']}.json"])
+        model_path = write_model(model_dir, data)
+        model_list.append([data['name'], model_path.resolve()])
     model_df = pd.DataFrame(model_list, columns=['name', 'path'])
     model_df = model_df.sort_values('name')
     if source == "CONJScan":
