@@ -205,7 +205,7 @@ def launch(args: argparse.Namespace):
     if args.translate is not None:
         outdir = mkdir(output=args.output, force=args.force, erase=True)
         launch_translate(
-            db=args.translate,
+            database_path=args.translate,
             source=args.source,
             output=outdir,
             binary_hmm=args.binary,
