@@ -76,3 +76,11 @@ Most of them are directly translated from different sources.
 We welcome contributions and would like to provide PANORAMA users with a variety of models for a multitude of analyses.
 You can contribute to the creation of new models by following the
 guide [here](./contribute.md#how-to-contribute-to-panorama-models).
+
+## Translate models
+
+PANORAMA can translate several sources (see [PANORAMA models repository](https://github.com/PANORAMA-models)).
+
+We ary trying to keep our models updated. But in case we miss it,
+you can translate the model yourself with `panorama utils --translate` command.
+Look here for more information: [PANORAMA – Model Translation Guide](./translate.md) 
