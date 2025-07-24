@@ -225,3 +225,18 @@ def conciliate_partition(partition: Set[str]) -> str:
             return "persistent|accessory"
         else:
             return 'accessory'
+
+
+def is_true_value(value: Union[str, int, bool]) -> bool:
+    """
+    Check if a value represents a true condition.
+
+    True conditions are: 1, "True" or True
+
+    Args:
+        value: Value to check
+
+    Returns:
+        True if value represents a true condition
+    """
+    return value == 1 or value == "True" or value is True

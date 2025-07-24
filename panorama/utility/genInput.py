@@ -57,22 +57,76 @@ def read_metadata(metadata: Path) -> pd.DataFrame:
     return metadata_df
 
 
-def gen_acc(acc: str, panorama_acc: Set[str]) -> str:
+def process_hmm_name(hmm: HMM, hmm_file: Path, hmm_dict: Dict[str, Union[str, int, float]]) -> Dict[str, Union[str, int, float]]:
     """
-    Generates a unique accession number for the given HMM.
+    Process HMM name from the HMM object and file path.
 
     Args:
-        acc (str): The accession number to check.
-        panorama_acc (Set[str]): The set of existing accession numbers.
+        hmm (HMM): HMM object
+        hmm_file (Path): Path to HMM file
+        hmm_dict (Dict): HMM dictionary to update
 
     Returns:
-        str: A unique accession number.
+        Dict: Updated HMM dictionary
+
+    Raises:
+        IOError: If HMM name cannot be determined
     """
-    if acc in panorama_acc:
-        return gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
+    name_parts = hmm.name.decode('UTF-8').split()
+
+    if len(name_parts) > 1:
+        logging.getLogger("PANORAMA").error(f"HMM with naming problem: {hmm_file.absolute().as_posix()}")
+        raise IOError("Cannot determine HMM name. Please report this issue on GitHub.")
+
+    # Extract name from file stem or HMM object
+    file_protein_name = hmm_file.stem.split('__')[-1]
+    hmm_protein_name = name_parts[0]
+    hmm_dict["name"] = hmm_file.stem
+    hmm_dict["protein_name"] = file_protein_name if hmm_protein_name != file_protein_name else hmm_protein_name
+
+    # Update HMM object with processed name
+    hmm.name = hmm_dict["protein_name"].encode('UTF-8')
+
+    return hmm_dict
+
+
+def generate_unique_accession(existing_accessions: Set[str]) -> str:
+    """
+    Generate a unique PANORAMA accession ID.
+
+    Args:
+        existing_accessions (Set): Set of existing accession IDs to avoid duplicates
+
+    Returns:
+        str: Unique accession ID
+    """
+    while True:
+        accession = f"PAN{''.join(choice(digits) for _ in range(6))}"
+        if accession not in existing_accessions:
+            existing_accessions.add(accession)
+            return accession
+
+
+def process_hmm_accession(hmm: HMM, panorama_acc: Set[str], hmm_dict: Dict[str, Union[str, int, float]]) -> Dict[str, Union[str, int, float]]:
+    """
+    Process or generate HMM accession ID.
+
+    Args:
+        hmm (HMM): HMM object
+        panorama_acc (Set): Set of existing accession IDs
+        hmm_dict (Dict): HMM dictionary to update
+
+    Returns:
+        Dict: Updated HMM dictionary
+    """
+    if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
+        # Generate new unique accession ID
+        hmm_dict["accession"] = generate_unique_accession(panorama_acc)
+        hmm.accession = hmm_dict["accession"].encode("UTF-8")
     else:
-        panorama_acc.add(acc)
-        return acc
+        hmm_dict["accession"] = hmm.accession.decode("UTF-8")
+
+    return hmm_dict
 
 
 def read_hmm(hmm_path: Path) -> List[HMM]:
@@ -122,7 +176,7 @@ def parse_hmm_info(hmm: HMM, panorama_acc: Set[str], metadata: pd.DataFrame = No
     hmm_dict = {"name": hmm.name.decode('UTF-8'), 'accession': "", "length": len(hmm.consensus)}
 
     if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
-        hmm_dict["accession"] = gen_acc("PAN" + ''.join(choice(digits) for _ in range(6)), panorama_acc)
+        hmm_dict["accession"] = generate_unique_accession(panorama_acc)
         hmm.accession = hmm_dict["accession"].encode("UTF-8")
     else:
         hmm_dict["accession"] = hmm.accession.decode("UTF-8")
