@@ -140,9 +140,9 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
     def fam_sort_key(item):
         family, meta_info = item
         score = meta_info[2]
-        presence_priority = {"mandatory": 0, "accessory": 1, "forbidden": 2}
-        presence_rank = presence_priority.get(family.presence, 3)
-        return (-score, presence_rank, family.name) # negative score for descending order
+        presence_priority = {"forbidden": 0, "mandatory": 1, "accessory": 2, "neutral": 3}
+        presence_rank = presence_priority.get(family.presence, 4)
+        return (presence_rank, -score, family.name) # negative score for descending order
 
     gf2meta_info = {}
     mandatory_seen = set()
@@ -150,6 +150,7 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
     
     for gf in sorted(gene_families, key=lambda n: len(gene_fam2mod_fam[n])):
         fam2meta_info = {}
+        meta_info = None
         for family in gene_fam2mod_fam[gf]:
             avail_name = {family.name}.union(family.exchangeable)
             # if family.presence in ("mandatory", "accessory", "forbidden"):
@@ -159,17 +160,29 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
                     fam2meta_info[family] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
 
         sorted_fam2meta_info = sorted(fam2meta_info.items(), key=fam_sort_key)
-        family, meta_info = sorted_fam2meta_info[0]
-        
+        family, best_meta_info = sorted_fam2meta_info.pop(0)            
+        while sorted_fam2meta_info and family.name in mandatory_seen.union(accessory_seen):
+            family, meta_info = sorted_fam2meta_info.pop(0) 
+                
         if family.presence == "forbidden":
             return False, {}
         
-        if family.presence == "mandatory" and family.name not in mandatory_seen:
-            mandatory_seen.add(family.name)
-        elif family.presence == "accessory" and family.name not in accessory_seen:
-            accessory_seen.add(family.name)
-        gf2meta_info[gf] = meta_info[:-1]
+        if meta_info and family.presence in ("mandatory", "accessory"):
+            best_meta_info = meta_info
         
+        if family.presence == "mandatory":
+            mandatory_seen.add(family.name)
+        elif family.presence == "accessory":
+            accessory_seen.add(family.name)
+        
+        gf2meta_info[gf] = best_meta_info[:-1]
+
+        # Alternatively, if GFs are allowed to play multiple roles, discard sorting and simply collect all families
+        # md_families = {fam for fam, _ in fam2meta_info if fam.presence == "mandatory"}
+        # acc_families = {fam for fam, _ in fam2meta_info if fam.presence == "accessory"}
+        # mandatory_seen.update(md_families)
+        # accessory_seen.update(acc_families)
+
     if (len(mandatory_seen) >= func_unit.min_mandatory and 
         len(mandatory_seen | accessory_seen) >= func_unit.min_total):
         return True, gf2meta_info
@@ -269,7 +282,6 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
             - dict: Dictionary linking gene families to their families.
             - dict: Dictionary linking families to their sources.
     """
-    gene_families = set()
     gf2fam = defaultdict(set)
     fam2source = {}
     for fam_model in model.families:
@@ -286,9 +298,9 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                         fam2source[fam_model.name] = source
                     
                     for gf in annotation2families[exchangeable]:
-                        gene_families.add(gf)
                         gf2fam[gf].add(fam_model)     
 
+    gene_families = set(gf2fam.keys()) # could be removed from return values as it could be extracted from gf2fam
     return gene_families, gf2fam, fam2source
 
 

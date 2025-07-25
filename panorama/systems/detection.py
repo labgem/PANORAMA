@@ -594,6 +594,7 @@ def get_system_unit_combinations(
     return valid_combinations
 
 
+# TODO properly manage edges data before contracting nodes to ensure proper filtering OR simplify approach
 def search_for_system(
     model: Model,
     su_found: Dict[str, Set[SystemUnit]],
