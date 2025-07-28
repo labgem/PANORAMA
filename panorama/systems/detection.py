@@ -194,8 +194,6 @@ def search_unit_in_combination(
     func_unit: FuncUnit,
     source: str,
     matrix: pd.DataFrame,
-    mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
-    accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
     combinations: List[FrozenSet[GeneFamily]],
     combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]],
     jaccard_threshold: float = 0.8,
@@ -211,8 +209,6 @@ def search_unit_in_combination(
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
-        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families.
-        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families.
         combinations (List[FrozenSet[GeneFamily]]): Existing combination of gene families in organisms.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): The combination of gene families corresponding to the context that exists in at least one genome.
@@ -224,15 +220,15 @@ def search_unit_in_combination(
     detected_su: Set[SystemUnit] = set()
     mandatory_gfs = {
         gf
-        for gf2metadata in mandatory_gfs2metadata.values()
-        for gf in gf2metadata.keys()
-        if gf in families
+        for gf in families
+        for fam in gene_fam2mod_fam[gf]
+        if fam.presence == "mandatory"
     }
     accessory_gfs = {
         gf
-        for gf2metadata in accessory_gfs2metadata.values()
-        for gf in gf2metadata.keys()
-        if gf in families
+        for gf in families
+        for fam in gene_fam2mod_fam[gf]
+        if fam.presence == "accessory"
     }
 
     while len(combinations) > 0:
@@ -285,8 +281,6 @@ def search_unit_in_context(
     gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
     mod_fam2meta_source: Dict[str, str],
     matrix: pd.DataFrame,
-    mandatory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
-    accessory_gfs2metadata: Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]],
     func_unit: FuncUnit,
     source: str,
     combinations2orgs: Dict[FrozenSet[GeneFamily], Set[Organism]] = None,
@@ -303,8 +297,6 @@ def search_unit_in_context(
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
-        mandatory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for mandatory families.
-        accessory_gfs2metadata (Dict[str, Dict[GeneFamily, Tuple[int, Metadata]]]): Dictionary linking gene families to metadata for accessory families.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
         combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]], optional): The combination of gene families corresponding to the context that exists in at least one genome. Defaults to None.
         local: (bool, optional): Whether to filter the context with a local Jaccard index or not. Defaults to False.
@@ -345,8 +337,6 @@ def search_unit_in_context(
                     func_unit,
                     source,
                     matrix,
-                    mandatory_gfs2metadata,
-                    accessory_gfs2metadata,
                     combinations_in_cc,
                     combinations2orgs,
                     jaccard_threshold,
@@ -441,8 +431,8 @@ def search_system_units(
             *get_functional_unit_gene_families(func_unit, gene_families, gf2fam)
         )
         if len(fu_families) >= func_unit.min_total:
-            matrix, md_gfs2meta, acc_gfs2meta = get_gfs_matrix_combination(
-                fu_families, gf2fam, fam2source
+            matrix = get_gfs_matrix_combination(
+                fu_families, gf2fam
             )
             if check_needed_families(matrix, func_unit):
                 logging.getLogger("PANORAMA").debug("Extract Genomic context")
@@ -483,8 +473,6 @@ def search_system_units(
                         gf2fam,
                         fam2source,
                         matrix,
-                        md_gfs2meta,
-                        acc_gfs2meta,
                         func_unit,
                         source,
                         combinations2orgs,
@@ -597,14 +585,16 @@ def get_system_unit_combinations(
                         final_combo = list(p)
                         valid_combinations.append(final_combo)
                         final_combo_with_neutral = list(final_combo)
-                        for neutral_cat in neutral_unit:
-                            final_combo_with_neutral.append(
-                                list(neutral_unit[neutral_cat])[0]
-                            )
-                        valid_combinations.append(final_combo_with_neutral)
+                        if neutral_unit:
+                            for neutral_cat in neutral_unit:
+                                final_combo_with_neutral.append(
+                                    list(neutral_unit[neutral_cat])[0]
+                                )
+                            valid_combinations.append(final_combo_with_neutral)
     return valid_combinations
 
 
+# TODO properly manage edges data before contracting nodes to ensure proper filtering OR simplify approach
 def search_for_system(
     model: Model,
     su_found: Dict[str, Set[SystemUnit]],
@@ -640,12 +630,13 @@ def search_for_system(
             fam_list = list(su.families)
             u = fam_list.pop(0)
             for v in fam_list:
-                nx.contracted_nodes(contracted_graph, u, v)
+                nx.contracted_nodes(contracted_graph, u, v, copy=False)
+                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(v.organisms)
             fam2su[u] = su
             organisms |= set(su.organisms)
-        filter_local_context(contracted_graph, organisms, jaccard_threshold)
+        filtered_graph = filter_local_context(contracted_graph, organisms, jaccard_threshold)
         for cc in sorted(
-            nx.connected_components(contracted_graph), key=len, reverse=True
+            nx.connected_components(filtered_graph), key=len, reverse=True
         ):
             cc: Set[GeneFamily]
             su_in_cc = {fam2su[fam].name: fam2su[fam] for fam in cc if fam in fam2su}
