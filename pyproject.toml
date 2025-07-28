@@ -56,7 +56,7 @@ notebook = [
 #
 test = [
     "pytest==7",
-    "nasort>=8"
+    "natsort>=8"
     ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
