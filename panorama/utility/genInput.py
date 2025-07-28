@@ -227,10 +227,11 @@ def parse_hmm_info(
     else:
         hmm_dict.update(
             {
-                "protein_name": "",
+                "protein_name":  hmm_dict["name"],
                 "secondary_name": "",
                 "score_threshold": nan,
                 "eval_threshold": nan,
+                "ieval_threshold": nan,
                 "hmm_cov_threshold": nan,
                 "target_cov_threshold": nan,
             }
@@ -299,7 +300,7 @@ def create_hmm_list_file(
         if path.is_file():
             hmm_path_list.append(path)
         elif path.is_dir():
-            for hmm_file in path.rglob("*.hmm") if recursive else path.glob("*.hmm"):
+            for hmm_file in path.rglob("*.h[3m]m") if recursive else path.glob("*.h[3m]m"):
                 hmm_path_list.append(hmm_file)
         else:
             if not path.exists():
