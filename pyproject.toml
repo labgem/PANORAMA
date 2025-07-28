@@ -46,6 +46,7 @@ dev = [
     "seaborn>=0.13",
     "vitables>=3.0.0",
     "viztracer>=0.16.2",
+    "black==24.*"
 ]
 notebook = [
     "jupyter-book>=1.0.0",
@@ -53,7 +54,10 @@ notebook = [
     "jupyter>=1.0.0",
 ]
 #
-
+test = [
+    "pytest==7",
+    "nasort>=8"
+    ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"
