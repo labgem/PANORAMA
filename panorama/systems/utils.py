@@ -178,8 +178,8 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
         gf2meta_info[gf] = best_meta_info[:-1]
 
         # Alternatively, if GFs are allowed to play multiple roles, discard sorting and simply collect all families
-        # md_families = {fam for fam, _ in fam2meta_info if fam.presence == "mandatory"}
-        # acc_families = {fam for fam, _ in fam2meta_info if fam.presence == "accessory"}
+        # md_families = {fam for fam, _ in fam2meta_info.items() if fam.presence == "mandatory"}
+        # acc_families = {fam for fam, _ in fam2meta_info.items() if fam.presence == "accessory"}
         # mandatory_seen.update(md_families)
         # accessory_seen.update(acc_families)
 
@@ -222,6 +222,7 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
     return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
 
+# Note that this function assumes that a family could play multiple roles to satisfy the model requirements if it has multiple annotations.
 def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     """
     Check if there are enough mandatory and total families to satisfy the functional unit rules.
@@ -278,7 +279,6 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
 
     Returns:
         tuple: A tuple containing:
-            - Set[GeneFamily]: Gene families of interest in the functional unit.
             - dict: Dictionary linking gene families to their families.
             - dict: Dictionary linking families to their sources.
     """
@@ -300,8 +300,7 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
                     for gf in annotation2families[exchangeable]:
                         gf2fam[gf].add(fam_model)     
 
-    gene_families = set(gf2fam.keys()) # could be removed from return values as it could be extracted from gf2fam
-    return gene_families, gf2fam, fam2source
+    return gf2fam, fam2source
 
 
 
