@@ -71,16 +71,28 @@ def test_get_metadata_to_families_multiple_annotations_case(simple_pangenome):
 
 
 def test_dict_families_context_simple_case(simple_gfs, single_unit_model):
-    '''Tests that the function returns the correct set of model GFs, mapping to protein annotations, and source per annotation.'''
-    annot2fam = {'source1': defaultdict(set, {f'protein{i}': {simple_gfs[i]} for i in range(len(simple_gfs))})} # protein_i -> {GF_i}
+    """Tests that the function returns the correct set of model GFs, mapping to protein annotations, and source per annotation."""
+    annot2fam = {
+        "source1": defaultdict(
+            set, {f"protein{i}": {simple_gfs[i]} for i in range(len(simple_gfs))}
+        )
+    }  # protein_i -> {GF_i}
     gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
     # mandatory: protein0, protein1, protein2
     # accessory: protein3, protein4, protein5
-    assert gf2fam == defaultdict(set, {simple_gfs[i]: 
-                                    {[f for f in single_unit_model.families if f.name == f'protein{i}'][0]} 
-                                    for i in range(6)}) # mapping from GFs to model families
-    assert fam2source == {f'protein{i}': 'source1' for i in range(6)} # annotation source mapping
-    
+    assert gf2fam == defaultdict(
+        set,
+        {
+            simple_gfs[i]: {
+                [f for f in single_unit_model.families if f.name == f"protein{i}"][0]
+            }
+            for i in range(6)
+        },
+    )  # mapping from GFs to model families
+    assert fam2source == {
+        f"protein{i}": "source1" for i in range(6)
+    }  # annotation source mapping
+
 
 def test_dict_families_context_many_to_many_case(simple_gfs, single_unit_model):
     """Tests that the function properly handles many-to-many associations between GFs and protein annotations."""
@@ -103,9 +115,9 @@ def test_dict_families_context_many_to_many_case(simple_gfs, single_unit_model):
     new_family = Family(name="protein8", presence="mandatory")
     fu = next(single_unit_model.func_units)
     fu.mandatory.add(new_family)
-    
+
     gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
-    
+
     family_lookup = {f.name: f for f in single_unit_model.families}
     assert gf2fam == defaultdict(
         set, {simple_gfs[i]: {family_lookup[f"protein{i}"]} for i in range(1, 6)}
