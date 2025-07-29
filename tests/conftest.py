@@ -7,40 +7,49 @@ from ppanggolin.genome import Gene, Organism, Contig
 
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Model, FuncUnit, Family
+from panorama.systems.system import System
 
 
 # Fixtures used across tests
 
 @pytest.fixture
-def simple_org():
-    org = Organism(name='test_org')
-    return org
+def simple_contigs():
+    return [Contig(identifier=num, name=f'contig_{num}') for num in range(3)]
 
 @pytest.fixture
-def simple_contig():
-    contig = Contig(identifier=1, name='test_contig')
-    return contig
+def simple_orgs(simple_contigs):
+    # create 3 organisms with 1 contig each
+    orgs = []
+    for i, contig in enumerate(simple_contigs):
+        org = Organism(name=f'org_{i}')
+        org[contig.name] = contig
+        orgs.append(org)
+    return orgs
 
 @pytest.fixture
-def simple_gfs(simple_org, simple_contig):
+def simple_gfs(simple_contigs, simple_orgs):
     gfs = [GeneFamily(family_id=i, name=f'GF{i}') for i in range(10)]
-    # Add a gene to each GF and fill its attributes
-    for i, gf in enumerate(gfs):
-        gene = Gene(gene_id=f'gene_{i}')
-        gene.family = gf
-        gf[gene.ID] = gene
-        gene.fill_parents(organism = simple_org, contig = simple_contig)
-        gene.fill_annotations(position=i, strand='+', start=(i+1)*100, stop=(i+2)*100)
-        simple_contig.add(gene)
+    # Add 3 genes to each GF; one gene for each GF per contig
+    for num, contig in enumerate(simple_contigs):
+        for i, gf in enumerate(gfs):
+            gene = Gene(gene_id=f'gene_{i}_{num}')
+            gf[gene.ID] = gene
+            gene.family = gf
+            gene.fill_parents(organism = simple_orgs[num], contig = contig)
+            gene.fill_annotations(position=i, strand='+', start=(i+1)*100, stop=(i+2)*100)
+            contig.add(gene)
+    for gf in gfs: # add partition to each GF
+        gf.partition = 'P'
     return gfs
 
 @pytest.fixture
-def simple_pangenome(simple_gfs):
+def simple_pangenome(simple_gfs, simple_orgs):
     from panorama.pangenomes import Pangenome # Import here to avoid circular import issue; TODO fix it
     pangenome = Pangenome(name='test_pangenome')
     for gf in simple_gfs:
         pangenome.add_gene_family(gf)
-    # GF_i -> protein_i
+    for org in simple_orgs:
+        pangenome.add_organism(org)
     metadata = pd.DataFrame({
         'families': [gf.name for gf in simple_gfs],
         'protein_name': [f'protein{i}' for i in range(10)],
@@ -50,11 +59,17 @@ def simple_pangenome(simple_gfs):
     return pangenome
 
 @pytest.fixture
-def single_unit_model():
-    mandatory_gfs = {Family(name=f'protein{i}', presence='mandatory') for i in range(3)} 
+def simple_fu():
+    mandatory_gfs = {Family(name=f'protein{i}', presence='mandatory') for i in range(3)}
     accessory_gfs = {Family(name=f'protein{i+3}', presence='accessory') for i in range(3)}
-    fu = FuncUnit(mandatory=mandatory_gfs, accessory=accessory_gfs, min_mandatory=2, min_total=4,transitivity=1)
-    model = Model(name='TestModel', mandatory={fu})
+    fu = FuncUnit(name='fu', mandatory=mandatory_gfs, accessory=accessory_gfs,
+                  min_mandatory=2, min_total=4, transitivity=1, window=2)
+    return fu
+
+@pytest.fixture
+def single_unit_model(simple_fu):
+    model = Model(name='TestModel', mandatory={simple_fu})
+    simple_fu.model = model
     return model
 
 @pytest.fixture()
