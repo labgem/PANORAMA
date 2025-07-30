@@ -598,7 +598,6 @@ class _ModFuFeatures:
         Returns:
             set: A set containing the names of child objects that match the given
                 presence status, or all child names if presence is None.
-        TODO: try to make presence optional
         """
         if presence is None:
             return {child.name for child in self._children}
@@ -1100,7 +1099,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             AttributeError: If the `_parent` attribute is not set or does not exist.
 
         """
-        del self._parent
+        self._parent = None
 
     @property
     def families(self) -> Generator[Family, None, None]:
@@ -1212,7 +1211,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             param_keys=fu_params,
         )
         self.window = (
-            data_fu["window"] if "window" in data_fu else self.transitivity + 1
+            data_fu["parameters"]["window"] if "window" in data_fu["parameters"] else self.transitivity + 1
         )
         for fam_dict in data_fu["families"]:
             family = Family()
@@ -1307,7 +1306,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
         Raises:
             AttributeError: If the `_parent` attribute does not exist or cannot be deleted.
         """
-        del self._parent
+        self._parent = None
 
     @property
     def model(self) -> Model:

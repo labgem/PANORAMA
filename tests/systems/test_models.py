@@ -176,9 +176,8 @@ class TestCheckDict:
     def test_check_dict_invalid_presence_value(self):
         """Test check_dict with an invalid presence value."""
         data_dict = {"name": "test_name", "presence": "invalid_presence"}
-        mandatory_keys = {"name", "presence"}
 
-        with pytest.raises(ValueError) as exc_info:
+        with pytest.raises(ValueError):
             check_dict(data_dict, self.mandatory_keys)
 
     @pytest.mark.parametrize("field_name", ["func_units", "families"])
@@ -227,6 +226,8 @@ class TestCheckDict:
             "presence": "mandatory",
             "same_strand": invalid,
         }
+        with pytest.raises(TypeError):
+            check_dict(data_dict, self.mandatory_keys)
 
     def test_check_dict_unexpected_key(self):
         """Test check_dict with unexpected parameter key."""
@@ -433,7 +434,7 @@ class TestModFuFeatures:
             TypeError,
             match=f"The child type is inconsistent. It contains {type(child).__name__} and {type(dumb_child).__name__}",
         ):
-            mff.child_type
+            _ = mff.child_type
 
     def test_check_validation_success(self, children):
         """Test _check method with valid configuration."""
@@ -461,9 +462,9 @@ class TestModFuFeatures:
 
         mff.accessory = {child}
         with pytest.raises(
-                Exception,
-                match=f"There are no mandatory {mff.child_type}. "
-                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+            Exception,
+            match=f"There are no mandatory {mff.child_type}. "
+            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
@@ -556,7 +557,9 @@ class TestModFuFeatures:
         ):
             mff._check()
 
-    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
+    @pytest.mark.parametrize(
+        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
+    )
     def test_add_child_success(self, child, presence):
         """Test adding a child with mandatory presence."""
 
@@ -569,8 +572,10 @@ class TestModFuFeatures:
 
     def test_add_child_failure_inconsistent_child_type(self, child):
         """Test that an TypeError is raised when the child type is inconsistent."""
+
         class DumbChild:
             """Dumb child class for testing."""
+
             presence = "mandatory"
 
         dumb_child = DumbChild()
@@ -587,7 +592,9 @@ class TestModFuFeatures:
         child.presence = "unexpected"
         with pytest.raises(
             ValueError,
-            match=re.escape(f"The child {child.name} does not have a valid presence attribute ({child.presence}).")
+            match=re.escape(
+                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
+            ),
         ):
             mff.add(child)
 
@@ -607,18 +614,41 @@ class TestModFuFeatures:
         assert mff.get("child3") == child3
 
     def test_get_child_failure(self, children):
-        child1, child2, child3 = children
         mff = _ModFuFeatures(mandatory=set(children))
         name = "notin_child"
         with pytest.raises(
-            KeyError,
-            match=f"No such {mff.child_type} with name {name} in {type(mff)}"
+            KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
         ):
             mff.get(name)
 
 
 class TestFamily:
     """Test cases for Family class."""
+
+    class MockModel:
+        """Represents a mock model class."""
+
+        pass
+
+    class MockFuncUnit:
+        """Represents a mock func_unit class."""
+
+        def __init__(self, name, presence):
+            self.name = name
+            self.presence = presence
+            self.families = []
+
+    @pytest.fixture
+    def model(self):
+        """Creates a fixture that yields a mock model instance."""
+        yield self.MockModel()
+
+    @pytest.fixture
+    def func_unit(self, model):
+        """Creates a fixture that yields a mock func_unit instance."""
+        func_unit = self.MockFuncUnit("test_fu", "mandatory")
+        func_unit.model = model
+        yield func_unit
 
     def test_initialization_default_values(self):
         """Test Family initialization with default values."""
@@ -630,6 +660,9 @@ class TestFamily:
         assert family.window == 1
         assert family.duplicate == 0
         assert family.exchangeable == set()
+        assert family._parent is None
+        assert family.multi_system is False
+        assert family.multi_model is False
 
     def test_initialization_custom_values(self):
         """Test Family initialization with custom values."""
@@ -647,20 +680,19 @@ class TestFamily:
         assert family.window == 5
         assert family.duplicate == 1
 
-    def test_func_unit_property(self):
+    def test_func_unit_property(self, func_unit):
         """Test func_unit property getter and setter."""
         family = Family()
-        func_unit = FuncUnit(name="test_fu")
 
         family.func_unit = func_unit
-        assert family.func_unit == func_unit
         assert family._parent == func_unit
+        assert family.func_unit == func_unit
 
-    def test_model_property(self):
+        del family.func_unit
+        assert family.func_unit is None
+
+    def test_model_property(self, func_unit, model):
         """Test model property returns func_unit's model."""
-        model = Model(name="test_model")
-        func_unit = FuncUnit(name="test_fu")
-        func_unit.model = model
         family = Family()
         family.func_unit = func_unit
 
@@ -688,6 +720,30 @@ class TestFamily:
 class TestFuncUnit:
     """Test cases for FuncUnit class."""
 
+    class MockModel:
+        """Mock model class for testing."""
+
+        def __init__(self, name=""):
+            self.name = name
+
+    @pytest.fixture
+    def model(self):
+        """Creates a fixture that yields a mock model instance."""
+        yield self.MockModel("test_model")
+
+    @pytest.fixture
+    def family(self):
+        """Creates a fixture that yields a family instance."""
+        yield Family(name="test_family", presence="mandatory")
+
+    @pytest.fixture
+    def families(self):
+        """Creates a fixture that yields a list of families."""
+        yield [
+            Family(name="fam1", presence="mandatory"),
+            Family(name="fam2", presence="accessory"),
+        ]
+
     def test_initialization_default_values(self):
         """Test FuncUnit initialization with default values."""
         func_unit = FuncUnit()
@@ -700,40 +756,114 @@ class TestFuncUnit:
         assert func_unit.neutral == set()
         assert func_unit.min_mandatory == 1
         assert func_unit.min_total == 1
+        assert func_unit.transitivity == 0
+        assert func_unit.window == 1
+        assert func_unit.duplicate == 0
+        assert func_unit.same_strand is False
+        assert func_unit._parent is None
+        assert func_unit.exchangeable == set()
+        assert func_unit.multi_system is False
+        assert func_unit.multi_model is False
 
-    def test_model_property(self):
+    def test_initialization_custom_values(self, families):
+        """Test FuncUnit initialization with custom values."""
+        family1, family2 = families
+        func_unit = FuncUnit(
+            name="test_fu",
+            presence="mandatory",
+            mandatory={family1},
+            accessory={family2},
+            min_mandatory=1,
+            min_total=3,
+            transitivity=2,
+            window=5,
+            duplicate=1,
+            same_strand=True,
+        )
+
+        assert func_unit.name == "test_fu"
+        assert func_unit.presence == "mandatory"
+        assert func_unit.min_mandatory == 1
+        assert func_unit.min_total == 3
+        assert func_unit.transitivity == 2
+        assert func_unit.window == 5
+        assert func_unit.duplicate == 1
+        assert func_unit.same_strand is True
+
+    def test_model_property(self, model):
         """Test model property getter and setter."""
         func_unit = FuncUnit()
-        model = Model(name="test_model")
 
         func_unit.model = model
-        assert func_unit.model == model
         assert func_unit._parent == model
+        assert func_unit.model == model
 
-    def test_families_property(self):
+        del func_unit.model
+        assert func_unit.model is None
+
+    def test_families_property(self, families):
         """Test families property returns child families."""
-        func_unit = FuncUnit()
-        family1 = Family(name="fam1", presence="mandatory")
-        family2 = Family(name="fam2", presence="accessory")
+        family1, family2 = families
+        func_unit = FuncUnit(mandatory={family1}, accessory={family2})
 
-        func_unit.add(family1)
-        func_unit.add(family2)
+        families_list = set(func_unit.families)
+        assert families_list == set(families)
 
-        families_list = list(func_unit.families)
-        assert len(families_list) == 2
-        assert family1 in families_list
-        assert family2 in families_list
-
-    def test_size_property(self):
+    def test_size_property(self, families):
         """Test size property returns number of families."""
-        func_unit = FuncUnit()
-        family1 = Family(name="fam1", presence="mandatory")
-        family2 = Family(name="fam2", presence="accessory")
-
-        func_unit.add(family1)
-        func_unit.add(family2)
+        family1, family2 = families
+        func_unit = FuncUnit(mandatory={family1}, accessory={family2})
 
         assert func_unit.size == 2
+
+    def test_add_family(self, family):
+        """Test add_family method adds a family to the FuncUnit."""
+        func_unit = FuncUnit()
+        func_unit.add(family)
+
+        assert list(func_unit.families) == [family]
+
+    def test_get_families(self, family):
+        """Test get_families method returns the list of child fus."""
+        func_unit = FuncUnit()
+        func_unit.add(family)
+
+        assert func_unit.get("test_family") == family
+
+    @pytest.mark.parametrize(
+        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
+    )
+    def test_list_families_names(self, families, presence):
+        """Test list_families method returns the list of child fus."""
+        func_unit = FuncUnit()
+        fam1, fam2 = families
+        func_unit.add(fam1)
+        func_unit.add(fam2)
+        fam3 = Family(name="test_family", presence=presence)
+        func_unit.add(fam3)
+
+        assert func_unit.families_names() == {fam1.name, fam2.name, fam3.name}
+        if fam1.presence == fam3.presence:
+            assert func_unit.families_names(fam3.presence) == {fam1.name, fam3.name}
+        elif fam2.presence == fam3.presence:
+            assert func_unit.families_names(fam3.presence) == {fam2.name, fam3.name}
+        else:
+            assert func_unit.families_names(fam3.presence) == {fam3.name}
+
+    @pytest.mark.parametrize(
+        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
+    )
+    def test_get_duplicate_families(self, families, presence):
+        """Test get_duplicate_families method returns the list of child fus with duplicate data."""
+        func_unit = FuncUnit()
+        fam1, fam2 = families
+        func_unit.add(fam1)
+        func_unit.add(fam2)
+        fam3 = Family(name="duplicated_fam", presence=presence, duplicate=1)
+        func_unit.add(fam3)
+
+        assert set(func_unit.duplicate_fam()) == {fam3}
+        assert set(func_unit.duplicate_fam(presence)) == {fam3}
 
     def test_read_method(self):
         """Test read method processes functional unit data correctly."""
@@ -752,6 +882,10 @@ class TestFuncUnit:
 
         assert func_unit.name == "test_fu"
         assert func_unit.presence == "mandatory"
+        mandatory_fam = list(func_unit.mandatory)[0]
+        assert mandatory_fam.name == "fam1"
+        accessory_fam = list(func_unit.accessory)[0]
+        assert accessory_fam.name == "fam2"
         assert func_unit.duplicate == 1
         assert func_unit.min_total == 2
         assert func_unit.size == 2  # Two families added
@@ -759,6 +893,61 @@ class TestFuncUnit:
 
 class TestModel:
     """Test cases for Model class."""
+
+    @pytest.fixture
+    def func_unit(self):
+        """Creates a fixture that yields a FuncUnit instance."""
+        func_unit = FuncUnit(name="test_fu", presence="mandatory")
+        yield func_unit
+
+    @pytest.fixture
+    def families(self):
+        """Creates a fixture that yields a list of families."""
+        family1 = Family(name="fam1", presence="mandatory")
+        family2 = Family(name="fam2", presence="accessory")
+        family3 = Family(name="fam3", presence="mandatory")
+        family4 = Family(name="fam4", presence="mandatory")
+        family5 = Family(name="fam5", presence="accessory")
+        family6 = Family(name="fam6", presence="mandatory")
+        family7 = Family(name="fam7", presence="accessory")
+        family8 = Family(name="fam8", presence="accessory")
+        family9 = Family(name="fam9", presence="mandatory")
+        family10 = Family(name="fam10", presence="accessory")
+        yield [
+            family1,
+            family2,
+            family3,
+            family4,
+            family5,
+            family6,
+            family7,
+            family8,
+            family9,
+            family10,
+        ]
+
+    @pytest.fixture
+    def func_units(self, families):
+        """Creates a fixture that yields a list of FuncUnit instances."""
+        fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
+        func_unit1 = FuncUnit(
+            name="test_fu1", presence="mandatory", mandatory={fam1}, accessory={fam2}
+        )
+        func_unit2 = FuncUnit(name="test_fu2", presence="mandatory", mandatory={fam3})
+        func_unit3 = FuncUnit(
+            name="test_fu3", presence="forbidden", mandatory={fam4}, accessory={fam5}
+        )
+        func_unit4 = FuncUnit(
+            name="test_fu4",
+            presence="accessory",
+            mandatory={fam6},
+            accessory={fam7, fam8},
+        )
+        func_unit5 = FuncUnit(
+            name="test_fu5", presence="neutral", mandatory={fam9}, accessory={fam10}
+        )
+
+        yield [func_unit1, func_unit2, func_unit3, func_unit4, func_unit5]
 
     def test_initialization_default_values(self):
         """Test Model initialization with default values."""
@@ -773,62 +962,154 @@ class TestModel:
         assert model.min_total == 1
         assert model.transitivity == 0
         assert model.window == 1
+        assert model.same_strand is False
         assert model.canonical == []
 
-    def test_func_units_property(self):
+    def test_initialization_custom_value(self):
+        """Test Model initialization with custom values."""
+        func_unit1 = FuncUnit(name="fun1")
+        func_unit2 = FuncUnit(name="fun2")
+        func_unit3 = FuncUnit(name="fun3")
+        func_unit4 = FuncUnit(name="fun4")
+        model = Model(
+            name="test_model",
+            mandatory={func_unit1},
+            accessory={func_unit2},
+            forbidden={func_unit3},
+            neutral={func_unit4},
+            min_mandatory=1,
+            min_total=3,
+            transitivity=2,
+            window=5,
+            same_strand=True,
+            canonical=["canonical_model"],
+        )
+
+        assert model.name == "test_model"
+        assert model.mandatory == {func_unit1}
+        assert model.accessory == {func_unit2}
+        assert model.forbidden == {func_unit3}
+        assert model.neutral == {func_unit4}
+        assert model.min_mandatory == 1
+        assert model.min_total == 3
+        assert model.transitivity == 2
+        assert model.window == 5
+        assert model.same_strand is True
+        assert model.canonical == ["canonical_model"]
+
+    def test_func_units_property(self, func_units):
         """Test func_units property returns child functional units."""
         model = Model()
-        fu1 = FuncUnit(name="fu1", presence="mandatory")
-        fu2 = FuncUnit(name="fu2", presence="accessory")
+        fu1, fu2, fu3, fu4, fu5 = func_units
 
         model.add(fu1)
         model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
 
-        func_units_list = list(model.func_units)
-        assert len(func_units_list) == 2
-        assert fu1 in func_units_list
-        assert fu2 in func_units_list
+        func_units_set = set(model.func_units)
+        assert func_units_set == set(func_units)
 
-    def test_families_property(self):
+    @pytest.mark.parametrize(
+        "presence", [None, "mandatory", "accessory", "forbidden", "neutral"]
+    )
+    def test_get_func_units_names(self, func_units, presence):
+        """Test get_func_units_names method returns the list of functional unit names."""
+        model = Model()
+        fu1, fu2, fu3, fu4, fu5 = func_units
+
+        model.add(fu1)
+        model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
+
+        func_units_names = set(model.func_units_names(presence))
+        assert func_units_names == {
+            fu.name for fu in func_units if fu.presence == presence or presence is None
+        }
+
+    def test_families_property(self, families, func_units):
         """Test families property returns all families from functional units."""
         model = Model()
-        fu1 = FuncUnit(name="fu1", presence="mandatory")
-        family1 = Family(name="fam1", presence="mandatory")
-        family2 = Family(name="fam2", presence="accessory")
-
-        fu1.add(family1)
-        fu1.add(family2)
+        fu1, fu2, fu3, fu4, fu5 = func_units
+        fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
         model.add(fu1)
+        model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
 
-        families_list = list(model.families)
-        assert len(families_list) == 2
-        assert family1 in families_list
-        assert family2 in families_list
+        families_set = set(model.families)
+        assert families_set == {
+            fam1,
+            fam2,
+            fam3,
+            fam4,
+            fam5,
+            fam6,
+            fam7,
+            fam8,
+            fam9,
+            fam10,
+        }
 
-    def test_size_property(self):
+    def test_size_property(self, func_units, families):
         """Test size property returns tuple of (func_units_count, families_count)."""
         model = Model()
-        fu1 = FuncUnit(name="fu1", presence="mandatory")
-        family1 = Family(name="fam1", presence="mandatory")
-        family2 = Family(name="fam2", presence="accessory")
-
-        fu1.add(family1)
-        fu1.add(family2)
+        fu1, fu2, fu3, fu4, fu5 = func_units
+        fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
         model.add(fu1)
+        model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
 
-        assert model.size == (1, 2)  # 1 func_unit, 2 families
+        assert model.size == (len(set(func_units)), len(set(families)))  # 1 func_unit, 2 families
+
+    def test_get_duplicate_fu(self, func_units):
+        """Test get_duplicate_fu method returns the list of functional units with duplicate data."""
+        model = Model()
+        fu1, fu2, fu3, fu4, fu5 = func_units
+        fu1.duplicate = 1
+        fu3.duplicate = 2
+        model.add(fu1)
+        model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
+
+        assert set(model.duplicate_fu()) == {fu1, fu3}
+        assert set(model.duplicate_fu("mandatory")) == {fu1}
+
+    def test_get_functional_units(self, func_units):
+        """Test get_functional_units method returns the list of functional units."""
+        model = Model()
+        fu1, fu2, fu3, fu4, fu5 = func_units
+        model.add(fu1)
+        model.add(fu2)
+        model.add(fu3)
+        model.add(fu4)
+        model.add(fu5)
+        assert model.get("test_fu1") == fu1
+        assert model.get("test_fu2") == fu2
+        assert model.get("test_fu3") == fu3
+        assert model.get("test_fu4") == fu4
+        assert model.get("test_fu5") == fu5
 
     def test_read_method(self):
         """Test read method processes model data correctly."""
         model = Model()
         data_model = {
             "name": "test_model",
-            "parameters": {"transitivity": 2, "min_mandatory": 1, "min_total": 2},
+            "parameters": {"transitivity": 2, "min_mandatory": 1, "min_total": 1},
             "func_units": [
                 {
                     "name": "fu1",
                     "presence": "mandatory",
                     "families": [{"name": "fam1", "presence": "mandatory"}],
+                    "parameters": {}
                 }
             ],
             "canonical": ["element1", "element2"],
@@ -839,29 +1120,35 @@ class TestModel:
         assert model.name == "test_model"
         assert model.transitivity == 2
         assert model.min_mandatory == 1
-        assert model.min_total == 2
+        assert model.min_total == 1
         assert model.canonical == ["element1", "element2"]
         assert model.size == (1, 1)  # 1 func_unit, 1 family
 
     def test_read_model_static_method(self):
         """Test read_model static method creates and returns Model instance."""
         data_model = {
-            "name": "static_test_model",
-            "parameters": {"transitivity": 1, "min_mandatory": 1, "min_total": 1},
+            "name": "test_model",
+            "parameters": {"transitivity": 2, "min_mandatory": 1, "min_total": 1},
             "func_units": [
                 {
                     "name": "fu1",
                     "presence": "mandatory",
                     "families": [{"name": "fam1", "presence": "mandatory"}],
+                    "parameters": {}
                 }
             ],
+            "canonical": ["element1", "element2"],
         }
 
         model = Model.read_model(data_model)
 
         assert isinstance(model, Model)
-        assert model.name == "static_test_model"
-        assert model.transitivity == 1
+        assert model.name == "test_model"
+        assert model.transitivity == 2
+        assert model.min_mandatory == 1
+        assert model.min_total == 1
+        assert model.canonical == ["element1", "element2"]
+        assert model.size == (1, 1)  # 1 func_unit, 1 family
 
 
 class TestModels:
