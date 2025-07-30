@@ -220,17 +220,17 @@ def unit_projection(
     """
     pangenome_projection, organisms_projection = [], []
     matrix = get_gfs_matrix_combination(set(unit.models_families), gf2fam)
+    mdr_acc_gfs = {gf for gf in unit.models_families if gf.name in matrix.columns.values}
 
-    for (
-        organism
-    ) in (
-        unit.models_organisms
-    ):  # Note that `unit.models_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
+    for organism in unit.models_organisms:
+        # Note that `unit.models_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
         org_fam = {
             fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1
         }
-        org_mod_fam = org_fam & set(unit.models_families)
-        filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
+        org_mod_fam = org_fam & mdr_acc_gfs
+
+        filtered_matrix = matrix[[gf.name for gf in org_mod_fam]]
+
         if check_needed_families(filtered_matrix, unit.functional_unit):
             pan_proj = [
                 unit.name,
@@ -398,11 +398,8 @@ def project_pangenome_systems(
     )
     sys2fam_context = {}
 
-    for (
-        system
-    ) in (
-        pangenome.systems
-    ):  # Search association now to don't repeat for the same model and different system
+    for system in pangenome.systems:
+        # Search association now to don't repeat for the same model and different system
         if system.model.name not in sys2fam_context:
             gf2fam, _ = dict_families_context(system.model, meta2fam)
             sys2fam_context[system.model.name] = gf2fam
