@@ -119,8 +119,10 @@ def project_unit_on_organisms(
                 category = "context" if gene.family in unit.families else "filtered"
                 fam_annot = fam_sec = ""
 
-            completeness = len(model_genes) / len(
-                set(unit.models_families)
+            completeness = round(
+                len(set(g.family.name for g in model_genes))
+                / len(set(unit.models_families)),
+                2,
             )  # proportion of unit families in the organism
 
             line_projection = [
@@ -258,10 +260,13 @@ def unit_projection(
             strict_count = sum(
                 1 for line in org_proj if line[-3] == "strict"
             )  # line[-3] -> sys_state_in_org
-            split_count = len(org_proj) - strict_count
+            split_count = sum(1 for line in org_proj if line[-3] == "split")
+            extended_count = len(org_proj) - strict_count - split_count
             completeness = len(org_fam) / len(unit)
             pangenome_projection.append(
-                pan_proj + [partition, completeness] + [strict_count, split_count]
+                pan_proj
+                + [partition, completeness]
+                + [strict_count, split_count, extended_count]
             )
 
             if "RGPs" in association:
@@ -463,6 +468,7 @@ def project_pangenome_systems(
         "completeness",
         "strict",
         "split",
+        "extended",
     ]
     org_cols_name = [
         "system number",
@@ -603,11 +609,57 @@ def get_org_df_one_unit_per_fam(
         "gene.ID",
         "start",
     ]
+
+    # Create overlapping_units column before filtering
+    overlapping_data = []
+    for group_key, group in org_df.groupby(group_cols):
+        if len(group) > 1:
+            # Sort by completeness (descending) to keep highest first
+            group_sorted = group.sort_values("completeness", ascending=False)
+
+            # Get the filtered out rows (all except the first)
+            filtered_rows = group_sorted.iloc[1:]
+
+            if not filtered_rows.empty:
+                # Create overlapping info with format `unit_number:completeness`
+                overlapping_info = []
+                for _, row in filtered_rows.iterrows():
+                    overlapping_info.append(
+                        f"{row['system number']}:{row['completeness']}"
+                    )
+                overlapping_str = "|".join(overlapping_info)
+            else:
+                overlapping_str = ""
+        else:
+            overlapping_str = ""
+
+        overlapping_data.append(
+            {
+                "gene family": group_key[0],
+                "system name": group_key[1],
+                "functional unit name": group_key[2],
+                "gene.ID": group_key[3],
+                "start": group_key[4],
+                "overlapping_units": overlapping_str,
+            }
+        )
+
+    # Create overlapping DataFrame
+    overlapping_df = pd.DataFrame(overlapping_data)
+
     idx_max_completeness = org_df.groupby(group_cols)["completeness"].idxmax()
     org_df_filtered = org_df.loc[idx_max_completeness]
 
     # Reset index to avoid issues with duplicate indices
     org_df_filtered = org_df_filtered.reset_index(drop=True)
+
+    # Add overlapping_units column to the end
+    org_df_filtered = org_df_filtered.merge(overlapping_df, on=group_cols, how="left")
+
+    # Fill NaN values in overlapping column with empty string
+    org_df_filtered["overlapping_units"] = org_df_filtered["overlapping_units"].fillna(
+        ""
+    )
 
     if (
         eliminate_filtered_systems
@@ -750,6 +802,7 @@ def write_projection_systems(
         "completeness": "mean",
         "strict": "sum",
         "split": "sum",
+        "extended": "sum",
     }
     if "RGPs" in pan_df_col:
         agg_dict["RGPs"] = custom_agg_unique

@@ -286,6 +286,7 @@ def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome)
             5: [1.0] * 3,  # Completeness
             6: [6] * 3,  # Strict count
             7: [0] * 3,  # Split count
+            8: [0] * 3,  # Extended count
         }
     )
 
@@ -356,6 +357,7 @@ def test_system_projection(
             7: [1.0] * 3,  # Completeness
             8: [6] * 3,  # Strict count
             9: [0] * 3,  # Split count
+            10: [0] * 3,  # Extended count
         }
     )
 
@@ -422,6 +424,7 @@ def test_project_pangenome_systems(simple_gfs, single_unit_model, simple_pangeno
             "completeness": [1.0] * 3,  # Completeness
             "strict": [6] * 3,  # Strict count
             "split": [0] * 3,  # Split count
+            "extended": [0] * 3,  # Extended count
         }
     )
 
@@ -555,6 +558,7 @@ def test_write_projection_systems(simple_orgs):
             "completeness": [1.0] * 3,  # Completeness
             "strict": [6] * 3,  # Strict count
             "split": [0] * 3,  # Split count
+            "extended": [0] * 3,  # Extended count
         }
     )
 
