@@ -27,11 +27,6 @@ def check_key(data: Dict, required_keys: Set[str]) -> None:
 
     Raises:
         KeyError: If any required keys are missing from the dictionary.
-
-    Example:
-        data = {'a': 1, 'b': 2}
-        validate_required_keys(data, {'a', 'b', 'c'})
-        KeyError: "Missing required keys: c"
     """
 
     missing_keys = required_keys - set(data.keys())
@@ -181,7 +176,7 @@ class Models:
         Args:
             models (Set[Model], optional): A set of models to be used. Defaults to None.
         """
-        self._model_getter = models if models is not None else {}
+        self._model_getter = {model.name for model in models} if models is not None else {}
 
     def __iter__(self) -> Generator[Model, None, None]:
         """
@@ -286,8 +281,58 @@ class Models:
         """
         fam2model = {}
         for family in self.families:
+            print(family, family.model)
             fam2model[family] = family.model
         return fam2model
+
+    def get_model(self, name: str) -> Model:
+        """
+        Retrieves a model from the internal collection based on its name.
+
+        This method attempts to fetch a model from an internal mapping using the
+        provided name. If the name does not exist in the mapping, a KeyError is
+        raised. On success, it returns the corresponding model.
+
+        Args:
+            name (str): The name of the model to retrieve.
+
+        Returns:
+            Model: The model corresponding to the provided name.
+
+        Raises:
+            KeyError: If the provided name does not exist in the internal mapping.
+        """
+        try:
+            model = self._model_getter[name]
+        except KeyError:
+            raise KeyError("Model not present in set of value")
+        else:
+            return model
+
+    def add_model(self, model: Model):
+        """
+        Adds a new model to the collection if it does not already exist.
+
+        This method allows adding a model to the collection, provided that no model
+        with the same name exists in the current collection. If a model with the
+        same name is already present, a KeyError will be raised. Before adding
+        the model, it ensures the validity of the model by invoking its `check_model`
+        method.
+
+        Args:
+            model (Model): The model instance to be added to the collection.
+
+        Raises:
+            KeyError: If a model with the same name is already present in the collection.
+            Any exception raised by model.check_model() if the model is invalid.
+        """
+        try:
+            self.get_model(model.name)
+        except KeyError:
+            model.check_model()
+            self._model_getter[model.name] = model
+        else:
+            raise KeyError(f"Model {model.name} already in set of value")
 
     def read(self, model_path: Path):
         """
@@ -326,55 +371,6 @@ class Models:
                 raise Exception(f"Unexpected problem to read JSON {model_path}")
             else:
                 self.add_model(model)
-
-    def get_model(self, name: str) -> Model:
-        """
-        Retrieves a model from the internal collection based on its name.
-
-        This method attempts to fetch a model from an internal mapping using the
-        provided name. If the name does not exist in the mapping, a KeyError is
-        raised. On success, it returns the corresponding model.
-
-        Args:
-            name (str): The name of the model to retrieve.
-
-        Returns:
-            Model: The model corresponding to the provided name.
-
-        Raises:
-            KeyError: If the provided name does not exist in the internal mapping.
-        """
-        try:
-            model = self._model_getter[name]
-        except KeyError:
-            raise KeyError("Model not present in set of value")
-        else:
-            return model
-
-    def add_model(self, model: Model):
-        """
-        Adds a new model to the collection if it does not already exist.
-
-        This method allows adding a model to the collection, provided that no model
-        with the same name exists in the current collection. If a model with the
-        same name is already present, an exception will be raised. Before adding
-        the model, it ensures the validity of the model by invoking its `check_model`
-        method.
-
-        Args:
-            model (Model): The model instance to be added to the collection.
-
-        Raises:
-            Exception: If a model with the same name is already present in the collection.
-        """
-        try:
-            self.get_model(model.name)
-        except KeyError:
-            model.check_model()
-            self._model_getter[model.name] = model
-        else:
-            raise Exception(f"Model {model.name} already in set of value")
-
 
 class _BasicFeatures:
     """
@@ -737,6 +733,7 @@ class _ModFuFeatures:
             raise ValueError(
                 f"The child {child.name} does not have a valid presence attribute ({child.presence})."
             )
+        child._parent = self
 
     def _mk_child_getter(self):
         """
