@@ -340,6 +340,7 @@ def search_unit_in_context(
                     combinations_in_cc,
                     combinations2orgs,
                     jaccard_threshold,
+                    local
                 )
                 logging.getLogger("PANORAMA").debug(
                     f"{len(detected_su)} unit found in cc in {time.time() - t0} seconds."
@@ -396,7 +397,6 @@ def get_functional_unit_gene_families(
 
 def search_system_units(
     model: Model,
-    gene_families: Set[GeneFamily],
     gf2fam: Dict[GeneFamily, Set[Family]],
     fam2source: Dict[str, str],
     source: str,
@@ -407,7 +407,6 @@ def search_system_units(
 
     Args:
         model (Model): Model corresponding to the system searched.
-        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
         gf2fam (Dict[GeneFamily, Set[Family]]): Dictionary linking gene families to their families.
         fam2source (Dict[str, str]): Dictionary linking families to their sources.
         source (str): Name of the annotation source.
@@ -427,6 +426,7 @@ def search_system_units(
     su_found = {}
     for func_unit in model.func_units:
         fu_families = set()
+        gene_families = set(gf2fam.keys())
         fu_families.update(
             *get_functional_unit_gene_families(func_unit, gene_families, gf2fam)
         )
@@ -647,7 +647,6 @@ def search_for_system(
 
 def search_system(
     model: Model,
-    gene_families: Set[GeneFamily],
     gf2fam: Dict[GeneFamily, Set[Family]],
     fam2source: Dict[str, str],
     source: str,
@@ -658,7 +657,6 @@ def search_system(
 
     Args:
         model (Model): Model to search in the pangenome.
-        gene_families (Set[GeneFamily]): Set of gene families that might be in the system.
         gf2fam (Dict[GeneFamily, Set[Family]]): Dictionary linking gene families to their families.
         fam2source (Dict[str, str]): Dictionary linking families to their sources.
         source (str): Name of the annotation source.
@@ -675,7 +673,7 @@ def search_system(
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     begin = time.time()
     su_found = search_system_units(
-        model, gene_families, gf2fam, fam2source, source, jaccard_threshold, sensitivity
+        model, gf2fam, fam2source, source, jaccard_threshold, sensitivity
     )
     detected_systems = set()
     if check_for_needed_units(su_found, model) and not check_for_forbidden_unit(
@@ -735,13 +733,12 @@ def search_systems(
         with tqdm(total=models.size, unit="model", disable=disable_bar) as progress:
             futures = []
             for model in models:
-                gene_families, gf2fam, fam2source = dict_families_context(
+                gf2fam, fam2source = dict_families_context(
                     model, meta2fam
                 )
                 future = executor.submit(
                     search_system,
                     model,
-                    gene_families,
                     gf2fam,
                     fam2source,
                     source,

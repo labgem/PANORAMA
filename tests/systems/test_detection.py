@@ -145,7 +145,12 @@ def test_search_unit_in_combination(
 
 
 def test_search_unit_in_context(
-    multi_unit_model, simple_gf2fam, simple_fam2source, simple_matrix, simple_pangenome
+    multi_unit_model,
+    simple_gf2fam,
+    simple_fam2source,
+    simple_matrix,
+    simple_orgs,
+    simple_pangenome,
 ):
     """Tests that the function correctly identifies units given the full context graph"""
     detected = set()
@@ -154,14 +159,15 @@ def test_search_unit_in_context(
         gfs[:6]
     )  # (mandatory | accessory) families of fu1 that are present in the pangenome
 
+    org1, org2 = simple_orgs[:2]  # two organisms in the pangenome
     combinations2orgs = defaultdict(
         set,
         {
             frozenset(
                 gfs[:4]
             ): {  # dict of all comb-to-orgs associations returned by compute_gene_context_graph of ppanggolin
-                "org1",
-                "org2",
+                org1,
+                org2,
             }
         },
     )  # used for local filtering
@@ -172,7 +178,7 @@ def test_search_unit_in_context(
     for i, _ in enumerate(gfs[:-1]):
         if i == 5:  # skip to create a disconnected component
             continue
-        context_graph.add_edge(gfs[i], gfs[i + 1])  # genomes = {'org1'}
+        context_graph.add_edge(gfs[i], gfs[i + 1], genomes={org1, org2})
     # context_graph = GF0 -- GF1 -- GF2 -- GF3 -- GF4 -- GF5
     #                 GF6 -- GF7 -- GF8
     detected = search_unit_in_context(
@@ -196,13 +202,8 @@ def test_search_system_units(
 ):
     """Tests that the context graph is properly constructed, the potential combinations are identified, and the units are detected."""
     gfs = list(simple_gf2fam.keys())
-    model_families = set(gfs[:6])  # all GFs corresponding to model families
     detected_systems = search_system_units(
-        multi_unit_model,
-        model_families,
-        simple_gf2fam,
-        simple_fam2source,
-        source="source1",
+        multi_unit_model, simple_gf2fam, simple_fam2source, source="source1"
     )
     # This method executes ppanggolin context graph construction -> context_graph = GF0 -- GF1 -- GF2 -- GF3 -- GF4 -- GF5 -- GF6 -- GF7 -- GF8
     # since all GFs correspond to sequential genes of the same contig of the same organism as defined in simple_gfs fixture
@@ -217,12 +218,14 @@ def test_search_system_units(
 
     # Increment window size of fu1
     multi_unit_model.get("fu1").window = 2
+
+    gf2fam = simple_gf2fam.copy()  # copy to avoid modifying the original fixture
+    del gf2fam[
+        gfs[9]
+    ]  # remove GF9 corresponding to neutral family of fu1 to avoid addition to unit models_families
+
     detected_systems = search_system_units(
-        multi_unit_model,
-        model_families,
-        simple_gf2fam,
-        simple_fam2source,
-        source="source1",
+        multi_unit_model, gf2fam, simple_fam2source, source="source1"
     )
     assert set(next(iter(detected_systems["fu1"])).families) == set(
         gfs[:8]
@@ -325,17 +328,10 @@ def test_search_system(
 ):
     """Tests that the function correctly identifies systems in the pangnomes after units detection."""
     gfs = list(simple_gf2fam.keys())
-    model_fams = set(gfs[:6])  # all GFs corresponding to model families (fu1 only)
 
     detected_system = next(
         iter(
-            search_system(
-                multi_unit_model,
-                model_fams,
-                simple_gf2fam,
-                simple_fam2source,
-                "source1",
-            )
+            search_system(multi_unit_model, simple_gf2fam, simple_fam2source, "source1")
         )
     )  # extract the first detected system
     expected_unit = SystemUnit(

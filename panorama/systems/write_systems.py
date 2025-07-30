@@ -147,7 +147,6 @@ def write_flat_systems_to_pangenome(
     logging.getLogger("PANORAMA").info(f"Begin write systems for {pangenome.name}")
     begin = time.time()
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
-    fam_index = pangenome.compute_org_bitarrays()
     for system_source in pangenome.systems_sources:
         logging.getLogger("PANORAMA").debug(
             f"Begin write systems for {pangenome.name} "
@@ -156,7 +155,6 @@ def write_flat_systems_to_pangenome(
         pangenome_proj, organisms_proj = project_pangenome_systems(
             pangenome,
             system_source,
-            fam_index,
             association=association,
             canonical=canonical,
             threads=threads,

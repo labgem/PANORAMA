@@ -77,10 +77,9 @@ def test_dict_families_context_simple_case(simple_gfs, single_unit_model):
             set, {f"protein{i}": {simple_gfs[i]} for i in range(len(simple_gfs))}
         )
     }  # protein_i -> {GF_i}
-    model_gfs, gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
+    gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
     # mandatory: protein0, protein1, protein2
     # accessory: protein3, protein4, protein5
-    assert model_gfs == set(simple_gfs[:6])  # all GFs corresponding to model families
     assert gf2fam == defaultdict(
         set,
         {
@@ -117,9 +116,8 @@ def test_dict_families_context_many_to_many_case(simple_gfs, single_unit_model):
     fu = next(single_unit_model.func_units)
     fu.mandatory.add(new_family)
 
-    model_fams, gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
+    gf2fam, fam2source = dict_families_context(single_unit_model, annot2fam)
 
-    assert model_fams == set(simple_gfs[:6]) | set(simple_gfs[10:16]) | {simple_gfs[8]}
     family_lookup = {f.name: f for f in single_unit_model.families}
     assert gf2fam == defaultdict(
         set, {simple_gfs[i]: {family_lookup[f"protein{i}"]} for i in range(1, 6)}

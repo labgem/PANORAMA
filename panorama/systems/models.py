@@ -7,7 +7,7 @@ This module provides tools to define and validate rules used to detect biologica
 
 from __future__ import annotations
 from pathlib import Path
-from typing import Dict, List, Generator, Set, Tuple, Union
+from typing import Dict, List, Generator, Set, Tuple, Union, Iterable
 import json
 
 # Constants (could be encapsulated later in a config class)
@@ -27,11 +27,6 @@ def check_key(data: Dict, required_keys: Set[str]) -> None:
 
     Raises:
         KeyError: If any required keys are missing from the dictionary.
-
-    Example:
-        data = {'a': 1, 'b': 2}
-        validate_required_keys(data, {'a', 'b', 'c'})
-        KeyError: "Missing required keys: c"
     """
 
     missing_keys = required_keys - set(data.keys())
@@ -79,7 +74,9 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: Set[str]) -> No
             if value < -1:
                 raise ValueError(f"{key} must be >= -1.")
         elif key == "duplicate":
-            if not isinstance(value, int) or value < 0:
+            if not isinstance(value, int):
+                raise TypeError("duplicate must be a non-negative integer.")
+            if value < 0:
                 raise ValueError("duplicate must be a non-negative integer.")
         elif key in ["multi_system", "multi_model"]:
             if not isinstance(value, bool):
@@ -144,7 +141,9 @@ def check_dict(
         elif key == "parameters" and value is not None:
             check_parameters(value, param_keys)
         elif key in ["func_units", "families"]:
-            if not isinstance(value, list) or not value:
+            if not isinstance(value, list):
+                raise TypeError(f"{key} must be a list.")
+            if not value:
                 raise ValueError(f"{key} must be a non-empty list.")
         elif key in ["canonical", "exchangeable"]:
             if not isinstance(value, list):
@@ -177,7 +176,7 @@ class Models:
         Args:
             models (Set[Model], optional): A set of models to be used. Defaults to None.
         """
-        self._model_getter = models if models is not None else {}
+        self._model_getter = {model.name for model in models} if models is not None else {}
 
     def __iter__(self) -> Generator[Model, None, None]:
         """
@@ -282,8 +281,58 @@ class Models:
         """
         fam2model = {}
         for family in self.families:
+            print(family, family.model)
             fam2model[family] = family.model
         return fam2model
+
+    def get_model(self, name: str) -> Model:
+        """
+        Retrieves a model from the internal collection based on its name.
+
+        This method attempts to fetch a model from an internal mapping using the
+        provided name. If the name does not exist in the mapping, a KeyError is
+        raised. On success, it returns the corresponding model.
+
+        Args:
+            name (str): The name of the model to retrieve.
+
+        Returns:
+            Model: The model corresponding to the provided name.
+
+        Raises:
+            KeyError: If the provided name does not exist in the internal mapping.
+        """
+        try:
+            model = self._model_getter[name]
+        except KeyError:
+            raise KeyError("Model not present in set of value")
+        else:
+            return model
+
+    def add_model(self, model: Model):
+        """
+        Adds a new model to the collection if it does not already exist.
+
+        This method allows adding a model to the collection, provided that no model
+        with the same name exists in the current collection. If a model with the
+        same name is already present, a KeyError will be raised. Before adding
+        the model, it ensures the validity of the model by invoking its `check_model`
+        method.
+
+        Args:
+            model (Model): The model instance to be added to the collection.
+
+        Raises:
+            KeyError: If a model with the same name is already present in the collection.
+            Any exception raised by model.check_model() if the model is invalid.
+        """
+        try:
+            self.get_model(model.name)
+        except KeyError:
+            model.check_model()
+            self._model_getter[model.name] = model
+        else:
+            raise KeyError(f"Model {model.name} already in set of value")
 
     def read(self, model_path: Path):
         """
@@ -322,55 +371,6 @@ class Models:
                 raise Exception(f"Unexpected problem to read JSON {model_path}")
             else:
                 self.add_model(model)
-
-    def get_model(self, name: str) -> Model:
-        """
-        Retrieves a model from the internal collection based on its name.
-
-        This method attempts to fetch a model from an internal mapping using the
-        provided name. If the name does not exist in the mapping, a KeyError is
-        raised. On success, it returns the corresponding model.
-
-        Args:
-            name (str): The name of the model to retrieve.
-
-        Returns:
-            Model: The model corresponding to the provided name.
-
-        Raises:
-            KeyError: If the provided name does not exist in the internal mapping.
-        """
-        try:
-            model = self._model_getter[name]
-        except KeyError:
-            raise KeyError("Model not present in set of value")
-        else:
-            return model
-
-    def add_model(self, model: Model):
-        """
-        Adds a new model to the collection if it does not already exist.
-
-        This method allows adding a model to the collection, provided that no model
-        with the same name exists in the current collection. If a model with the
-        same name is already present, an exception will be raised. Before adding
-        the model, it ensures the validity of the model by invoking its `check_model`
-        method.
-
-        Args:
-            model (Model): The model instance to be added to the collection.
-
-        Raises:
-            Exception: If a model with the same name is already present in the collection.
-        """
-        try:
-            self.get_model(model.name)
-        except KeyError:
-            model.check_model()
-            self._model_getter[model.name] = model
-        else:
-            raise Exception(f"Model {model.name} already in set of value")
-
 
 class _BasicFeatures:
     """
@@ -566,7 +566,7 @@ class _ModFuFeatures:
         self.forbidden = forbidden if forbidden is not None else set()
         self.neutral = neutral if neutral is not None else set()
         self.same_strand = same_strand
-        self._child_type = "Functional unit" if isinstance(self, Model) else "Family"
+        self._child_type = None
         self._child_getter = None
 
     @property
@@ -582,7 +582,7 @@ class _ModFuFeatures:
         for child in self.mandatory.union(self.accessory, self.forbidden, self.neutral):
             yield child
 
-    def _child_names(self, presence: str):
+    def _child_names(self, presence: str = None):
         """
         Retrieves the names of child objects based on their presence status.
 
@@ -594,7 +594,6 @@ class _ModFuFeatures:
         Returns:
             set: A set containing the names of child objects that match the given
                 presence status, or all child names if presence is None.
-        TODO: try to make presence optional
         """
         if presence is None:
             return {child.name for child in self._children}
@@ -652,25 +651,57 @@ class _ModFuFeatures:
             Exception: If no mandatory elements are present.
 
         """
+        if len(self.mandatory) == 0:
+            raise Exception(
+                f"There are no mandatory {self.child_type}. "
+                f"You should have at least one mandatory {self.child_type} with mandatory presence."
+            )
         if self.min_mandatory > len(self.mandatory) + sum(
             [child.duplicate for child in self._duplicate("mandatory")]
         ):
             raise Exception(
-                f"There are less mandatory {self._child_type} than the minimum mandatory"
+                f"There are less mandatory {self.child_type} than the minimum mandatory"
             )
-        if self.min_total > len(list(self._children)) + sum(
-            [child.duplicate for child in self._duplicate()]
+        if self.min_total > len(self.mandatory.union(self.accessory)) + sum(
+            [
+                child.duplicate
+                for child in set(self._duplicate("mandatory")).union(
+                    set(self._duplicate("accessory"))
+                )
+            ]
         ):
-            raise Exception(f"There are less {self._child_type} than the minimum total")
+            raise Exception(f"There are less {self.child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
             raise Exception(
-                f"Minimum mandatory {self._child_type} value is greater than minimum total."
+                f"Minimum mandatory {self.child_type} value is greater than minimum total."
             )
-        if len(self.mandatory) == 0:
-            raise Exception(
-                f"There are no mandatory {self._child_type}. "
-                f"You should have at least one mandatory {self._child_type} with mandatory presence."
-            )
+
+    @property
+    def child_type(self):
+        """
+        Determines the consistent child type for the instance.
+
+        Raises:
+            Exception: If the child type among children is inconsistent.
+
+        Returns:
+            Any: The consistent child type of the instance.
+        """
+        if self._child_type is not None:
+            return self._child_type
+        else:
+            child_type = None
+            for child in self._children:
+                curr_child_type = type(child).__name__
+                if child_type is None:
+                    child_type = curr_child_type
+                elif child_type != curr_child_type:
+                    raise TypeError(
+                        f"The child type is inconsistent. "
+                        f"It contains {child_type} and {curr_child_type}"
+                    )
+            self._child_type = child_type
+            return self._child_type
 
     def add(self, child: Union[FuncUnit, Family]):
         """
@@ -686,16 +717,23 @@ class _ModFuFeatures:
                 invoked before proceeding.
 
         """
-        if isinstance(child, FuncUnit):
-            child.check_func_unit()
+        if set(self._children) and type(child).__name__ != self.child_type:
+            raise TypeError(
+                f"The child type is inconsistent. Expected {self.child_type} but found {type(child).__name__}."
+            )
         if child.presence == "mandatory":
             self.mandatory.add(child)
         elif child.presence == "accessory":
             self.accessory.add(child)
         elif child.presence == "forbidden":
             self.forbidden.add(child)
-        else:
+        elif child.presence == "neutral":
             self.neutral.add(child)
+        else:
+            raise ValueError(
+                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
+            )
+        child._parent = self
 
     def _mk_child_getter(self):
         """
@@ -728,7 +766,7 @@ class _ModFuFeatures:
         try:
             child = self._child_getter[name]
         except KeyError:
-            raise KeyError(f"No such {self._child_type} with {name} in {type(self)}")
+            raise KeyError(f"No such {self._child_type} with name {name} in {type(self)}")
         else:
             return child
 
@@ -857,6 +895,17 @@ class Model(_BasicFeatures, _ModFuFeatures):
             Any: The duplicated items obtained from the filtering process.
         """
         yield from self._duplicate(filter_type)
+
+    def add(self, func_unit: FuncUnit):
+        """
+        Adds a functional unit to one of the sets in the instance based on its `presence`
+        attribute.
+
+        Args:
+            func_unit (FuncUnit): The functional to be added.
+        """
+        func_unit.check_func_unit()
+        super().add(func_unit)
 
     def get(self, name: str) -> Union[FuncUnit]:
         """
@@ -1047,7 +1096,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             AttributeError: If the `_parent` attribute is not set or does not exist.
 
         """
-        del self._parent
+        self._parent = None
 
     @property
     def families(self) -> Generator[Family, None, None]:
@@ -1058,6 +1107,16 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             Generator[Family, None, None]: A generator producing `Family` objects.
         """
         yield from self._children
+
+    def add(self, family: Family):
+        """
+        Adds a family to one of the sets in the instance based on its `presence`
+        attribute.
+
+        Args:
+            family (Family): The functional to be added.
+        """
+        super().add(family)
 
     def get(self, name: str) -> Union[Family]:
         """
@@ -1149,7 +1208,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             param_keys=fu_params,
         )
         self.window = (
-            data_fu["window"] if "window" in data_fu else self.transitivity + 1
+            data_fu["parameters"]["window"] if "window" in data_fu["parameters"] else self.transitivity + 1
         )
         for fam_dict in data_fu["families"]:
             family = Family()
@@ -1244,7 +1303,7 @@ class Family(_BasicFeatures, _FuFamFeatures):
         Raises:
             AttributeError: If the `_parent` attribute does not exist or cannot be deleted.
         """
-        del self._parent
+        self._parent = None
 
     @property
     def model(self) -> Model:
