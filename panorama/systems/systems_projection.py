@@ -220,7 +220,9 @@ def unit_projection(
     """
     pangenome_projection, organisms_projection = [], []
     matrix = get_gfs_matrix_combination(set(unit.models_families), gf2fam)
-    mdr_acc_gfs = {gf for gf in unit.models_families if gf.name in matrix.columns.values}
+    mdr_acc_gfs = {
+        gf for gf in unit.models_families if gf.name in matrix.columns.values
+    }
 
     for organism in unit.models_organisms:
         # Note that `unit.models_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
@@ -511,7 +513,7 @@ def project_pangenome_systems(
         ),
         ascending=[True, True, True, True, True],
         inplace=True,
-    )  # TODO Try to order system number numerically (done)
+    )
     organisms_projection.columns = org_cols_name
     organisms_projection.sort_values(
         by=[
