@@ -264,8 +264,8 @@ def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
     )
     group = metadata_df.groupby(["families", "protein_name"])
     metadata_df = group.first().assign(
-        secondary_name=group.agg(
-            {"secondary_name": lambda x: ",".join(set(x.dropna()))}
+        secondary_names=group.agg(
+            {"secondary_names": lambda x: ",".join(set(x.dropna()))}
         ).replace("", nan)
     )
     metadata_df = metadata_df.reset_index()

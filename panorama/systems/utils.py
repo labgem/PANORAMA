@@ -156,7 +156,7 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
             # if family.presence in ("mandatory", "accessory", "forbidden"):
             for meta_id, metadata in gf.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
                 if (metadata.protein_name in avail_name or ("secondary_name" in metadata.fields and
-                    any(name in avail_name for name in metadata.secondary_name.split(",")))):
+                    any(name in avail_name for name in metadata.secondary_names.split(",")))):
                     fam2meta_info[family] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
 
         sorted_fam2meta_info = sorted(fam2meta_info.items(), key=fam_sort_key)
@@ -217,7 +217,7 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
         annotations = [f.name for f in gene_fam2mod_fam[gf]]
         for i, fam in enumerate(model_fams):
             if fam in annotations:
-                score_matrix[i, j] = 1 
+                score_matrix[i, j] = 1
                 
     return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
@@ -262,8 +262,8 @@ def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Di
             if metadata is not None:
                 for meta in metadata.values():
                     meta2fam[source][meta.protein_name].add(gf)
-                    if "secondary_name" in meta.fields and meta.secondary_name != "":
-                        for secondary_name in meta.secondary_name.split(','):
+                    if "secondary_names" in meta.fields and meta.secondary_names != "":
+                        for secondary_name in meta.secondary_names.split(','):
                             meta2fam[source][secondary_name].add(gf)
     return meta2fam
 

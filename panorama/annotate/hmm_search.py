@@ -43,7 +43,7 @@ RESULT_COLUMNS = [
     "score",
     "bias",
     "i_e_value",
-    "secondary_name",
+    "secondary_names",
     "Description",
 ]
 METADATA_COLUMNS = [
