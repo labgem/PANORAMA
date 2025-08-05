@@ -158,6 +158,27 @@ class GeneFamily(Fam):
             )
         self._hmm = hmm
 
+    @property
+    def module(self):
+        """Return module belonging to the family
+
+        Returns:
+            panorama.region.Module: module belonging to the family
+        """
+        return self._module
+
+    @module.setter
+    def module(self, module):
+        """Set the modules belonging to the family
+
+        Args:
+            module (panorama.region.Module): module belonging to the family
+        """
+        from panorama.region import Module
+        if not isinstance(module, Module):
+            raise TypeError("Module object is expected to object of Module class")
+        self._module = module
+
     @staticmethod
     def recast(family: Fam) -> GeneFamily:
         """
