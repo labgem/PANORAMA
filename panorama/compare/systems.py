@@ -111,8 +111,8 @@ def compute_frr_edges(graph: nx.Graph, sys2pangenome: Dict[int, str], systemhash
         for sys1_hash, sys2_hash in sys_pair:
             if not graph.has_edge(sys1_hash, sys2_hash):
                 sys1, sys2 = systemhash2system[sys1_hash], systemhash2system[sys2_hash]
-                min_frr_models, max_frr_models, shared_models_gf = compute_frr(set(sys1.models_families),
-                                                                               set(sys2.models_families))
+                min_frr_models, max_frr_models, shared_models_gf = compute_frr(set(sys1.model_families),
+                                                                               set(sys2.model_families))
                 if min_frr_models > frr_models_cutoff[0] and max_frr_models > frr_models_cutoff[1]:
                     min_frr, max_frr, shared_gf = compute_frr(set(sys1.families), set(sys2.families))
                     if min_frr > frr_cutoff[0] and max_frr > frr_cutoff[1]:

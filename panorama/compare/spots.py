@@ -184,7 +184,7 @@ def add_systems_info(pangenomes, cs_graph):
         for system in pangenome.systems:
             spots = set()
             sys_names.add(system.name)
-            for gf in system.models_families:
+            for gf in system.model_families:
                 spots |= set(gf.spots)
             for spot in spots:
                 spot_hash = hash((spot.ID, pangenome.name))
