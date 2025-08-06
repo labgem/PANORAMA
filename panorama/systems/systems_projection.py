@@ -97,7 +97,7 @@ def project_unit_on_organisms(
     for cc in components:
         sys_state_in_org = "strict" if model_genes <= set(cc) else "split"
         for gene in cc:
-            if gene.family in unit.models_families:
+            if gene.family in unit.model_families:
                 metasource, metaid = unit.get_metainfo(gene.family)
                 metadata = gene.family.get_metadata(metasource, metaid)
                 avail_name = set(fam.name for fam in unit.functional_unit.families)
@@ -121,7 +121,7 @@ def project_unit_on_organisms(
 
             completeness = round(
                 len(set(g.family.name for g in model_genes))
-                / len(set(unit.models_families)),
+                / len(set(unit.model_families)),
                 2,
             )  # proportion of unit families in the organism
 
@@ -219,13 +219,13 @@ def unit_projection(
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
     pangenome_projection, organisms_projection = [], []
-    matrix = get_gfs_matrix_combination(set(unit.models_families), gf2fam)
+    matrix = get_gfs_matrix_combination(set(unit.model_families), gf2fam)
     mdr_acc_gfs = {
-        gf for gf in unit.models_families if gf.name in matrix.columns.values
+        gf for gf in unit.model_families if gf.name in matrix.columns.values
     }
 
-    for organism in unit.models_organisms:
-        # Note that `unit.models_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
+    for organism in unit.model_organisms:
+        # Note that `unit.model_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
         org_fam = {
             fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1
         }
@@ -264,6 +264,7 @@ def unit_projection(
             )  # line[-3] -> sys_state_in_org
             split_count = sum(1 for line in org_proj if line[-3] == "split")
             extended_count = len(org_proj) - strict_count - split_count
+            #TODO completness model
             completeness = len(org_fam) / len(unit)
             pangenome_projection.append(
                 pan_proj

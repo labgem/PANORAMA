@@ -13,6 +13,7 @@ from __future__ import annotations
 from typing import Dict, List, Set, Tuple, Union, Generator
 
 import numpy as np
+from functools import wraps
 
 # installed libraries
 from ppanggolin.metadata import MetaFeatures
@@ -23,6 +24,58 @@ from ppanggolin.region import Region
 from panorama.systems.models import Model, FuncUnit
 from panorama.geneFamily import GeneFamily
 from panorama.region import Module, Spot
+
+
+def check_instance_of_system_unit(method):
+    """
+    Decorator to ensure that a provided argument is an instance of SystemUnit.
+
+    Args:
+        method (Callable): The method to be wrapped in type-checking functionality.
+
+    Returns:
+        Callable: The wrapped method with type-checking functionality added.
+
+    Raises:
+        TypeError: If the `other` argument passed to the wrapped method is not an
+            instance of SystemUnit.
+    """
+    @wraps(method)
+    def wrapper(self, other):
+        if not isinstance(other, SystemUnit):
+            raise TypeError(
+                f"Another system unit is expected to be compared to the first one. "
+                f"You gave a {type(other)}"
+            )
+        return method(self, other)
+
+    return wrapper
+
+
+def check_instance_of_system(method):
+    """
+    Decorator to ensure that a provided argument is an instance of SystemUnit.
+
+    Args:
+        method (Callable): The method to be wrapped in type-checking functionality.
+
+    Returns:
+        Callable: The wrapped method with type-checking functionality added.
+
+    Raises:
+        TypeError: If the `other` argument passed to the wrapped method is not an
+            instance of SystemUnit.
+    """
+    @wraps(method)
+    def wrapper(self, other):
+        if not isinstance(other, System):
+            raise TypeError(
+                f"Another system is expected to be compared to the first one. "
+                f"You gave a {type(other)}"
+            )
+        return method(self, other)
+
+    return wrapper
 
 
 class SystemUnit(MetaFeatures):
@@ -64,7 +117,7 @@ class SystemUnit(MetaFeatures):
         self._regions_getter = {}
         self._spots_getter = {}
         self._modules_getter = {}
-        self._models_families = None
+        self._model_families = None
         self._system = None
         if gene_families:
             for family in gene_families:
@@ -154,6 +207,7 @@ class SystemUnit(MetaFeatures):
         """
         return self._system
 
+    # TODO add a deleter method
     @system.setter
     def system(self, system: System):
         """
@@ -164,8 +218,8 @@ class SystemUnit(MetaFeatures):
         Raises:
             AssertionError: The given system is not an object of class System.
         """
-        assert isinstance(system, System), "System must be an instance of System."
-
+        if not isinstance(system, System):
+            raise TypeError(f"System must be an instance of {System.__name__}.")
         self._system = system
 
     @property
@@ -245,10 +299,12 @@ class SystemUnit(MetaFeatures):
             AssertionError: If gene_family is not an instance of GeneFamily.
         """
         assert isinstance(gene_family, GeneFamily), "GeneFamily object is expected"
+        self._model_families = None  # New family added need to reset model families
         self._families_getter[gene_family.name] = gene_family
         self._families2metainfo[gene_family] = (annotation_source, metadata_id)
         # gene_family.add_system_unit(self)
 
+    @check_instance_of_system_unit
     def __eq__(self, other: SystemUnit) -> bool:
         """
         Determine if two SystemUnit instances are equal by comparing their sets of model gene families.
@@ -262,14 +318,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        # TODO change the instance check for a decorator
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
-        return set(self.models_families) == set(other.models_families)
+        return set(self.model_families) == set(other.model_families)
 
+    @check_instance_of_system_unit
     def is_superset(self, other: SystemUnit):
         """
         Check if this SystemUnit is a superset of another, i.e., contains all model gene families of the other unit.
@@ -283,14 +334,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
+        return set(self.model_families).issuperset(other.model_families)
 
-        return set(self.models_families).issuperset(other.models_families)
-
+    @check_instance_of_system_unit
     def is_subset(self, other: SystemUnit):
         """
         Check if this SystemUnit is a subset of another, i.e., contains all model gene families of the other unit.
@@ -304,14 +350,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
+        return set(self.model_families).issubset(other.model_families)
 
-        return set(self.models_families).issubset(other.models_families)
-
+    @check_instance_of_system_unit
     def intersection(self, other: SystemUnit) -> Set[GeneFamily]:
         """Return the set of model gene families common to both this SystemUnit and another.
 
@@ -324,13 +365,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
-        return set(other.models_families).intersection(set(self.models_families))
+        return set(other.model_families).intersection(set(self.model_families))
 
+    @check_instance_of_system_unit
     def difference(self, other: SystemUnit) -> Set[GeneFamily]:
         """
         Return the set of gene families present in this SystemUnit but not in another.
@@ -344,14 +381,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
-
         return set(self.families).difference(set(other.families))
 
+    @check_instance_of_system_unit
     def symmetric_difference(self, other: SystemUnit) -> Set[GeneFamily]:
         """
         Return the set of gene families that are present in exactly one of this SystemUnit or another.
@@ -365,14 +397,9 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
-
         return set(other.families).symmetric_difference(set(self.families))
 
+    @check_instance_of_system_unit
     def merge(self, other: SystemUnit):
         """
         Merge another SystemUnit into this one by adding gene families present in the other unit but not in this unit.
@@ -383,16 +410,11 @@ class SystemUnit(MetaFeatures):
         Raises:
             TypeError: If 'other' is not a SystemUnit instance.
         """
-        if not isinstance(other, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be merged with. You gave a {type(other)}"
-            )
-
         for family in other.difference(self):
             self.add_family(family)
             # family.del_system_unit(other.ID)
 
-    def _get_models_families(self) -> Set[GeneFamily]:
+    def _get_model_families(self) -> Set[GeneFamily]:
         """
         Return the set of gene families in this SystemUnit that are associated with a nonzero metadata ID.
 
@@ -406,16 +428,16 @@ class SystemUnit(MetaFeatures):
         return families
 
     @property
-    def models_families(self) -> Generator[GeneFamily, None, None]:
+    def model_families(self) -> Generator[GeneFamily, None, None]:
         """
         Return a generator yielding all gene families in this SystemUnit that are associated with a nonzero metadata ID.
 
         Yields:
             GeneFamily: Each gene family described in the model.
         """
-        if self._models_families is None:
-            self._models_families = self._get_models_families()
-        yield from self._models_families
+        if self._model_families is None:
+            self._model_families = self._get_model_families()
+        yield from self._model_families
 
     @property
     def nb_model_families(self) -> int:
@@ -425,7 +447,7 @@ class SystemUnit(MetaFeatures):
         Returns:
             int: Number of distinct model-associated gene families.
         """
-        return len(set(self.models_families))
+        return len(set(self.model_families))
 
     @property
     def organisms(self) -> Generator[Organism, None, None]:
@@ -451,7 +473,7 @@ class SystemUnit(MetaFeatures):
         return len(set(self.organisms))
 
     @property
-    def models_organisms(self) -> Generator[Organism, None, None]:
+    def model_organisms(self) -> Generator[Organism, None, None]:
         """
         Return a generator yielding all unique Organism instances present in at least `min_total` model gene families within this SystemUnit.
 
@@ -465,7 +487,7 @@ class SystemUnit(MetaFeatures):
         """
         matrix = np.zeros((self.nb_organisms, self.nb_model_families))
         org2idx = {org: i for i, org in enumerate(self.organisms)}
-        for j, family in enumerate(self.models_families):
+        for j, family in enumerate(self.model_families):
             for org in family.organisms:
                 matrix[org2idx[org], j] = 1
         idx2org = {i: org for org, i in org2idx.items()}
@@ -527,6 +549,8 @@ class SystemUnit(MetaFeatures):
         Raises:
             KeyError: If no module with the specified identifier is associated with this unit.
         """
+        if not self._modules_getter:
+            self._asso_modules()
         try:
             return self._modules_getter[identifier]
         except KeyError:
@@ -544,17 +568,16 @@ class SystemUnit(MetaFeatures):
         Raises:
             Exception: If a different module with the same identifier is already associated with this unit.
         """
-        try:
-            mod_in = self.get_module(identifier=module.ID)
-        except KeyError:
-            self._modules_getter[module.ID] = module
-            module.add_unit(self)
-        else:
+        mod_in = self._modules_getter.get(module.ID, None)
+        if mod_in:
             if module != mod_in:
                 raise Exception(
                     f"Another module with identifier {module.ID} is already associated with unit {self.ID}. "
                     f"This is unexpected. Please report an issue on our GitHub"
                 )
+        else:
+            self._modules_getter[module.ID] = module
+            module.add_unit(self)
 
     def _asso_modules(self):
         """
@@ -605,6 +628,8 @@ class SystemUnit(MetaFeatures):
         Raises:
             KeyError: If the spot is not associated with the unit.
         """
+        if not self._spots_getter:
+            self._make_spot_getter()
         try:
             return self._spots_getter[identifier]
         except KeyError:
@@ -622,16 +647,17 @@ class SystemUnit(MetaFeatures):
         Raises:
             Exception: If a different spot with the same identifier is already associated with the unit.
         """
-        try:
-            spot_in = self.get_spot(identifier=spot.ID)
-        except KeyError:
-            self._spots_getter[spot.ID] = spot
-        else:
+
+        spot_in = self._spots_getter.get(spot.ID, None)
+        if spot_in:
             if spot != spot_in:
                 raise Exception(
                     f"Another spot with identifier {spot.ID} is already associated with unit {self.ID}. "
                     f"This is unexpected. Please report an issue on our GitHub"
                 )
+        else:
+            self._spots_getter[spot.ID] = spot
+
 
     @property
     def regions(self) -> Generator[Region, None, None]:
@@ -781,7 +807,8 @@ class System(MetaFeatures):
         """
         if not isinstance(unit, SystemUnit):
             raise TypeError(
-                f"A SystemUnit object is expected. You provided a {type(unit)}."
+                f"Another system unit is expected to be compared to the first one. "
+                f"You gave a {type(unit)}"
             )
         if name in self._unit_getter and self[name] != unit:
             raise KeyError("A different system unit with the same name already exists.")
@@ -820,6 +847,7 @@ class System(MetaFeatures):
         except KeyError:
             raise KeyError(f"There isn't any unit with the name {name} in the system")
 
+    @check_instance_of_system
     def __eq__(self, other: System) -> bool:
         """
         Compares this system to another for structural equality.
@@ -833,10 +861,6 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be compared to the first one. You gave a {type(other)}"
-            )
         return set(self._unit_getter.items()) == set(other._unit_getter.items())
 
     @property
@@ -859,6 +883,7 @@ class System(MetaFeatures):
         """
         yield from self._unit_getter.values()
 
+    @check_instance_of_system_unit
     def add_unit(self, unit: SystemUnit):
         """
         Adds a system unit to the system, replacing it if it is a superset.
@@ -869,7 +894,6 @@ class System(MetaFeatures):
         Raises:
             AssertionError: If the provided unit is not a SystemUnit.
         """
-        assert isinstance(unit, SystemUnit), "SystemUnit object is expected"
         if unit.name in self._unit_getter:
             existing = self.get_unit(unit.name)
             if existing.is_superset(unit):
@@ -915,6 +939,19 @@ class System(MetaFeatures):
         return sum(len(unit) for unit in self.units)
 
     @property
+    def model_families(self) -> Generator[GeneFamily, None, None]:
+        """
+        Retrieves all gene families defined by the model.
+
+        Returns:
+            Generator[GeneFamily, None, None]: Model gene families.
+        """
+        model_families = set()
+        for unit in self.units:
+            model_families |= set(unit.model_families)
+        yield from model_families
+
+    @property
     def number_of_model_gene_families(self):
         """
         Computes the total number of model gene families in the system.
@@ -924,6 +961,7 @@ class System(MetaFeatures):
         """
         return sum(unit.nb_model_families for unit in self.units)
 
+    @check_instance_of_system
     def is_superset(self, other: System) -> bool:
         """
         Checks if this system contains all units of another.
@@ -937,16 +975,12 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be compared to the first one. You gave a {type(other)}"
-            )
-
         return all(
             any(self_unit.is_superset(other_unit) for self_unit in self.units)
             for other_unit in other.units
         )
 
+    @check_instance_of_system
     def is_subset(self, other: System) -> bool:
         """
         Checks if this system is fully contained in another.
@@ -960,16 +994,12 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be compared to the first one. You gave a {type(other)}"
-            )
-
         return all(
             any(other_unit.is_superset(self_unit) for other_unit in other.units)
             for self_unit in self.units
         )
 
+    @check_instance_of_system
     def intersection(self, other: System) -> Set[SystemUnit]:
         """
         Computes the common units between this system and another.
@@ -983,11 +1013,6 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be compared to the first one. You gave a {type(other)}"
-            )
-
         return {
             s_unit if s_unit.is_superset(o_unit) else o_unit
             for s_unit in self.units
@@ -995,6 +1020,7 @@ class System(MetaFeatures):
             if s_unit.is_superset(o_unit) or s_unit.is_subset(o_unit)
         }
 
+    @check_instance_of_system
     def merge(self, other: System):
         """
         Merges another system into this one by unifying their units.
@@ -1004,12 +1030,10 @@ class System(MetaFeatures):
 
         Raises:
             TypeError: If `other` is not a System.
+        Todo:
+            - Make the method create a new system. Maybe a static method ?
+            - Make merge method take multiple systems as input.
         """
-        if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be merged with the first one. You gave a {type(other)}"
-            )
-
         unit_names = {unit.name for unit in self.units}.union(
             {unit.name for unit in other.units}
         )
@@ -1021,19 +1045,6 @@ class System(MetaFeatures):
                     other_unit.system = self
                 else:
                     self.add_unit(other_unit)
-
-    @property
-    def models_families(self) -> Generator[GeneFamily, None, None]:
-        """
-        Retrieves all gene families defined by the model.
-
-        Returns:
-            Generator[GeneFamily, None, None]: Model gene families.
-        """
-        model_families = set()
-        for unit in self.units:
-            model_families |= set(unit.models_families)
-        yield from model_families
 
     @property
     def organisms(self) -> Generator[Organism, None, None]:
@@ -1049,7 +1060,7 @@ class System(MetaFeatures):
         yield from organisms
 
     @property
-    def models_organisms(self) -> Generator[Organism, None, None]:
+    def model_organisms(self) -> Generator[Organism, None, None]:
         """
         Retrieves organisms matching model gene family requirements.
 
@@ -1058,7 +1069,7 @@ class System(MetaFeatures):
         """
         model_organisms = set()
         for unit in self.units:
-            model_organisms |= set(unit.models_organisms)
+            model_organisms |= set(unit.model_organisms)
         yield from model_organisms
 
     def canonical_models(self) -> List[str]:
@@ -1070,6 +1081,7 @@ class System(MetaFeatures):
         """
         return self.model.canonical
 
+    @check_instance_of_system
     def add_canonical(self, system: System):
         """
         Adds a canonical system to this instance. If a similar canonical system already exists,
@@ -1077,6 +1089,9 @@ class System(MetaFeatures):
 
         Args:
             system (System): Canonical system to incorporate.
+        Todo:
+            - Manage if the new canonical system has canonical itself
+            - See if possible to remove the merge
         """
         already_in = False
         for canon in self.canonical:
@@ -1156,7 +1171,9 @@ class System(MetaFeatures):
                 return unit.get_module(identifier)
             except KeyError:
                 continue
-        raise KeyError(f"Module with ID {identifier} is not associated with system {self.ID}")
+        raise KeyError(
+            f"Module with ID {identifier} is not associated with system {self.ID}"
+        )
 
     @property
     def spots(self) -> Generator[Spot, None, None]:
@@ -1189,7 +1206,9 @@ class System(MetaFeatures):
                 return unit.get_spot(identifier)
             except KeyError:
                 continue
-        raise KeyError(f"Spot with ID {identifier} is not associated with system {self.ID}")
+        raise KeyError(
+            f"Spot with ID {identifier} is not associated with system {self.ID}"
+        )
 
     @property
     def regions(self) -> Generator[Region, None, None]:
@@ -1222,7 +1241,9 @@ class System(MetaFeatures):
                 return unit.get_region(name)
             except KeyError:
                 continue
-        raise KeyError(f"Region with name '{name}' is not associated with system {self.ID}")
+        raise KeyError(
+            f"Region with name '{name}' is not associated with system {self.ID}"
+        )
 
 
 class ClusterSystems:
@@ -1295,7 +1316,9 @@ class ClusterSystems:
             AssertionError: If the input is not a System instance.
             KeyError: If a system with the same key already exists in the cluster.
         """
-        assert isinstance(system, System), f"System object is expected, got {type(system)}"
+        assert isinstance(
+            system, System
+        ), f"System object is expected, got {type(system)}"
         self[(system.pangenome.name, system.ID)] = system
         system.cluster_id = self.ID
 
@@ -1314,7 +1337,9 @@ class ClusterSystems:
             AssertionError: If system_id is not a string.
             KeyError: If the system is not found in the cluster.
         """
-        assert isinstance(system_id, str), f"System id should be a string, got {type(system_id)}"
+        assert isinstance(
+            system_id, str
+        ), f"System id should be a string, got {type(system_id)}"
         return self[(pangenome_name, system_id)]
 
     @property

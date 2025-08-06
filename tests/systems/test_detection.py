@@ -212,7 +212,7 @@ def test_search_system_units(
     assert set(next(iter(detected_systems["fu1"])).families) == set(
         gfs[:7]
     )  # GF6 detected as context family (since transitivity = window = 1)
-    assert set(next(iter(detected_systems["fu1"])).models_families) == set(
+    assert set(next(iter(detected_systems["fu1"])).model_families) == set(
         gfs[:6]
     )  # model families of fu1
 
@@ -222,7 +222,7 @@ def test_search_system_units(
     gf2fam = simple_gf2fam.copy()  # copy to avoid modifying the original fixture
     del gf2fam[
         gfs[9]
-    ]  # remove GF9 corresponding to neutral family of fu1 to avoid addition to unit models_families
+    ]  # remove GF9 corresponding to neutral family of fu1 to avoid addition to unit model_families
 
     detected_systems = search_system_units(
         multi_unit_model, gf2fam, simple_fam2source, source="source1"
@@ -230,7 +230,7 @@ def test_search_system_units(
     assert set(next(iter(detected_systems["fu1"])).families) == set(
         gfs[:8]
     )  # GF7 is now detected as context family
-    assert set(next(iter(detected_systems["fu1"])).models_families) == set(
+    assert set(next(iter(detected_systems["fu1"])).model_families) == set(
         gfs[:6]
     )  # model families of fu1 remain the same
 
@@ -343,11 +343,11 @@ def test_search_system(
         families_to_metainfo={gf: ("source1", 1) for gf in gfs[:6]},
     )
 
-    # the first detected unit of the detected system corresponds to the expected unit (__eq__ based on models_families attribute only)
+    # the first detected unit of the detected system corresponds to the expected unit (__eq__ based on model_families attribute only)
     assert next(iter((set(detected_system.units)))) == expected_unit
-    assert set(expected_unit.models_families) == set(
+    assert set(expected_unit.model_families) == set(
         gfs[:6]
-    )  # ensure models_families is as expected
+    )  # ensure model_families is as expected
     assert (
         set(next(iter((set(detected_system.units)))).families)
         == set(expected_unit.families)
