@@ -99,7 +99,7 @@ class TestSystemUnit(TestFixture):
         assert unit._modules_getter == {}
         assert unit._model_families is None
         assert unit._system is None
-        assert unit.ID == 1  # Auto-generated ID
+        assert unit.ID == SystemUnit._id_counter  # Auto-generated ID
         assert len(unit) == 0  # No gene families initially
 
     @pytest.fixture
@@ -586,7 +586,7 @@ class TestSystem(TestFixture):
 
         assert system.model == model
         assert system.source == "test_source"
-        assert system.ID == "1"
+        assert system.ID == str(System._id_counter)
         assert system._unit_getter == {}
         assert system.canonical == set()
         assert system._fam2unit is None

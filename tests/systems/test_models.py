@@ -428,13 +428,16 @@ class TestModFuFeatures:
             presence = "mandatory"
 
         dumb_child = DumbChild()
-        mff = _ModFuFeatures(mandatory={child, dumb_child})
         child.presence = "mandatory"
+        mff = _ModFuFeatures(mandatory={child, dumb_child})
 
-        with pytest.raises(
-            TypeError,
-            match=f"The child type is inconsistent. It contains {type(child).__name__} and {type(dumb_child).__name__}",
-        ):
+        child_type = type(child).__name__
+        dumb_type = type(dumb_child).__name__
+
+        # Pattern that matches either order
+        pattern = f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+
+        with pytest.raises(TypeError, match=pattern):
             _ = mff.child_type
 
     def test_check_validation_success(self, children):
@@ -455,17 +458,17 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(min_mandatory=1, min_total=1)
 
         with pytest.raises(
-            Exception,
-            match=f"There are no mandatory {mff.child_type}. "
-            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+                Exception,
+                match=f"There are no mandatory {mff.child_type}. "
+                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
         mff.accessory = {child}
         with pytest.raises(
-            Exception,
-            match=f"There are no mandatory {mff.child_type}. "
-            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+                Exception,
+                match=f"There are no mandatory {mff.child_type}. "
+                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
@@ -473,8 +476,8 @@ class TestModFuFeatures:
         """Test exception when mandatory elements are less than the required minimum."""
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=2, min_total=2)
         with pytest.raises(
-            Exception,
-            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+                Exception,
+                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -490,8 +493,8 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=3, min_total=3)
         child.duplicate = 1
         with pytest.raises(
-            Exception,
-            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+                Exception,
+                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -506,8 +509,8 @@ class TestModFuFeatures:
             min_total=3,
         )
         with pytest.raises(
-            Exception,
-            match=f"There are less {mff.child_type} than the minimum total",
+                Exception,
+                match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -540,8 +543,8 @@ class TestModFuFeatures:
         child2.duplicate = 1
         child3.duplicate = 2
         with pytest.raises(
-            Exception,
-            match=f"There are less {mff.child_type} than the minimum total",
+                Exception,
+                match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -553,8 +556,8 @@ class TestModFuFeatures:
         child.presence = "mandatory"
         child.duplicate = 2
         with pytest.raises(
-            Exception,
-            match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
+                Exception,
+                match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
         ):
             mff._check()
 
@@ -583,8 +586,8 @@ class TestModFuFeatures:
         dumb_child = DumbChild()
         mff = _ModFuFeatures(mandatory={child})
         with pytest.raises(
-            TypeError,
-            match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
+                TypeError,
+                match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
         ):
             mff.add(dumb_child)
 
@@ -593,10 +596,10 @@ class TestModFuFeatures:
         mff = _ModFuFeatures()
         child.presence = "unexpected"
         with pytest.raises(
-            ValueError,
-            match=re.escape(
-                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
-            ),
+                ValueError,
+                match=re.escape(
+                    f"The child {child.name} does not have a valid presence attribute ({child.presence})."
+                ),
         ):
             mff.add(child)
 
@@ -619,7 +622,7 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory=set(children))
         name = "notin_child"
         with pytest.raises(
-            KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
+                KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
         ):
             mff.get(name)
 
