@@ -9,7 +9,7 @@ defined in the biological systems detection module, including validation functio
 Models, FuncUnit, Family classes and their interactions.
 """
 import re
-
+from typing import Generator, Set
 import pytest
 from pathlib import Path
 from unittest.mock import mock_open, patch
@@ -1215,7 +1215,7 @@ class TestModels:
         yield [func_unit1, func_unit2, func_unit3, func_unit4, func_unit5]
 
     @pytest.fixture
-    def model_set(self, func_units):
+    def model_set(self, func_units) -> Generator[Set[Model], None, None]:
         """Creates a fixture that yields a Model instance."""
         fu1, fu2, fu3, fu4, fu5 = func_units
         model1 = Model(name="model1")
@@ -1225,7 +1225,7 @@ class TestModels:
         model2 = Model(name="model2")
         model2.add(fu2)
         model2.add(fu4)
-        yield [model1, model2]
+        yield {model1, model2}
 
     def test_initialization_default(self):
         """Test Models initialization with default values."""
@@ -1233,19 +1233,14 @@ class TestModels:
 
         assert models._model_getter == {}
 
-    def test_initialization_with_models(self):
+    def test_initialization_with_models(self, model_set):
         """Test Models initialization with provided models."""
-        model1 = Model(name="model1")
-        model2 = Model(name="model2")
-        model_dict = {"model1": model1, "model2": model2}
+        model1, model2 = model_set
+        model_dict = {model1.name: model1, model2.name: model2}
 
-        models = Models({model1, model2})
-        models._model_getter = model_dict
+        models = Models(model_set)
 
-        model_names = [model.name for model in models.value]
-        assert "model1" in model_names
-        assert "model2" in model_names
-
+        assert models._model_getter == model_dict
         assert models.size == 2
 
     def test_value_success(self, model_set):
