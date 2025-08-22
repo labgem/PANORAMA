@@ -9,7 +9,7 @@ defined in the biological systems detection module, including validation functio
 Models, FuncUnit, Family classes and their interactions.
 """
 import re
-from typing import Generator, Set
+from typing import Generator, List
 import pytest
 from pathlib import Path
 from unittest.mock import mock_open, patch
@@ -1215,7 +1215,7 @@ class TestModels:
         yield [func_unit1, func_unit2, func_unit3, func_unit4, func_unit5]
 
     @pytest.fixture
-    def model_set(self, func_units) -> Generator[Set[Model], None, None]:
+    def model_list(self, func_units) -> Generator[List[Model], None, None]:
         """Creates a fixture that yields a Model instance."""
         fu1, fu2, fu3, fu4, fu5 = func_units
         model1 = Model(name="model1")
@@ -1225,7 +1225,7 @@ class TestModels:
         model2 = Model(name="model2")
         model2.add(fu2)
         model2.add(fu4)
-        yield {model1, model2}
+        yield [model1, model2]
 
     def test_initialization_default(self):
         """Test Models initialization with default values."""
@@ -1233,36 +1233,33 @@ class TestModels:
 
         assert models._model_getter == {}
 
-    def test_initialization_with_models(self, model_set):
+    def test_initialization_with_models(self, model_list):
         """Test Models initialization with provided models."""
-        model1, model2 = model_set
+        model1, model2 = model_list
         model_dict = {model1.name: model1, model2.name: model2}
 
-        models = Models(model_set)
+        models = Models(set(model_list))
 
         assert models._model_getter == model_dict
         assert models.size == 2
 
-    def test_value_success(self, model_set):
+    def test_value_success(self, model_list):
         """Test value property returns the list of models."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
         assert models.value == [model1, model2]
 
-    def test_func_units_property_success(self, func_units, model_set):
+    def test_func_units_property_success(self, func_units, model_list):
         """Test func_units property returns the list of functional units."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
 
         assert set(models.func_units) == set(func_units)
 
-    def test_func_units_to_model_success(self, func_units, model_set):
+    def test_func_units_to_model_success(self, func_units, model_list):
         """Test func_units_to_model method returns the model with the given functional unit."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
         fu1, fu2, fu3, fu4, fu5 = func_units
         expected_dict = {
             fu1: model1,
@@ -1273,11 +1270,9 @@ class TestModels:
         }
         assert models.func_units_to_model() == expected_dict
 
-    def test_families_property_success(self, families, model_set):
+    def test_families_property_success(self, families, model_list):
         """Test families property returns the list of families."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        models = Models(set(model_list))
         fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
 
         assert set(models.families) == {
@@ -1293,11 +1288,10 @@ class TestModels:
             fam10,
         }
 
-    def test_families_to_model_success(self, families, model_set):
+    def test_families_to_model_success(self, families, model_list):
         """Test families_to_model method returns the model with the given family."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
         fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
         expected_dict = {
             fam1: model1,
@@ -1313,11 +1307,10 @@ class TestModels:
         }
         assert models.families_to_model() == expected_dict
 
-    def test_get_model_success(self, model_set):
+    def test_get_model_success(self, model_list):
         """Test getting an existing model by name."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
 
         assert models.get_model(model1.name) == model1
         assert models.get_model(model2.name) == model2
@@ -1329,10 +1322,10 @@ class TestModels:
         with pytest.raises(KeyError, match="Model not present in set of value"):
             models.get_model("non_existent_model")
 
-    def test_add_model_success(self, model_set):
+    def test_add_model_success(self, model_list):
         """Test adding a new model successfully."""
         models = Models()
-        model1, model2 = model_set
+        model1, model2 = model_list
 
         models.add_model(model1)
         models.add_model(model2)
