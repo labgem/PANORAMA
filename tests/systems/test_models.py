@@ -1247,7 +1247,7 @@ class TestModels:
         """Test value property returns the list of models."""
         model1, model2 = model_list
         models = Models(set(model_list))
-        assert models.value == [model1, model2]
+        assert set(models.value) == set(model_list)
 
     def test_func_units_property_success(self, func_units, model_list):
         """Test func_units property returns the list of functional units."""
