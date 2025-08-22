@@ -786,39 +786,81 @@ class TestSystem(TestFixture):
         def create_superset_units() -> tuple[Set[int], Set[SystemUnit]]:
             """
             Generates a superset of units by augmenting the input units with new gene families.
-
-            Returns:
-                tuple[Set[int], Set[SystemUnit]]: A tuple containing:
-                    - A set of integer choices where each value represents the random decision for
-                      whether to modify the corresponding unit.
-                    - A set of `SystemUnit` objects representing the resulting superset of units,
-                      including the augmented units where applicable.
             """
             choices = set()
             new_units = set()
+            family_id_counter = 1000  # Use a counter to avoid ID collisions
+
             for unit in units:
                 choice = randint(0, 1)
                 choices.add(choice)
                 if choice:
-                    fam_id = randint(50, 100)
-                    new_gene_family = GeneFamily(fam_id, f"new_family_{fam_id}")
-                    fam2metainfo = unit._families2metainfo
+                    # Create a new unit with additional gene family
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    family_id_counter += 1
+
+                    # Copy the original families and metadata
+                    new_families = set(unit.families).union({new_gene_family})
+                    fam2metainfo = unit._families2metainfo.copy()
                     fam2metainfo[new_gene_family] = ("test_source", 1)
+
                     superset_unit = SystemUnit(
                         unit.functional_unit,
                         "test_source",
-                        gene_families=set(unit.families).union({new_gene_family}),
+                        gene_families=new_families,
                         families_to_metainfo=fam2metainfo,
                     )
                     new_units.add(superset_unit)
                 else:
-                    new_units.add(unit)
+                    # Create a copy of the original unit instead of reusing the same object
+                    original_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=set(unit.families),
+                        families_to_metainfo=unit._families2metainfo.copy(),
+                    )
+                    new_units.add(original_unit)
             return choices, new_units
 
+        # Ensure we have both modified and unmodified units
         do_create_superset_units = set()
         new_sys_units = set()
-        while do_create_superset_units != {0, 1}:
+        max_attempts = 100  # Prevent infinite loop
+        attempts = 0
+
+        while do_create_superset_units != {0, 1} and attempts < max_attempts:
             do_create_superset_units, new_sys_units = create_superset_units()
+            attempts += 1
+
+        # If we couldn't get both 0 and 1, force create a superset
+        if do_create_superset_units != {0, 1}:
+            # Manually ensure we have at least one augmented unit
+            new_sys_units = set()
+            family_id_counter = 1000
+
+            for i, unit in enumerate(units):
+                if i == 0:  # Force the first unit to be augmented
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    new_families = set(unit.families).union({new_gene_family})
+                    fam2metainfo = unit._families2metainfo.copy()
+                    fam2metainfo[new_gene_family] = ("test_source", 1)
+
+                    superset_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=new_families,
+                        families_to_metainfo=fam2metainfo,
+                    )
+                    new_sys_units.add(superset_unit)
+                else:
+                    # Copy the original unit
+                    original_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=set(unit.families),
+                        families_to_metainfo=unit._families2metainfo.copy(),
+                    )
+                    new_sys_units.add(original_unit)
 
         system1 = System(model, "test_source")
         system2 = System(model, "test_source")
@@ -1136,6 +1178,8 @@ class TestSystem(TestFixture):
     def test_get_spots_with_region(self, system, units):
         """Test getting spots from system unit."""
         spots = {Spot(i) for i in range(5)}
+        used_spots = set()  # Track which spots were actually assigned
+
         for unit in units:
             system.add_unit(unit)
             regions = []
@@ -1155,9 +1199,11 @@ class TestSystem(TestFixture):
                     spot = choice(tuple(spots))
                     rgp.spot = spot
                     spot.add(rgp)
+                    used_spots.add(spot)  # Track this spot as used
                     assigned_count += 1
 
             unit._spots_getter = {}
 
-        for spot in spots:
+        # Only test spots that were actually assigned
+        for spot in used_spots:
             assert system.get_spot(spot.ID) == spot
