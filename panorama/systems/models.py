@@ -176,7 +176,7 @@ class Models:
         Args:
             models (Set[Model], optional): A set of models to be used. Defaults to None.
         """
-        self._model_getter = {model.name for model in models} if models is not None else {}
+        self._model_getter = {model.name: model for model in models} if models is not None else {}
 
     def __iter__(self) -> Generator[Model, None, None]:
         """

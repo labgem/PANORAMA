@@ -99,7 +99,7 @@ class TestSystemUnit(TestFixture):
         assert unit._modules_getter == {}
         assert unit._model_families is None
         assert unit._system is None
-        assert unit.ID == 1  # Auto-generated ID
+        assert unit.ID == SystemUnit._id_counter  # Auto-generated ID
         assert len(unit) == 0  # No gene families initially
 
     @pytest.fixture
@@ -586,7 +586,7 @@ class TestSystem(TestFixture):
 
         assert system.model == model
         assert system.source == "test_source"
-        assert system.ID == "1"
+        assert system.ID == str(System._id_counter)
         assert system._unit_getter == {}
         assert system.canonical == set()
         assert system._fam2unit is None
@@ -786,39 +786,81 @@ class TestSystem(TestFixture):
         def create_superset_units() -> tuple[Set[int], Set[SystemUnit]]:
             """
             Generates a superset of units by augmenting the input units with new gene families.
-
-            Returns:
-                tuple[Set[int], Set[SystemUnit]]: A tuple containing:
-                    - A set of integer choices where each value represents the random decision for
-                      whether to modify the corresponding unit.
-                    - A set of `SystemUnit` objects representing the resulting superset of units,
-                      including the augmented units where applicable.
             """
             choices = set()
             new_units = set()
+            family_id_counter = 1000  # Use a counter to avoid ID collisions
+
             for unit in units:
                 choice = randint(0, 1)
                 choices.add(choice)
                 if choice:
-                    fam_id = randint(50, 100)
-                    new_gene_family = GeneFamily(fam_id, f"new_family_{fam_id}")
-                    fam2metainfo = unit._families2metainfo
+                    # Create a new unit with additional gene family
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    family_id_counter += 1
+
+                    # Copy the original families and metadata
+                    new_families = set(unit.families).union({new_gene_family})
+                    fam2metainfo = unit._families2metainfo.copy()
                     fam2metainfo[new_gene_family] = ("test_source", 1)
+
                     superset_unit = SystemUnit(
                         unit.functional_unit,
                         "test_source",
-                        gene_families=set(unit.families).union({new_gene_family}),
+                        gene_families=new_families,
                         families_to_metainfo=fam2metainfo,
                     )
                     new_units.add(superset_unit)
                 else:
-                    new_units.add(unit)
+                    # Create a copy of the original unit instead of reusing the same object
+                    original_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=set(unit.families),
+                        families_to_metainfo=unit._families2metainfo.copy(),
+                    )
+                    new_units.add(original_unit)
             return choices, new_units
 
+        # Ensure we have both modified and unmodified units
         do_create_superset_units = set()
         new_sys_units = set()
-        while do_create_superset_units != {0, 1}:
+        max_attempts = 100  # Prevent infinite loop
+        attempts = 0
+
+        while do_create_superset_units != {0, 1} and attempts < max_attempts:
             do_create_superset_units, new_sys_units = create_superset_units()
+            attempts += 1
+
+        # If we couldn't get both 0 and 1, force create a superset
+        if do_create_superset_units != {0, 1}:
+            # Manually ensure we have at least one augmented unit
+            new_sys_units = set()
+            family_id_counter = 1000
+
+            for i, unit in enumerate(units):
+                if i == 0:  # Force the first unit to be augmented
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    new_families = set(unit.families).union({new_gene_family})
+                    fam2metainfo = unit._families2metainfo.copy()
+                    fam2metainfo[new_gene_family] = ("test_source", 1)
+
+                    superset_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=new_families,
+                        families_to_metainfo=fam2metainfo,
+                    )
+                    new_sys_units.add(superset_unit)
+                else:
+                    # Copy the original unit
+                    original_unit = SystemUnit(
+                        unit.functional_unit,
+                        "test_source",
+                        gene_families=set(unit.families),
+                        families_to_metainfo=unit._families2metainfo.copy(),
+                    )
+                    new_sys_units.add(original_unit)
 
         system1 = System(model, "test_source")
         system2 = System(model, "test_source")
@@ -898,7 +940,7 @@ class TestSystem(TestFixture):
             system2.add_unit(unit)
 
         intersection = system1.intersection(system2)
-        assert units_list[1:-1] == list(intersection)
+        assert set(units_list[1:-1]) == set(intersection)
 
     def test_is_superset_subset_with_missing_units(self, model, units):
         """Test superset comparison between Systems, when one or more units are missing."""
@@ -1136,16 +1178,32 @@ class TestSystem(TestFixture):
     def test_get_spots_with_region(self, system, units):
         """Test getting spots from system unit."""
         spots = {Spot(i) for i in range(5)}
+        used_spots = set()  # Track which spots were actually assigned
+
         for unit in units:
             system.add_unit(unit)
-            for i in range(randint(1, 10)):
+            regions = []
+            for i in range(randint(4, 10)):
                 rgp = Region(name=f"RGP_{i}")
                 unit.add_region(rgp)
-                if randint(0, 1):
+                regions.append(rgp)
+
+            # Assign spots with higher probability, ensuring at least one
+            assigned_count = 0
+            for i, rgp in enumerate(regions):
+                # Last region must get a spot if none assigned yet
+                should_assign = (i == len(regions) - 1 and assigned_count == 0) or randint(
+                    0, 2
+                ) > 0  # 66% chance
+                if should_assign:
                     spot = choice(tuple(spots))
                     rgp.spot = spot
                     spot.add(rgp)
+                    used_spots.add(spot)  # Track this spot as used
+                    assigned_count += 1
+
             unit._spots_getter = {}
 
-        for spot in spots:
+        # Only test spots that were actually assigned
+        for spot in used_spots:
             assert system.get_spot(spot.ID) == spot

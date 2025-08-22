@@ -16,7 +16,6 @@ import numpy as np
 import pandas as pd
 import networkx as nx
 from ppanggolin.genome import Organism
-from ppanggolin.metadata import Metadata
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -120,61 +119,96 @@ def filter_local_context(
     return new_graph
 
 
-
-def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                       mod_fam2meta_source: Dict[str, str], func_unit: FuncUnit
-                       ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
+def check_for_families(
+    gene_families: Set[GeneFamily],
+    gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
+    mod_fam2meta_source: Dict[str, str],
+    func_unit: FuncUnit,
+) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
-    Checks gene families against a functional unit to identify forbidden, mandatory, and accessory family conditions.
+    Checks gene families against a functional unit to identify forbidden, mandatory, and accessory fam conditions.
 
     Args:
         gene_families (Set[GeneFamily]): Set of gene families to evaluate.
         gene_fam2mod_fam (Dict[GeneFamily, Set[Family]]): Mapping from gene families to associated model families.
-        mod_fam2meta_source (Dict[str, str]): Mapping from model family names to metadata sources.
+        mod_fam2meta_source (Dict[str, str]): Mapping from model fam names to metadata sources.
         func_unit (FuncUnit): Functional unit definition to check against.
 
     Returns:
         bool: True if forbidden conditions are encountered, False otherwise.
         dict: Dictionary mapping gene families to metadata information.
     """
+
     def fam_sort_key(item):
-        family, meta_info = item
-        score = meta_info[2]
-        presence_priority = {"forbidden": 0, "mandatory": 1, "accessory": 2, "neutral": 3}
-        presence_rank = presence_priority.get(family.presence, 4)
-        return (presence_rank, -score, family.name) # negative score for descending order
+        """
+        Determines the sorting key for an item based on specified criteria.
+
+        Args:
+            item (Tuple): A tuple consisting of a fam object and its associated metadata.
+
+        Returns:
+            Tuple: A tuple containing the rank based on presence, the negative score (for descending order),
+            and the name of the fam to determine sorting precedence.
+        """
+        fam, md_info = item
+        score = md_info[2]
+        presence_priority = {
+            "forbidden": 0,
+            "mandatory": 1,
+            "accessory": 2,
+            "neutral": 3,
+        }
+        presence_rank = presence_priority.get(fam.presence, 4)
+        return (
+            presence_rank,
+            -score,
+            fam.name,
+        )  # negative score for descending order
 
     gf2meta_info = {}
     mandatory_seen = set()
     accessory_seen = set()
-    
+
     for gf in sorted(gene_families, key=lambda n: len(gene_fam2mod_fam[n])):
         fam2meta_info = {}
         meta_info = None
         for family in gene_fam2mod_fam[gf]:
             avail_name = {family.name}.union(family.exchangeable)
-            # if family.presence in ("mandatory", "accessory", "forbidden"):
-            for meta_id, metadata in gf.get_metadata_by_source(mod_fam2meta_source[family.name]).items():
-                if (metadata.protein_name in avail_name or ("secondary_name" in metadata.fields and
-                    any(name in avail_name for name in metadata.secondary_names.split(",")))):
-                    fam2meta_info[family] = (mod_fam2meta_source[family.name], meta_id, metadata.score)
+            # if fam.presence in ("mandatory", "accessory", "forbidden"):
+            for meta_id, metadata in gf.get_metadata_by_source(
+                mod_fam2meta_source[family.name]
+            ).items():
+                if metadata.protein_name in avail_name or (
+                    "secondary_name" in metadata.fields
+                    and any(
+                        name in avail_name
+                        for name in metadata.secondary_names.split(",")
+                    )
+                ):
+                    fam2meta_info[family] = (
+                        mod_fam2meta_source[family.name],
+                        meta_id,
+                        metadata.score,
+                    )
 
         sorted_fam2meta_info = sorted(fam2meta_info.items(), key=fam_sort_key)
-        family, best_meta_info = sorted_fam2meta_info.pop(0)            
-        while sorted_fam2meta_info and family.name in mandatory_seen.union(accessory_seen):
-            family, meta_info = sorted_fam2meta_info.pop(0) 
-                
+        family, best_meta_info = sorted_fam2meta_info.pop(0)
+        while sorted_fam2meta_info and family.name in mandatory_seen.union(
+            accessory_seen
+        ):
+            family, meta_info = sorted_fam2meta_info.pop(0)
+
         if family.presence == "forbidden":
             return False, {}
-        
+
         if meta_info and family.presence in ("mandatory", "accessory"):
             best_meta_info = meta_info
-        
+
         if family.presence == "mandatory":
             mandatory_seen.add(family.name)
         elif family.presence == "accessory":
             accessory_seen.add(family.name)
-        
+
         gf2meta_info[gf] = best_meta_info[:-1]
 
         # Alternatively, if GFs are allowed to play multiple roles, discard sorting and simply collect all families
@@ -183,13 +217,17 @@ def check_for_families(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[Ge
         # mandatory_seen.update(md_families)
         # accessory_seen.update(acc_families)
 
-    if (len(mandatory_seen) >= func_unit.min_mandatory and 
-        len(mandatory_seen | accessory_seen) >= func_unit.min_total):
+    if (
+        len(mandatory_seen) >= func_unit.min_mandatory
+        and len(mandatory_seen | accessory_seen) >= func_unit.min_total
+    ):
         return True, gf2meta_info
     return False, {}
 
 
-def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]) -> pd.DataFrame:
+def get_gfs_matrix_combination(
+    gene_families: Set[GeneFamily], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]]
+) -> pd.DataFrame:
     """
     Build a matrix of association between gene families and families.
 
@@ -208,17 +246,17 @@ def get_gfs_matrix_combination(gene_families: Set[GeneFamily], gene_fam2mod_fam:
             if fam.presence in ["mandatory", "accessory"]:
                 gfs.add(gf)
                 model_fams.add(fam.name)
-                
+
     gfs = list(gfs)
     model_fams = list(model_fams)
     score_matrix = np.zeros((len(model_fams), len(gfs)), dtype=int)
 
     for j, gf in enumerate(gfs):
-        annotations = [f.name for f in gene_fam2mod_fam[gf]]
+        annots = [f.name for f in gene_fam2mod_fam[gf]]
         for i, fam in enumerate(model_fams):
-            if fam in annotations:
+            if fam in annots:
                 score_matrix[i, j] = 1
-                
+
     return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
 
@@ -235,16 +273,20 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
         Boolean: True if satisfied, False otherwise
     """
 
-    matrix = matrix.loc[matrix.sum(axis=1) > 0] # Remove all-zero rows
-    
+    matrix = matrix.loc[matrix.sum(axis=1) > 0]  # Remove all-zero rows
+
     mandatory_fams = {fam.name for fam in func_unit.mandatory}
     mandatory_count = sum(fam in mandatory_fams for fam in matrix.index)
 
-    return (mandatory_count >= func_unit.min_mandatory and
-            len(matrix) >= func_unit.min_total)
+    return (
+        mandatory_count >= func_unit.min_mandatory
+        and len(matrix) >= func_unit.min_total
+    )
 
 
-def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
+def get_metadata_to_families(
+    pangenome: Pangenome, sources: Iterable[str]
+) -> Dict[str, Dict[str, Set[GeneFamily]]]:
     """
     Retrieves a mapping of metadata to sets of gene families for each metadata source.
 
@@ -263,13 +305,14 @@ def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Di
                 for meta in metadata.values():
                     meta2fam[source][meta.protein_name].add(gf)
                     if "secondary_names" in meta.fields and meta.secondary_names != "":
-                        for secondary_name in meta.secondary_names.split(','):
+                        for secondary_name in meta.secondary_names.split(","):
                             meta2fam[source][secondary_name].add(gf)
     return meta2fam
 
 
-def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]) \
-        -> Tuple[Set[GeneFamily], Dict[GeneFamily, Set[Family]], Dict[str, str]]:
+def dict_families_context(
+    model: Model, annot2fam: Dict[str, Dict[str, Set[GeneFamily]]]
+) -> Tuple[Dict[GeneFamily, Set[Family]], Dict[str, str]]:
     """
     Retrieves all gene families associated with the families in the model.
 
@@ -285,27 +328,31 @@ def dict_families_context(model: Model, annot2fam: Dict[str, Dict[str, Set[GeneF
     gf2fam = defaultdict(set)
     fam2source = {}
     for fam_model in model.families:
-        exchangeables = fam_model.exchangeable | {fam_model.name} 
-        for exchangeable in exchangeables: 
+        exchangeable = fam_model.exchangeable | {fam_model.name}
+        for exchangeable in exchangeable:
             for source, annotation2families in annot2fam.items():
                 if exchangeable in annotation2families:
-                    
-                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
-                        logging.getLogger("PANORAMA").warning(f"Protein annotation {fam_model.name} is encountered in multiple sources." 
-                                                               "All sources will be used, but only first one will be associated with " 
-                                                               "the model family.")
+
+                    if (
+                        fam_model.name in fam2source
+                        and fam2source[fam_model.name] != source
+                    ):
+                        logging.getLogger("PANORAMA").warning(
+                            f"Protein annotation {fam_model.name} is encountered in multiple sources."
+                            "All sources will be used, but only first one will be associated with "
+                            "the model family."
+                        )
                     else:
                         fam2source[fam_model.name] = source
-                    
+
                     for gf in annotation2families[exchangeable]:
-                        gf2fam[gf].add(fam_model)     
+                        gf2fam[gf].add(fam_model)
 
     return gf2fam, fam2source
 
 
-
-
 # The following functions are not used anywhere anymore
+
 
 def bitset_from_row(row) -> int:
     """
@@ -345,7 +392,7 @@ def search_comb(
 
     covered_mandatory = 0
     for family_index, bitset in enumerate(mandatory_bitsets):
-        covering_gfs = set(ind for ind in comb if (1 << ind) & bitset)
+        covering_gfs = {ind for ind in comb if (1 << ind) & bitset}
         if len(covering_gfs) >= 1:
             for gf in covering_gfs:
                 gf2fam[gf] = family_index
@@ -357,7 +404,7 @@ def search_comb(
     for family_index, bitset in enumerate(
         accessory_bitsets, start=len(mandatory_bitsets)
     ):
-        covering_gfs = set(ind for ind in comb if (1 << ind) & bitset)
+        covering_gfs = {ind for ind in comb if (1 << ind) & bitset}
         if len(covering_gfs) >= 1:
             for gf in covering_gfs:
                 gf2fam[gf] = family_index
@@ -368,9 +415,11 @@ def search_comb(
     return gf2fam, covered_mandatory, covered_accessory
 
 
-def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[Set[str], Dict[str, str]]]:
+def find_combinations(
+    matrix: pd.DataFrame, func_unit: FuncUnit
+) -> List[Tuple[Set[str], Dict[str, str]]]:
     """
-    Search working combination of gene families that respect families presence absence model rules
+    Search for a working combination of gene families that respect families' presence absence model rules
 
     Args:
         matrix: The association matrix between gene families and families
@@ -383,22 +432,37 @@ def find_combinations(matrix: pd.DataFrame, func_unit: FuncUnit) -> List[Tuple[S
     """
 
     mandatory = {fam.name for fam in func_unit.mandatory}
-    mandatory_indices = [i for i, fam in enumerate(matrix.index.values) if fam in mandatory]
+    mandatory_indices = [
+        i for i, fam in enumerate(matrix.index.values) if fam in mandatory
+    ]
 
-    if len(mandatory_indices) < func_unit.min_mandatory or matrix.shape[0] < func_unit.min_total:
+    if (
+        len(mandatory_indices) < func_unit.min_mandatory
+        or matrix.shape[0] < func_unit.min_total
+    ):
         return []
 
     bitsets = [bitset_from_row(matrix.iloc[i, :]) for i in range(matrix.shape[0])]
     mandatory_bitsets = [bitsets[i] for i in mandatory_indices]
-    accessory_bitsets = [bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices]
+    accessory_bitsets = [
+        bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices
+    ]
 
     solutions = []
     for size in sorted(range(func_unit.min_total, matrix.shape[1] + 1), reverse=True):
         for comb in combinations(range(matrix.shape[1]), size):
-            gf2fam, covered_mandatory, covered_accessory = search_comb(comb, mandatory_bitsets, accessory_bitsets)
-            if (covered_mandatory >= func_unit.min_mandatory and
-                    covered_mandatory + covered_accessory >= func_unit.min_total):
-                solutions.append(({matrix.columns[i] for i in comb},
-                                  {matrix.columns[j]: matrix.index[i] for j, i in gf2fam.items()}))
+            gf2fam, covered_mandatory, covered_accessory = search_comb(
+                comb, mandatory_bitsets, accessory_bitsets
+            )
+            if (
+                covered_mandatory >= func_unit.min_mandatory
+                and covered_mandatory + covered_accessory >= func_unit.min_total
+            ):
+                solutions.append(
+                    (
+                        {matrix.columns[i] for i in comb},
+                        {matrix.columns[j]: matrix.index[i] for j, i in gf2fam.items()},
+                    )
+                )
 
     return solutions

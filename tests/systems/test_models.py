@@ -9,7 +9,7 @@ defined in the biological systems detection module, including validation functio
 Models, FuncUnit, Family classes and their interactions.
 """
 import re
-
+from typing import Generator, List
 import pytest
 from pathlib import Path
 from unittest.mock import mock_open, patch
@@ -428,13 +428,16 @@ class TestModFuFeatures:
             presence = "mandatory"
 
         dumb_child = DumbChild()
-        mff = _ModFuFeatures(mandatory={child, dumb_child})
         child.presence = "mandatory"
+        mff = _ModFuFeatures(mandatory={child, dumb_child})
 
-        with pytest.raises(
-            TypeError,
-            match=f"The child type is inconsistent. It contains {type(child).__name__} and {type(dumb_child).__name__}",
-        ):
+        child_type = type(child).__name__
+        dumb_type = type(dumb_child).__name__
+
+        # Pattern that matches either order
+        pattern = f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+
+        with pytest.raises(TypeError, match=pattern):
             _ = mff.child_type
 
     def test_check_validation_success(self, children):
@@ -455,17 +458,17 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(min_mandatory=1, min_total=1)
 
         with pytest.raises(
-            Exception,
-            match=f"There are no mandatory {mff.child_type}. "
-            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+                Exception,
+                match=f"There are no mandatory {mff.child_type}. "
+                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
         mff.accessory = {child}
         with pytest.raises(
-            Exception,
-            match=f"There are no mandatory {mff.child_type}. "
-            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+                Exception,
+                match=f"There are no mandatory {mff.child_type}. "
+                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
@@ -473,8 +476,8 @@ class TestModFuFeatures:
         """Test exception when mandatory elements are less than the required minimum."""
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=2, min_total=2)
         with pytest.raises(
-            Exception,
-            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+                Exception,
+                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -490,8 +493,8 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=3, min_total=3)
         child.duplicate = 1
         with pytest.raises(
-            Exception,
-            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+                Exception,
+                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -506,8 +509,8 @@ class TestModFuFeatures:
             min_total=3,
         )
         with pytest.raises(
-            Exception,
-            match=f"There are less {mff.child_type} than the minimum total",
+                Exception,
+                match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -540,8 +543,8 @@ class TestModFuFeatures:
         child2.duplicate = 1
         child3.duplicate = 2
         with pytest.raises(
-            Exception,
-            match=f"There are less {mff.child_type} than the minimum total",
+                Exception,
+                match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -553,8 +556,8 @@ class TestModFuFeatures:
         child.presence = "mandatory"
         child.duplicate = 2
         with pytest.raises(
-            Exception,
-            match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
+                Exception,
+                match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
         ):
             mff._check()
 
@@ -583,8 +586,8 @@ class TestModFuFeatures:
         dumb_child = DumbChild()
         mff = _ModFuFeatures(mandatory={child})
         with pytest.raises(
-            TypeError,
-            match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
+                TypeError,
+                match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
         ):
             mff.add(dumb_child)
 
@@ -593,10 +596,10 @@ class TestModFuFeatures:
         mff = _ModFuFeatures()
         child.presence = "unexpected"
         with pytest.raises(
-            ValueError,
-            match=re.escape(
-                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
-            ),
+                ValueError,
+                match=re.escape(
+                    f"The child {child.name} does not have a valid presence attribute ({child.presence})."
+                ),
         ):
             mff.add(child)
 
@@ -619,7 +622,7 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory=set(children))
         name = "notin_child"
         with pytest.raises(
-            KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
+                KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
         ):
             mff.get(name)
 
@@ -1212,7 +1215,7 @@ class TestModels:
         yield [func_unit1, func_unit2, func_unit3, func_unit4, func_unit5]
 
     @pytest.fixture
-    def model_set(self, func_units):
+    def model_list(self, func_units) -> Generator[List[Model], None, None]:
         """Creates a fixture that yields a Model instance."""
         fu1, fu2, fu3, fu4, fu5 = func_units
         model1 = Model(name="model1")
@@ -1230,41 +1233,33 @@ class TestModels:
 
         assert models._model_getter == {}
 
-    def test_initialization_with_models(self):
+    def test_initialization_with_models(self, model_list):
         """Test Models initialization with provided models."""
-        model1 = Model(name="model1")
-        model2 = Model(name="model2")
-        model_dict = {"model1": model1, "model2": model2}
+        model1, model2 = model_list
+        model_dict = {model1.name: model1, model2.name: model2}
 
-        models = Models({model1, model2})
-        models._model_getter = model_dict
+        models = Models(set(model_list))
 
-        model_names = [model.name for model in models.value]
-        assert "model1" in model_names
-        assert "model2" in model_names
-
+        assert models._model_getter == model_dict
         assert models.size == 2
 
-    def test_value_success(self, model_set):
+    def test_value_success(self, model_list):
         """Test value property returns the list of models."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
-        assert models.value == [model1, model2]
+        model1, model2 = model_list
+        models = Models(set(model_list))
+        assert set(models.value) == set(model_list)
 
-    def test_func_units_property_success(self, func_units, model_set):
+    def test_func_units_property_success(self, func_units, model_list):
         """Test func_units property returns the list of functional units."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
 
         assert set(models.func_units) == set(func_units)
 
-    def test_func_units_to_model_success(self, func_units, model_set):
+    def test_func_units_to_model_success(self, func_units, model_list):
         """Test func_units_to_model method returns the model with the given functional unit."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
         fu1, fu2, fu3, fu4, fu5 = func_units
         expected_dict = {
             fu1: model1,
@@ -1275,11 +1270,9 @@ class TestModels:
         }
         assert models.func_units_to_model() == expected_dict
 
-    def test_families_property_success(self, families, model_set):
+    def test_families_property_success(self, families, model_list):
         """Test families property returns the list of families."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        models = Models(set(model_list))
         fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
 
         assert set(models.families) == {
@@ -1295,11 +1288,10 @@ class TestModels:
             fam10,
         }
 
-    def test_families_to_model_success(self, families, model_set):
+    def test_families_to_model_success(self, families, model_list):
         """Test families_to_model method returns the model with the given family."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
         fam1, fam2, fam3, fam4, fam5, fam6, fam7, fam8, fam9, fam10 = families
         expected_dict = {
             fam1: model1,
@@ -1315,11 +1307,10 @@ class TestModels:
         }
         assert models.families_to_model() == expected_dict
 
-    def test_get_model_success(self, model_set):
+    def test_get_model_success(self, model_list):
         """Test getting an existing model by name."""
-        model1, model2 = model_set
-        models = Models()
-        models._model_getter = {model1.name: model1, model2.name: model2}
+        model1, model2 = model_list
+        models = Models(set(model_list))
 
         assert models.get_model(model1.name) == model1
         assert models.get_model(model2.name) == model2
@@ -1331,10 +1322,10 @@ class TestModels:
         with pytest.raises(KeyError, match="Model not present in set of value"):
             models.get_model("non_existent_model")
 
-    def test_add_model_success(self, model_set):
+    def test_add_model_success(self, model_list):
         """Test adding a new model successfully."""
         models = Models()
-        model1, model2 = model_set
+        model1, model2 = model_list
 
         models.add_model(model1)
         models.add_model(model2)

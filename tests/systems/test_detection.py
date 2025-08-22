@@ -358,7 +358,7 @@ def test_search_system(
 def test_search_systems(simple_gfs, multi_unit_model, simple_pangenome):
     """Tests that the function correctly identifies systems in the pangenome across different models."""
     # Executes all the previous methods, and all the methods in utils, given the model and pangenome as arguments
-    models = Models(models={multi_unit_model.name: multi_unit_model})
+    models = Models(models={multi_unit_model})
 
     # No return value; systems added to the pangenome
     assert (
