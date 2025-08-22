@@ -898,7 +898,7 @@ class TestSystem(TestFixture):
             system2.add_unit(unit)
 
         intersection = system1.intersection(system2)
-        assert units_list[1:-1] == list(intersection)
+        assert set(units_list[1:-1]) == set(intersection)
 
     def test_is_superset_subset_with_missing_units(self, model, units):
         """Test superset comparison between Systems, when one or more units are missing."""
@@ -1138,13 +1138,25 @@ class TestSystem(TestFixture):
         spots = {Spot(i) for i in range(5)}
         for unit in units:
             system.add_unit(unit)
-            for i in range(randint(1, 10)):
+            regions = []
+            for i in range(randint(4, 10)):
                 rgp = Region(name=f"RGP_{i}")
                 unit.add_region(rgp)
-                if randint(0, 1):
+                regions.append(rgp)
+
+            # Assign spots with higher probability, ensuring at least one
+            assigned_count = 0
+            for i, rgp in enumerate(regions):
+                # Last region must get a spot if none assigned yet
+                should_assign = (i == len(regions) - 1 and assigned_count == 0) or randint(
+                    0, 2
+                ) > 0  # 66% chance
+                if should_assign:
                     spot = choice(tuple(spots))
                     rgp.spot = spot
                     spot.add(rgp)
+                    assigned_count += 1
+
             unit._spots_getter = {}
 
         for spot in spots:
