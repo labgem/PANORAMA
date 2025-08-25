@@ -400,7 +400,7 @@ def create_spots_graph(
     return spots_graph, spots2borders, spots2pangenome, spothash2spot
 
 
-def compute_frr_edges(
+def compute_gfrr_edges(
     graph: nx.Graph,
     spots2borders: Dict[int, Set[GeneFamily]],
     spots2pangenome: Dict[int, str],
@@ -421,8 +421,8 @@ def compute_frr_edges(
         spots2borders (Dict[int, Set[GeneFamily]]): Mapping of spot hashes to
                                                    their bordering gene families.
         spots2pangenome (Dict[int, str]): Mapping of spot hashes to pangenome names.
-        min_gfrr_cutoff (float): Minimum threshold for min_frr metric. Default: 0.5.
-        max_gfrr_cutoff (float): Minimum threshold for max_frr metric. Default: 0.8.
+        min_gfrr_cutoff (float): Minimum threshold for min_gfrr metric. Default: 0.5.
+        max_gfrr_cutoff (float): Minimum threshold for max_gfrr metric. Default: 0.8.
         disable_bar (bool): Whether to disable the progress bar. Default: False.
     """
     # Generate all possible pairs of spots from different pangenomes
@@ -467,7 +467,7 @@ def compute_frr_edges(
 
             # Compute GFRR metrics between the two spots
             try:
-                min_frr, max_frr, shared_count = compute_gfrr(
+                min_gfrr, max_gfrr, shared_count = compute_gfrr(
                     border1_families, border2_families
                 )
             except ValueError as e:
@@ -478,21 +478,21 @@ def compute_frr_edges(
                 continue
 
             # Add edge if both GFRR thresholds are satisfied
-            if min_frr >= min_gfrr_cutoff and max_frr >= max_gfrr_cutoff:
+            if min_gfrr >= min_gfrr_cutoff and max_gfrr >= max_gfrr_cutoff:
                 graph.add_edge(
                     spot1,
                     spot2,
-                    min_frr=min_frr,
-                    max_frr=max_frr,
+                    min_gfrr=min_gfrr,
+                    max_gfrr=max_gfrr,
                     shared_families=shared_count,
-                    weight=max_frr,  # Use max_frr as the default edge weight
+                    weight=max_gfrr,  # Use max_gfrr as the default edge weight
                 )
                 edges_added += 1
 
                 logger.debug(
                     f"Added edge: {spots2pangenome[spot1]} spot {spot1} <-> "
                     f"{spots2pangenome[spot2]} spot {spot2} "
-                    f"(min_frr={min_frr:.3f}, max_frr={max_frr:.3f})"
+                    f"(min_gfrr={min_gfrr:.3f}, max_gfrr={max_gfrr:.3f})"
                 )
 
             pbar.update()
@@ -1176,7 +1176,7 @@ def write_conserved_spots(
 def compare_spots(
     pangenomes: Pangenomes,
     dup_margin: float = 0.05,
-    gfrr_metrics: str = "min_frr",
+    gfrr_metrics: str = "min_gfrr",
     gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
     threads: int = 1,
     lock: Optional[Lock] = None,
@@ -1193,8 +1193,8 @@ def compare_spots(
     Args:
         pangenomes (Pangenomes): Collection of pangenomes to analyze.
         dup_margin (float): Minimum ratio for multigenic family detection. Default: 0.05.
-        gfrr_metrics (str): GFRR metric for clustering ('min_frr' or 'max_frr'). Default: 'min_frr'.
-        gfrr_cutoff (Tuple[float, float]): Thresholds for (min_frr, max_frr). Default: (0.8, 0.8).
+        gfrr_metrics (str): GFRR metric for clustering ('min_gfrr' or 'max_gfrr'). Default: 'min_gfrr'.
+        gfrr_cutoff (Tuple[float, float]): Thresholds for (min_gfrr, max_gfrr). Default: (0.8, 0.8).
         threads (int): Number of threads for parallel processing. Default: 1.
         lock (Optional[Lock]): Thread synchronization lock. Default: None.
         disable_bar (bool): Whether to disable progress bars. Default: False.
@@ -1207,12 +1207,12 @@ def compare_spots(
         - Modifies the returned graph by adding cluster assignments and removing isolated nodes
 
     Raises:
-        ValueError: If gfrr_metrics is not 'min_frr' or 'max_frr'.
+        ValueError: If gfrr_metrics is not 'min_gfrr' or 'max_gfrr'.
         RuntimeError: If clustering fails or produces no valid clusters.
     """
-    if gfrr_metrics not in ["min_frr", "max_frr"]:
+    if gfrr_metrics not in ["min_gfrr", "max_gfrr"]:
         raise ValueError(
-            f"Invalid gfrr_metrics: {gfrr_metrics}. Must be 'min_frr' or 'max_frr'"
+            f"Invalid gfrr_metrics: {gfrr_metrics}. Must be 'min_gfrr' or 'max_gfrr'"
         )
 
     logger.info(
@@ -1231,14 +1231,8 @@ def compare_spots(
 
     # Step 2: Compute GFRR-based edges between spots
     logger.info("Step 2: Computing GFRR-based similarity edges")
-    compute_frr_edges(
-        spots_graph,
-        spots2borders,
-        spots2pangenome,
-        min_gfrr_cutoff=gfrr_cutoff[0],
-        max_gfrr_cutoff=gfrr_cutoff[1],
-        disable_bar=disable_bar,
-    )
+    compute_gfrr_edges(spots_graph, spots2borders, spots2pangenome, min_gfrr_cutoff=gfrr_cutoff[0],
+                       max_gfrr_cutoff=gfrr_cutoff[1], disable_bar=disable_bar)
 
     edges_count = len(spots_graph.edges)
     logger.info(f"Added {edges_count} similarity edges to spots graph")
@@ -1322,19 +1316,41 @@ def compare_spots(
     return spots_graph
 
 
-def launch(args):
+def launch(args: argparse.Namespace) -> None:
     """
-    Launch functions to align gene families from pangenomes
+    Main entry point for conserved spots comparison analysis.
+
+    This function orchestrates the complete workflow for identifying and analyzing
+    conserved spots across multiple pangenomes. It handles argument validation,
+    resource setup, analysis execution, and results output.
 
     Args:
-        args: argument given in CLI
-    """
-    need_info = check_compare_spots_args(args)
+        args (argparse.Namespace): Parsed command-line arguments containing all
+                                 configuration parameters for the analysis.
 
+    Raises:
+        Various exceptions from underlying functions for validation, processing, or I/O errors.
+    """
+    logger.info("Starting conserved spots comparison analysis")
+
+    # Step 1: Validate arguments and determine data requirements
+    try:
+        need_info = check_compare_spots_args(args)
+        logger.info("Arguments validation successful")
+    except argparse.ArgumentError as e:
+        logger.error(f"Argument validation failed: {e}")
+        raise
+
+    # Step 2: Load pangenomes and set up resources
+    logger.info("Loading pangenomes and setting up analysis resources")
     pangenomes, tmpdir, _, lock = common_launch(args, check_pangenome_cs, need_info)
 
+    # Step 3: Create an output directory
     output = mkdir(args.output, force=args.force)
+    logger.info(f"Analysis results will be written to: {output}")
 
+    # Step 4: Perform conserved spots analysis
+    logger.info("Performing conserved spots identification and clustering")
     spots_graph = compare_spots(
         pangenomes=pangenomes,
         dup_margin=args.dup_margin,
@@ -1342,106 +1358,164 @@ def launch(args):
         gfrr_cutoff=args.frr_cutoff,
         threads=args.cpus,
         lock=lock,
-        disable_bar=args.disable_prog_bar,
+        disable_bar=args.disable_prog_bar
     )
 
+    # Step 5: Write conserved spots results
+    logger.info("Writing conserved spots results to files")
     write_conserved_spots(
         pangenomes,
         output,
         cs_graph=spots_graph,
         graph_formats=args.graph_formats,
         force=args.force,
-        disable_bar=args.disable_prog_bar,
+        disable_bar=args.disable_prog_bar
     )
 
+    # Step 6: Perform systems linkage analysis if requested
     if args.systems:
+        logger.info("Performing systems linkage analysis with conserved spots")
         graph_systems_link_with_conserved_spots(
             pangenomes=pangenomes,
             output=output,
             graph_formats=args.graph_formats,
             threads=args.cpus,
             lock=lock,
-            disable_bar=args.disable_prog_bar,
+            disable_bar=args.disable_prog_bar
         )
+    else:
+        logger.info("Systems analysis not requested - skipping systems linkage")
+
+    # Step 7: Clean up temporary files
     if not args.keep_tmp:
+        logger.info(f"Cleaning up temporary directory: {tmpdir}")
         rmtree(tmpdir, ignore_errors=True)
+    else:
+        logger.info(f"Temporary files preserved in: {tmpdir}")
+
+    logger.info("Conserved spots comparison analysis completed successfully")
 
 
-def subparser(sub_parser) -> argparse.ArgumentParser:
+def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
     """
-    Subparser to launch PANORAMA in the Command line
+    Create a subparser for conserved spots comparison command.
+
+    This function configures the command-line interface for the conserved spots
+    comparison functionality, setting up the argument parser with appropriate
+    description and configuration.
 
     Args:
-        sub_parser: sub_parser for cluster command
+        sub_parser (argparse._SubParsersAction): Parent subparser to add this command to.
 
     Returns:
-        argparse.ArgumentParser: parser arguments for cluster command
+        argparse.ArgumentParser: Configured parser for the compare_spots command.
+
+    Example:
+        >>> main_parser = argparse.ArgumentParser()
+        >>> subparsers = main_parser.add_subparsers()
+        >>> compare_parser = subparser(subparsers)
     """
     parser = sub_parser.add_parser(
-        "compare_spots", description="Comparison of systems among pangenomes"
+        "compare_spots",
+        description="Compare and identify conserved spots across multiple pangenomes. "
+                    "This analysis identifies genomic regions that are conserved "
+                    "across different pangenomes based on gene family similarity "
+                    "and optionally analyzes systems relationships within these regions.",
+        help="Compare spots across pangenomes to identify conserved regions"
     )
 
+    # Configure all arguments for this subcommand
     parser_comparison_spots(parser)
     return parser
 
 
-def parser_comparison_spots(parser):
+def parser_comparison_spots(parser: argparse.ArgumentParser) -> None:
     """
-    Add argument to parser for system comparison command
+    Configure argument parser for conserved spots comparison command.
+
+    This function adds all necessary command-line arguments for conserved spots
+    comparison, including core comparison parameters, systems analysis options,
+    and various output configurations.
 
     Args:
-        parser: parser for cluster argument
+        parser (argparse.ArgumentParser): Parser to configure with comparison arguments.
     """
+    # Get base comparison arguments (required, compare_opt, optional)
     _, compare_opt, optional = parser_comparison(parser)
+
+    # Add spots-specific comparison options
     compare_opt.add_argument(
-        "--frr_metrics",
+        '--gfrr_metrics',
         required=False,
         type=str,
-        default="min_frr",
-        choices=["min_frr", "max_frr"],
-        help="Metrics used to computed spots cluster.",
+        default="min_gfrr",
+        choices=["min_gfrr", "max_gfrr"],
+        help="GFRR metric used for spots clustering. "
+             "'min_gfrr': conservative metric (shared/smaller_set), "
+             "'max_gfrr': liberal metric (shared/larger_set). "
+             "Default: min_gfrr"
     )
+
+    # Add general optional arguments
     optional.add_argument(
         "--dup_margin",
         required=False,
         type=float,
         default=0.05,
-        help="minimum ratio of genomes in which the family must have multiple genes "
-        "for it to be considered 'duplicated'",
+        help="Minimum ratio of genomes in which a gene family must have "
+             "multiple copies to be considered 'duplicated'. This affects "
+             "multigenic family detection for spot border analysis. "
+             "Range: 0.0-1.0. Default: 0.05 (5%%)"
     )
-    systems = parser.add_argument_group(title="Add systems to conserved spots analyses")
+
+    # Systems analysis argument group
+    systems = parser.add_argument_group(
+        title="Systems analysis options",
+        description="Optional analysis of systems relationships within conserved spots"
+    )
+
     systems.add_argument(
-        "--systems",
+        '--systems',
         required=False,
-        action="store_true",
+        action='store_true',
         default=False,
-        help="Add systems to conserved spots analyses",
+        help="Enable systems analysis to examine relationships between "
+             "conserved spots and detected biological systems. This adds "
+             "systems linkage graphs and enriched annotations to the output."
     )
+
     systems.add_argument(
-        "-m",
-        "--models",
+        '-m', '--models',
         required=False,
         type=Path,
         nargs="+",
         default=None,
-        help="Path to model list file. You can specify multiple models from different source. "
-        "For that separate the model list files by a space and "
-        "make sure you give them in the same order as the sources.",
+        metavar="MODEL_FILE",
+        help="Path(s) to system model files. Multiple model files can be "
+             "specified (space-separated) for different system sources. "
+             "Must be provided in the same order as --sources. "
+             "Required if --systems is used."
     )
+
     systems.add_argument(
-        "-s",
-        "--sources",
+        "-s", "--sources",
         required=False,
         type=str,
         nargs="+",
         default=None,
-        help="Name of the systems sources. You can specify multiple sources. "
-        "For that separate names by a space and "
-        "make sure you give them in the same order as the models.",
+        metavar="SOURCE_NAME",
+        help="Name(s) of systems sources corresponding to model files. "
+             "Multiple sources can be specified (space-separated). "
+             "Must be provided in the same order as --models. "
+             "Required if --systems is used. "
     )
+
     systems.add_argument(
         "--canonical",
         required=False,
         action="store_true",
-        help="Write the canonical version of systems too.",
+        default=False,
+        help="Include canonical versions of systems in the analysis. "
+             "This provides additional system representations that may "
+             "be useful for comprehensive systems analysis."
     )
