@@ -62,8 +62,9 @@ notebook = [
 #
 test = [
     "pytest==7",
-    "natsort>=8"
-]
+    "natsort>=8",
+    "pytest-cov>=6.0.0",
+    ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"
