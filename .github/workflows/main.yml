@@ -68,3 +68,8 @@ jobs:
         run: |
           panorama --version
           panorama --help
+      # Check that it is installed and displays help without error
+      - name: Check that PANORAMA is installed
+        shell: bash -l {0}
+        run: |
+          pytest 
