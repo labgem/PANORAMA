@@ -121,10 +121,9 @@ def project_unit_on_organisms(
                 fam_annot = fam_sec = ""
 
             completeness = round(
-                len({g.family.name for g in model_genes}) / len({unit.model_families}),
+                len({g.family.name for g in model_genes}) / len(set(unit.model_families)),
                 2,
             )  # proportion of unit families in the organism
-
             line_projection = [
                 unit.name,
                 sub_id,
