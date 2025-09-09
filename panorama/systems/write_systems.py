@@ -52,9 +52,7 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
         "systems_sources": args.sources,
         "read_canonical": args.canonical,
     }
-    if not any(
-        arg for arg in [args.projection, args.partition, args.association, args.proksee]
-    ):
+    if not any([args.projection, args.partition, args.association, args.proksee]):
         raise argparse.ArgumentError(
             argument=None,
             message="You should at least choose one type of systems writing "
@@ -400,6 +398,7 @@ def parser_write(parser):
         help="Write the canonical version of systems too.",
     )
     optional.add_argument(
-        "--organisms", required=False, type=str, default=None, nargs="+"
+        "--organisms", required=False, type=str, default=None, nargs="+",
+        help="List of organisms to write. If not specified, all organisms will be written."
     )
     optional.add_argument("--threads", required=False, type=int, default=1)

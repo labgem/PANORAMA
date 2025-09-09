@@ -21,7 +21,7 @@ import time
 from tqdm import tqdm
 import pandas as pd
 import networkx as nx
-from ppanggolin.genome import Organism, Gene
+from ppanggolin.genome import Gene
 from ppanggolin.utils import extract_contig_window
 
 
@@ -77,7 +77,7 @@ def project_unit_on_organisms(
     components: List[List[Gene]],
     unit: SystemUnit,
     model_genes: Set[Gene],
-    association: List[str] = [],
+    association: List[str] = None,
 ) -> List[List[str]]:
     """
     Projects a system unit onto a given organism's pangenome.
@@ -91,6 +91,7 @@ def project_unit_on_organisms(
     Returns:
         A list of projected system information for the organism.
     """
+    association = [] if not association else association
     projection = []
 
     sub_id = 1  # to keep track of genes that are part of the same component
@@ -100,7 +101,7 @@ def project_unit_on_organisms(
             if gene.family in unit.model_families:
                 metasource, metaid = unit.get_metainfo(gene.family)
                 metadata = gene.family.get_metadata(metasource, metaid)
-                avail_name = set(fam.name for fam in unit.functional_unit.families)
+                avail_name = {fam.name for fam in unit.functional_unit.families}
                 for fam in unit.functional_unit.families:
                     avail_name |= fam.exchangeable
                 fam_annot = metadata.protein_name
@@ -115,16 +116,14 @@ def project_unit_on_organisms(
                 )
                 category = "model"
             else:
-                # seperate genes filtered locally at family level; could be alternatively excluded
+                # separate genes filtered locally at family level; could be alternatively excluded
                 category = "context" if gene.family in unit.families else "filtered"
                 fam_annot = fam_sec = ""
 
             completeness = round(
-                len(set(g.family.name for g in model_genes))
-                / len(set(unit.model_families)),
+                len({g.family.name for g in model_genes}) / len(set(unit.model_families)),
                 2,
             )  # proportion of unit families in the organism
-
             line_projection = [
                 unit.name,
                 sub_id,
@@ -170,7 +169,7 @@ def compute_gene_components(
 
     Args:
         model_genes (Set[Gene]): Set of genes in one organism corresponding to model gene families.
-        window (int): The size of the window to consider for grouping genes.
+        window_size (int): The size of the window to consider for grouping genes.
 
     Returns:
         List[List[Gene]]: A list of components, each containing genes that are within the specified window.
@@ -204,7 +203,7 @@ def unit_projection(
     unit: SystemUnit,
     gf2fam: Dict[GeneFamily, set[Family]],
     fam_index: Dict[GeneFamily, int],
-    association: List[str] = [],
+    association: List[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project a system unit onto all organisms in a pangenome.
@@ -218,11 +217,10 @@ def unit_projection(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
+    association = [] if not association else association
     pangenome_projection, organisms_projection = [], []
     matrix = get_gfs_matrix_combination(set(unit.model_families), gf2fam)
-    mdr_acc_gfs = {
-        gf for gf in unit.model_families if gf.name in matrix.columns.values
-    }
+    mdr_acc_gfs = {gf for gf in unit.model_families if gf.name in matrix.columns.values}
 
     for organism in unit.model_organisms:
         # Note that `unit.model_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
@@ -264,14 +262,13 @@ def unit_projection(
             )  # line[-3] -> sys_state_in_org
             split_count = sum(1 for line in org_proj if line[-3] == "split")
             extended_count = len(org_proj) - strict_count - split_count
-            #TODO completness model
+            # TODO completeness model
             completeness = len(org_fam) / len(unit)
             pangenome_projection.append(
                 pan_proj
                 + [partition, completeness]
                 + [strict_count, split_count, extended_count]
             )
-
             if "RGPs" in association:
                 rgps = {rgp.name for rgp in unit.regions if rgp.organism == organism}
                 if len(rgps) == 1:
@@ -299,7 +296,7 @@ def system_projection(
     system: System,
     fam_index: Dict[GeneFamily, int],
     gene_family2family: Dict[GeneFamily, Set[Family]],
-    association: List[str] = [],
+    association: List[str] = None,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project a system onto all organisms in a pangenome.
@@ -315,6 +312,7 @@ def system_projection(
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for systems: {system.name}")
     begin = time.time()
+    association = [] if not association else association
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
     gf2fam = {
@@ -371,7 +369,7 @@ def system_projection(
 def project_pangenome_systems(
     pangenome: Pangenome,
     system_source: str,
-    association: List[str] = [],
+    association: List[str] = None,
     canonical: bool = False,
     threads: int = 1,
     lock: Lock = None,
@@ -392,6 +390,7 @@ def project_pangenome_systems(
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projections for each organism and the pangenome.
     """
+    association = [] if not association else association
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
 
@@ -548,8 +547,9 @@ def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
 
     Returns:
         pd.DataFrame: Dataframe reformated for an organism
+    Todo: This function is not used anymore, should we remove it?
     """
-    org_name = org_df["organism"].unique()[0]
+    org_name = str(org_df["organism"].unique()[0])
     org_df = org_df.drop(columns=["organism"])
     org_df_cols = org_df.columns.tolist()
 
@@ -597,11 +597,32 @@ def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
 # it is also much faster since it avoids aggregation across all columns
 def get_org_df_one_unit_per_fam(
     org_df, eliminate_filtered_systems=False, eliminate_empty_systems=False
-):
-    org_name = org_df["organism"].unique()[0]
-    org_df = org_df.drop(columns=["organism"])
+) -> Tuple[pd.DataFrame, str]:
+    """
+    Filters and processes a DataFrame to retain only one representative unit
+    per gene family based on completeness, and optionally eliminates certain
+    systems based on filtering criteria. Also calculates overlapping information.
 
-    # Keep only the row with highest completeness for each group
+    Args:
+        org_df: The input DataFrame containing organism data with details such as
+            "gene family", "system name", "functional unit name", "completeness",
+            and other related columns.
+        eliminate_filtered_systems: Flag indicating whether to remove systems
+            where any of their model families were filtered out due to lower
+            completeness.
+        eliminate_empty_systems: Flag indicating whether to remove systems with
+            no model families left after filtering.
+
+    Returns:
+        Tuple containing:
+            - A processed and filtered DataFrame with one row per unit per gene
+              family, with overlapping information added and optional system
+              elimination applied.
+            - The unique organism name derived from the input DataFrame.
+    """
+    org_name = str(org_df["organism"].unique()[0])
+    org_df = org_df.drop(columns=["organism"])
+    # Keep only the row with the highest completeness for each group
     group_cols = [
         "gene family",
         "system name",
@@ -610,18 +631,18 @@ def get_org_df_one_unit_per_fam(
         "start",
     ]
 
-    # Create overlapping_units column before filtering
+    # Create an overlapping_units column before filtering
     overlapping_data = []
     for group_key, group in org_df.groupby(group_cols):
         if len(group) > 1:
-            # Sort by completeness (descending) to keep highest first
+            # Sort by completeness (descending) to keep the highest first
             group_sorted = group.sort_values("completeness", ascending=False)
 
             # Get the filtered out rows (all except the first)
             filtered_rows = group_sorted.iloc[1:]
 
             if not filtered_rows.empty:
-                # Create overlapping info with format `unit_number:completeness`
+                # Create overlapping info with the format `unit_number:completeness`
                 overlapping_info = []
                 for _, row in filtered_rows.iterrows():
                     overlapping_info.append(
@@ -653,7 +674,7 @@ def get_org_df_one_unit_per_fam(
     # Reset index to avoid issues with duplicate indices
     org_df_filtered = org_df_filtered.reset_index(drop=True)
 
-    # Add overlapping_units column to the end
+    # Add the overlapping_units column to the end
     org_df_filtered = org_df_filtered.merge(overlapping_df, on=group_cols, how="left")
 
     # Fill NaN values in overlapping column with empty string
@@ -684,6 +705,19 @@ def get_org_df_one_unit_per_fam(
 
 
 def eliminate_systems(org_df, org_df_filtered):
+    """
+    Eliminates systems from a filtered DataFrame based on model family changes. This function ensures that systems
+    with any eliminated model families in the filtered dataset are removed entirely.
+
+    Args:
+        org_df: pandas.DataFrame containing the original dataset with all systems and associated gene families.
+        org_df_filtered: pandas.DataFrame containing the already filtered dataset, which may have excluded some
+            gene families or systems.
+
+    Returns:
+        pandas.DataFrame filtered to exclude entire systems where any model families were missing after the
+        initial filtering step.
+    """
     # Track which systems to eliminate
     systems_to_eliminate = set()
 
@@ -725,6 +759,19 @@ def eliminate_systems(org_df, org_df_filtered):
 
 
 def eliminate_empty(org_df):
+    """
+    Removes systems with no model genes left.
+
+    Args:
+        org_df (pd.DataFrame): A DataFrame with at least the columns
+            "system number" and "category". The "category" column is used to
+            identify "model" genes, and the "system number" column groups rows
+            into systems.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing only the systems that have at least
+            one "model" gene. The rows are concatenated and re-indexed.
+    """
     # Removes systems with no model genes left
     valid_systems = []
     for _, system_group in org_df.groupby("system number"):
@@ -767,7 +814,6 @@ def write_projection_systems(
         organisms_projection = organisms_projection[
             ~organisms_projection["organism"].isin(organisms)
         ]
-
     with ProcessPoolExecutor(
         max_workers=threads, mp_context=get_context("fork")
     ) as executor:
@@ -839,10 +885,8 @@ def _custom_agg(series: pd.Series, unique: bool = False):
     Returns:
         The aggregated series
     """
-    sort_key = lambda x: int(x) if x.isdigit() else x
-
     values = list(
-        itertools.chain(*[x for x in series.replace("", pd.NA).dropna().str.split(",")])
+        itertools.chain(*list(series.replace("", pd.NA).dropna().str.split(",")))
     )
     if not values:
         return ""
@@ -850,7 +894,7 @@ def _custom_agg(series: pd.Series, unique: bool = False):
     if unique:
         values = set(values)
 
-    return ", ".join(sorted(values, key=sort_key))
+    return ", ".join(sorted(values, key=lambda x: int(x) if x.isdigit() else x))
 
 
 def custom_agg(series: pd.Series):
@@ -952,9 +996,7 @@ def extract_numeric_for_sorting(val) -> float:
 
 
 # Replaced by `compute_gene_components`; preserved for further review if needed
-def compute_genes_graph(
-    model_genes: Set[Gene], unit: SystemUnit
-) -> Tuple[nx.Graph, Set[Gene]]:
+def compute_genes_graph(model_genes: Set[Gene], unit: SystemUnit) -> nx.Graph:
     """
     Compute the genes graph for a given genomic context in an organism.
 

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List, Set, Tuple, FrozenSet, Union
+from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
 from multiprocessing import Manager, Lock
 
 # Installed libraries
@@ -21,7 +21,6 @@ from tqdm import tqdm
 from ppanggolin.genome import Organism
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
-from ppanggolin.metadata import Metadata
 
 # Local libraries
 from panorama.geneFamily import GeneFamily
@@ -157,32 +156,46 @@ def search_unit_in_cc(
     Returns:
         Set[FrozenSet[GeneFamily]]: Set of found combinations of gene families.
     """
-    found_combinations = set()
-    for cc in sorted(
-        [cc for cc in nx.connected_components(graph) if len(cc) >= func_unit.min_total],
-        key=lambda c: (len(c), sorted(c)),
+    found_combinations: Set[FrozenSet[GeneFamily]] = set()
+
+    # Build and sort connected components by size (desc) and then lexicographically by names
+    connected_components: Iterable[Set[GeneFamily]] = (
+        cc for cc in nx.connected_components(graph) if len(cc) >= func_unit.min_total
+    )
+    sorted_ccs = sorted(
+        connected_components,
+        key=lambda c: (len(c), tuple(sorted(f.name for f in c))),
         reverse=True,
-    ):
-        cc: Set[GeneFamily]
-        gfs_in_cc = system_gf.intersection(cc)
-        check, gf2meta_info = check_for_families(
+    )
+
+    for cc in sorted_ccs:
+        gfs_in_cc = system_gf & cc
+        if not gfs_in_cc:
+            continue
+
+        is_valid, gf2meta_info = check_for_families(
             gfs_in_cc, gf2fam, fam2source, func_unit
         )
-        if check:
-            new_unit = SystemUnit(
-                functional_unit=func_unit,
-                source=source,
-                gene_families=cc,
-                families_to_metainfo=gf2meta_info,
-            )
-            is_subset = False
-            for unit in sorted(detected_su, key=len, reverse=True):
-                if new_unit.is_subset(unit):
-                    unit.merge(new_unit)
-                    is_subset = True
-            if not is_subset:
-                detected_su.add(new_unit)
-            found_combinations.add(frozenset(gfs_in_cc))
+        if not is_valid:
+            continue
+
+        new_unit = SystemUnit(
+            functional_unit=func_unit,
+            source=source,
+            gene_families=cc,
+            families_to_metainfo=gf2meta_info,
+        )
+
+        # Merge with existing unit if it’s a subset
+        for existing in detected_su:
+            if new_unit.is_subset(existing):
+                existing.merge(new_unit)
+                break
+        else:
+            detected_su.add(new_unit)
+
+        found_combinations.add(frozenset(gfs_in_cc))
+
     return found_combinations
 
 
@@ -230,7 +243,6 @@ def search_unit_in_combination(
         for fam in gene_fam2mod_fam[gf]
         if fam.presence == "accessory"
     }
-
     while len(combinations) > 0:
         logging.getLogger("PANORAMA").debug(f"Search in {len(combinations)}")
         context_combination = combinations.pop(0)
@@ -257,6 +269,7 @@ def search_unit_in_combination(
                         jaccard_threshold=jaccard_threshold,
                     )
                 logging.getLogger("PANORAMA").debug("search unit in filtered context")
+
                 founds_combs = search_unit_in_cc(
                     local_graph,
                     context_combination,
@@ -304,6 +317,7 @@ def search_unit_in_context(
     Returns:
        Set[SystemUnit]: Set of detected systems in the pangenomic context.
     """
+
     detected_su: Set[SystemUnit] = set()
     families_in_context, neutral_families_in_context = (
         get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
@@ -340,7 +354,7 @@ def search_unit_in_context(
                     combinations_in_cc,
                     combinations2orgs,
                     jaccard_threshold,
-                    local
+                    local,
                 )
                 logging.getLogger("PANORAMA").debug(
                     f"{len(detected_su)} unit found in cc in {time.time() - t0} seconds."
@@ -431,9 +445,7 @@ def search_system_units(
             *get_functional_unit_gene_families(func_unit, gene_families, gf2fam)
         )
         if len(fu_families) >= func_unit.min_total:
-            matrix = get_gfs_matrix_combination(
-                fu_families, gf2fam
-            )
+            matrix = get_gfs_matrix_combination(fu_families, gf2fam)
             if check_needed_families(matrix, func_unit):
                 logging.getLogger("PANORAMA").debug("Extract Genomic context")
                 t0 = time.time()
@@ -442,6 +454,9 @@ def search_system_units(
                     transitive=func_unit.transitivity,
                     window_size=func_unit.window,
                     disable_bar=True,
+                )
+                logging.getLogger("PANORAMA").debug(
+                    f"Genomic context extracted in {time.time() - t0} seconds. "
                 )
                 detected_su: Set[SystemUnit] = set()
                 if sensitivity == 1:
@@ -462,7 +477,6 @@ def search_system_units(
                         if len(combs) >= func_unit.min_total
                     }
                     logging.getLogger("PANORAMA").debug(
-                        f"Genomic context extracted in {time.time() - t0} seconds. "
                         f"{len(combinations2orgs)} combinations found"
                     )
                     t1 = time.time()
@@ -631,10 +645,14 @@ def search_for_system(
             u = fam_list.pop(0)
             for v in fam_list:
                 nx.contracted_nodes(contracted_graph, u, v, copy=False)
-                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(v.organisms)
+                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(
+                    v.organisms
+                )
             fam2su[u] = su
             organisms |= set(su.organisms)
-        filtered_graph = filter_local_context(contracted_graph, organisms, jaccard_threshold)
+        filtered_graph = filter_local_context(
+            contracted_graph, organisms, jaccard_threshold
+        )
         for cc in sorted(
             nx.connected_components(filtered_graph), key=len, reverse=True
         ):
@@ -701,8 +719,6 @@ def search_systems(
     metadata_sources: List[str],
     jaccard_threshold: float = 0.8,
     sensitivity: int = 1,
-    threads: int = 1,
-    lock: Lock = None,
     disable_bar: bool = False,
 ):
     """Searches for systems present in the pangenome for all models.
@@ -713,8 +729,6 @@ def search_systems(
         source (str): Name of the source for the system.
         metadata_sources (List[str]): List of the metadata sources for the families.
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        threads (int, optional): Number of available threads. Defaults to 1.
-        lock (Lock, optional): Global lock for multiprocessing execution. Defaults to None.
         disable_bar (bool, optional): If True, disables the progress bar. Defaults to False.
         sensitivity (int, optional): Sensitivity level for detection.
             1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
@@ -723,34 +737,21 @@ def search_systems(
             Defaults to 1.
     """
     logging.getLogger("PANORAMA").debug(
-        f"Begin systems detection with {threads} threads in {pangenome.name}"
+        f"Begin systems detection in {pangenome.name}"
     )
     begin = time.time()
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(total=models.size, unit="model", disable=disable_bar) as progress:
-            futures = []
-            for model in models:
-                gf2fam, fam2source = dict_families_context(
-                    model, meta2fam
-                )
-                future = executor.submit(
-                    search_system,
-                    model,
-                    gf2fam,
-                    fam2source,
-                    source,
-                    jaccard_threshold,
-                    sensitivity,
-                )
-                future.add_done_callback(lambda p: progress.update())
-                futures.append(future)
-            detected_systems = set()
-            for future in futures:
-                result = future.result()
-                detected_systems |= result
+    detected_systems = set()
+    for model in tqdm(models, total=models.size, unit="model", disable=disable_bar):
+        gf2fam, fam2source = dict_families_context(model, meta2fam)
+        detected_systems |= search_system(
+                model,
+                gf2fam,
+                fam2source,
+                source,
+                jaccard_threshold,
+                sensitivity,
+            )
     for idx, system in enumerate(
         sorted(
             detected_systems,
@@ -801,23 +802,31 @@ def search_systems_in_pangenomes(
             Defaults to 1.
     """
     t0 = time.time()
-    for pangenome in tqdm(
-        pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar
-    ):
-        logging.getLogger("PANORAMA").debug(
-            f"Begin systems searching for {pangenome.name}"
-        )
-        search_systems(
-            models,
-            pangenome,
-            source,
-            metadata_sources,
-            jaccard_threshold,
-            sensitivity,
-            threads,
-            lock,
-            disable_bar,
-        )
+    with ThreadPoolExecutor(
+        max_workers=threads, initializer=init_lock, initargs=(lock,)
+    ) as executor:
+        with tqdm(
+            total=len(pangenomes), unit="pangenome", disable=disable_bar
+        ) as progress:
+            futures = []
+            for pangenome in tqdm(pangenomes, unit="pangenome", disable=disable_bar):
+                logging.getLogger("PANORAMA").debug(
+                    f"Begin systems searching for {pangenome.name}"
+                )
+                future = executor.submit(
+                    search_systems,
+                    models,
+                    pangenome,
+                    source,
+                    metadata_sources,
+                    jaccard_threshold,
+                    sensitivity,
+                    disable_bar,
+                )
+                future.add_done_callback(lambda p: progress.update())
+                futures.append(future)
+            for future in futures:
+                future.result()
     logging.getLogger("PANORAMA").info(
         f"Systems prediction in all pangenomes done in {time.time() - t0:.2f} seconds"
     )

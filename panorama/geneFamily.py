@@ -46,6 +46,7 @@ class GeneFamily(Fam):
         self._units_getter = {}
         self._systems_getter = {}
         self._akin = None
+        self._hash = None
 
     def __repr__(self) -> str:
         """
@@ -63,7 +64,9 @@ class GeneFamily(Fam):
         Returns:
             int: The hash value of the GeneFamily instance.
         """
-        return hash((self.name, self.ID))
+        if self._hash is None:
+            self._hash = hash((self.name, self.ID))
+        return self._hash
 
     def __eq__(self, other: GeneFamily) -> bool:
         """
@@ -82,7 +85,7 @@ class GeneFamily(Fam):
             raise TypeError(
                 f"Expected another GeneFamily instance for comparison, but received {type(other)}"
             )
-        return set(self.genes) == set(other.genes)
+        return hash(self) == hash(other)
 
     def __lt__(self, other: GeneFamily) -> bool:
         if len(self) == len(other):
@@ -153,9 +156,7 @@ class GeneFamily(Fam):
             TypeError: If the provided hmm is not an HMM instance.
         """
         if not isinstance(hmm, HMM):
-            raise TypeError(
-                f"Expected an HMM instance, but received {type(hmm)}"
-            )
+            raise TypeError(f"Expected an HMM instance, but received {type(hmm)}")
         self._hmm = hmm
 
     @property
@@ -175,6 +176,7 @@ class GeneFamily(Fam):
             module (panorama.region.Module): module belonging to the family
         """
         from panorama.region import Module
+
         if not isinstance(module, Module):
             raise TypeError("Module object is expected to object of Module class")
         self._module = module
@@ -276,7 +278,7 @@ class GeneFamily(Fam):
             KeyError: If no akin families are assigned.
         """
         if self._akin is None:
-            logging.getLogger('PANORAMA').debug(
+            logging.getLogger("PANORAMA").debug(
                 f"No akin families assigned to {self.name}."
             )
         return self._akin
@@ -311,7 +313,9 @@ class Akin:
         _families (dict): A dictionary of gene families in the Akin group.
     """
 
-    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily) -> None:
+    def __init__(
+        self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily
+    ) -> None:
         """
         Initializes an Akin instance.
 
