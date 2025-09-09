@@ -21,7 +21,6 @@ from tqdm import tqdm
 from ppanggolin.genome import Organism
 from ppanggolin.utils import restricted_float
 from ppanggolin.context.searchGeneContext import compute_gene_context_graph
-from viztracer import VizTracer
 
 # Local libraries
 from panorama.geneFamily import GeneFamily
