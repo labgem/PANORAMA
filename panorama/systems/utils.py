@@ -82,6 +82,50 @@ def filter_local_context(
         organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
         jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
+    orgs = frozenset(organisms)
+
+    # Precompute family ∩ organisms intersections
+    family_orgs: dict[GeneFamily, set[Organism]] = {
+        fam: set(fam.organisms).intersection(orgs) for fam in graph.nodes
+    }
+
+    new_graph = nx.Graph()
+    new_graph.add_nodes_from(graph.nodes(data=True))
+
+    for f1, f2, data in graph.edges(data=True):
+        genomes_in_orgs = data["genomes"].intersection(orgs)
+
+        f1_orgs = family_orgs[f1]
+        f2_orgs = family_orgs[f2]
+
+        f1_proportion = len(genomes_in_orgs) / len(f1_orgs) if f1_orgs else 0.0
+        f2_proportion = len(genomes_in_orgs) / len(f2_orgs) if f2_orgs else 0.0
+
+        if f1_proportion >= jaccard_threshold and f2_proportion >= jaccard_threshold:
+            new_graph.add_edge(
+                f1,
+                f2,
+                **data,
+                f1=f1.name,
+                f2=f2.name,
+                f1_jaccard_gene=f1_proportion,
+                f2_jaccard_gene=f2_proportion,
+            )
+
+    return new_graph
+
+
+def filter_local_context_old(
+    graph: nx.Graph, organisms: Set[Organism], jaccard_threshold: float = 0.8
+) -> nx.Graph[GeneFamily]:
+    """
+    Filters a graph based on a local Jaccard index.
+
+    Args:
+        graph (nx.Graph): A sub-pangenome graph.
+        organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
+        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+    """
 
     def get_gene_proportion(gene_family: GeneFamily) -> float:
         """Returns the Jaccard gene proportion for a given gene family."""
@@ -126,18 +170,24 @@ def check_for_families(
     func_unit: FuncUnit,
 ) -> Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
     """
-    Checks gene families against a functional unit to identify forbidden, mandatory, and accessory fam conditions.
+    Evaluate gene families against a functional unit to detect forbidden, mandatory,
+    and accessory family conditions.
 
     Args:
-        gene_families (Set[GeneFamily]): Set of gene families to evaluate.
-        gene_fam2mod_fam (Dict[GeneFamily, Set[Family]]): Mapping from gene families to associated model families.
-        mod_fam2meta_source (Dict[str, str]): Mapping from model fam names to metadata sources.
+        gene_families (Set[GeneFamily]): Gene families to evaluate.
+        gene_fam2mod_fam (Dict[GeneFamily, Set[Family]]): Map from gene families to their model families.
+        mod_fam2meta_source (Dict[str, str]): Map from model family name to metadata source.
         func_unit (FuncUnit): Functional unit definition to check against.
 
     Returns:
-        bool: True if forbidden conditions are encountered, False otherwise.
-        dict: Dictionary mapping gene families to metadata information.
+        Tuple[bool, Dict[GeneFamily, Tuple[str, int]]]:
+            - A boolean indicating whether the conditions are satisfied
+              (False immediately if a forbidden family is found).
+            - A mapping from gene families to their selected metadata (source, meta_id).
     """
+
+    # Ranking order for family presence
+    presence_priority = {"forbidden": 0, "mandatory": 1, "accessory": 2, "neutral": 3}
 
     def fam_sort_key(item):
         """
@@ -152,76 +202,64 @@ def check_for_families(
         """
         fam, md_info = item
         score = md_info[2]
-        presence_priority = {
-            "forbidden": 0,
-            "mandatory": 1,
-            "accessory": 2,
-            "neutral": 3,
-        }
-        presence_rank = presence_priority.get(fam.presence, 4)
-        return (
-            presence_rank,
-            -score,
-            fam.name,
-        )  # negative score for descending order
+        return (presence_priority.get(fam.presence, 4), -score, fam.name)
 
-    gf2meta_info = {}
-    mandatory_seen = set()
-    accessory_seen = set()
+    gf2meta_info: Dict[GeneFamily, Tuple[str, int]] = {}
+    mandatory_seen, accessory_seen = set(), set()
 
+    # Sort gene families by how many model families they map to (fewer first)
     for gf in sorted(gene_families, key=lambda n: len(gene_fam2mod_fam[n])):
         fam2meta_info = {}
-        meta_info = None
+
+        # Collect all metadata matches for this gene family
         for family in gene_fam2mod_fam[gf]:
-            avail_name = {family.name}.union(family.exchangeable)
-            # if fam.presence in ("mandatory", "accessory", "forbidden"):
-            for meta_id, metadata in gf.get_metadata_by_source(
-                mod_fam2meta_source[family.name]
-            ).items():
-                if metadata.protein_name in avail_name or (
+            source = mod_fam2meta_source[family.name]
+            available_names = {family.name, *family.exchangeable}
+
+            for meta_id, metadata in gf.get_metadata_by_source(source).items():
+                if metadata.protein_name in available_names or (
                     "secondary_name" in metadata.fields
                     and any(
-                        name in avail_name
+                        name in available_names
                         for name in metadata.secondary_names.split(",")
                     )
                 ):
-                    fam2meta_info[family] = (
-                        mod_fam2meta_source[family.name],
-                        meta_id,
-                        metadata.score,
-                    )
+                    fam2meta_info[family] = (source, meta_id, metadata.score)
 
-        sorted_fam2meta_info = sorted(fam2meta_info.items(), key=fam_sort_key)
-        family, best_meta_info = sorted_fam2meta_info.pop(0)
-        while sorted_fam2meta_info and family.name in mandatory_seen.union(
-            accessory_seen
-        ):
-            family, meta_info = sorted_fam2meta_info.pop(0)
+        if not fam2meta_info:
+            continue  # no metadata match, skip this GF
 
+        # Pick the best candidate (highest priority, then score, then name)
+        sorted_candidates = sorted(fam2meta_info.items(), key=fam_sort_key)
+        family, best_meta_info = sorted_candidates[0]
+
+        # Skip families already used if alternatives exist
+        used_names = mandatory_seen | accessory_seen
+        for fam, meta in sorted_candidates:
+            if fam.name not in used_names:
+                family, best_meta_info = fam, meta
+                break
+
+        # Forbidden condition → stop immediately
         if family.presence == "forbidden":
             return False, {}
 
-        if meta_info and family.presence in ("mandatory", "accessory"):
-            best_meta_info = meta_info
-
+        # Track mandatory / accessory usage
         if family.presence == "mandatory":
             mandatory_seen.add(family.name)
         elif family.presence == "accessory":
             accessory_seen.add(family.name)
 
-        gf2meta_info[gf] = best_meta_info[:-1]
+        # Store only (source, meta_id), drop score
+        gf2meta_info[gf] = best_meta_info[:2]
 
-        # Alternatively, if GFs are allowed to play multiple roles, discard sorting and simply collect all families
-        # md_families = {fam for fam, _ in fam2meta_info.items() if fam.presence == "mandatory"}
-        # acc_families = {fam for fam, _ in fam2meta_info.items() if fam.presence == "accessory"}
-        # mandatory_seen.update(md_families)
-        # accessory_seen.update(acc_families)
-
+    # Check if constraints are satisfied
     if (
         len(mandatory_seen) >= func_unit.min_mandatory
         and len(mandatory_seen | accessory_seen) >= func_unit.min_total
     ):
         return True, gf2meta_info
+
     return False, {}
 
 
