@@ -32,7 +32,7 @@ from panorama.alignment.cluster import (
 
 
 def compute_gfrr(
-        queries: Set[GeneFamily], targets: Set[GeneFamily]
+    queries: Set[GeneFamily], targets: Set[GeneFamily]
 ) -> Tuple[float, float, int]:
     """
     Compute Gene Family Repertoire Relatedness (GFRR) metrics between query and target gene families.
@@ -71,10 +71,10 @@ def compute_gfrr(
         if query_gf.akin == target_gf.akin  # Check if akin relationships match
     }
 
-    # Calculate conservative similarity metric (normalized by smaller set)
+    # Calculate conservative similarity metric (normalized by a smaller set)
     min_frr = len(shared_akins) / min(len(queries), len(targets))
 
-    # Calculate liberal similarity metric (normalized by larger set)
+    # Calculate liberal similarity metric (normalized by a larger set)
     max_frr = len(shared_akins) / max(len(queries), len(targets))
 
     return min_frr, max_frr, len(shared_akins)
@@ -114,7 +114,7 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
     cluster_attribute_name = f"{gfrr_metric}_cluster"
     for cluster_idx, cluster_nodes in enumerate(partitions):
         cluster_label = f"cluster_{cluster_idx}"
-        # Create attribute dictionary for all nodes in this cluster
+        # Create an attribute dictionary for all nodes in this cluster
         node_attributes = dict.fromkeys(cluster_nodes, cluster_label)
         # Set the attributes on the graph
         nx.set_node_attributes(graph, node_attributes, name=cluster_attribute_name)
@@ -128,20 +128,17 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
 
 
 def common_launch(
-        args: Any,
-        check_func: Callable,
-        need_info: Dict[str, Any],
-        **kwargs: Any
+    args: Any, check_func: Callable, need_info: Dict[str, Any], **kwargs: Any
 ) -> Tuple[Pangenomes, Path, Manager, Lock]:
     """
-    Launch common setup for comparative pangenome workflows.
+    Launch a common setup for comparative pangenome workflows.
 
     This function handles the common initialization steps for pangenome comparison workflows,
     including loading pangenomes, setting up multiprocessing resources, creating temporary
     directories, and optionally performing gene family clustering.
 
     Args:
-        args (Any): Parsed command-line arguments containing workflow parameters such as:
+        args (Any): Parsed command-line arguments containing workflow parameters such as
                    - pangenomes: Path to pangenome list file
                    - cpus: Number of CPU threads to use
                    - cluster: Optional path to existing clustering results
@@ -172,9 +169,13 @@ def common_launch(
     # If no clustering is provided, we need sequences to perform clustering
     if args.cluster is None:
         need_info["need_families_sequences"] = True
-        logging.getLogger("PANORAMA").info("No clustering provided - will perform gene family clustering")
+        logging.getLogger("PANORAMA").info(
+            "No clustering provided - will perform gene family clustering"
+        )
     else:
-        logging.getLogger("PANORAMA").info(f"Using existing clustering from: {args.cluster}")
+        logging.getLogger("PANORAMA").info(
+            f"Using existing clustering from: {args.cluster}"
+        )
 
     # Load pangenomes with specified requirements and validation
     logging.getLogger("PANORAMA").info("Loading pangenomes...")
@@ -188,7 +189,7 @@ def common_launch(
         **kwargs,
     )
 
-    # Create temporary directory for intermediate processing files
+    # Create a temporary directory for intermediate processing files
     tmpdir = Path(tempfile.mkdtemp(dir=args.tmpdir))
     logging.getLogger("PANORAMA").info(f"Created temporary directory: {tmpdir}")
 
@@ -196,23 +197,25 @@ def common_launch(
     if args.cluster is None:
         # Configure MMSeqs2 clustering parameters from command-line arguments
         mmseqs2_options = {
-            "max_seqs": args.max_seqs,                    # Maximum sequences per query
-            "min_ungapped": args.min_ungapped,            # Minimum ungapped alignment score
-            "comp_bias_corr": args.comp_bias_corr,        # Composition bias correction
-            "sensitivity": args.sensitivity,              # Search sensitivity level
-            "kmer_per_seq": args.kmer_per_seq,           # K-mers per sequence
-            "identity": args.clust_identity,              # Sequence identity threshold
-            "coverage": args.clust_coverage,              # Coverage threshold
-            "cov_mode": args.clust_cov_mode,             # Coverage calculation mode
-            "eval": args.eval,                            # E-value threshold
-            "max_seq_len": args.max_seq_len,             # Maximum sequence length
-            "max_reject": args.max_reject,                # Maximum rejections per query
-            "align_mode": args.align_mode,                # Alignment mode
-            "clust_mode": args.clust_mode,               # Clustering mode
-            "reassign": args.reassign,                    # Whether to reassign sequences
+            "max_seqs": args.max_seqs,  # Maximum sequences per query
+            "min_ungapped": args.min_ungapped,  # Minimum ungapped alignment score
+            "comp_bias_corr": args.comp_bias_corr,  # Composition bias correction
+            "sensitivity": args.sensitivity,  # Search sensitivity level
+            "kmer_per_seq": args.kmer_per_seq,  # K-mers per sequence
+            "identity": args.clust_identity,  # Sequence identity threshold
+            "coverage": args.clust_coverage,  # Coverage threshold
+            "cov_mode": args.clust_cov_mode,  # Coverage calculation mode
+            "eval": args.eval,  # E-value threshold
+            "max_seq_len": args.max_seq_len,  # Maximum sequence length
+            "max_reject": args.max_reject,  # Maximum rejections per query
+            "align_mode": args.align_mode,  # Alignment mode
+            "clust_mode": args.clust_mode,  # Clustering mode
+            "reassign": args.reassign,  # Whether to reassign sequences
         }
 
-        logging.getLogger("PANORAMA").info(f"Starting gene family clustering with method: {args.method}")
+        logging.getLogger("PANORAMA").info(
+            f"Starting gene family clustering with method: {args.method}"
+        )
         # Perform gene family clustering using MMSeqs2
         clustering_results = cluster_gene_families(
             pangenomes=pangenomes,
@@ -225,16 +228,18 @@ def common_launch(
             disable_bar=args.disable_prog_bar,
         )
 
-        # Write clustering results to file for future use
+        # Write clustering results to a file for future use
         cluster_file = tmpdir / "pangenome_gf_clustering.tsv"
         write_clustering(clustering_results, cluster_file)
-        logging.getLogger("PANORAMA").info(f"Clustering results written to: {cluster_file}")
+        logging.getLogger("PANORAMA").info(
+            f"Clustering results written to: {cluster_file}"
+        )
 
     else:
         # Use existing clustering file
         cluster_file = args.cluster
 
-    # Load clustering results into pangenomes object
+    # Load clustering results into a pangenomes object
     logging.getLogger("PANORAMA").info("Loading clustering results into pangenomes...")
     pangenomes.read_clustering(cluster_file, args.disable_prog_bar)
 
@@ -243,7 +248,7 @@ def common_launch(
 
 def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
     """
-    Configure argument parser for pangenome comparison commands.
+    Configure an argument parser for pangenome comparison commands.
 
     This function sets up command-line argument groups and options specific to pangenome
     comparison workflows, including required arguments, comparison options, and MMSeqs2
@@ -296,20 +301,20 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
         type=Path,
         default=None,
         help="Path to tab-separated file with pre-computed clustering results "
-             "(cluster_name\\tfamily_id format). If not provided, clustering will be performed.",
+        "(cluster_name\\tfamily_id format). If not provided, clustering will be performed.",
     )
 
     compare_opt.add_argument(
-        "--frr_cutoff",
+        "--gfrr_cutoff",
         required=False,
         type=float,
         nargs=2,
         default=(0.5, 0.8),
         metavar=("MIN_FRR", "MAX_FRR"),
         help="FRR (Family Relatedness Relationship) cutoff values for similarity assessment. "
-             "MIN_FRR: threshold for conservative similarity (shared_families / smaller_set). "
-             "MAX_FRR: threshold for liberal similarity (shared_families / larger_set). "
-             "Default: 0.5 0.8",
+        "min_gfrr = shared_families / min(families1, families2), "
+        "max_gfrr = shared_families / max(families1, families2)"
+        "Default: 0.5 0.8",
     )
 
     # Configure MMSeqs2 clustering arguments
@@ -326,9 +331,9 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
         choices=["linclust", "cluster"],
         default="linclust",
         help="MMSeqs2 clustering method selection: "
-             "'linclust' - fast linear-time clustering (less sensitive), "
-             "'cluster' - slower but more sensitive clustering. "
-             "Default: linclust",
+        "'linclust' - fast linear-time clustering (less sensitive), "
+        "'cluster' - slower but more sensitive clustering. "
+        "Default: linclust",
     )
 
     # General optional arguments for workflow control
@@ -342,7 +347,7 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
         nargs="+",
         default=None,
         help="Output format(s) for graph files. Multiple formats can be specified. "
-             "Supported: gexf (Gephi Exchange Format), graphml (Graph Markup Language)",
+        "Supported: gexf (Gephi Exchange Format), graphml (Graph Markup Language)",
     )
 
     optional.add_argument(

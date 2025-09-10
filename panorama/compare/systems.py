@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
-from typing import Dict, List, Tuple, Set, Optional
+from typing import Dict, List, Tuple, Optional
 from shutil import rmtree
 from itertools import combinations
 from concurrent.futures import ThreadPoolExecutor
@@ -36,7 +36,12 @@ from panorama.utils import mkdir, init_lock
 from panorama.utility.utility import check_models
 from panorama.systems.system import System, ClusterSystems
 from panorama.systems.write_systems import check_pangenome_write_systems
-from panorama.compare.utils import parser_comparison, common_launch, cluster_on_gfrr, compute_gfrr
+from panorama.compare.utils import (
+    parser_comparison,
+    common_launch,
+    cluster_on_gfrr,
+    compute_gfrr,
+)
 
 
 logger = logging.getLogger("PANORAMA")
@@ -44,6 +49,7 @@ logger = logging.getLogger("PANORAMA")
 
 class SystemsComparisonError(Exception):
     """Custom exception for systems comparison errors."""
+
     pass
 
 
@@ -58,7 +64,10 @@ def check_compare_systems_args(args: argparse.Namespace) -> Dict:
         Dict containing required information flags and parameters for pangenome processing.
 
     Raises:
-        argparse.ArgumentError: If number of sources and models don't match.
+        argparse.ArgumentError: If the number of sources and models don't match.
+    todo:
+        - check if output is a directory and if empty
+        - incompatibility with gfrr_metric not given & graph_formats given
     """
     # Define what information we need from pangenomes
     need_info = {
@@ -69,14 +78,14 @@ def check_compare_systems_args(args: argparse.Namespace) -> Dict:
         "metatypes": ["families"],
         "need_systems": True,
         "systems_sources": args.sources,
-        "read_canonical": args.canonical
+        "read_canonical": args.canonical,
     }
 
-    # Validate that sources and models lists have same length
+    # Validate that sources and models lists have the same length
     if len(args.sources) != len(args.models):
         raise argparse.ArgumentError(
             argument=None,
-            message=f"Number of sources ({len(args.sources)}) and models ({len(args.models)}) must match."
+            message=f"Number of sources ({len(args.sources)}) and models ({len(args.models)}) must match.",
         )
 
     return need_info
@@ -92,13 +101,13 @@ def add_system_metadata_to_graph(pangenomes: Pangenomes, graph: nx.Graph) -> Non
     """
     for pangenome_name, pangenome in pangenomes.items():
         for system in pangenome.systems:
-            # Create comprehensive system metadata
+            # Create a comprehensive system metadata
             system_metadata = {
                 "pangenome": pangenome_name,
                 "system_name": system.name,
                 "system_id": system.ID,
                 "families_models_count": system.number_of_model_gene_families,
-                "families_count": system.number_of_families
+                "families_count": system.number_of_families,
             }
 
             # Generate unique hash for the system
@@ -109,7 +118,9 @@ def add_system_metadata_to_graph(pangenomes: Pangenomes, graph: nx.Graph) -> Non
                 graph.nodes[system_hash].update(system_metadata)
 
 
-def create_pangenome_system_graph(pangenome) -> Tuple[nx.Graph, Dict[int, str], Dict[int, System]]:
+def create_pangenome_system_graph(
+    pangenome,
+) -> Tuple[nx.Graph, Dict[int, str], Dict[int, System]]:
     """
     Create a graph representation of systems for a single pangenome.
 
@@ -120,7 +131,7 @@ def create_pangenome_system_graph(pangenome) -> Tuple[nx.Graph, Dict[int, str], 
         Tuple containing:
             - NetworkX graph with system nodes
             - Dictionary mapping system hash to pangenome name
-            - Dictionary mapping system hash to system object
+            - Dictionary mapping system hash to a system object
     """
     graph = nx.Graph()
     system_to_pangenome = {}
@@ -130,12 +141,12 @@ def create_pangenome_system_graph(pangenome) -> Tuple[nx.Graph, Dict[int, str], 
     for system in pangenome.systems:
         system_hash = hash((pangenome.name, system.name, system.ID))
 
-        # Add node with basic attributes
+        # Add a node with basic attributes
         graph.add_node(
             system_hash,
             system_id=system.ID,
             system_name=system.name,
-            pangenome=pangenome.name
+            pangenome=pangenome.name,
         )
 
         # Maintain mapping dictionaries
@@ -146,10 +157,10 @@ def create_pangenome_system_graph(pangenome) -> Tuple[nx.Graph, Dict[int, str], 
 
 
 def create_systems_graph(
-        pangenomes: Pangenomes,
-        threads: int = 1,
-        lock: Optional[Lock] = None,
-        disable_bar: bool = False
+    pangenomes: Pangenomes,
+    threads: int = 1,
+    lock: Optional[Lock] = None,
+    disable_bar: bool = False,
 ) -> Tuple[nx.Graph, Dict[int, str], Dict[int, System]]:
     """
     Create a comprehensive graph of all systems across pangenomes.
@@ -158,16 +169,18 @@ def create_systems_graph(
         pangenomes: Collection of pangenomes to process.
         threads: Number of threads for parallel processing.
         lock: Thread lock for synchronization.
-        disable_bar: Whether to disable progress bar.
+        disable_bar: Whether to disable the progress bar.
 
     Returns:
         Tuple containing:
             - NetworkX graph with all system nodes
             - Dictionary mapping system hash to pangenome name
-            - Dictionary mapping system hash to system object
+            - Dictionary mapping system hash to a system object
     """
 
-    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+    with ThreadPoolExecutor(
+        max_workers=threads, initializer=init_lock, initargs=(lock,)
+    ) as executor:
         with tqdm(total=len(pangenomes), unit="Pangenome", disable=disable_bar) as pbar:
             # Submit tasks for each pangenome
             futures = []
@@ -192,12 +205,12 @@ def create_systems_graph(
 
 
 def compute_gfrr_edges(
-        graph: nx.Graph,
-        system_to_pangenome: Dict[int, str],
-        system_hash_to_system: Dict[int, System],
-        gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
-        gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
-        disable_bar: bool = False
+    graph: nx.Graph,
+    system_to_pangenome: Dict[int, str],
+    system_hash_to_system: Dict[int, System],
+    gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
+    gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+    disable_bar: bool = False,
 ) -> None:
     """
     Compute GFRR (Gene Families Repertoire Relatedness) edges between systems from different pangenomes.
@@ -208,10 +221,10 @@ def compute_gfrr_edges(
     Args:
         graph: Graph with system nodes (edges will be added).
         system_to_pangenome: Mapping from system hash to pangenome name.
-        system_hash_to_system: Mapping from system hash to system object.
+        system_hash_to_system: Mapping from system hash to a system object.
         gfrr_cutoff: Minimum (min_gfrr, max_gfrr) for all gene families.
         gfrr_models_cutoff: Minimum (min_gfrr, max_gfrr) for model gene families.
-        disable_bar: Whether to disable progress bar.
+        disable_bar: Whether to disable the progress bar.
     """
     # Generate all possible pairs of systems from different pangenomes
     system_pairs = [
@@ -222,7 +235,12 @@ def compute_gfrr_edges(
 
     logger.info(f"Computing GFRR for {len(system_pairs)} system pairs")
 
-    with tqdm(total=len(system_pairs), unit='system pair', desc="Computing FRR", disable=disable_bar) as pbar:
+    with tqdm(
+        total=len(system_pairs),
+        unit="system pair",
+        desc="Computing FRR",
+        disable=disable_bar,
+    ) as pbar:
         for sys1_hash, sys2_hash in system_pairs:
             # Skip if edge already exists
             if graph.has_edge(sys1_hash, sys2_hash):
@@ -232,43 +250,45 @@ def compute_gfrr_edges(
             sys1 = system_hash_to_system[sys1_hash]
             sys2 = system_hash_to_system[sys2_hash]
 
-            # First check model families GFRR (more restrictive)
+            # First, check model families GFRR (more restrictive)
             min_gfrr_models, max_gfrr_models, shared_models_families = compute_gfrr(
-                set(sys1.model_families),
-                set(sys2.model_families)
+                set(sys1.model_families), set(sys2.model_families)
             )
 
             # Only proceed if model families meet cutoff
-            if min_gfrr_models > gfrr_models_cutoff[0] and max_gfrr_models > gfrr_models_cutoff[1]:
+            if (
+                min_gfrr_models > gfrr_models_cutoff[0]
+                and max_gfrr_models > gfrr_models_cutoff[1]
+            ):
                 # Check all families FRR
                 min_gfrr, max_gfrr, shared_families = compute_gfrr(
-                    set(sys1.families),
-                    set(sys2.families)
+                    set(sys1.families), set(sys2.families)
                 )
 
                 # Add edge if both cutoffs are met
                 if min_gfrr > gfrr_cutoff[0] and max_gfrr > gfrr_cutoff[1]:
                     graph.add_edge(
-                        sys1_hash, sys2_hash,
+                        sys1_hash,
+                        sys2_hash,
                         min_gfrr_models=min_gfrr_models,
                         max_gfrr_models=max_gfrr_models,
                         shared_model_families=shared_models_families,
                         min_gfrr=min_gfrr,
                         max_gfrr=max_gfrr,
-                        shared_families=shared_families
+                        shared_families=shared_families,
                     )
 
             pbar.update()
 
 
 def write_conserved_systems(
-        pangenomes: Pangenomes,
-        output: Path,
-        conserved_systems_graph: nx.Graph,
-        graph_formats: List[str]
+    pangenomes: Pangenomes,
+    output: Path,
+    conserved_systems_graph: nx.Graph,
+    graph_formats: List[str],
 ) -> None:
     """
-    Write conserved systems graph to various output formats.
+    Write a conserved systems graph to various output formats.
 
     Args:
         pangenomes: Collection of pangenomes.
@@ -289,10 +309,12 @@ def write_conserved_systems(
     # Write in GraphML format if requested
     if "graphml" in graph_formats:
         graphml_file = output / "conserved_systems.graphml"
-        logger.info(f"Writing conserved systems graph in GraphML format: {graphml_file}")
+        logger.info(
+            f"Writing conserved systems graph in GraphML format: {graphml_file}"
+        )
         nx.readwrite.graphml.write_graphml(conserved_systems_graph, graphml_file)
 
-    # Write summary TSV file
+    # Write a summary TSV file
     tsv_file = output / "conserved_systems.tsv"
     logger.info(f"Writing conserved systems summary: {tsv_file}")
     # TODO: Implement TSV writing logic
@@ -321,13 +343,13 @@ def get_pangenomes_to_systems_data(pangenomes: Pangenomes) -> Dict[str, Dict[str
 
 
 def compare_systems(
-        pangenomes: Pangenomes,
-        gfrr_metrics: str = "min_gfrr_models",
-        gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
-        gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
-        threads: int = 1,
-        lock: Optional[Lock] = None,
-        disable_bar: bool = False
+    pangenomes: Pangenomes,
+    gfrr_metrics: str = "min_gfrr_models",
+    gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
+    gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+    threads: int = 1,
+    lock: Optional[Lock] = None,
+    disable_bar: bool = False,
 ) -> nx.Graph:
     """
     Compare systems across pangenomes and identify conserved system clusters.
@@ -350,16 +372,22 @@ def compare_systems(
     logger.info("Starting systems comparison across pangenomes")
 
     try:
-        # Create comprehensive systems graph
-        systems_graph, system_to_pangenome, system_hash_to_system = create_systems_graph(
-            pangenomes, threads, lock, disable_bar
+        # Create a comprehensive systems graph
+        systems_graph, system_to_pangenome, system_hash_to_system = (
+            create_systems_graph(pangenomes, threads, lock, disable_bar)
         )
 
         logger.info(f"Created systems graph with {len(systems_graph.nodes)} nodes")
 
         # Compute similarity edges based on FRR
-        compute_gfrr_edges(systems_graph, system_to_pangenome, system_hash_to_system, gfrr_cutoff, gfrr_models_cutoff,
-                           disable_bar)
+        compute_gfrr_edges(
+            systems_graph,
+            system_to_pangenome,
+            system_hash_to_system,
+            gfrr_cutoff,
+            gfrr_models_cutoff,
+            disable_bar,
+        )
 
         logger.info(f"Added {len(systems_graph.edges)} similarity edges")
 
@@ -384,19 +412,23 @@ def compare_systems(
                     node_attrs.pop(f"{gfrr_metrics}_cluster", None)
 
                     # Add cluster information
-                    node_attrs.update({
-                        "cluster_systems_id": cluster_id,
-                        "system_id": system_obj.ID,
-                        "system_name": system_obj.name,
-                        "pangenome": pangenome_name
-                    })
+                    node_attrs.update(
+                        {
+                            "cluster_systems_id": cluster_id,
+                            "system_id": system_obj.ID,
+                            "system_name": system_obj.name,
+                            "pangenome": pangenome_name,
+                        }
+                    )
 
                     cluster_system_objects.add(system_obj)
 
-                # Add cluster to pangenomes collection
-                pangenomes.add_cluster_systems(ClusterSystems(cluster_id, *cluster_system_objects))
+                # Add a cluster to a pangenomes collection
+                pangenomes.add_cluster_systems(
+                    ClusterSystems(cluster_id, *cluster_system_objects)
+                )
             else:
-                # Remove single-system "clusters" from graph
+                # Remove single-system "clusters" from the graph
                 systems_graph.remove_nodes_from(cluster_systems)
 
         logger.info(f"Identified {conserved_clusters_count} conserved system clusters")
@@ -408,13 +440,13 @@ def compare_systems(
 
 
 def generate_heatmap(
-        data: pd.DataFrame,
-        output: Path,
-        output_name: str,
-        output_formats: List[str],
-        figure_size: Tuple[float, float],
-        title: str = "Heatmap",
-        font_size: int = 18
+    data: pd.DataFrame,
+    output: Path,
+    output_name: str,
+    output_formats: List[str],
+    figure_size: Tuple[float, float],
+    title: str = "Heatmap",
+    font_size: int = 18,
 ) -> None:
     """
     Generate a heatmap visualization using Bokeh.
@@ -429,15 +461,13 @@ def generate_heatmap(
         font_size: Base font size for text elements.
     """
 
-    # Prepare data source for Bokeh
+    # Prepare a data source for Bokeh
     melted_data = data.reset_index().melt(
-        id_vars="index",
-        var_name="columns",
-        value_name="value"
+        id_vars="index", var_name="columns", value_name="value"
     )
     source = ColumnDataSource(melted_data)
 
-    # Create figure with appropriate dimensions
+    # Create a figure with appropriate dimensions
     plot_width, plot_height = int(figure_size[0]), int(figure_size[1])
 
     heatmap = figure(
@@ -447,7 +477,7 @@ def generate_heatmap(
         width=plot_width,
         height=plot_height,
         tools="hover,save,pan,box_zoom,reset,wheel_zoom",
-        toolbar_location='above'
+        toolbar_location="above",
     )
 
     # Create color mapping
@@ -455,21 +485,25 @@ def generate_heatmap(
         field_name="value",
         palette=Reds256[::-1],  # Reverse palette for intuitive coloring
         low=data.values.min(),
-        high=data.values.max()
+        high=data.values.max(),
     )
 
     # Add heatmap rectangles
     heatmap.rect(
-        x="columns", y="index",
-        width=1, height=1,
+        x="columns",
+        y="index",
+        width=1,
+        height=1,
         source=source,
         fill_color=color_mapper,
-        line_color=None
+        line_color=None,
     )
 
     # Add color bar legend
-    color_bar = ColorBar(color_mapper=color_mapper['transform'], width=8, location=(0, 0))
-    heatmap.add_layout(color_bar, 'right')
+    color_bar = ColorBar(
+        color_mapper=color_mapper["transform"], width=8, location=(0, 0)
+    )
+    heatmap.add_layout(color_bar, "right")
 
     # Configure styling
     heatmap.title.text_font_size = f"{font_size + 6}px"
@@ -513,19 +547,25 @@ def create_pangenome_systems_heatmaps(pangenomes: Pangenomes, output: Path) -> N
 
     # Generate raw counts heatmap
     generate_heatmap(
-        data_df.T, output, "heatmap_number_systems", ["html"],
+        data_df.T,
+        output,
+        "heatmap_number_systems",
+        ["html"],
         figure_size=figure_size,
         title="Number of Systems Detected in Pangenomes",
-        font_size=18
+        font_size=18,
     )
 
-    # Generate normalized percentage heatmap
+    # Generate a normalized percentage heatmap
     data_normalized = data_df.div(data_df.sum(axis=0), axis=1) * 100
     generate_heatmap(
-        data_normalized.T, output, "heatmap_normalized_systems", ["html"],
+        data_normalized.T,
+        output,
+        "heatmap_normalized_systems",
+        ["html"],
         figure_size=figure_size,
         title="Normalized Percentage of Systems Detected in Pangenomes",
-        font_size=18
+        font_size=18,
     )
 
     logger.info("Heatmaps generation completed")
@@ -550,12 +590,14 @@ def launch(args: argparse.Namespace) -> None:
         # Process and validate model files
         models_list = []
         for model_path in args.models:
-            validated_models = check_models(model_path, disable_bar=args.disable_prog_bar)
+            validated_models = check_models(
+                model_path, disable_bar=args.disable_prog_bar
+            )
             models_list.append(validated_models)
         need_info["models"] = models_list
 
-        # Load pangenomes and set up working environment
-        pangenomes, temp_dir, _, lock = common_launch(
+        # Load pangenomes and set up a working environment
+        pangenomes, tmp_dir, _, lock = common_launch(
             args, check_pangenome_write_systems, need_info, sources=args.sources
         )
 
@@ -570,31 +612,42 @@ def launch(args: argparse.Namespace) -> None:
 
         # Perform systems comparison if GFRR metrics specified
         if args.gfrr_metrics:
-            logger.info(f"Performing systems comparison using {args.gfrr_metrics} metric")
-            conserved_systems_graph = compare_systems(pangenomes, gfrr_metrics=args.gfrr_metrics,
-                                                      gfrr_cutoff=args.gfrr_cutoff,
-                                                      gfrr_models_cutoff=args.gfrr_models_cutoff, threads=args.cpus,
-                                                      lock=lock, disable_bar=args.disable_prog_bar)
+            logger.info(
+                f"Performing systems comparison using {args.gfrr_metrics} metric"
+            )
+            conserved_systems_graph = compare_systems(
+                pangenomes,
+                gfrr_metrics=args.gfrr_metrics,
+                gfrr_cutoff=args.gfrr_cutoff,
+                gfrr_models_cutoff=args.gfrr_models_cutoff,
+                threads=args.cpus,
+                lock=lock,
+                disable_bar=args.disable_prog_bar,
+            )
 
             # Write results to files
-            write_conserved_systems(pangenomes, output_dir, conserved_systems_graph, args.graph_formats)
+            write_conserved_systems(
+                pangenomes, output_dir, conserved_systems_graph, args.graph_formats
+            )
 
         logger.info("Systems comparison analysis completed successfully")
 
     except Exception as e:
         logger.error(f"Analysis failed: {str(e)}")
-        raise SystemsComparisonError(f"Systems comparison analysis failed: {str(e)}") from e
+        raise SystemsComparisonError(
+            f"Systems comparison analysis failed: {str(e)}"
+        ) from e
 
     finally:
         # Clean up temporary files
-        if not args.keep_tmp and 'temp_dir' in locals():
-            logger.debug(f"Cleaning up temporary directory: {temp_dir}")
-            rmtree(temp_dir, ignore_errors=True)
+        if not args.keep_tmp:
+            logger.debug(f"Cleaning up temporary directory: {tmp_dir}")
+            rmtree(tmp_dir, ignore_errors=True)
 
 
 def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:
     """
-    Create subparser for systems comparison command.
+    Create a subparser for systems comparison command.
 
     Args:
         sub_parser: Subparser action from main argument parser.
@@ -605,7 +658,7 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
     parser = sub_parser.add_parser(
         "compare_systems",
         description="Compare genomic systems among pangenomes using GFRR metrics",
-        help="Identify conserved systems across multiple pangenomes"
+        help="Identify conserved systems across multiple pangenomes",
     )
 
     parser_comparison_systems(parser)
@@ -624,53 +677,55 @@ def parser_comparison_systems(parser: argparse.ArgumentParser) -> None:
 
     # Required arguments specific to systems comparison
     required.add_argument(
-        '-m', '--models',
+        "-m",
+        "--models",
         required=True,
         type=Path,
         nargs="+",
         help="Path(s) to model list files. Multiple models can be specified "
-             "corresponding to different sources. Order must match --sources."
+        "corresponding to different sources. Order must match --sources.",
     )
 
     required.add_argument(
-        "-s", "--sources",
+        "-s",
+        "--sources",
         required=True,
         type=str,
         nargs="+",
         help="Name(s) of the systems sources. Multiple sources can be specified. "
-             "Order must match --models argument."
+        "Order must match --models argument.",
     )
 
     # Optional comparison-specific arguments
     compare_opt.add_argument(
-        '--heatmap',
-        action='store_true',
-        help='Generate heatmaps showing normalized system presence distribution across pangenomes'
+        "--heatmap",
+        action="store_true",
+        help="Generate heatmaps showing normalized system presence distribution across pangenomes",
     )
 
     compare_opt.add_argument(
-        '--gfrr_metrics',
+        "--gfrr_metrics",
         type=str,
         default=None,
         choices=["min_gfrr_models", "max_gfrr_models", "min_gfrr", "max_gfrr"],
         help="Similarity metric for clustering conserved systems. "
-             "Models metrics use only model gene families, while regular metrics use all families."
+        "Models metrics use only model gene families, while regular metrics use all families.",
     )
 
     compare_opt.add_argument(
-        '--gfrr_models_cutoff',
+        "--gfrr_models_cutoff",
         type=float,
         nargs=2,
-        default=[0.2, 0.2],
+        default=[0.4, 0.6],
         help="GFRR cutoff thresholds for model gene families comparison. "
-             "min_gfrr = shared_families / min(families1, families2), "
-             "max_gfrr = shared_families / max(families1, families2). "
-             "Default: 0.2 0.2"
+        "min_gfrr = shared_families / min(families1, families2), "
+        "max_gfrr = shared_families / max(families1, families2). "
+        "Default: 0.2 0.2",
     )
 
     # Additional optional arguments
     optional.add_argument(
         "--canonical",
         action="store_true",
-        help="Include canonical system versions in the analysis output."
+        help="Include canonical system versions in the analysis output.",
     )
