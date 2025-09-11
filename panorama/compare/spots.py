@@ -10,6 +10,8 @@ clustering approaches. It includes utilities for building comparative graphs, co
 family relatedness relationships (GFRR), and generating various output formats for visualization.
 """
 
+# TODO create a Heatmap with clustered spots and pangenomes (see code of Jupyter NB)
+
 # Default libraries
 from __future__ import annotations
 import argparse
@@ -761,6 +763,7 @@ def graph_systems_link_with_conserved_spots(
     output: Path,
     graph_formats: Optional[List[str]] = None,
     canonical: bool = False,
+    community: str = "Louvain",
     threads: int = 1,
     lock: Optional[Lock] = None,
     disable_bar: bool = False,
@@ -770,10 +773,11 @@ def graph_systems_link_with_conserved_spots(
 
     This function creates comprehensive graphs linking systems through shared conserved
     spots and performs dual clustering analysis using both Louvain community detection
-    and Minimum Spanning Tree (MST) approaches. The analysis identifies system clusters
+    or Minimum Spanning Tree (MST) approaches. The analysis identifies system clusters
     that span multiple pangenomes and share conserved genomic locations.
 
     Args:
+        community:
         pangenomes (Pangenomes): Collection of pangenomes with systems and conserved spots.
         output (Path): Output directory for generated graphs and results.
         graph_formats (Optional[List[str]]): Output formats ['gexf', 'graphml']. Default: None.
@@ -871,144 +875,146 @@ def graph_systems_link_with_conserved_spots(
             node_attr["spots"] = ",".join(map(str, sorted(node_attr["spots"])))
 
     # LOUVAIN CLUSTERING ANALYSIS
-    logger.info("Performing Louvain community detection")
-    louvain_graph = systems_graph.copy()
-    partitions = nx.algorithms.community.louvain_communities(
-        louvain_graph, weight="weight"
-    )
+    if community == "Louvain":
+        logger.info("Performing Louvain community detection")
+        louvain_graph = systems_graph.copy()
+        partitions = nx.algorithms.community.louvain_communities(
+            louvain_graph, weight="weight"
+        )
 
-    cluster_id = 1
-    clusters_retained = 0
+        cluster_id = 1
+        clusters_retained = 0
 
-    for cluster_systems in partitions:
-        if len(cluster_systems) > 1:  # Only process multi-node clusters
-            # Check if the cluster spans multiple pangenomes
-            pangenomes_in_cluster = {
-                system2pangenome[sys_hash] for sys_hash in cluster_systems
-            }
+        for cluster_systems in partitions:
+            if len(cluster_systems) > 1:  # Only process multi-node clusters
+                # Check if the cluster spans multiple pangenomes
+                pangenomes_in_cluster = {
+                    system2pangenome[sys_hash] for sys_hash in cluster_systems
+                }
 
-            if len(pangenomes_in_cluster) > 1:
-                # Multi-pangenome cluster - retain and label
+                if len(pangenomes_in_cluster) > 1:
+                    # Multi-pangenome cluster - retain and label
+                    for sys_hash in cluster_systems:
+                        node_attr = louvain_graph.nodes[sys_hash]
+                        system_obj = systemhash2system[sys_hash]
+                        pangenome_name = system2pangenome[sys_hash]
+
+                        node_attr.update(
+                            {
+                                "system_ID": getattr(system_obj, "ID", None),
+                                "system_name": system_obj.name,
+                                "pangenome": pangenome_name,
+                                "cluster_id": cluster_id,
+                            }
+                        )
+
+                    cluster_id += 1
+                    clusters_retained += 1
+                else:
+                    # Single-pangenome cluster - remove
+                    louvain_graph.remove_nodes_from(cluster_systems)
+            else:
+                # Single-node cluster - remove
+                louvain_graph.remove_nodes_from(cluster_systems)
+
+        logger.info(
+            f"Louvain clustering: retained {clusters_retained} inter-pangenome clusters"
+        )
+
+        # Save Louvain clustering results
+        if graph_formats is not None:
+            for fmt in graph_formats:
+                if fmt == "gexf":
+                    graph_file = output / "systems_link_with_conserved_spots_louvain.gexf"
+                    logger.info(f"Writing Louvain graph in GEXF format: {graph_file}")
+                    nx.readwrite.gexf.write_gexf(louvain_graph, graph_file)
+                elif fmt == "graphml":
+                    graph_file = (
+                        output / "systems_link_with_conserved_spots_louvain.graphml"
+                    )
+                    logger.info(f"Writing Louvain graph in GraphML format: {graph_file}")
+                    nx.readwrite.graphml.write_graphml(louvain_graph, graph_file)
+
+    if community == "MST":
+        # MINIMUM SPANNING TREE (MST) CLUSTERING ANALYSIS
+        logger.info("Performing MST-based clustering with automatic threshold detection")
+
+        if len(systems_graph.edges) == 0:
+            logger.warning("No edges in systems graph - skipping MST analysis")
+            return
+
+        # Build Minimum Spanning Tree
+        mst = nx.minimum_spanning_tree(systems_graph, weight="weight")
+
+        # Extract edge weights for threshold analysis
+        edge_weights = np.array([d["weight"] for _, _, d in mst.edges(data=True)])
+
+        if len(edge_weights) == 0:
+            logger.warning("MST has no edges - skipping threshold analysis")
+            return
+
+        # Automatic threshold detection using weight distribution analysis
+        sorted_weights = np.sort(edge_weights)
+
+        if len(sorted_weights) > 1:
+            # Find the largest jump in consecutive weights
+            weight_differences = np.diff(sorted_weights)
+            max_jump_index = np.argmax(weight_differences)
+            threshold = sorted_weights[max_jump_index]
+
+            logger.info(
+                f"MST threshold detection: identified threshold = {threshold} "
+                f"(max jump at index {max_jump_index})"
+            )
+        else:
+            # Fallback for the single edge case
+            threshold = sorted_weights[0]
+            logger.info(f"MST threshold detection: single edge, using weight = {threshold}")
+
+        # Remove edges with weights above the threshold
+        heavy_edges = [
+            (u, v) for u, v, d in mst.edges(data=True) if d["weight"] > threshold
+        ]
+        if heavy_edges:
+            mst.remove_edges_from(heavy_edges)
+            logger.info(f"Removed {len(heavy_edges)} edges above threshold from MST")
+
+        # Identify connected components as clusters
+        mst_clusters_retained = 0
+        for cluster_id, cluster_systems in enumerate(nx.connected_components(mst), start=1):
+            if len(cluster_systems) > 1:
+                # Assign cluster labels to nodes
                 for sys_hash in cluster_systems:
-                    node_attr = louvain_graph.nodes[sys_hash]
+                    node_attr = mst.nodes[sys_hash]
                     system_obj = systemhash2system[sys_hash]
                     pangenome_name = system2pangenome[sys_hash]
 
                     node_attr.update(
                         {
-                            "system_ID": getattr(system_obj, "ID", None),
                             "system_name": system_obj.name,
                             "pangenome": pangenome_name,
                             "cluster_id": cluster_id,
                         }
                     )
 
-                cluster_id += 1
-                clusters_retained += 1
+                mst_clusters_retained += 1
             else:
-                # Single-pangenome cluster - remove
-                louvain_graph.remove_nodes_from(cluster_systems)
-        else:
-            # Single-node cluster - remove
-            louvain_graph.remove_nodes_from(cluster_systems)
+                # Remove single-node components
+                mst.remove_nodes_from(cluster_systems)
 
-    logger.info(
-        f"Louvain clustering: retained {clusters_retained} inter-pangenome clusters"
-    )
+        logger.info(f"MST clustering: identified {mst_clusters_retained} clusters")
 
-    # Save Louvain clustering results
-    if graph_formats is not None:
-        for fmt in graph_formats:
-            if fmt == "gexf":
-                graph_file = output / "systems_link_with_conserved_spots_louvain.gexf"
-                logger.info(f"Writing Louvain graph in GEXF format: {graph_file}")
-                nx.readwrite.gexf.write_gexf(louvain_graph, graph_file)
-            elif fmt == "graphml":
-                graph_file = (
-                    output / "systems_link_with_conserved_spots_louvain.graphml"
-                )
-                logger.info(f"Writing Louvain graph in GraphML format: {graph_file}")
-                nx.readwrite.graphml.write_graphml(louvain_graph, graph_file)
-
-    # MINIMUM SPANNING TREE (MST) CLUSTERING ANALYSIS
-    logger.info("Performing MST-based clustering with automatic threshold detection")
-
-    if len(systems_graph.edges) == 0:
-        logger.warning("No edges in systems graph - skipping MST analysis")
-        return
-
-    # Build Minimum Spanning Tree
-    mst = nx.minimum_spanning_tree(systems_graph, weight="weight")
-
-    # Extract edge weights for threshold analysis
-    edge_weights = np.array([d["weight"] for _, _, d in mst.edges(data=True)])
-
-    if len(edge_weights) == 0:
-        logger.warning("MST has no edges - skipping threshold analysis")
-        return
-
-    # Automatic threshold detection using weight distribution analysis
-    sorted_weights = np.sort(edge_weights)
-
-    if len(sorted_weights) > 1:
-        # Find the largest jump in consecutive weights
-        weight_differences = np.diff(sorted_weights)
-        max_jump_index = np.argmax(weight_differences)
-        threshold = sorted_weights[max_jump_index]
-
-        logger.info(
-            f"MST threshold detection: identified threshold = {threshold} "
-            f"(max jump at index {max_jump_index})"
-        )
-    else:
-        # Fallback for the single edge case
-        threshold = sorted_weights[0]
-        logger.info(f"MST threshold detection: single edge, using weight = {threshold}")
-
-    # Remove edges with weights above the threshold
-    heavy_edges = [
-        (u, v) for u, v, d in mst.edges(data=True) if d["weight"] > threshold
-    ]
-    if heavy_edges:
-        mst.remove_edges_from(heavy_edges)
-        logger.info(f"Removed {len(heavy_edges)} edges above threshold from MST")
-
-    # Identify connected components as clusters
-    mst_clusters_retained = 0
-    for cluster_id, cluster_systems in enumerate(nx.connected_components(mst), start=1):
-        if len(cluster_systems) > 1:
-            # Assign cluster labels to nodes
-            for sys_hash in cluster_systems:
-                node_attr = mst.nodes[sys_hash]
-                system_obj = systemhash2system[sys_hash]
-                pangenome_name = system2pangenome[sys_hash]
-
-                node_attr.update(
-                    {
-                        "system_name": system_obj.name,
-                        "pangenome": pangenome_name,
-                        "cluster_id": cluster_id,
-                    }
-                )
-
-            mst_clusters_retained += 1
-        else:
-            # Remove single-node components
-            mst.remove_nodes_from(cluster_systems)
-
-    logger.info(f"MST clustering: identified {mst_clusters_retained} clusters")
-
-    # Save MST clustering results
-    if graph_formats is not None:
-        for fmt in graph_formats:
-            if fmt == "gexf":
-                graph_file = output / "systems_link_with_conserved_spots_mst.gexf"
-                logger.info(f"Writing MST graph in GEXF format: {graph_file}")
-                nx.readwrite.gexf.write_gexf(mst, graph_file)
-            elif fmt == "graphml":
-                graph_file = output / "systems_link_with_conserved_spots_mst.graphml"
-                logger.info(f"Writing MST graph in GraphML format: {graph_file}")
-                nx.readwrite.graphml.write_graphml(mst, graph_file)
+        # Save MST clustering results
+        if graph_formats is not None:
+            for fmt in graph_formats:
+                if fmt == "gexf":
+                    graph_file = output / "systems_link_with_conserved_spots_mst.gexf"
+                    logger.info(f"Writing MST graph in GEXF format: {graph_file}")
+                    nx.readwrite.gexf.write_gexf(mst, graph_file)
+                elif fmt == "graphml":
+                    graph_file = output / "systems_link_with_conserved_spots_mst.graphml"
+                    logger.info(f"Writing MST graph in GraphML format: {graph_file}")
+                    nx.readwrite.graphml.write_graphml(mst, graph_file)
 
 
 def write_conserved_spots(
@@ -1270,7 +1276,7 @@ def compare_spots(
                         "spot_id": spot.ID,
                         "pangenome": pangenome_name,
                         "num_families": spot.number_of_families,
-                        "num_rgps": len(spot),
+                        "num_regions": len(spot),
                     }
                 )
 
@@ -1330,6 +1336,8 @@ def launch(args: argparse.Namespace) -> None:
 
     Raises:
         Various exceptions from underlying functions for validation, processing, or I/O errors.
+    todo:
+        - add a community argument
     """
     logger.info("Starting conserved spots comparison analysis")
 
@@ -1354,8 +1362,8 @@ def launch(args: argparse.Namespace) -> None:
     spots_graph = compare_spots(
         pangenomes=pangenomes,
         dup_margin=args.dup_margin,
-        gfrr_metrics=args.frr_metrics,
-        gfrr_cutoff=args.frr_cutoff,
+        gfrr_metrics=args.gfrr_metrics,
+        gfrr_cutoff=args.gfrr_cutoff,
         threads=args.cpus,
         lock=lock,
         disable_bar=args.disable_prog_bar
@@ -1375,14 +1383,8 @@ def launch(args: argparse.Namespace) -> None:
     # Step 6: Perform systems linkage analysis if requested
     if args.systems:
         logger.info("Performing systems linkage analysis with conserved spots")
-        graph_systems_link_with_conserved_spots(
-            pangenomes=pangenomes,
-            output=output,
-            graph_formats=args.graph_formats,
-            threads=args.cpus,
-            lock=lock,
-            disable_bar=args.disable_prog_bar
-        )
+        graph_systems_link_with_conserved_spots(pangenomes=pangenomes, output=output, graph_formats=args.graph_formats,
+                                                threads=args.cpus, lock=lock, disable_bar=args.disable_prog_bar)
     else:
         logger.info("Systems analysis not requested - skipping systems linkage")
 
