@@ -172,7 +172,7 @@ Interactive HTML heatmaps showing system distribution patterns:
 When `--gfrr_metrics` and `--graph_formats` are specified, genereate `conserved_systems.gexf/graphml` Network graphs of
 conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
-Edge attributes contain GFRR similarity scores and shared family counts
+Edge attributes contain GFRR similarity scores and the number of shared gene families.
 
 [PLACEHOLDER: Network graph of conserved systems clusters with different colors]
 
