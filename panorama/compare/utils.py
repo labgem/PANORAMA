@@ -222,7 +222,6 @@ def common_launch(
             method=args.method,
             mmseqs2_opt=mmseqs2_options,
             tmpdir=tmpdir,
-            keep_tmp=args.keep_tmp,
             threads=args.cpus,
             lock=lock,
             disable_bar=args.disable_prog_bar,

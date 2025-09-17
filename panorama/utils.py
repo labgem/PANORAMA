@@ -118,6 +118,8 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         FileExistsError: If the directory already exists and force is False.
         Exception: If an unexpected error occurs.
     """
+    if not isinstance(output, Path):
+        raise Exception(f"Invalid directory type: {type(output)}")
     try:
         output.mkdir(parents=True, exist_ok=False)
     except OSError:
@@ -126,7 +128,8 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
             if erase:
-                logging.getLogger("PANORAMA").warning(f"Erasing the directory: {output}")
+                if any(output.iterdir()):
+                    logging.getLogger("PANORAMA").warning(f"Erasing the non empty directory: {output}")
                 try:
                     shutil.rmtree(output)
                 except Exception:
