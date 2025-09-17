@@ -94,7 +94,7 @@ def cmd_line():
     desc += (
         "         cluster             Cluster gene families from multiple pangenomes\n"
     )
-    desc += "         compare_context     Compare contexts among pangenomes\n"
+    # desc += "         compare_context     Compare contexts among pangenomes\n"
     desc += "         compare_systems     Compare contexts among pangenomes\n"
     desc += "         compare_spots       Compare spots among pangenomes\n"
     desc += "\n"
