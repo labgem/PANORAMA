@@ -37,12 +37,15 @@ def filter_global_context(
     and family names.
 
     Args:
-        graph (nx.Graph): The input graph with GeneFamily nodes and edge data containing 'genomes'.
-        jaccard_threshold (float, optional): Minimum Jaccard gene proportion required for both
-            families to retain an edge. Defaults to 0.8.
+        graph (nx.Graph):
+            The input graph with GeneFamily nodes and edge data containing 'genomes'.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard gene proportion required for both families to retain an edge.
+            Defaults to 0.8.
 
     Returns:
-        nx.Graph[GeneFamily]: A new graph with filtered edges and updated edge attributes.
+        nx.Graph[GeneFamily]:
+            A new graph with filtered edges and updated edge attributes.
     """
     new_graph = nx.Graph()
     # Copy all nodes from the original graph to the new graph
@@ -387,120 +390,3 @@ def dict_families_context(
                         gf2fam[gf].add(fam_model)
 
     return gf2fam, fam2source
-
-
-# The following functions are not used anywhere anymore
-
-
-def bitset_from_row(row) -> int:
-    """
-    Converts a row of the binary matrix into an integer bitset.
-    Each bit represents the presence of an individual for that characteristic.
-    Args:
-        row: A row of the binary matrix
-
-    Returns:
-        int: integer bitset representing the presence of an individual for that characteristic
-    """
-    bitset = 0
-    for i, val in enumerate(row):
-        if val == 1:
-            bitset |= 1 << i  # Met le i-ème bit à 1
-    return bitset
-
-
-def search_comb(
-    comb: Tuple[int, ...], mandatory_bitsets: List[int], accessory_bitsets: List[int]
-) -> Tuple[Dict[int, int], int, int]:
-    """
-    Search for a working combination in bitsets
-
-    Args:
-        comb (Tuple[int, ...]): Combination of gene families index
-        mandatory_bitsets (List[int]): Bitsets with index of mandatory families
-        accessory_bitsets (List[int]): Bitsets with index of accessory families
-
-    Returns:
-        Dict[int, int]: Association between gene families and families
-        Integer: Number of mandatory families covered
-        Integer: Number of accessory families covered
-    """
-    covered_families = set()
-    gf2fam = {}
-
-    covered_mandatory = 0
-    for family_index, bitset in enumerate(mandatory_bitsets):
-        covering_gfs = {ind for ind in comb if (1 << ind) & bitset}
-        if len(covering_gfs) >= 1:
-            for gf in covering_gfs:
-                gf2fam[gf] = family_index
-            if family_index not in covered_families:
-                covered_mandatory += 1
-                covered_families.add(family_index)
-
-    covered_accessory = 0
-    for family_index, bitset in enumerate(
-        accessory_bitsets, start=len(mandatory_bitsets)
-    ):
-        covering_gfs = {ind for ind in comb if (1 << ind) & bitset}
-        if len(covering_gfs) >= 1:
-            for gf in covering_gfs:
-                gf2fam[gf] = family_index
-            if family_index not in covered_families:
-                covered_accessory += 1
-                covered_families.add(family_index)
-
-    return gf2fam, covered_mandatory, covered_accessory
-
-
-def find_combinations(
-    matrix: pd.DataFrame, func_unit: FuncUnit
-) -> List[Tuple[Set[str], Dict[str, str]]]:
-    """
-    Search for a working combination of gene families that respect families' presence absence model rules
-
-    Args:
-        matrix: The association matrix between gene families and families
-        func_unit: The functional unit to search for.
-
-    Returns:
-        List: List of working combination
-            Set[str]: Set of selected gene families name that correspond to a working combination
-            Dict[str, str]: Association between gene families and families for the combination.
-    """
-
-    mandatory = {fam.name for fam in func_unit.mandatory}
-    mandatory_indices = [
-        i for i, fam in enumerate(matrix.index.values) if fam in mandatory
-    ]
-
-    if (
-        len(mandatory_indices) < func_unit.min_mandatory
-        or matrix.shape[0] < func_unit.min_total
-    ):
-        return []
-
-    bitsets = [bitset_from_row(matrix.iloc[i, :]) for i in range(matrix.shape[0])]
-    mandatory_bitsets = [bitsets[i] for i in mandatory_indices]
-    accessory_bitsets = [
-        bitsets[i] for i in range(matrix.shape[0]) if i not in mandatory_indices
-    ]
-
-    solutions = []
-    for size in sorted(range(func_unit.min_total, matrix.shape[1] + 1), reverse=True):
-        for comb in combinations(range(matrix.shape[1]), size):
-            gf2fam, covered_mandatory, covered_accessory = search_comb(
-                comb, mandatory_bitsets, accessory_bitsets
-            )
-            if (
-                covered_mandatory >= func_unit.min_mandatory
-                and covered_mandatory + covered_accessory >= func_unit.min_total
-            ):
-                solutions.append(
-                    (
-                        {matrix.columns[i] for i in comb},
-                        {matrix.columns[j]: matrix.index[i] for j, i in gf2fam.items()},
-                    )
-                )
-
-    return solutions

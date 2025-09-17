@@ -160,16 +160,20 @@ def check_pangenome_cs(
     and spots. Optionally validates systems detection if sources are provided.
 
     Args:
-        pangenome (Pangenome): Pangenome object to validate.
-        sources (Optional[List[str]]): List of system sources to validate.
-                                     If None, systems validation is skipped.
+        pangenome (Pangenome):
+            Pangenome object to validate.
+        sources (Optional[List[str]]):
+            List of system sources to validate.
+            If None, systems validation is skipped.
 
     Raises:
-        ValueError: If RGPs or spots haven't been computed for the pangenome.
-                   Includes guidance on required commands.
-        AttributeError: If systems detection hasn't been performed when sources
-                       are specified.
-        KeyError: If specified sources aren't found in the pangenome's systems.
+        ValueError:
+            If RGPs or spots haven't been computed for the pangenome.
+            Includes guidance on required commands.
+        AttributeError:
+            If systems detection hasn't been performed when sources are specified.
+        KeyError:
+            If specified sources aren't found in the pangenome's systems.
     """
     pangenome_name = pangenome.name
 
@@ -234,10 +238,12 @@ def create_pangenome_spots_graph(
     associated with its bordering gene families for subsequent comparison analysis.
 
     Args:
-        pangenome (Pangenome): Source pangenome containing spots to process.
-        dup_margin (float): Minimum ratio of organisms that must contain multiple
-                          copies of a gene family for it to be considered duplicated.
-                          Used for multigenic family detection. Default: 0.05 (5%).
+        pangenome (Pangenome):
+            Source pangenome containing spots to process.
+        dup_margin (float):
+            Minimum ratio of organisms that must contain multiple
+            copies of a gene family for it to be considered duplicated.
+            Used for multigenic family detection. Default: 0.05 (5%).
 
     Returns:
         Tuple[nx.Graph, Dict[int, Set[GeneFamily]], Dict[int, str], Dict[int, Spot]]:
@@ -419,13 +425,18 @@ def compute_gfrr_edges(
     conserved genomic spots.
 
     Args:
-        graph (nx.Graph): Spots graph to add edges to (modified in-place).
-        spots2borders (Dict[int, Set[GeneFamily]]): Mapping of spot hashes to
-                                                   their bordering gene families.
-        spots2pangenome (Dict[int, str]): Mapping of spot hashes to pangenome names.
-        min_gfrr_cutoff (float): Minimum threshold for min_gfrr metric. Default: 0.5.
-        max_gfrr_cutoff (float): Minimum threshold for max_gfrr metric. Default: 0.8.
-        disable_bar (bool): Whether to disable the progress bar. Default: False.
+        graph (nx.Graph):
+            Spots graph to add edges to (modified in-place).
+        spots2borders (Dict[int, Set[GeneFamily]]):
+            Mapping of spot hashes to their bordering gene families.
+        spots2pangenome (Dict[int, str]):
+            Mapping of spot hashes to pangenome names.
+        min_gfrr_cutoff (float):
+            Minimum threshold for min_gfrr metric. Default: 0.5.
+        max_gfrr_cutoff (float):
+            Minimum threshold for max_gfrr metric. Default: 0.8.
+        disable_bar (bool):
+            Whether to disable the progress bar. Default: False.
     """
     # Generate all possible pairs of spots from different pangenomes
     # This avoids unnecessary intra-pangenome comparisons

@@ -419,18 +419,29 @@ def align_db(
 
     Args:
         query_name:
+            Name of the query database
         target_name:
-        query_db: Path to MMseqs2 query sequences database.
-        target_db: Path to MMseqs2 target sequences database.
-        aln_db: Optional path for the alignment results database.
-            If None, a temporary file will be created.
-        tmpdir: Temporary directory for MMseqs2 operations.
+            Name of the target database
+        query_db:
+            Path to MMseqs2 query sequences database.
+        target_db:
+            Path to MMseqs2 target sequences database.
+        aln_db:
+            Optional path for the alignment results database. If None, a temporary file will be created.
+        tmpdir:
+            Temporary directory for MMseqs2 operations.
             If None, the system temp directory will be used.
-        identity: Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
-        coverage: Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
-        cov_mode: Coverage mode for MMseqs2 (0-5). Defaults to 0.
-            0: coverage of the query, 1: coverage of the target, 2: coverage of the shorter sequence.
-        threads: Number of threads for alignment. Defaults to 1.
+        identity:
+            Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
+        coverage:
+            Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
+        cov_mode:
+            Coverage mode for MMseqs2 (0-5). Defaults to 0.
+            - 0: coverage of the query,
+            - 1: coverage of the target,
+            - 2: coverage of the shorter sequence.
+        threads:
+            Number of threads for alignment. Defaults to 1.
 
     Returns:
         Path: Path to the MMseqs2 alignment results database.
@@ -742,21 +753,32 @@ def inter_pangenome_align(
     databases for each pangenome and performs all pairwise comparisons.
 
     Args:
-        pangenome2families_seq: Dictionary mapping pangenome names to their
+        pangenome2families_seq:
+            Dictionary mapping pangenome names to their
             respective gene family sequence files.
-        output: Directory where alignment results will be written.
+        output:
+            Directory where alignment results will be written.
             Will be created if it doesn't exist.
-        identity: Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
-        coverage: Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
-        cov_mode: Coverage mode for MMseqs2 (0-5). Defaults to 0.
-        tmpdir: Temporary directory for operations. If None, uses system temp.
-        threads: Number of threads for processing. Defaults to 1.
-        disable_bar: Whether to disable progress bars. Defaults to False.
+        identity:
+            Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
+        coverage:
+            Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
+        cov_mode:
+            Coverage mode for MMseqs2 (0-5). Defaults to 0.
+        tmpdir:
+            Temporary directory for operations. If None, uses system temp.
+        threads:
+            Number of threads for processing. Defaults to 1.
+        disable_bar:
+            Whether to disable progress bars. Defaults to False.
 
     Raises:
-        AlignmentError: If the alignment process fails.
-        AlignmentValidationError: If parameters are invalid.
-        FileNotFoundError: If sequence files don't exist.
+        AlignmentError:
+            If the alignment process fails.
+        AlignmentValidationError:
+            If parameters are invalid.
+        FileNotFoundError:
+            If sequence files don't exist.
 
     Notes:
         Output directory and temporary directory are supposed to be already validated.
@@ -836,23 +858,34 @@ def all_against_all_align(
     similarities.
 
     Args:
-        families_seq: List of paths to gene family sequence files from all pangenomes.
-        output: Directory where alignment results will be written.
+        families_seq:
+            List of paths to gene family sequence files from all pangenomes.
+        output:
+            Directory where alignment results will be written.
             Will be created if it doesn't exist.
-        identity: Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
-        coverage: Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
-        cov_mode: Coverage mode for MMseqs2 (0-5). Defaults to 0.
-        tmpdir: Temporary directory for operations. If None, uses system temp.
-        threads: Number of threads for processing. Defaults to 1.
+        identity:
+            Minimum sequence identity threshold (0.0-1.0). Defaults to 0.8.
+        coverage:
+            Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
+        cov_mode:
+            Coverage mode for MMseqs2 (0-5). Defaults to 0.
+        tmpdir:
+            Temporary directory for operations. If None, uses system temp.
+        threads:
+            Number of threads for processing. Defaults to 1.
 
     Returns:
-        pd.DataFrame: DataFrame containing all alignment results with columns
+        pd.DataFrame:
+            DataFrame containing all alignment results with columns
             defined in CONFIG.ALIGN_COLUMNS.
 
     Raises:
-        AlignmentError: If the alignment process fails.
-        AlignmentValidationError: If parameters are invalid.
-        FileNotFoundError: If sequence files don't exist.
+        AlignmentError:
+            If the alignment process fails.
+        AlignmentValidationError:
+            If parameters are invalid.
+        FileNotFoundError:
+            If sequence files don't exist.
 
     Notes:
         Output directory and temporary directory are supposed to be already validated.
@@ -968,28 +1001,35 @@ def launch_pangenomes_alignment(
     Launches the alignment of pangenome families based on the specified mode.
 
     Args:
-        pangenomes (Pangenomes): A collection of pangenomes to be aligned.
-        output (Path): Path to the directory where the alignment results will be
-            stored.
-        tmpdir (Path): Path to the temporary directory for intermediate files during
+        pangenomes (Pangenomes):
+            A collection of pangenomes to be aligned.
+        output (Path):
+            Path to the directory where the alignment results will be stored.
+        tmpdir (Path):
+            Path to the temporary directory for intermediate files during
             the alignment process.
-        inter_pangenomes (bool): If True, performs an inter-pangenome alignment
-            mode.
-        all_against_all (bool): If True, performs an all-against-all alignment mode.
-        identity (float): Minimum sequence identity threshold for the alignment.
-        coverage (float): Minimum sequence coverage threshold for the alignment.
-        cov_mode (int): Coverage mode to dictate how the coverage threshold is
-            applied.
-        threads (int): Number of threads to be used for parallel processing.
-        lock (Lock): A multiprocessing lock to synchronize access to certain
-            operations.
-        force (bool): If True, allows overwriting or recreating the output
-            directory.
-        disable_bar (bool): If True, disables progress bars in the alignment
-            process.
+        inter_pangenomes (bool):
+            If True, performs an inter-pangenome alignment mode.
+        all_against_all (bool):
+            If True, performs an all-against-all alignment mode.
+        identity (float):
+            Minimum sequence identity threshold for the alignment.
+        coverage (float):
+            Minimum sequence coverage threshold for the alignment.
+        cov_mode (int):
+            Coverage mode to dictate how the coverage threshold is applied.
+        threads (int):
+            Number of threads to be used for parallel processing.
+        lock (Lock):
+            A multiprocessing lock to synchronize access to certain operations.
+        force (bool):
+            If True, allows overwriting or recreating the output directory.
+        disable_bar (bool):
+            If True, disables progress bars in the alignment process.
 
     Raises:
-        AlignmentValidationError: If none of the alignment modes (-inter_pangenomes
+        AlignmentValidationError:
+            If none of the alignment modes (-inter_pangenomes
             or -all_against_all) are specified.
     """
     # Write pangenome families sequences

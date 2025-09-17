@@ -710,8 +710,10 @@ def eliminate_systems(org_df, org_df_filtered):
     with any eliminated model families in the filtered dataset are removed entirely.
 
     Args:
-        org_df: pandas.DataFrame containing the original dataset with all systems and associated gene families.
-        org_df_filtered: pandas.DataFrame containing the already filtered dataset, which may have excluded some
+        org_df:
+            pandas.DataFrame containing the original dataset with all systems and associated gene families.
+        org_df_filtered:
+            pandas.DataFrame containing the already filtered dataset, which may have excluded some
             gene families or systems.
 
     Returns:

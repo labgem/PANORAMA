@@ -163,15 +163,19 @@ def process_hmm_accession(
 def read_hmm(hmm_path: Path) -> List[HMM]:
     """
     Read a HMM file to get a HMM object from pyHMMer.
+
     Args:
-        hmm_path: Path to the HMM file.
+        hmm_path:
+            Path to the HMM file.
 
     Returns:
         HMM object
 
     Raises:
-        Exception if opening the HMM file failed
-        IOError: if there is a problem in HMM reading
+        Exception:
+            if opening the HMM file failed
+        IOError:
+            if there is a problem in HMM reading
     """
     try:
         hmm_file = HMMFile(hmm_path)

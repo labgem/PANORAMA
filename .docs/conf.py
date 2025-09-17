@@ -15,7 +15,7 @@ from pathlib import Path
 # -- Project information -----------------------------------------------------
 
 project = 'PANORAMA'
-copyright = '2023, LABGeM'
+copyright = '2025, LABGeM'
 author = 'Jérôme Arnoux'
 
 # The full version, including alpha/beta/rc tags
@@ -50,7 +50,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 suppress_warning = ["myst.header", "autosectionlabel.*"]
 
