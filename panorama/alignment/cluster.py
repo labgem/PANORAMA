@@ -34,7 +34,7 @@ from panorama.alignment.utils import (
     write_pangenomes_families_sequences,
     createdb,
     PangenomeProcessingError,
-    MMSeqsError
+    MMSeqsError,
 )
 
 
@@ -45,6 +45,7 @@ class ClusteringMethod:
     """
     Defines a class representing clustering methods and their choices.
     """
+
     CHOICES = ["linclust", "cluster"]
     LINCLUST = "linclust"
     CLUSTER = "cluster"
@@ -54,8 +55,11 @@ class ClusteringMethod:
 @dataclass(frozen=True)
 class ClusteringConfig:
     """Configuration constants for clustering operations."""
+
     # Column names for clustering results
-    CLUSTER_COLUMN_NAMES: List[str] = field(default_factory=lambda: ["cluster_id", "referent", "in_clust"])
+    CLUSTER_COLUMN_NAMES: List[str] = field(
+        default_factory=lambda: ["cluster_id", "referent", "in_clust"]
+    )
 
     # Default clustering parameters
     DEFAULT_THREADS: int = 1
@@ -65,22 +69,24 @@ class ClusteringConfig:
     DEFAULT_EVAL: float = 1e-3
 
     # MMseqs2 default parameters
-    DEFAULT_MMSEQS2_OPTIONS: Dict[str, Union[int, float, str]] = field(default_factory=lambda: {
-        "comp_bias_corr": 1,
-        "kmer_per_seq": 20,
-        "identity": 0.5,
-        "coverage": 0.8,
-        "cov_mode": 0,
-        "eval": 1e-3,
-        "align_mode": 3,
-        "max_seq_len": 65535,
-        "max_reject": 2147483647,
-        "clust_mode": 0,
-        # Cluster-specific options
-        "max_seqs": 300,
-        "min_ungapped": 30,
-        "sensitivity": 5.7
-    })
+    DEFAULT_MMSEQS2_OPTIONS: Dict[str, Union[int, float, str]] = field(
+        default_factory=lambda: {
+            "comp_bias_corr": 1,
+            "kmer_per_seq": 20,
+            "identity": 0.5,
+            "coverage": 0.8,
+            "cov_mode": 0,
+            "eval": 1e-3,
+            "align_mode": 3,
+            "max_seq_len": 65535,
+            "max_reject": 2147483647,
+            "clust_mode": 0,
+            # Cluster-specific options
+            "max_seqs": 300,
+            "min_ungapped": 30,
+            "sensitivity": 5.7,
+        }
+    )
 
     # Output filename
     CLUSTERING_OUTPUT: str = "clustering_results.tsv"
@@ -92,17 +98,18 @@ CONFIG = ClusteringConfig()
 
 class ClusteringError(Exception):
     """Custom exception for clustering-related errors."""
+
     pass
 
 
 class ClusteringValidationError(ClusteringError):
     """Custom exception for clustering parameter validation errors."""
+
     pass
 
 
 def _validate_clustering_parameters(
-        threads: int,
-        mmseqs2_options: Dict[str, Union[int, float, str]]
+    threads: int, mmseqs2_options: Dict[str, Union[int, float, str]]
 ) -> None:
     """
     Validate clustering parameters.
@@ -115,7 +122,9 @@ def _validate_clustering_parameters(
         ClusteringValidationError: If any parameter is invalid.
     """
     if not isinstance(threads, int) or threads <= 0:
-        raise ClusteringValidationError(f"Threads must be positive integer, got: {threads}")
+        raise ClusteringValidationError(
+            f"Threads must be positive integer, got: {threads}"
+        )
 
     if not isinstance(mmseqs2_options, dict):
         raise ClusteringValidationError("MMseqs2 options must be a dictionary")
@@ -124,7 +133,9 @@ def _validate_clustering_parameters(
     required_params = ["identity", "coverage", "cov_mode"]
     for param in required_params:
         if param not in mmseqs2_options:
-            raise ClusteringValidationError(f"Missing required MMseqs2 parameter: {param}")
+            raise ClusteringValidationError(
+                f"Missing required MMseqs2 parameter: {param}"
+            )
 
     # Validate parameter ranges
     identity = mmseqs2_options.get("identity", 0)
@@ -132,16 +143,24 @@ def _validate_clustering_parameters(
     cov_mode = mmseqs2_options.get("cov_mode", 0)
 
     if not isinstance(identity, (int, float)) or not (0.0 <= identity <= 1.0):
-        raise ClusteringValidationError(f"Identity must be between 0.0 and 1.0, got: {identity}")
+        raise ClusteringValidationError(
+            f"Identity must be between 0.0 and 1.0, got: {identity}"
+        )
 
     if not isinstance(coverage, (int, float)) or not (0.0 <= coverage <= 1.0):
-        raise ClusteringValidationError(f"Coverage must be between 0.0 and 1.0, got: {coverage}")
+        raise ClusteringValidationError(
+            f"Coverage must be between 0.0 and 1.0, got: {coverage}"
+        )
 
     if not isinstance(cov_mode, int) or not (0 <= cov_mode <= 5):
-        raise ClusteringValidationError(f"Coverage mode must be between 0 and 5, got: {cov_mode}")
+        raise ClusteringValidationError(
+            f"Coverage mode must be between 0 and 5, got: {cov_mode}"
+        )
 
 
-def _validate_directory_access(directory: Path, create_if_missing: bool = False) -> None:
+def _validate_directory_access(
+    directory: Path, create_if_missing: bool = False
+) -> None:
     """
     Validate directory exists and is accessible.
 
@@ -160,7 +179,9 @@ def _validate_directory_access(directory: Path, create_if_missing: bool = False)
             try:
                 directory.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                raise ClusteringValidationError(f"Cannot create directory {directory}: {e}")
+                raise ClusteringValidationError(
+                    f"Cannot create directory {directory}: {e}"
+                )
         else:
             raise ClusteringValidationError(f"Directory does not exist: {directory}")
 
@@ -185,7 +206,7 @@ def check_cluster_parameters(args: argparse.Namespace) -> None:
         NotADirectoryError: If tmpdir is not a valid directory.
     """
     # Validate temporary directory
-    if not hasattr(args, 'tmpdir') or not isinstance(args.tmpdir, Path):
+    if not hasattr(args, "tmpdir") or not isinstance(args.tmpdir, Path):
         raise ClusteringValidationError("tmpdir must be a valid Path object")
 
     try:
@@ -213,7 +234,7 @@ def check_pangenome_cluster(pangenome: Pangenome) -> None:
     Raises:
         AttributeError: If pangenome is missing required data or processing steps.
     """
-    if not hasattr(pangenome, 'status'):
+    if not hasattr(pangenome, "status"):
         raise AttributeError("Pangenome object missing status information")
 
     # Check if genes have been clustered
@@ -262,8 +283,10 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         clust_df = pd.read_csv(
             clust_res,
             sep="\t",
-            names=CONFIG.CLUSTER_COLUMN_NAMES[1:],  # Skip the cluster_id column initially
-            dtype=str
+            names=CONFIG.CLUSTER_COLUMN_NAMES[
+                1:
+            ],  # Skip the cluster_id column initially
+            dtype=str,
         )
 
         if clust_df.empty:
@@ -275,24 +298,27 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         # Each unique referent gets a unique cluster ID
         unique_referents = clust_df[CONFIG.CLUSTER_COLUMN_NAMES[1]].unique()
         cluster_id_mapping = {
-            referent: cluster_id
-            for cluster_id, referent in enumerate(unique_referents)
+            referent: cluster_id for cluster_id, referent in enumerate(unique_referents)
         }
 
-        logger.debug(f"Created {len(cluster_id_mapping)} unique clusters", )
+        logger.debug(
+            f"Created {len(cluster_id_mapping)} unique clusters",
+        )
 
         # Create cluster ID dataframe
-        cluster_id_df = pd.DataFrame([
-            {"cluster_id": cluster_id, "referent": referent}
-            for referent, cluster_id in cluster_id_mapping.items()
-        ])
+        cluster_id_df = pd.DataFrame(
+            [
+                {"cluster_id": cluster_id, "referent": referent}
+                for referent, cluster_id in cluster_id_mapping.items()
+            ]
+        )
 
         # Merge cluster IDs with clustering results
         merged_clustering = cluster_id_df.merge(
             clust_df,
             on=CONFIG.CLUSTER_COLUMN_NAMES[1],  # referent column
             how="inner",
-            validate="one_to_many"
+            validate="one_to_many",
         )
 
         # Ensure proper column order
@@ -305,11 +331,13 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         merged_clustering.to_csv(outfile, sep="\t", header=True, index=False)
 
         total_entries = len(merged_clustering)
-        unique_clusters = merged_clustering['cluster_id'].nunique()
+        unique_clusters = merged_clustering["cluster_id"].nunique()
 
         logger.info(
             "Clustering results processed: %d entries in %d clusters saved to: %s",
-            total_entries, unique_clusters, outfile.absolute()
+            total_entries,
+            unique_clusters,
+            outfile.absolute(),
         )
 
     except pd.errors.EmptyDataError:
@@ -322,7 +350,9 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         raise ClusteringError(f"Unexpected error during clustering processing: {e}")
 
 
-def create_tsv(db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAULT_THREADS) -> None:
+def create_tsv(
+    db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAULT_THREADS
+) -> None:
     """
     Convert MMseqs2 clustering database to TSV format.
 
@@ -344,13 +374,15 @@ def create_tsv(db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAUL
     try:
         # Prepare MMseqs2 createtsv command
         cmd = [
-            "mmseqs", "createtsv",
+            "mmseqs",
+            "createtsv",
             db.absolute().as_posix(),
             db.absolute().as_posix(),  # Use the same database for both query and target
             clust.absolute().as_posix(),
             output.absolute().as_posix(),
-            "--threads", str(threads),
-            "--full-header"  # Include full sequence headers
+            "--threads",
+            str(threads),
+            "--full-header",  # Include full sequence headers
         ]
 
         logger.debug(f"Executing MMseqs2 createtsv: {' '.join(cmd)}")
@@ -361,7 +393,7 @@ def create_tsv(db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAUL
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             check=False,
-            text=True
+            text=True,
         )
 
         if result.returncode != 0:
@@ -379,8 +411,8 @@ def create_tsv(db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAUL
 
 
 def _execute_clustering_command(
-        cmd: List[str],
-        method_name: str,
+    cmd: List[str],
+    method_name: str,
 ) -> float:
     """
     Execute MMseqs2 clustering command with timing and error handling.
@@ -404,11 +436,13 @@ def _execute_clustering_command(
             stdout=subprocess.DEVNULL,
             stderr=subprocess.PIPE,
             check=False,
-            text=True
+            text=True,
         )
 
         if result.returncode != 0:
-            error_msg = f"MMseqs2 {method_name} failed with return code {result.returncode}"
+            error_msg = (
+                f"MMseqs2 {method_name} failed with return code {result.returncode}"
+            )
             if result.stderr:
                 error_msg += f": {result.stderr.strip()}"
             raise ClusteringError(error_msg)
@@ -422,11 +456,11 @@ def _execute_clustering_command(
 
 
 def linclust_launcher(
-        seq_db: Path,
-        mmseqs2_opt: Dict[str, Union[int, float, str]],
-        lclust_db: Optional[Path] = None,
-        tmpdir: Optional[Path] = None,
-        threads: int = CONFIG.DEFAULT_THREADS
+    seq_db: Path,
+    mmseqs2_opt: Dict[str, Union[int, float, str]],
+    lclust_db: Optional[Path] = None,
+    tmpdir: Optional[Path] = None,
+    threads: int = CONFIG.DEFAULT_THREADS,
 ) -> Path:
     """
     Launch MMseqs2 linclust (fast clustering) on gene family sequences.
@@ -470,7 +504,7 @@ def linclust_launcher(
 
     try:
         # Create the clustering database if not provided
-        temp_lclust_db = tmpdir/"linclust_db" if lclust_db is None else lclust_db
+        temp_lclust_db = tmpdir / "linclust_db" if lclust_db is None else lclust_db
         return _execute_linclust(seq_db, mmseqs2_opt, temp_lclust_db, tmpdir, threads)
 
     except Exception as e:
@@ -478,11 +512,11 @@ def linclust_launcher(
 
 
 def _execute_linclust(
-        seq_db: Path,
-        mmseqs2_opt: Dict[str, Union[int, float, str]],
-        lclust_db: Path,
-        tmpdir: Path,
-        threads: int
+    seq_db: Path,
+    mmseqs2_opt: Dict[str, Union[int, float, str]],
+    lclust_db: Path,
+    tmpdir: Path,
+    threads: int,
 ) -> Path:
     """
     Execute the actual linclust command.
@@ -502,21 +536,33 @@ def _execute_linclust(
     """
     # Prepare linclust command
     cmd = [
-        "mmseqs", "cluster",
+        "mmseqs",
+        "cluster",
         str(seq_db.absolute()),
         str(lclust_db.absolute()),
         str(tmpdir.absolute()),
-        "--threads", str(threads),
-        "--comp-bias-corr", str(mmseqs2_opt["comp_bias_corr"]),
-        "--kmer-per-seq", str(mmseqs2_opt["kmer_per_seq"]),
-        "--min-seq-id", str(mmseqs2_opt["identity"]),
-        "-c", str(mmseqs2_opt["coverage"]),
-        "--cov-mode", str(mmseqs2_opt["cov_mode"]),
-        "-e", str(mmseqs2_opt["eval"]),
-        "--alignment-mode", str(mmseqs2_opt["align_mode"]),
-        "--max-seq-len", str(mmseqs2_opt["max_seq_len"]),
-        "--max-rejected", str(mmseqs2_opt["max_reject"]),
-        "--cluster-mode", str(mmseqs2_opt["clust_mode"])
+        "--threads",
+        str(threads),
+        "--comp-bias-corr",
+        str(mmseqs2_opt["comp_bias_corr"]),
+        "--kmer-per-seq",
+        str(mmseqs2_opt["kmer_per_seq"]),
+        "--min-seq-id",
+        str(mmseqs2_opt["identity"]),
+        "-c",
+        str(mmseqs2_opt["coverage"]),
+        "--cov-mode",
+        str(mmseqs2_opt["cov_mode"]),
+        "-e",
+        str(mmseqs2_opt["eval"]),
+        "--alignment-mode",
+        str(mmseqs2_opt["align_mode"]),
+        "--max-seq-len",
+        str(mmseqs2_opt["max_seq_len"]),
+        "--max-rejected",
+        str(mmseqs2_opt["max_reject"]),
+        "--cluster-mode",
+        str(mmseqs2_opt["clust_mode"]),
     ]
 
     # Execute clustering
@@ -527,11 +573,11 @@ def _execute_linclust(
 
 
 def cluster_launcher(
-        seq_db: Path,
-        mmseqs2_opt: Dict[str, Union[int, float, str]],
-        cluster_db: Optional[Path] = None,
-        tmpdir: Optional[Path] = None,
-        threads: int = CONFIG.DEFAULT_THREADS
+    seq_db: Path,
+    mmseqs2_opt: Dict[str, Union[int, float, str]],
+    cluster_db: Optional[Path] = None,
+    tmpdir: Optional[Path] = None,
+    threads: int = CONFIG.DEFAULT_THREADS,
 ) -> Path:
     """
     Launch MMseqs2 cluster (sensitive clustering) on gene family sequences.
@@ -569,7 +615,9 @@ def cluster_launcher(
     cluster_specific = ["max_seqs", "min_ungapped", "sensitivity"]
     for param in cluster_specific:
         if param not in mmseqs2_opt:
-            raise ClusteringValidationError(f"Missing cluster-specific parameter: {param}")
+            raise ClusteringValidationError(
+                f"Missing cluster-specific parameter: {param}"
+            )
 
     # Set the default temporary directory
     if tmpdir is None:
@@ -581,7 +629,7 @@ def cluster_launcher(
 
     try:
         # Create the clustering database if not provided
-        temp_cluster_db = tmpdir/"cluster_db" if cluster_db is None else cluster_db
+        temp_cluster_db = tmpdir / "cluster_db" if cluster_db is None else cluster_db
         return _execute_cluster(seq_db, mmseqs2_opt, temp_cluster_db, tmpdir, threads)
 
     except Exception as e:
@@ -589,11 +637,11 @@ def cluster_launcher(
 
 
 def _execute_cluster(
-        seq_db: Path,
-        mmseqs2_opt: Dict[str, Union[int, float, str]],
-        cluster_db: Path,
-        tmpdir: Path,
-        threads: int
+    seq_db: Path,
+    mmseqs2_opt: Dict[str, Union[int, float, str]],
+    cluster_db: Path,
+    tmpdir: Path,
+    threads: int,
 ) -> Path:
     """
     Execute the actual cluster command.
@@ -613,24 +661,39 @@ def _execute_cluster(
     """
     # Prepare cluster command
     cmd = [
-        "mmseqs", "cluster",
+        "mmseqs",
+        "cluster",
         str(seq_db.absolute()),
         str(cluster_db.absolute()),
         str(tmpdir.absolute()),
-        "--threads", str(threads),
-        "--max-seqs", str(mmseqs2_opt["max_seqs"]),
-        "--min-ungapped-score", str(mmseqs2_opt["min_ungapped"]),
-        "--comp-bias-corr", str(mmseqs2_opt["comp_bias_corr"]),
-        "-s", str(mmseqs2_opt["sensitivity"]),
-        "--kmer-per-seq", str(mmseqs2_opt["kmer_per_seq"]),
-        "--min-seq-id", str(mmseqs2_opt["identity"]),
-        "-c", str(mmseqs2_opt["coverage"]),
-        "--cov-mode", str(mmseqs2_opt["cov_mode"]),
-        "-e", str(mmseqs2_opt["eval"]),
-        "--alignment-mode", str(mmseqs2_opt["align_mode"]),
-        "--max-seq-len", str(mmseqs2_opt["max_seq_len"]),
-        "--max-rejected", str(mmseqs2_opt["max_reject"]),
-        "--cluster-mode", str(mmseqs2_opt["clust_mode"])
+        "--threads",
+        str(threads),
+        "--max-seqs",
+        str(mmseqs2_opt["max_seqs"]),
+        "--min-ungapped-score",
+        str(mmseqs2_opt["min_ungapped"]),
+        "--comp-bias-corr",
+        str(mmseqs2_opt["comp_bias_corr"]),
+        "-s",
+        str(mmseqs2_opt["sensitivity"]),
+        "--kmer-per-seq",
+        str(mmseqs2_opt["kmer_per_seq"]),
+        "--min-seq-id",
+        str(mmseqs2_opt["identity"]),
+        "-c",
+        str(mmseqs2_opt["coverage"]),
+        "--cov-mode",
+        str(mmseqs2_opt["cov_mode"]),
+        "-e",
+        str(mmseqs2_opt["eval"]),
+        "--alignment-mode",
+        str(mmseqs2_opt["align_mode"]),
+        "--max-seq-len",
+        str(mmseqs2_opt["max_seq_len"]),
+        "--max-rejected",
+        str(mmseqs2_opt["max_reject"]),
+        "--cluster-mode",
+        str(mmseqs2_opt["clust_mode"]),
     ]
 
     # Execute clustering
@@ -641,13 +704,13 @@ def _execute_cluster(
 
 
 def cluster_gene_families(
-        pangenomes: Pangenomes,
-        method: str,
-        mmseqs2_opt: Dict[str, Union[int, float, str]],
-        tmpdir: Path,
-        threads: int = CONFIG.DEFAULT_THREADS,
-        lock: Optional[Lock] = None,
-        disable_bar: bool = False
+    pangenomes: Pangenomes,
+    method: str,
+    mmseqs2_opt: Dict[str, Union[int, float, str]],
+    tmpdir: Path,
+    threads: int = CONFIG.DEFAULT_THREADS,
+    lock: Optional[Lock] = None,
+    disable_bar: bool = False,
 ) -> Path:
     """
     Cluster gene families from multiple pangenomes using MMseqs2.
@@ -695,11 +758,17 @@ def cluster_gene_families(
     try:
         # Write pangenome families sequences
         logger.info("Writing pangenome families sequences...")
-        pangenome2families_seq = write_pangenomes_families_sequences(pangenomes=pangenomes, output=tmpdir,
-                                                                     threads=threads, lock=lock,
-                                                                     disable_bar=disable_bar)
+        pangenome2families_seq = write_pangenomes_families_sequences(
+            pangenomes=pangenomes,
+            output=tmpdir,
+            threads=threads,
+            lock=lock,
+            disable_bar=disable_bar,
+        )
 
-        logger.info(f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes")
+        logger.info(
+            f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes"
+        )
 
         # Create combined MMseqs2 database
         logger.info("Creating combined MMseqs2 database...")
@@ -720,14 +789,14 @@ def cluster_gene_families(
                 seq_db=merged_db,
                 mmseqs2_opt=mmseqs2_opt,
                 tmpdir=tmpdir,
-                threads=threads
+                threads=threads,
             )
         elif method == ClusteringMethod.CLUSTER:
             cluster_db = cluster_launcher(
                 seq_db=merged_db,
                 mmseqs2_opt=mmseqs2_opt,
                 tmpdir=tmpdir,
-                threads=threads
+                threads=threads,
             )
         else:
             # This should not happen due to earlier validation, but included for completeness
@@ -737,10 +806,7 @@ def cluster_gene_families(
         logger.debug("Converting clustering results to TSV format...")
         cluster_results_file = tmpdir / "cluster_results.tsv"
         create_tsv(
-            db=merged_db,
-            clust=cluster_db,
-            output=cluster_results_file,
-            threads=threads
+            db=merged_db, clust=cluster_db, output=cluster_results_file, threads=threads
         )
 
         logger.info("Gene family clustering completed successfully")
@@ -775,17 +841,14 @@ def launch(args: argparse.Namespace) -> None:
 
     # Create output directory
     logger.debug(f"Creating output directory: {args.output}")
-    mkdir(args.output, getattr(args, 'force', False))
+    mkdir(args.output, getattr(args, "force", False))
 
     # Set up multiprocessing
     manager = Manager()
     lock = manager.Lock()
 
     # Define requirements for pangenome loading
-    need_info = {
-        "need_families": True,
-        "need_families_sequences": False
-    }
+    need_info = {"need_families": True, "need_families_sequences": False}
 
     # Load pangenomes with validation
     logger.info(f"Loading pangenomes from: {args.pangenomes}")
@@ -793,9 +856,9 @@ def launch(args: argparse.Namespace) -> None:
         pangenome_list=args.pangenomes,
         need_info=need_info,
         check_function=check_pangenome_cluster,
-        max_workers=getattr(args, 'threads', CONFIG.DEFAULT_THREADS),
+        max_workers=getattr(args, "threads", CONFIG.DEFAULT_THREADS),
         lock=lock,
-        disable_bar=getattr(args, 'disable_prog_bar', False)
+        disable_bar=getattr(args, "disable_prog_bar", False),
     )
 
     logger.info(f"Successfully loaded {len(pangenomes)} pangenomes")
@@ -815,9 +878,9 @@ def launch(args: argparse.Namespace) -> None:
             method=args.method,
             mmseqs2_opt=mmseqs2_options,
             tmpdir=tmpdir,
-            threads=getattr(args, 'threads', CONFIG.DEFAULT_THREADS),
+            threads=getattr(args, "threads", CONFIG.DEFAULT_THREADS),
             lock=lock,
-            disable_bar=getattr(args, 'disable_prog_bar', False)
+            disable_bar=getattr(args, "disable_prog_bar", False),
         )
 
         # Process and write final results
@@ -829,7 +892,9 @@ def launch(args: argparse.Namespace) -> None:
     except ClusteringError as e:
         raise ClusteringError(f"Clustering process failed: {e}") from e
     except Exception as e:
-        raise ClusteringError(f"Clustering process failed with unexpected error: {e}") from e
+        raise ClusteringError(
+            f"Clustering process failed with unexpected error: {e}"
+        ) from e
     finally:
         # Clean up the temporary directory unless requested to keep it
         if not args.keep_tmp:
@@ -839,7 +904,9 @@ def launch(args: argparse.Namespace) -> None:
             logger.info(f"Temporary files kept in: {tmpdir}")
 
 
-def _prepare_mmseqs2_options(args: argparse.Namespace) -> Dict[str, Union[int, float, str]]:
+def _prepare_mmseqs2_options(
+    args: argparse.Namespace,
+) -> Dict[str, Union[int, float, str]]:
     """
     Prepare MMseqs2 options dictionary from command line arguments.
 
@@ -854,19 +921,19 @@ def _prepare_mmseqs2_options(args: argparse.Namespace) -> Dict[str, Union[int, f
 
     # Override with command line arguments if provided
     option_mappings = {
-        'cluster_identity': 'identity',
-        'cluster_coverage': 'coverage',
-        'cluster_cov_mode': 'cov_mode',
-        'cluster_eval': 'eval',
-        'cluster_sensitivity': 'sensitivity',
-        'cluster_max_seqs': 'max_seqs',
-        'cluster_comp_bias_corr': 'comp_bias_corr',
-        'cluster_kmer_per_seq': 'kmer_per_seq',
-        'cluster_align_mode': 'align_mode',
-        'cluster_max_seq_len': 'max_seq_len',
-        'cluster_max_reject': 'max_reject',
-        'cluster_clust_mode': 'clust_mode',
-        'cluster_min_ungapped': 'min_ungapped'
+        "cluster_identity": "identity",
+        "cluster_coverage": "coverage",
+        "cluster_cov_mode": "cov_mode",
+        "cluster_eval": "eval",
+        "cluster_sensitivity": "sensitivity",
+        "cluster_max_seqs": "max_seqs",
+        "cluster_comp_bias_corr": "comp_bias_corr",
+        "cluster_kmer_per_seq": "kmer_per_seq",
+        "cluster_align_mode": "align_mode",
+        "cluster_max_seq_len": "max_seq_len",
+        "cluster_max_reject": "max_reject",
+        "cluster_clust_mode": "clust_mode",
+        "cluster_min_ungapped": "min_ungapped",
     }
 
     for arg_name, option_key in option_mappings.items():
@@ -895,8 +962,8 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
         "cluster",
         help="Cluster gene families across pangenomes using MMseqs2",
         description="Perform gene family clustering across multiple pangenomes "
-                    "using MMseqs2 with support for both fast (linclust) and "
-                    "sensitive (cluster) clustering methods."
+        "using MMseqs2 with support for both fast (linclust) and "
+        "sensitive (cluster) clustering methods.",
     )
     parser_cluster(parser)
     return parser
@@ -915,123 +982,123 @@ def parser_mmseqs2_cluster(parser: argparse.ArgumentParser) -> argparse._Argumen
     mmseqs_group = parser.add_argument_group(
         title="MMseqs2 clustering parameters",
         description="Configure MMseqs2 clustering behavior. "
-                    "See MMseqs2 documentation for detailed parameter descriptions."
+        "See MMseqs2 documentation for detailed parameter descriptions.",
     )
 
     # Core clustering parameters
     mmseqs_group.add_argument(
-        '--cluster_identity',
+        "--cluster_identity",
         required=False,
         type=float,
         default=CONFIG.DEFAULT_IDENTITY,
-        metavar='FLOAT',
-        help=f"Minimum sequence identity threshold (0.0-1.0). Default: {CONFIG.DEFAULT_IDENTITY}"
+        metavar="FLOAT",
+        help=f"Minimum sequence identity threshold (0.0-1.0). Default: {CONFIG.DEFAULT_IDENTITY}",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_coverage',
+        "--cluster_coverage",
         required=False,
         type=float,
         default=CONFIG.DEFAULT_COVERAGE,
-        metavar='FLOAT',
-        help=f"Minimum coverage threshold (0.0-1.0). Default: {CONFIG.DEFAULT_COVERAGE}"
+        metavar="FLOAT",
+        help=f"Minimum coverage threshold (0.0-1.0). Default: {CONFIG.DEFAULT_COVERAGE}",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_cov_mode',
+        "--cluster_cov_mode",
         required=False,
         type=int,
         default=CONFIG.DEFAULT_COV_MODE,
         choices=[0, 1, 2, 3, 4, 5],
-        metavar='INT',
+        metavar="INT",
         help=f"Coverage mode: 0=query, 1=target, 2=shorter seq, 3=longer seq, "
-             f"4=query and target, 5=shorter and longer seq. Default: {CONFIG.DEFAULT_COV_MODE}"
+        f"4=query and target, 5=shorter and longer seq. Default: {CONFIG.DEFAULT_COV_MODE}",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_eval',
+        "--cluster_eval",
         required=False,
         type=float,
         default=CONFIG.DEFAULT_EVAL,
-        metavar='FLOAT',
-        help=f"E-value threshold. Default: {CONFIG.DEFAULT_EVAL}"
+        metavar="FLOAT",
+        help=f"E-value threshold. Default: {CONFIG.DEFAULT_EVAL}",
     )
 
     # Sensitivity and performance parameters
     mmseqs_group.add_argument(
-        '--cluster_sensitivity',
+        "--cluster_sensitivity",
         required=False,
         type=float,
-        metavar='FLOAT',
-        help="Search sensitivity (cluster method only). Higher values = more sensitive but slower"
+        metavar="FLOAT",
+        help="Search sensitivity (cluster method only). Higher values = more sensitive but slower",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_max_seqs',
+        "--cluster_max_seqs",
         required=False,
         type=int,
-        metavar='INT',
-        help="Maximum number of sequences per cluster representative (cluster method only)"
+        metavar="INT",
+        help="Maximum number of sequences per cluster representative (cluster method only)",
     )
 
     # Advanced parameters
     mmseqs_group.add_argument(
-        '--cluster_comp_bias_corr',
+        "--cluster_comp_bias_corr",
         required=False,
         type=int,
         choices=[0, 1],
-        metavar='INT',
-        help="Compositional bias correction: 0=disabled, 1=enabled"
+        metavar="INT",
+        help="Compositional bias correction: 0=disabled, 1=enabled",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_kmer_per_seq',
+        "--cluster_kmer_per_seq",
         required=False,
         type=int,
-        metavar='INT',
-        help="Number of k-mers per sequence"
+        metavar="INT",
+        help="Number of k-mers per sequence",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_align_mode',
+        "--cluster_align_mode",
         required=False,
         type=int,
         choices=[0, 1, 2, 3, 4],
-        metavar='INT',
-        help="Alignment mode: 0=automatic, 1=only score, 2=only extended, 3=score+extended, 4=fast+extended"
+        metavar="INT",
+        help="Alignment mode: 0=automatic, 1=only score, 2=only extended, 3=score+extended, 4=fast+extended",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_max_seq_len',
+        "--cluster_max_seq_len",
         required=False,
         type=int,
-        metavar='INT',
-        help="Maximum sequence length"
+        metavar="INT",
+        help="Maximum sequence length",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_max_reject',
+        "--cluster_max_reject",
         required=False,
         type=int,
-        metavar='INT',
-        help="Maximum number of rejected sequences"
+        metavar="INT",
+        help="Maximum number of rejected sequences",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_clust_mode',
+        "--cluster_clust_mode",
         required=False,
         type=int,
         choices=[0, 1, 2, 3],
-        metavar='INT',
-        help="Clustering mode: 0=Set Cover, 1=Connected Component, 2=Greedy, 3=Greedy Low Memory"
+        metavar="INT",
+        help="Clustering mode: 0=Set Cover, 1=Connected Component, 2=Greedy, 3=Greedy Low Memory",
     )
 
     mmseqs_group.add_argument(
-        '--cluster_min_ungapped',
+        "--cluster_min_ungapped",
         required=False,
         type=int,
-        metavar='INT',
-        help="Minimum ungapped alignment score (cluster method only)"
+        metavar="INT",
+        help="Minimum ungapped alignment score (cluster method only)",
     )
 
     return mmseqs_group
@@ -1051,32 +1118,35 @@ def parser_cluster(parser: argparse.ArgumentParser) -> None:
     # Required arguments group
     required_group = parser.add_argument_group(
         title="Required arguments",
-        description="All of the following arguments are required:"
+        description="All of the following arguments are required:",
     )
 
     required_group.add_argument(
-        '-p', '--pangenomes',
+        "-p",
+        "--pangenomes",
         required=True,
         type=Path,
-        metavar='FILE',
-        help='Path to TSV file containing list of pangenome .h5 files to process'
+        metavar="FILE",
+        help="Path to TSV file containing list of pangenome .h5 files to process",
     )
 
     required_group.add_argument(
-        '-o', '--output',
+        "-o",
+        "--output",
         required=True,
         type=Path,
-        metavar='DIR',
-        help="Output directory where clustering results will be written"
+        metavar="DIR",
+        help="Output directory where clustering results will be written",
     )
 
     required_group.add_argument(
-        '-m', '--method',
+        "-m",
+        "--method",
         required=True,
         choices=ClusteringMethod.CHOICES,
-        metavar='METHOD',
+        metavar="METHOD",
         help=f"Clustering method: {ClusteringMethod.LINCLUST} (fast) or "
-             f"{ClusteringMethod.CLUSTER} (sensitive)"
+        f"{ClusteringMethod.CLUSTER} (sensitive)",
     )
 
     # Add MMseqs2 specific arguments
@@ -1090,8 +1160,8 @@ def parser_cluster(parser: argparse.ArgumentParser) -> None:
         required=False,
         type=Path,
         default=Path(tempfile.gettempdir()),
-        metavar='DIR',
-        help=f"Directory for temporary files. Default: {tempfile.gettempdir()}"
+        metavar="DIR",
+        help=f"Directory for temporary files. Default: {tempfile.gettempdir()}",
     )
 
     optional_group.add_argument(
@@ -1099,7 +1169,7 @@ def parser_cluster(parser: argparse.ArgumentParser) -> None:
         required=False,
         default=False,
         action="store_true",
-        help="Keep temporary files after completion (useful for debugging)"
+        help="Keep temporary files after completion (useful for debugging)",
     )
 
     optional_group.add_argument(
@@ -1107,6 +1177,6 @@ def parser_cluster(parser: argparse.ArgumentParser) -> None:
         required=False,
         type=int,
         default=CONFIG.DEFAULT_THREADS,
-        metavar='INT',
-        help=f"Number of threads for parallel processing. Default: {CONFIG.DEFAULT_THREADS}"
+        metavar="INT",
+        help=f"Number of threads for parallel processing. Default: {CONFIG.DEFAULT_THREADS}",
     )
