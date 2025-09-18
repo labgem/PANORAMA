@@ -88,12 +88,12 @@ panorama compare_spots \
 | -d       | --disable_prog_bar | bool (flag)          | True     | Disable the progress bars                                                                |
 | —        | --force            | bool (flag)          | True     | Force writing in output directory and pangenome file                                     |
 
-:::{note}
+```{note}
 PANORAMA can perform the clustering step first thing, but it's also possible to use pre-computed clustering results with
 the `--cluster` argument.
 If you use let PANORAMA perform the clustering, you can look at the [Clustering](../clustering.md) section for more
 details about options.
-:::
+```
 
 ### 📊 GFRR Metrics
 

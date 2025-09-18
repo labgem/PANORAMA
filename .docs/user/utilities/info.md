@@ -26,10 +26,10 @@ yourtool info -i <pangenome_list.tsv> -o <output_directory> [--status] [--conten
 
 default If no flags are provided, all (status, content, parameters, metadata) are extracted.
 
-:::{warning}
+```{warning}
 `--parameters` and `--metadata` outputs are not settled yet. We are currently working on a useful output.
 Please add `--status` and/or `--content` to don't get an error.
-:::
+```
 
 ### 🌐 Exploring the Reports
 
