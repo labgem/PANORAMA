@@ -1,3 +1,4 @@
+(models)=
 # 🧬 PANORAMA System Modeling
 
 ## 🧰 Definition
@@ -14,9 +15,9 @@ or [PADLOC](https://github.com/padlocbio/padloc) modeling format, PANORAMA intro
 
 - A canonical model mechanism allows detection of incomplete or hypothetical systems.
 
-:::{important}
+```{important}
 PANORAMA system models are written in JSON format.
-:::
+```
 
 ## 🧱 Model Structure
 
@@ -132,10 +133,10 @@ It models a modular system architecture using three functional units:
     - NS-md: mandatory within the unit, if the unit is found this family is too
     - NV-ac: accessory within the unit, not always present in the unit.
 
-:::{seealso}
+```{seealso}
 This example shows a fairly complete and specific model.
 In the next section, we'll look at how to create more simplified models.
-:::
+```
 
 ### 🧩 Components
 
@@ -145,18 +146,18 @@ In the next section, we'll look at how to create more simplified models.
 
 Functional Units represent a set of genes/families that together perform a system function. Each has:
 
-| Field      | Description                                    | Required/Optional | Possible Values                                                                   |
-|------------|------------------------------------------------|-------------------|-----------------------------------------------------------------------------------|
-| name       | Unique name identifying the functional unit    | 🔴 Required       | String (annotation identifier)                                                    |
-| presence   | Role of the unit                               | 🔴 Required       | `mandatory`, `accessory`, `neutral`, `forbidden`                                  |
-| families   | List of protein families included in this unit | 🔴 Required       | List of family objects                                                            |
-| parameters | List of specific rules to detect the unit      | 🟡 Optional       | Dictionary with fields describe in [detection parameters](#-detection-parameters) |
+| Field      | Description                                    | Required/Optional | Possible Values                                                         |
+|------------|------------------------------------------------|-------------------|-------------------------------------------------------------------------|
+| name       | Unique name identifying the functional unit    | 🔴 Required       | String (annotation identifier)                                          |
+| presence   | Role of the unit                               | 🔴 Required       | `mandatory`, `accessory`, `neutral`, `forbidden`                        |
+| families   | List of protein families included in this unit | 🔴 Required       | List of family objects                                                  |
+| parameters | List of specific rules to detect the unit      | 🟡 Optional       | Dictionary with fields describe in [detection rules](#detection-rules)  |
 
 A functional unit could biologically represent a functional module, such as isoenzyme, or subunit of protein dimers.
 
-:::{attention}
+```{attention}
 A model must include at least one functional unit.
-:::
+```
 
 #### Families
 
@@ -171,12 +172,12 @@ Families correspond to isofunctional protein families used to search the pangeno
 | multi_system | Can be used in multiple predicted systems                 | 🟡 Optional       | Boolean (`true`/`false`)                         |
 | multi_model  | Can be shared across models                               | 🟡 Optional       | Boolean (`true`/`false`)                         |
 
-:::{attention}
+```{attention}
 A family must be included in a functional unit.
-:::
-:::{warning}
+```
+```{warning}
 A family can theoretically be in multiple unit, but this feature has never been tested.
-:::
+```
 
 ### 🎯 Presence Types Explained
 
@@ -198,6 +199,7 @@ Below is a complete reference:
 | forbidden     | Family, Unit | 🚫 Must be absent       | ❌ No            | 🚫 No                         | If present, it disqualifies the system or unit. Useful to distinguish similar systems or detect inhibitors. |
 | neutral       | Family, Unit | 〰 Ignored               | ❌ No            | ✔ Yes                         | Ignored for scoring, but included in the graph. Helps connect elements that are close in genomic context.   |
 
+(detection-rules)=
 ### ⚙️ Detection rules
 
 Parameters are defined at the model or functional unit level, such as:
@@ -268,10 +270,10 @@ Example:
 Here, the functional unit _FA_ inherits all the parameters from the model, whereas _FB_ redefines the _min_mandatory_
 and the _transitivity_.
 
-:::{attention}
+```{attention}
 Either it's possible to don't precise all parameters in functional unit, the `parameters` field must exist.
 To let the functional unit inherits all parameter you can let the dictionary empty.
-:::
+```
 
 ### 🧪 Canonical Models
 
@@ -305,5 +307,5 @@ Models failing these checks will raise clear exceptions.
 
 1. Each model must be saved in its own .json file.
 2. Names are case-sensitive. 
-3. Families must match the name given during the annotation step (see [annotation command](../user/Systems/annotation.md#-gene-family-annotation)). 
+3. Families must match the name given during the annotation step (see [annotation command](../user/Systems/annotation.md#gene-family-annotation)). 
 4. Exchangeable families inherit the parameters (presence, etc.) of their reference unless specified otherwise.

@@ -1,39 +1,40 @@
-## 🔬 System Detection Based on Models
+## System Detection Based on Models 🔬
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
-This detection relies on gene family [annotations](annotation.md), and a [model](./models.md) file defining the the presence/absence of specific function and the genomic organization.
+This detection relies on gene family [annotations](./annotation.md#gene-family-annotation), 
+and a [model](../modeller/modeling.md#models) file defining the the presence/absence of specific function and the genomic organization.
 
-### ⚙️ Model Detection Workflow
+### Model Detection Workflow ⚙️
 
 The detection process runs as follows:
 
-1. 📂 Load Pangenomes
+1. Load Pangenomes
     
-    Based on a `.tsv` file, `.h5` pangenomes are loaded with the required annotation and metadata sources.
+   Based on a `.tsv` file, `.h5` pangenomes are loaded with the required annotation and metadata sources.
 
-2. 📜 Load System Models
+2. Load System Models
 
    The models are parsed from a list provided by --models.
 
-3. 🧠 Search for System Units
+3. Search for System Units
 
-    For each functional unit of each model:
-    1. Gene families are matched based on annotation metadata. 
-    2. A context graph is built based on gene neighborhood (window, transitivity). 
-    3. Jaccard similarity filters edges in the graph.
-    4. Connected components are checked for necessary and forbidden families.
+   For each functional unit of each model:
+   1. Gene families are matched based on annotation metadata. 
+   2. A context graph is built based on gene neighborhood (window, transitivity). 
+   3. Jaccard similarity filters edges in the graph.
+   4. Connected components are checked for necessary and forbidden families.
 
-4. 🧬 Assemble Systems
+4. Assemble Systems
 
     Functional units are grouped into systems if they satisfy:
     - presence/abscence rules
     - restrain distance
 
-5. 💾 Write Systems to File
+5. Write Systems to File
 
-    Detected systems are saved back into the pangenome `.h5` file, under the given source name.
+   Detected systems are saved back into the pangenome `.h5` file, under the given source name.
 
-### 🚀 Command Line Usage
+### Command Line Usage 🚀
 
 System detection command is used as such:
 ```shell
@@ -46,7 +47,7 @@ panorama systems \
 --sensitivity 3 \
 --threads 8
 ```
-#### 🔑 Key Options
+#### Key Options 🔑
 
 | Shortcut | Argument             | Description                                                                |
 |----------|----------------------|----------------------------------------------------------------------------|
@@ -57,16 +58,19 @@ panorama systems \
 | —        | --jaccard            | Minimum Jaccard similarity to keep an edge in context graph (default: 0.8) |
 | —        | --sensitivity        | Sensitivity mode: 1, 2, or 3. Higher = more precise, slower (default: 3)   |
 | —        | --threads            | Number of threads to use for parallel model evaluation                     |
-| —        | --disable_prog_bar   | Disable the progress bars                                                  |
-| —        | --force              | Overwrite existing system predictions                                      |
 
-#### 🔍 Sensitivity Modes
+[//]: # (#### 🔍 Sensitivity Modes)
 
-| Level | Description                                                                            |
-|-------|----------------------------------------------------------------------------------------|
-| 1     | Global filtering of genomic context, faster, less sensitive                            |
-| 2     | Global filtering context within each functional unit combination, moderate sensitivity |
-| 3     | Local filtering for each combination (highest sensitivity, slowest)                    |
+[//]: # ()
+[//]: # (| Level | Description                                                                            |)
+
+[//]: # (|-------|----------------------------------------------------------------------------------------|)
+
+[//]: # (| 1     | Global filtering of genomic context, faster, less sensitive                            |)
+
+[//]: # (| 2     | Global filtering context within each functional unit combination, moderate sensitivity |)
+
+[//]: # (| 3     | Local filtering for each combination &#40;highest sensitivity, slowest&#41;                    |)
 
 
 ### 🗂 Output
