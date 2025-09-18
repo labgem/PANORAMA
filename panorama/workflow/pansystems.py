@@ -99,29 +99,45 @@ def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[st
     Detects systems in multiple pangenomes.
 
     Args:
-        pangenomes (Pangenomes): The pangenomes to analyze.
-        source (str): The source of the annotation.
-        models (Models): The models to detect systems.
-        table (pd.Dataframe, optional): Dataframe containing for each pangenome a path to a table with annotation information. Defaults to None.
-        hmm (Dict[str, List[HMM]], optional): A dictionary to identify which cutoff use to align HMM . Defaults to None.
-        k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
-        jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        sensitivity (int, optional): Sensitivity level for detection.
-            1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
-            2 corresponds to a global Jaccard filtering on the specific context of each combination.
-            3 corresponds to a local Jaccard filtering on the specific context of each combination.
-            Defaults to 1.
-        projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
-        association (List[str], optional): The type of association to write between systems and other pangenome elements. Defaults to None.
-        partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
-        proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
-        threads (int, optional): The number of available threads. Defaults to 1.
-        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
-        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
-        **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
+        pangenomes (Pangenomes):
+            The pangenomes to analyze.
+        source (str):
+            The source of the annotation.
+        models (Models):
+            The models to detect systems.
+        table (pd.Dataframe, optional):
+            Dataframe containing for each pangenome a path to a table with annotation information. Defaults to None.
+        hmm (Dict[str, List[HMM]], optional):
+            A dictionary to identify which cutoff use to align HMM . Defaults to None.
+        k_best_hit (int, optional):
+            The number of best annotation hits to keep per gene family. Defaults to None.
+        jaccard_threshold (float, optional):
+            The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        sensitivity (int, optional):
+            Sensitivity level for detection. Defaults to 1.
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2.  corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+        projection (bool, optional):
+            Whether to project the systems on organisms. Defaults to False.
+        association (List[str], optional):
+            The type of association to write between systems and other pangenome elements. Defaults to None.
+        partition (bool, optional):
+            Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
+        proksee (str, optional):
+            Whether to write a proksee file with systems. Defaults to None.
+        threads (int, optional):
+            The number of available threads. Defaults to 1.
+        force (bool, optional):
+            Whether to force erasing already computed systems. Defaults to False.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar. Defaults to False.
+        **hmm_kwgs (Any):
+            Additional keyword arguments for HMM annotation.
 
     Raises:
-        AssertionError: If neither table nor hmm is provided.
+        AssertionError:
+            If neither table nor hmm is provided.
     """
     assert table is not None or hmm is not None, 'Must provide either table or hmm'
     pangenome2metadata_df = {}

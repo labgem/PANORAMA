@@ -14,12 +14,15 @@ from pathlib import Path
 
 # -- Project information -----------------------------------------------------
 
-project = 'PANORAMA'
-copyright = '2023, LABGeM'
-author = 'Jérôme Arnoux'
+project = "PANORAMA"
+copyright = "2025, LABGeM"
+html_show_copyright = True
+author = "Jérôme Arnoux"
 
 # The full version, including alpha/beta/rc tags
-release = open(Path(__file__).resolve().parents[1]/"VERSION").read().rstrip()  # Get release number in the VERSION file
+release = (
+    open(Path(__file__).resolve().parents[1] / "VERSION").read().rstrip()
+)  # Get release number in the VERSION file
 
 
 # -- General configuration ---------------------------------------------------
@@ -33,8 +36,9 @@ extensions = [
     "sphinx.ext.duration",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autodoc",
-    'sphinx_search.extension',
+    "sphinx_search.extension",
     "sphinxcontrib.mermaid",
+    "sphinx_wagtail_theme",
 ]
 
 source_suffix = {".md": "markdown"}
@@ -44,13 +48,12 @@ source_suffix = {".md": "markdown"}
 autosectionlabel_prefix_document = True
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ['_templates']
+templates_path = ["_templates"]
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 suppress_warning = ["myst.header", "autosectionlabel.*"]
 
@@ -59,9 +62,29 @@ suppress_warning = ["myst.header", "autosectionlabel.*"]
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
 #
-html_theme = 'sphinx_rtd_theme'
-
+# html_theme = 'sphinx_rtd_theme'
+html_theme = "sphinx_wagtail_theme"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = ["_static"]
+
+# These are options specifically for the Wagtail Theme.
+html_theme_options = {
+    "project_name": "PANORAMA",
+    "logo": "img/wagtail-logo-circle.svg",
+    "logo_alt": "Wagtail",
+    "logo_height": 59,
+    "logo_url": "/",
+    "logo_width": 45,
+    "github_url": "https://github.com/jpjarnoux/PANORAMA",
+    # "header_links": "Top 1|http://example.com/one, Top 2|http://example.com/two",
+    # "footer_links": ",".join(
+    #     [
+    #         "About Us|http://example.com/",
+    #         "Contact|http://example.com/contact",
+    #         "Legal|http://example.com/dev/null",
+    #     ]
+    # ),
+}
+# html_show_sphinx = False

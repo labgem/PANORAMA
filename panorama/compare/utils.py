@@ -89,16 +89,19 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
     the function returns the cluster partitions.
 
     Args:
-        graph (nx.Graph): Input graph with nodes and weighted edges to cluster.
-        gfrr_metric (str): Name of the edge weight attribute to use for clustering
-                          (e.g., 'min_frr', 'max_frr').
+        graph (nx.Graph):
+            Input graph with nodes and weighted edges to cluster.
+        gfrr_metric (str):
+            Name of the edge weight attribute to use for clustering
+            (e.g., 'min_frr', 'max_frr').
 
     Returns:
-        List[Set[Any]]: List where each element is a set containing nodes belonging
-                       to the same cluster.
+        List[Set[Any]]:
+            List where each element is a set containing nodes belonging to the same cluster.
 
     Raises:
-        KeyError: If the specified gfrr_metric is not found in graph edge attributes.
+        KeyError:
+            If the specified gfrr_metric is not found in graph edge attributes.
 
     TODO:
         - Make the resolution parameter configurable
@@ -138,17 +141,21 @@ def common_launch(
     directories, and optionally performing gene family clustering.
 
     Args:
-        args (Any): Parsed command-line arguments containing workflow parameters such as
-                   - pangenomes: Path to pangenome list file
-                   - cpus: Number of CPU threads to use
-                   - cluster: Optional path to existing clustering results
-                   - tmpdir: Temporary directory path
-                   - Various MMSeqs2 clustering parameters
-        check_func (Callable): Validation function to check pangenome integrity during loading.
-        need_info (Dict[str, Any]): Dictionary specifying required data components:
-                                   - 'need_families_sequences': bool, whether sequences are needed
-                                   - Other data requirements as key-value pairs
-        **kwargs (Any): Additional keyword arguments passed to pangenome loading function.
+        args (Any):
+            Parsed command-line arguments containing workflow parameters such as
+                - pangenomes: Path to pangenome list file
+                - cpus: Number of CPU threads to use
+                - cluster: Optional path to existing clustering results
+                - tmpdir: Temporary directory path
+                - Various MMSeqs2 clustering parameters
+        check_func (Callable):
+            Validation function to check pangenome integrity during loading.
+        need_info (Dict[str, Any]):
+            Dictionary specifying required data components:
+                - 'need_families_sequences': bool, whether sequences are needed
+                - Other data requirements as key-value pairs
+        **kwargs (Any):
+            Additional keyword arguments passed to pangenome loading function.
 
     Returns:
         Tuple[Pangenomes, Path, Manager, Lock]: Setup resources containing:
@@ -158,8 +165,10 @@ def common_launch(
             - lock (Lock): Thread-safe lock for concurrent operations
 
     Raises:
-        FileNotFoundError: If pangenome files or clustering file cannot be found.
-        ValueError: If clustering parameters are invalid.
+        FileNotFoundError:
+            If pangenome files or clustering file cannot be found.
+        ValueError:
+            If clustering parameters are invalid.
     """
     # Initialize multiprocessing resources for thread-safe operations
     manager = Manager()

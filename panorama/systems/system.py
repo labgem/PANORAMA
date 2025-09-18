@@ -1252,8 +1252,10 @@ class ClusterSystems:
     across different pangenomes.
 
     Attributes:
-        ID (int): Unique identifier for the cluster.
-        _systems_getter (Dict[Tuple[str, str], System]): Dictionary mapping (pangenome name, system ID)
+        ID (int):
+            Unique identifier for the cluster.
+        _systems_getter (Dict[Tuple[str, str], System]):
+            Dictionary mapping (pangenome name, system ID)
             to System instances.
     """
 

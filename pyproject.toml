@@ -3,7 +3,7 @@ requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name="PANORAMA"
+name = "PANORAMA"
 
 authors = [
     { name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr" },
@@ -57,7 +57,7 @@ notebook = [
 test = [
     "pytest==7",
     "natsort>=8"
-    ]
+]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"

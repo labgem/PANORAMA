@@ -95,12 +95,17 @@ def read_systems_by_source(
     regular systems and their canonical representations if requested.
 
     Args:
-        pangenome (Pangenome): Target the pangenome object to populate with systems.
-        source_group (tables.Group): HDF5 group containing system tables for one source.
-        models (Models): Model definitions associated with the systems.
-        read_canonical (bool, optional): Whether to read canonical system representations.
+        pangenome (Pangenome):
+            Target the pangenome object to populate with systems.
+        source_group (tables.Group):
+            HDF5 group containing system tables for one source.
+        models (Models):
+            Model definitions associated with the systems.
+        read_canonical (bool, optional):
+            Whether to read canonical system representations.
             Defaults to True.
-        disable_bar (bool, optional): Whether to disable the progress bar display.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar display.
             Defaults to False.
 
     Note:
@@ -256,20 +261,28 @@ def read_systems(
     Read system information from all sources in the pangenome HDF5 file.
 
     Args:
-        pangenome (Pangenome): Target pangenome object.
-        h5f (tables.File): Open HDF5 file handle containing pangenome data.
-        models (List[Models]): List of model definitions for each source.
-        sources (List[str]): List of source identifiers to process.
-        read_canonical (bool, optional): Whether to read canonical representations.
+        pangenome (Pangenome):
+            Target pangenome object.
+        h5f (tables.File):
+            Open HDF5 file handle containing pangenome data.
+        models (List[Models]):
+            List of model definitions for each source.
+        sources (List[str]):
+            List of source identifiers to process.
+        read_canonical (bool, optional):
+            Whether to read canonical representations.
             Defaults to False.
-        disable_bar (bool, optional): Whether to disable progress bars.
+        disable_bar (bool, optional):
+            Whether to disable progress bars.
             Defaults to False.
 
     Returns:
-        Set[str]: Combined set of metadata sources from all processed sources.
+        Set[str]:
+            Combined set of metadata sources from all processed sources.
 
     Raises:
-        ValueError: If the number of models doesn't match the number of sources.
+        ValueError:
+            If the number of models doesn't match the number of sources.
     """
     if len(models) != len(sources):
         raise ValueError(f"Number of models ({len(models)}) must match number of sources ({len(sources)})")
@@ -325,13 +338,18 @@ def read_gene_families_info(
     for gene families already present in the pangenome.
 
     Args:
-        pangenome (Pangenome): Target pangenome object containing gene families.
-        h5f (tables.File): Open HDF5 file handle with gene family information.
-        information (bool, optional): Whether to read partition information.
+        pangenome (Pangenome):
+            Target pangenome object containing gene families.
+        h5f (tables.File):
+            Open HDF5 file handle with gene family information.
+        information (bool, optional):
+            Whether to read partition information.
             Defaults to False.
-        sequences (bool, optional): Whether to read protein sequences.
+        sequences (bool, optional):
+            Whether to read protein sequences.
             Defaults to False.
-        disable_bar (bool, optional): Whether to disable the progress bar.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar.
             Defaults to False.
 
     Note:
@@ -394,9 +412,12 @@ def read_gene_families(
     gene objects; otherwise, it creates minimal gene objects.
 
     Args:
-        pangenome (Pangenome): Target pangenome object.
-        h5f (tables.File): Open HDF5 file handle containing gene family data.
-        disable_bar (bool, optional): Whether to disable the progress bar.
+        pangenome (Pangenome):
+            Target pangenome object.
+        h5f (tables.File):
+            Open HDF5 file handle containing gene family data.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar.
             Defaults to False.
     """
     table = h5f.root.geneFamilies
@@ -453,9 +474,12 @@ def read_spots(
     that occur in similar genomic contexts across multiple genomes.
 
     Args:
-        pangenome (Pangenome): Target pangenome object.
-        h5f (tables.File): Open HDF5 file handle with precomputed spots.
-        disable_bar (bool, optional): Whether to disable the progress bar.
+        pangenome (Pangenome):
+            Target pangenome object.
+        h5f (tables.File):
+            Open HDF5 file handle with precomputed spots.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar.
             Defaults to False.
     """
     table = h5f.root.spots
@@ -511,13 +535,17 @@ def read_modules(
     found together and likely represent functional units.
 
     Args:
-        pangenome (Pangenome): Target pangenome object.
-        h5f (tables.File): Open HDF5 file handle with precomputed modules.
-        disable_bar (bool, optional): Whether to disable the progress bar.
+        pangenome (Pangenome):
+            Target pangenome object.
+        h5f (tables.File):
+            Open HDF5 file handle with precomputed modules.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar.
             Defaults to False.
 
     Raises:
-        Exception: If gene families have not been loaded into the pangenome.
+        Exception:
+            If gene families have not been loaded into the pangenome.
     """
     # Validate prerequisites
     if pangenome.status["genesClustered"] not in ["Computed", "Loaded"]:
@@ -783,25 +811,37 @@ def check_pangenome_info(
     the required components from the pangenome file.
 
     Args:
-        pangenome (Pangenome): Target pangenome object.
-        need_families_info (bool, optional): Whether gene family partition info is needed.
+        pangenome (Pangenome):
+            Target pangenome object.
+        need_families_info (bool, optional):
+            Whether gene family partition info is needed.
             Defaults to False.
-        need_families_sequences (bool, optional): Whether gene family sequences are needed.
+        need_families_sequences (bool, optional):
+            Whether gene family sequences are needed.
             Defaults to False.
-        need_systems (bool, optional): Whether biological systems are needed.
+        need_systems (bool, optional):
+            Whether biological systems are needed.
             Defaults to False.
-        models (Optional[List[Models]], optional): Model definitions for systems.
+        models (Optional[List[Models]], optional):
+            Model definitions for systems.
             Required if need_systems=True.
-        systems_sources (Optional[List[str]], optional): System source identifiers.
+        systems_sources (Optional[List[str]], optional):
+            System source identifiers.
             Required if need_systems=True.
-        read_canonical (bool, optional): Whether to read canonical system representations.
+        read_canonical (bool, optional):
+            Whether to read canonical system representations.
             Defaults to False.
-        disable_bar (bool, optional): Whether to disable progress bars.
+        disable_bar (bool, optional):
+            Whether to disable progress bars.
             Defaults to False.
-        **kwargs: Additional parameters
+        **kwargs:
+            Additional parameters
+
     Raises:
-        AssertionError: If systems are requested but required parameters are missing.
-        ValueError: If gene families info/sequences are requested without gene families.
+        AssertionError:
+            If systems are requested but required parameters are missing.
+        ValueError:
+            If gene families info/sequences are requested without gene families.
     """
     # Get base information requirements
     need_info = get_need_info(pangenome, **kwargs)
@@ -860,25 +900,34 @@ def load_pangenome(
     HDF5 file, performs optional validation, and loads the requested information.
 
     Args:
-        name (str): Descriptive name for the pangenome.
-        path (Path): Path to the pangenome HDF5 file.
-        taxid (int): NCBI taxonomic identifier for the pangenome.
-        need_info (Dict[str, bool]): Dictionary specifying what information to load.
+        name (str):
+            Descriptive name for the pangenome.
+        path (Path):
+            Path to the pangenome HDF5 file.
+        taxid (int):
+            NCBI taxonomic identifier for the pangenome.
+        need_info (Dict[str, bool]):
+            Dictionary specifying what information to load.
             Keys can include: 'annotation', 'gene_families', 'graph', 'rgp',
             'spots', 'gene_sequences', 'modules', 'metadata', 'systems', etc.
-        check_function (Optional[Callable], optional): Custom validation function
-            to run before loading information. Should raise exceptions on failure.
-        disable_bar (bool, optional): Whether to disable progress bars.
+        check_function (Optional[Callable], optional):
+            Custom validation function to run before loading information.
+             Should raise exceptions on failure.
+        disable_bar (bool, optional):
+            Whether to disable progress bars.
             Defaults to False.
-        **kwargs: Additional parameters passed to check_function and
-            check_pangenome_info.
+        **kwargs:
+            Additional parameters passed to check_function and check_pangenome_info.
 
     Returns:
-        Pangenome: Fully loaded pangenome object with requested information.
+        Pangenome:
+            Fully loaded pangenome object with requested information.
 
     Raises:
-        FileNotFoundError: If the specified path does not exist.
-        Exception: If check_function validation fails or loading encounters errors.
+        FileNotFoundError:
+            If the specified path does not exist.
+        Exception:
+            If check_function validation fails or loading encounters errors.
     """
     start_time = time.time()
     logger.info(f"Starting to load pangenome: {name}")

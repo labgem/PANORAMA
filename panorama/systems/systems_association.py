@@ -278,8 +278,12 @@ def create_figure(
     elif high_corr <= 8:
         color_palette = ["#ffffff"] + list(Colorblind[high_corr])
     else:
+        n_color = high_corr + 4
         color_palette = ["#ffffff"] + list(
-            linear_palette(Reds256[::-1], high_corr + 4)
+            linear_palette(
+                Reds256[::-1],
+                n_color if n_color < 256 else 256
+            )
         )[4:]
 
     tools = "hover,save,pan,box_zoom,reset,wheel_zoom"

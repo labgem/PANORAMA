@@ -620,13 +620,16 @@ def get_metadata_df(
     "sensitive" mode to allow grouping by family.
 
     Args:
-        result (List[Tuple]): List of raw alignment results from HMM search.
-        mode (str): Annotation mode used ("fast" or "sensitive").
-        gene2family (Dict[str, str], optional): Required for "sensitive" mode.
-            Maps gene IDs to family names.
+        result (List[Tuple]):
+            List of raw alignment results from HMM search.
+        mode (str):
+            Annotation mode used ("fast" or "sensitive").
+        gene2family (Dict[str, str], optional):
+            Required for "sensitive" mode. Maps gene IDs to family names.
 
     Returns:
-        pd.DataFrame: Cleaned and optionally merged metadata DataFrame.
+        pd.DataFrame:
+            Cleaned and optionally merged metadata DataFrame.
     """
     metadata_df = pd.DataFrame(result).fillna(nan)
     metadata_df = metadata_df.replace(to_replace="-", value=nan)

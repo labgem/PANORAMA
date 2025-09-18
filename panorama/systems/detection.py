@@ -46,13 +46,16 @@ def check_detection_args(
     """Checks and processes the provided arguments to ensure they are valid.
 
     Args:
-        args (argparse.Namespace): The parsed command-line arguments.
+        args (argparse.Namespace):
+            The parsed command-line arguments.
 
     Returns:
-         Dict[str, Union[bool, str, List[str]]]: A dictionary indicating necessary information to load the pangenome.
+         Dict[str, Union[bool, str, List[str]]]:
+            A dictionary indicating necessary information to load the pangenome.
 
     Raises:
-        argparse.ArgumentTypeError: If 'jaccard' is not a restricted float.
+        argparse.ArgumentTypeError:
+            If 'jaccard' is not a restricted float.
     """
     args.jaccard = restricted_float(args.jaccard)
     args.annotation_sources = (
@@ -76,15 +79,22 @@ def check_pangenome_detection(
     """Checks and loads pangenome information before adding families.
 
     Args:
-        pangenome (Pangenome): Pangenome object to be checked.
-        metadata_sources (List[str]): Sources used to associate families with gene families.
-        systems_source (str): Source used to detect systems.
-        force (bool, optional): If True, forces the erasure of pangenome systems from the source. Defaults to False.
+        pangenome (Pangenome):
+            Pangenome object to be checked.
+        metadata_sources (List[str]):
+            Sources used to associate families with gene families.
+        systems_source (str):
+            Source used to detect systems.
+        force (bool, optional):
+            If True, forces the erasure of pangenome systems from the source. Defaults to False.
 
     Raises:
-        KeyError: If the provided annotation source is not in the pangenome.
-        ValueError: If systems are already detected based on the source and 'force' is not used.
-        AttributeError: If there is no metadata associated with families.
+        KeyError:
+            If the provided annotation source is not in the pangenome.
+        ValueError:
+            If systems are already detected based on the source and 'force' is not used.
+        AttributeError:
+            If there is no metadata associated with families.
     """
     if (
         pangenome.status["systems"] == "inFile"
@@ -420,16 +430,21 @@ def search_system_units(
     """Searches for system units corresponding to a model.
 
     Args:
-        model (Model): Model corresponding to the system searched.
-        gf2fam (Dict[GeneFamily, Set[Family]]): Dictionary linking gene families to their families.
-        fam2source (Dict[str, str]): Dictionary linking families to their sources.
-        source (str): Name of the annotation source.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        sensitivity (int, optional): Sensitivity level for detection.
-            1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
-            2 corresponds to a global Jaccard filtering on the specific context of each combination.
-            3 corresponds to a local Jaccard filtering on the specific context of each combination.
-            Defaults to 1.
+        model (Model):
+            Model corresponding to the system searched.
+        gf2fam (Dict[GeneFamily, Set[Family]]):
+            Dictionary linking gene families to their families.
+        fam2source (Dict[str, str]):
+            Dictionary linking families to their sources.
+        source (str):
+            Name of the annotation source.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        sensitivity (int, optional): Sensitivity level for detection:
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2. corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+            - Defaults to 1.
 
     Returns:
         Dict[str, Set[SystemUnit]]: System units found with their name as the key and units as value.
@@ -561,9 +576,10 @@ def get_system_unit_combinations(
     from neutral categories are generated.
 
     Args:
-        su_found (Dict[str, Set[SystemUnit]]): A dictionary where keys are functional unit names and values are sets of
-                 elements belonging to each functional unit model.
-        model (Model): Model corresponding to the functional unit.
+        su_found (Dict[str, Set[SystemUnit]]):
+            A dictionary where keys are functional unit names and values are sets of elements belonging to each functional unit model.
+        model (Model):
+            Model corresponding to the functional unit.
 
     Returns:
         List[List[SystemUnit]]: A list of all possible valid combinations based on the model.
@@ -618,10 +634,14 @@ def search_for_system(
     """Searches for a system corresponding to the model based on the units found.
 
     Args:
-        model (Model): Model corresponding to the system searched.
-        su_found (Dict[str, Set[SystemUnit]]): The system units found for the model.
-        source (str): Name of the annotation source.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        model (Model):
+            Model corresponding to the system searched.
+        su_found (Dict[str, Set[SystemUnit]]):
+            The system units found for the model.
+        source (str):
+            Name of the annotation source.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
 
     Returns:
         set of System: Systems detected.
@@ -674,16 +694,21 @@ def search_system(
     """Searches for a model system in a pangenome.
 
     Args:
-        model (Model): Model to search in the pangenome.
-        gf2fam (Dict[GeneFamily, Set[Family]]): Dictionary linking gene families to their families.
-        fam2source (Dict[str, str]): Dictionary linking families to their sources.
-        source (str): Name of the annotation source.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        sensitivity (int, optional): Sensitivity level for detection.
-            1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
-            2 corresponds to a global Jaccard filtering on the specific context of each combination.
-            3 corresponds to a local Jaccard filtering on the specific context of each combination.
-            Defaults to 1.
+        model (Model):
+            Model to search in the pangenome.
+        gf2fam (Dict[GeneFamily, Set[Family]]):
+            Dictionary linking gene families to their families.
+        fam2source (Dict[str, str]):
+            Dictionary linking families to their sources.
+        source (str):
+            Name of the annotation source.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        sensitivity (int, optional): Sensitivity level for detection:
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2. corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+            - Defaults to 1.
 
     Returns:
         set of System: Set of systems detected in the pangenome for the given model.
@@ -724,34 +749,38 @@ def search_systems(
     """Searches for systems present in the pangenome for all models.
 
     Args:
-        models (Models): Models to search in pangenomes.
-        pangenome (Pangenome): Pangenome object containing gene families.
-        source (str): Name of the source for the system.
-        metadata_sources (List[str]): List of the metadata sources for the families.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        disable_bar (bool, optional): If True, disables the progress bar. Defaults to False.
-        sensitivity (int, optional): Sensitivity level for detection.
-            1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
-            2 corresponds to a global Jaccard filtering on the specific context of each combination.
-            3 corresponds to a local Jaccard filtering on the specific context of each combination.
-            Defaults to 1.
+        models (Models):
+            Models to search in pangenomes.
+        pangenome (Pangenome):
+            Pangenome object containing gene families.
+        source (str):
+            Name of the source for the system.
+        metadata_sources (List[str]):
+            List of the metadata sources for the families.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        disable_bar (bool, optional):
+            If True, disables the progress bar. Defaults to False.
+        sensitivity (int, optional): Sensitivity level for detection:
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2. corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+            - Defaults to 1.
     """
-    logging.getLogger("PANORAMA").debug(
-        f"Begin systems detection in {pangenome.name}"
-    )
+    logging.getLogger("PANORAMA").debug(f"Begin systems detection in {pangenome.name}")
     begin = time.time()
     meta2fam = get_metadata_to_families(pangenome=pangenome, sources=metadata_sources)
     detected_systems = set()
     for model in tqdm(models, total=models.size, unit="model", disable=disable_bar):
         gf2fam, fam2source = dict_families_context(model, meta2fam)
         detected_systems |= search_system(
-                model,
-                gf2fam,
-                fam2source,
-                source,
-                jaccard_threshold,
-                sensitivity,
-            )
+            model,
+            gf2fam,
+            fam2source,
+            source,
+            jaccard_threshold,
+            sensitivity,
+        )
     for idx, system in enumerate(
         sorted(
             detected_systems,
@@ -787,19 +816,27 @@ def search_systems_in_pangenomes(
     """Searches for systems in pangenomes by multithreading on pangenomes.
 
     Args:
-        models (Models): Models to search in pangenomes.
-        pangenomes (Pangenomes): Getter object with Pangenome.
-        source (str): Name of the source for the system.
-        metadata_sources (List[str]): List of the metadata sources for the families.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        threads (int, optional): Number of available threads. Defaults to 1.
-        lock (Lock, optional): Global lock for multiprocessing execution. Defaults to None.
-        disable_bar (bool, optional): If True, disables the progress bar. Defaults to False.
-        sensitivity (int, optional): Sensitivity level for detection.
-            1 corresponds to a global Jaccard filtering on the context without looking at all the combinations.
-            2 corresponds to a global Jaccard filtering on the specific context of each combination.
-            3 corresponds to a local Jaccard filtering on the specific context of each combination.
-            Defaults to 1.
+        models (Models):
+            Models to search in pangenomes.
+        pangenomes (Pangenomes):
+            Getter object with Pangenome.
+        source (str):
+            Name of the source for the system.
+        metadata_sources (List[str]):
+            List of the metadata sources for the families.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        threads (int, optional):
+            Number of available threads. Defaults to 1.
+        lock (Lock, optional):
+            Global lock for multiprocessing execution. Defaults to None.
+        disable_bar (bool, optional):
+            If True, disables the progress bar. Defaults to False.
+        sensitivity (int, optional): Sensitivity level for detection:
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2. corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+            - Defaults to 1.
     """
     t0 = time.time()
     with ThreadPoolExecutor(

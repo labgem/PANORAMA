@@ -102,20 +102,23 @@ def check_dict(
     any checks fail.
 
     Args:
-        data_dict (Dict[str, Union[str, int, list, Dict[str, int]]]): The dictionary
-            that needs to be validated.
-        mandatory_keys (List[str]): A list of keys that must be present in the
-            dictionary.
-        param_keys (List[str], optional): An optional list of keys required in the
-            'parameters' field of the dictionary, if present. Defaults to an empty list.
+        data_dict (Dict[str, Union[str, int, list, Dict[str, int]]]):
+            The dictionary that needs to be validated.
+        mandatory_keys (List[str]):
+            A list of keys that must be present in the dictionary.
+        param_keys (List[str], optional):
+            An optional list of keys required in the 'parameters' field of the dictionary, if present.
+            Defaults to an empty list.
 
     Raises:
-        KeyError: If required top-level keys are missing, or unexpected keys are found
-            in the dictionary.
-        TypeError: If a field contains a value of an unexpected type.
-        ValueError: If a field contains a value that does not meet the required
-            constraints.
-        Exception: If any unexpected issues occur during the validation process.
+        KeyError:
+            If required top-level keys are missing, or unexpected keys are found in the dictionary.
+        TypeError:
+            If a field contains a value of an unexpected type.
+        ValueError:
+            If a field contains a value that does not meet the required constraints.
+        Exception:
+            If any unexpected issues occur during the validation process.
     Todo:
         split in multiple functions: one to validate type, one to validate value, and keep this function at the main one.
         (ask Jerome for the example code)

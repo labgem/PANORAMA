@@ -470,23 +470,32 @@ def linclust_launcher(
     algorithm for clustering.
 
     Args:
-        seq_db: Path to MMseqs2 sequence database containing gene families.
-        mmseqs2_opt: Dictionary containing MMseqs2 clustering parameters.
+        seq_db:
+            Path to MMseqs2 sequence database containing gene families.
+        mmseqs2_opt:
+            Dictionary containing MMseqs2 clustering parameters.
             Required keys: comp_bias_corr, kmer_per_seq, identity, coverage,
             cov_mode, eval, align_mode, max_seq_len, max_reject, clust_mode.
-        lclust_db: Optional path for the clustering results database.
+        lclust_db:
+            Optional path for the clustering results database.
             If None, a temporary file will be created.
-        tmpdir: Temporary directory for MMseqs2 operations.
+        tmpdir:
+            Temporary directory for MMseqs2 operations.
             If None, a system temp directory will be used.
-        threads: Number of threads for clustering. Defaults to 1.
+        threads:
+            Number of threads for clustering. Defaults to 1.
 
     Returns:
-        Path: Path to the MMseqs2 clustering results database.
+        Path:
+            Path to the MMseqs2 clustering results database.
 
     Raises:
-        ClusteringError: If clustering execution fails.
-        ClusteringValidationError: If parameters are invalid.
-        FileNotFoundError: If the sequence database doesn't exist.
+        ClusteringError:
+            If clustering execution fails.
+        ClusteringValidationError:
+            If parameters are invalid.
+        FileNotFoundError:
+            If the sequence database doesn't exist.
     """
     # Validate inputs
     if not seq_db.exists():
@@ -586,24 +595,43 @@ def cluster_launcher(
     better clustering quality through more thorough sequence comparison.
 
     Args:
-        seq_db: Path to MMseqs2 sequence database containing gene families.
-        mmseqs2_opt: Dictionary containing MMseqs2 clustering parameters.
-            Required keys: max_seqs, min_ungapped, comp_bias_corr, sensitivity,
-            kmer_per_seq, identity, coverage, cov_mode, eval, align_mode,
-            max_seq_len, max_reject, clust_mode.
-        cluster_db: Optional path for the clustering results database.
+        seq_db:
+            Path to MMseqs2 sequence database containing gene families.
+        mmseqs2_opt:
+            Dictionary containing MMseqs2 clustering parameters. Required keys:
+            - max_seqs,
+            - min_ungapped,
+            - comp_bias_corr,
+            - sensitivity,
+            - kmer_per_seq,
+            - identity,
+            - coverage,
+            - cov_mode,
+            - eval,
+            - align_mode,
+            - max_seq_len,
+            - max_reject,
+            - clust_mode.
+        cluster_db:
+            Optional path for the clustering results database.
             If None, a temporary file will be created.
-        tmpdir: Temporary directory for MMseqs2 operations.
+        tmpdir:
+            Temporary directory for MMseqs2 operations.
             If None, the system temp directory will be used.
-        threads: Number of threads for clustering. Defaults to 1.
+        threads:
+            Number of threads for clustering. Defaults to 1.
 
     Returns:
-        Path: Path to the MMseqs2 clustering results database.
+        Path:
+            Path to the MMseqs2 clustering results database.
 
     Raises:
-        ClusteringError: If clustering execution fails.
-        ClusteringValidationError: If parameters are invalid.
-        FileNotFoundError: If the sequence database doesn't exist.
+        ClusteringError:
+            If clustering execution fails.
+        ClusteringValidationError:
+            If parameters are invalid.
+        FileNotFoundError:
+            If the sequence database doesn't exist.
     """
     # Validate inputs
     if not seq_db.exists():
@@ -719,26 +747,38 @@ def cluster_gene_families(
     writing sequences, creating databases, performing clustering, and formatting results.
 
     Args:
-        pangenomes: Pangenomes object containing multiple pangenome instances.
+        pangenomes:
+            Pangenomes object containing multiple pangenome instances.
             All pangenomes must have clustered genes and family sequences.
-        method: Clustering method to use. Must be "linclust" or "cluster".
-            "linclust" is faster but less sensitive, "cluster" is more sensitive but slower.
-        mmseqs2_opt: Dictionary containing MMseqs2 clustering parameters.
+        method:
+            Clustering method to use. Must be "linclust" or "cluster".
+            - "linclust" is faster but less sensitive,
+            - "cluster" is more sensitive but slower.
+        mmseqs2_opt:
+            Dictionary containing MMseqs2 clustering parameters.
             Must include all required parameters for the chosen method.
-        tmpdir: Temporary directory for operations. If None, uses system temp.
-        threads: Number of threads for processing. Defaults to 1.
-        lock: Optional multiprocessing Lock for thread safety. If None, operations
+        tmpdir:
+            Temporary directory for operations. If None, uses system temp.
+        threads:
+            Number of threads for processing. Defaults to 1.
+        lock:
+            Optional multiprocessing Lock for thread safety. If None, operations
             may not be thread-safe in multiprocessing contexts.
-        disable_bar: Whether to disable progress bars. Defaults to False.
+        disable_bar:
+            Whether to disable progress bars. Defaults to False.
 
     Returns:
-        Path: Path to the final clustering results file in TSV format with columns:
+        Path:
+            Path to the final clustering results file in TSV format with columns:
             cluster_id, referent, in_clust.
 
     Raises:
-        ClusteringError: If the clustering process fails.
-        ClusteringValidationError: If parameters are invalid.
-        ValueError: If the method is not "linclust" or "cluster".
+        ClusteringError:
+            If the clustering process fails.
+        ClusteringValidationError:
+            If parameters are invalid.
+        ValueError:
+            If the method is not "linclust" or "cluster".
 
     Notes:
         Temporary directory is supposed to be already validated

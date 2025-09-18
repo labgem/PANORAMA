@@ -440,16 +440,26 @@ def annot_pangenomes(
     Gene families annotation with HMM or TSV files for multiple pangenomes in multiprocessing.
 
     Args:
-        pangenomes (Pangenomes): Pangenomes object containing all the pangenome to annotate.
-        source (str, optional): Name of the annotation source. Defaults to None.
-        table (Path, optional): Path to the metadata file for gene families annotation. Defaults to None.
-        hmm (Path, optional): Path to hmm list file. Defaults to None.
-        threads (int, optional): Number of available threads. Defaults to 1.
-        k_best_hit (int, optional): Number of best hits to keep. Defaults to None.
-        lock (Lock, optional): Lock for multiprocessing. Defaults to None.
-        force (bool, optional): Flag to allow force overwrite in pangenomes. Defaults to False.
-        disable_bar (bool, optional): Flag to disable progress bar. Defaults to False.
-        **hmm_kwgs (Any): Arbitrary keyword arguments for hmm alignment.
+        pangenomes (Pangenomes):
+            Pangenomes object containing all the pangenome to annotate.
+        source (str, optional):
+            Name of the annotation source. Defaults to None.
+        table (Path, optional):
+            Path to the metadata file for gene families annotation. Defaults to None.
+        hmm (Path, optional):
+            Path to hmm list file. Defaults to None.
+        threads (int, optional):
+            Number of available threads. Defaults to 1.
+        k_best_hit (int, optional):
+            Number of best hits to keep. Defaults to None.
+        lock (Lock, optional):
+            Lock for multiprocessing. Defaults to None.
+        force (bool, optional):
+            Flag to allow force overwrite in pangenomes. Defaults to False.
+        disable_bar (bool, optional):
+            Flag to disable progress bar. Defaults to False.
+        **hmm_kwgs (Any):
+            Arbitrary keyword arguments for hmm alignment.
 
     Raises:
         AssertionError: If neither HMM nor TSV are provided.
