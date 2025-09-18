@@ -1,7 +1,9 @@
 .justify-text {
     text-align: justify;
 }
-
+.wy-nav-content {
+    max-width: 100% !important;
+}
 
 
 
