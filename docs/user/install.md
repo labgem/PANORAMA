@@ -13,7 +13,6 @@ For more information, see the [Conda documentation](https://docs.conda.io/projec
 ```
 
 * * *
-
 ### Installing from source code (GitHub) 🐙
 (with_conda_env)=
 #### Within a Conda environmnent 🐍

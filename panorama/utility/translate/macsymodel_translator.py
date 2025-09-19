@@ -542,7 +542,7 @@ def find_type_subtype_canonical(model_name: str, models: Path) -> List[str]:
     Returns:
         List of canonical model names
 
-    todo:
+    TODO:
         Try to have a function more general and refactor
     """
     canonical_systems = []

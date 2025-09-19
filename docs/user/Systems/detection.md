@@ -1,10 +1,10 @@
-## System Detection Based on Models 🔬
+# System Detection Based on Models 🔬
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
 This detection relies on gene family [annotations](./annotation.md#gene-family-annotation), 
 and a [model](../modeller/modeling.md#models) file defining the the presence/absence of specific function and the genomic organization.
 
-### Model Detection Workflow ⚙️
+## Model Detection Workflow ⚙️
 
 The detection process runs as follows:
 
@@ -34,7 +34,7 @@ The detection process runs as follows:
 
    Detected systems are saved back into the pangenome `.h5` file, under the given source name.
 
-### Command Line Usage 🚀
+## Command Line Usage 🚀
 
 System detection command is used as such:
 ```shell
@@ -47,7 +47,7 @@ panorama systems \
 --sensitivity 3 \
 --threads 8
 ```
-#### Key Options 🔑
+## Key Options 🔑
 
 | Shortcut | Argument             | Description                                                                |
 |----------|----------------------|----------------------------------------------------------------------------|
@@ -59,7 +59,7 @@ panorama systems \
 | —        | --sensitivity        | Sensitivity mode: 1, 2, or 3. Higher = more precise, slower (default: 3)   |
 | —        | --threads            | Number of threads to use for parallel model evaluation                     |
 
-[//]: # (#### 🔍 Sensitivity Modes)
+[//]: # (## 🔍 Sensitivity Modes)
 
 [//]: # ()
 [//]: # (| Level | Description                                                                            |)
@@ -73,7 +73,7 @@ panorama systems \
 [//]: # (| 3     | Local filtering for each combination &#40;highest sensitivity, slowest&#41;                    |)
 
 
-### 🗂 Output
+## 🗂 Output
 
 PANORAMA integrates multiple outputs: textual, graph-based representations and figures to summarize results.
 

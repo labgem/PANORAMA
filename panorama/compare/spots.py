@@ -1347,7 +1347,7 @@ def launch(args: argparse.Namespace) -> None:
 
     Raises:
         Various exceptions from underlying functions for validation, processing, or I/O errors.
-    todo:
+    TODO:
         - add a community argument
     """
     logger.info("Starting conserved spots comparison analysis")
