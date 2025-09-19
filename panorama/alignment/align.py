@@ -450,7 +450,7 @@ def align_db(
         AlignmentError: If alignment execution fails.
         AlignmentValidationError: If parameters are invalid.
         FileNotFoundError: If input databases don't exist.
-    Todo:
+    TODO:
         - see how validate input databases
     """
 

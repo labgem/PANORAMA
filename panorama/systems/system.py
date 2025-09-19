@@ -1030,7 +1030,7 @@ class System(MetaFeatures):
 
         Raises:
             TypeError: If `other` is not a System.
-        Todo:
+        TODO:
             - Make the method create a new system. Maybe a static method ?
             - Make merge method take multiple systems as input.
         """
@@ -1089,7 +1089,7 @@ class System(MetaFeatures):
 
         Args:
             system (System): Canonical system to incorporate.
-        Todo:
+        TODO:
             - Manage if the new canonical system has canonical itself
             - See if possible to remove the merge
         """

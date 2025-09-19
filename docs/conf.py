@@ -45,6 +45,7 @@ extensions = [
     "sphinx_search.extension",
     "sphinx.ext.napoleon",  # Extension for NumPy and Google style docstrings
     "sphinx.ext.extlinks",
+    "sphinx.ext.todo",  # Remove warning todo
     "sphinx_design",
     "sphinxcontrib.jquery",
     "sphinxcontrib.mermaid",

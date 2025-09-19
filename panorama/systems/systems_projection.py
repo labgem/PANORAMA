@@ -547,7 +547,7 @@ def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
 
     Returns:
         pd.DataFrame: Dataframe reformated for an organism
-    Todo: This function is not used anymore, should we remove it?
+    TODO: This function is not used anymore, should we remove it?
     """
     org_name = str(org_df["organism"].unique()[0])
     org_df = org_df.drop(columns=["organism"])

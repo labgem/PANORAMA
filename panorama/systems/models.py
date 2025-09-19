@@ -57,7 +57,7 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: Set[str]) -> No
         ValueError: If a parameter value in param_dict does not meet the defined constraints.
         Exception: If an unexpected error occurs during parameter validation.
 
-    Todo:
+    TODO:
         look at dataclasses to encapsulate validation rules (note ask Jerome for the example code)
     """
     try:
@@ -119,7 +119,7 @@ def check_dict(
             If a field contains a value that does not meet the required constraints.
         Exception:
             If any unexpected issues occur during the validation process.
-    Todo:
+    TODO:
         split in multiple functions: one to validate type, one to validate value, and keep this function at the main one.
         (ask Jerome for the example code)
     """
