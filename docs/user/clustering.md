@@ -1,3 +1,4 @@
+(clustering)=
 ## 🔗 Gene Family Clustering Across Pangenomes
 
 The cluster command groups related gene families from multiple pangenomes into homologous clusters based on sequence

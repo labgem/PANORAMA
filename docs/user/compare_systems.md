@@ -1,4 +1,4 @@
-# 🧬 Systems Comparison Across Pangenomes
+# Systems Comparison Across Pangenomes 🧬
 
 The `compare_systems` command identifies and analyzes conserved biological systems across multiple pangenomes by
 comparing their gene family composition and computing similarity metrics.
@@ -7,42 +7,42 @@ Family Relatedness Relationship (GFRR) metrics** to identify systems that are co
 populations. The analysis generates visualizations showing system distribution patterns and creates graphs of conserved
 system clusters.
 
-## ⚙️ Systems Comparison Workflow
+## Systems Comparison Workflow ⚙️
 
 The systems comparison process runs as follows:
 
-1. 📂 **Load and Validate Pangenomes**
+1. **Load and Validate Pangenomes**
     - Multiple pangenomes are loaded from .h5 files based on a .tsv file.
     - Each pangenome is validated to ensure that systems have been detected for the specified sources.
 
-2. 📊 **Create Systems**
+2. **Create Systems**
     - All systems from all pangenomes are represented as nodes in a
       unified [NetworkX](https://networkx.org/documentation/stable/) graph.
     - Each system is characterized by its gene families and model families for similarity assessment.
 
-3. 🧮 Compute GFRR-based Edges
+3. Compute GFRR-based Edges
     - For each pair of systems from different pangenomes:
         - Model gene families are compared using GFRR metrics.
         - If model families exceed thresholds, all gene families are compared.
     - Edges are added between systems that exceed both GFRR cutoff thresholds.
 
-4. 🔗 Cluster Conserved Systems
+4. Cluster Conserved Systems
 
    Graph clustering algorithms
    ([Louvain](https://networkx.org/documentation/stable/reference/algorithms/community.html#module-networkx.algorithms.community.louvain))
    identify groups of similar systems that represent conserved biological systems across pangenomes based on the
    selected GFRR metric.
 
-5. 📊 Generate Visualizations
+5. Generate Visualizations
 
    Heatmaps showing system distribution patterns across pangenomes are generated in HTML format for interactive
    exploration.
 
-6. 💾 Write Results to Files
+6. Write Results to Files
 
    Conserved systems are saved as graph files (GEXF, GraphML) and summary tables for further analysis and visualization.
 
-## 🚀 Command Line Usage
+## System comparison command Line Usage 🚀
 
 Basic systems comparison with heatmap generation:
 
@@ -72,7 +72,7 @@ panorama compare_systems \
 --threads 8
 ```
 
-## 📋 Key Options
+### Key Options 📋
 
 | Shortcut | Argument             | Type                   | Optional | Description                                                                                         |
 |----------|----------------------|------------------------|----------|-----------------------------------------------------------------------------------------------------|
@@ -87,7 +87,7 @@ panorama compare_systems \
 | —        | --graph_formats      | List[str]              | True     | Export graph formats: gexf, graphml                                                                 |
 | —        | --canonical          | bool (flag)            | True     | Include canonical system versions in analysis                                                       |
 
-## Advanced Configuration Arguments
+### Advanced Configuration Arguments
 
 | Shortcut | Argument           | Type                 | Optional | Description                                                                              |
 |----------|--------------------|----------------------|----------|------------------------------------------------------------------------------------------|
@@ -108,7 +108,7 @@ If you use let PANORAMA perform the clustering, you can look at the [Clustering]
 details about options.
 ```
 
-## 📊 GFRR Metrics for Systems
+### GFRR Metrics for Systems
 
 | Metric          | Target Families     | Description                                        |
 |-----------------|---------------------|----------------------------------------------------|
@@ -117,7 +117,7 @@ details about options.
 | min_gfrr        | All families        | Conservative metric using complete gene repertoire |
 | max_gfrr        | All families        | Liberal metric using complete gene repertoire      |
 
-## 🎯 Cutoff Configuration
+### Cutoff Configuration
 
 The dual-cutoff system provides hierarchical filtering:
 
@@ -126,18 +126,18 @@ The dual-cutoff system provides hierarchical filtering:
 | Model families  | gfrr_models_cutoff | Primary filter using core functional genes      |
 | All families    | gfrr_cutoff        | Secondary filter using complete gene repertoire |
 
-## Recommended settings
+### Recommended settings
 
 - Strict: gfrr_models_cutoff=[0.5, 0.5], gfrr_cutoff=[0.8, 0.8]
 - Moderate: gfrr_models_cutoff=[0.3, 0.3], gfrr_cutoff=[0.6, 0.7]
 - Permissive: gfrr_models_cutoff=[0.2, 0.2], gfrr_cutoff=[0.4, 0.5]
 
-## 🗂 Output
+## Output 🗂
 
 PANORAMA generates multiple outputs: interactive heatmaps, network graphs, and summary tables for comprehensive systems
 analysis.
 
-## File Organization
+### File Organization
 
 ```
 output_directory/
@@ -148,9 +148,9 @@ output_directory/
 └── conserved_systems.tsv (optional)
 ```
 
-## Files description
+### Files description
 
-### Heatmap Visualizations
+#### Heatmap Visualizations
 
 Interactive HTML heatmaps showing system distribution patterns:
 
@@ -166,9 +166,9 @@ Interactive HTML heatmaps showing system distribution patterns:
 
 [PLACEHOLDER: Normalized heatmap showing relative system abundance patterns]
 
-## Conserved System Clustering
+#### Conserved System Clustering
 
-### Network Graphs
+##### Network Graphs
 When `--gfrr_metrics` and `--graph_formats` are specified, genereate `conserved_systems.gexf/graphml` Network graphs of
 conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
@@ -176,6 +176,6 @@ Edge attributes contain GFRR similarity scores and the number of shared gene fam
 
 [PLACEHOLDER: Network graph of conserved systems clusters with different colors]
 
-### Summary Tables
+##### Summary Tables
 When conserved systems clustering is performed:
 conserved_systems.tsv: Tabular summary of identified conserved system clusters
