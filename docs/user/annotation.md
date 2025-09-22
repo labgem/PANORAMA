@@ -90,12 +90,14 @@ panorama annotation \
 ```
 ```{tip}
 More options are available to annotate with a HMM database. See below.
-```:
+```
+
 ```{note}
-source name should not contain a special character. They could interfere with the h5 writing.
+Source name should not contain a special character. They could interfere with the `.h5` writing.
 ```
 ```{warning}
-You **must provide either** `--table` **or** `--hmm`, **but not both**. These options are mutually exclusive.
+You **must provide either** `--table` **or** `--hmm`, **but not both**. 
+These options are mutually exclusive.
 ```
 
 ### Key options 🔑
@@ -131,7 +133,7 @@ You **must provide either** `--table` **or** `--hmm`, **but not both**. These op
 
    - With `--hmm`: aligns families via annot_with_hmm() from hmm_search.py
 
-3. Filter HMM hits (only for hmm option)
+3. Filter HMM hits (only for the hmm option)
 
     Each hit is filtered using the thresholds defined in the HMM metadata:
     - e-value
@@ -149,7 +151,7 @@ Prefer to use the score instead of the e-value or the i-evalue to ensure reprodu
    Filtered annotations are stored in the .h5 files, under the given --source name.
 
 ```{note}
-Annotations can be viewed or reused with panorama, ppanggolin, or custom tools (*e.g.*, [vitables](https://vitables.org/index.html)).
+Annotations can be viewed or reused with PANORAMA, PPanGGOLiN, or custom tools (*e.g.*, [vitables](https://vitables.org/index.html)).
 ```
 
 ## HMM Search Details 🧠
@@ -164,7 +166,7 @@ Depending on sequence size, PANORAMA chooses the best method:
 | hmmscan   | Streaming, used when memory is limited |
 
 ```{note}
-If sequences exceed 10% of available RAM, PANORAMA uses hmmscan, as recommended by pyhmmer documentation 
+If sequences exceed 10% of available RAM, PANORAMA uses `hmmscan`, as recommended by pyhmmer documentation 
 [here](https://pyhmmer.readthedocs.io/en/stable/examples/performance_tips.html#Performance-tips-and-tricks)
 ```
 

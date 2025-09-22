@@ -1,8 +1,8 @@
 # System Detection Based on Models 🔬
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
-This detection relies on gene family [annotations](annotation.mdene-family-annotation), 
-and a [model](../modeller/modeling.md#models) file defining the the presence/absence of specific function and the genomic organization.
+This detection relies on gene family [annotations](annotation.md#gene-family-annotation), 
+and a [model](../modeller/modeling.md#models) file defining the presence/absence of a specific function and the genomic organization.
 
 ## Model Detection Workflow ⚙️
 
@@ -14,13 +14,13 @@ The detection process runs as follows:
 
 2. Load System Models
 
-   The models are parsed from a list provided by --models.
+   The models are parsed from a list provided by `--models`.
 
 3. Search for System Units
 
    For each functional unit of each model:
    1. Gene families are matched based on annotation metadata. 
-   2. A context graph is built based on gene neighborhood (window, transitivity). 
+   2. A context graph is built based on the gene neighborhood (window, transitivity). 
    3. Jaccard similarity filters edges in the graph.
    4. Connected components are checked for necessary and forbidden families.
 
@@ -78,4 +78,4 @@ panorama systems \
 
 PANORAMA integrates multiple outputs: textual, graph-based representations and figures to summarize results.
 
-See the [write_systems](.write_systems.md)
+See the [write_systems](write_systems.md#systems-analysis-output)

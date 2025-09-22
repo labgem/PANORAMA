@@ -1,10 +1,10 @@
-## 🔭 System Projection on Genomes
+## System Projection on Genomes 🔭
 
 The `write_systems` command enables the projection of systems, previously detected at the pangenome level
 (see [`systems` command](detection.md)), onto individual genomes. Projection relies on system detection results and
 the genomic context of gene families within organisms.
 
-### 🧪 Projection Workflow
+### Projection Workflow 🧪
 
 The projection process has been optimized and proceeds as follows:
 
@@ -77,9 +77,9 @@ New optimization that handles overlapping system units:
 #### 5. Write Output
 
 Projection results are written as TSV files with improved organization and metadata.
-See [Output Files](#-output-files) for details on organization and contents.
+See [Output Files](#output-files) for details on the organization and contents.
 
-### 🚀 Command Line Usage
+### Projection command Line Usage 🚀
 
 #### Basic Projection
 
@@ -110,7 +110,7 @@ panorama write_systems \
     --output results/
 ```
 
-### ⚙️ Command Line Arguments
+### Command Line Arguments ⚙️
 
 #### Required Arguments
 
@@ -133,7 +133,7 @@ panorama write_systems \
 | `--threads`     | int  | 1       | Number of parallel threads to use                      |
 | `--force`       | flag | False   | Overwrite existing projection files                    |
 
-### 📄 Output Files
+### Output Files 📄
 
 Output is organized in the specified `--output` directory with subdirectories for each pangenome and source combination:
 
