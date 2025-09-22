@@ -1002,7 +1002,6 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         transitivity (int): Size of the transitive closure used to build the graph.
         window (int): Number of neighboring genes considered in genomic searches.
         duplicate (int): Number of duplicates allowed.
-        model (Model): Model in which the functional unit is defined.
         exchangeable (Set[str]): List of exchangeable families.
         multi_system (bool): Flag indicating if the unit can span multiple systems.
         multi_model (bool): Flag indicating if the unit can span multiple models.
@@ -1234,7 +1233,6 @@ class Family(_BasicFeatures, _FuFamFeatures):
         transitivity (int): Represents the transitivity value, indicating the structural property of the family.
         window (int): Defines the processing window or range, typically a limit or scope.
         presence (str): Indicates the presence condition or state of the family instance.
-        func_unit (FuncUnit): Functional unit linked to the family, representing a unit of operation or behavior.
         duplicate (int): Parameter controlling the duplication count or flag for this family.
         exchangeable (Set[str]): Defines a set of exchangeable features or components related to the family.
         multi_system (bool): Specifies if the family supports operation across multiple systems.
