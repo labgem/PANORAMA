@@ -1,3 +1,4 @@
+name: blabla
 channels:
   - conda-forge
   - bioconda

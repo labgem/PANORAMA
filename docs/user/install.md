@@ -4,18 +4,14 @@
 ### Installation via Conda 🐍
 
 ```{note}
-PANORAMA is not yet available on Bioconda. We hope to provide a recipe soon.
-```
-
-```{important}
-Before starting, create and activate a Conda environment. 
-For more information, see the [Conda documentation](https://docs.conda.io/projects/conda/en/latest/index.html).
+PANORAMA is not yet available on [Bioconda](https://bioconda.github.io/). We hope to provide a recipe soon.
 ```
 
 * * *
+
 ### Installing from source code (GitHub) 🐙
 (with_conda_env)=
-#### Within a Conda environmnent 🐍
+#### Within a Conda environment 🐍
 
 ##### 1. Clone the GitHub Repository
 
@@ -35,7 +31,7 @@ conda env update --file panorama.yml
 ```
 
 Alternatively, in one line:  
-`conda create -n panorama -c bioconda -c conda-forge --file panorama.yml`
+`conda env create -f panorama.yml`
 
 ##### 3. Install PANORAMA
 
@@ -50,7 +46,7 @@ panorama --help
 panorama --version
 ```
 
-#### 🛠️ Manual Installation (without Conda)
+#### Manual Installation (without Conda) 🛠️
 
 ##### 1. Clone the Repository
 
@@ -81,7 +77,7 @@ pip install .
 
 * * *
 
-## 🧪 Development Version
+## Development Version 🧪
 
 ### 1. Get the Development branch 
 
