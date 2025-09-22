@@ -11,7 +11,7 @@
 :caption: 'User Guide:'
 :maxdepth: 2
 
-user/index
+user/user_guide
 ```
 
 [//]: # (```{toctree})
