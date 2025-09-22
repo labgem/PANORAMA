@@ -74,7 +74,7 @@ panorama systems \
 | 3     | Local filtering for each combination (highest sensitivity, slowest)                    |
 -->
 
-## 🗂 Output
+## Output 📂
 
 PANORAMA integrates multiple outputs: textual, graph-based representations and figures to summarize results.
 

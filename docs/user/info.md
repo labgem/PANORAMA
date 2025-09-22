@@ -1,21 +1,21 @@
-## ℹ info Command — Extract and Visualize Pangenome Information
+# info Command — Extract and Visualize Pangenome Information ℹ
 
 The info subcommand extracts summary information from PPanGGOLiN **.h5 pangenome files** and generates interactive HTML
 reports. These reports support quick content comparison of each pangenome.
 
-### ⚙️ Usage
+## Info command line usage ️️📋
 
 ```shell
 yourtool info -i <pangenome_list.tsv> -o <output_directory> [--status] [--content] [--parameters] [--metadata]
 ```
 
-### 📤 Output
+## Output 📤
 
 - status_info.html — ✅ Status of pangenome processing steps (annotation, clustering, etc.)
 
 - content_info.html — 📊 Numerical summary: genomes, genes, gene families, modules, etc.
 
-### 🔧 Options
+## Key options 🔧
 
 | Option       | Description                                                  |
 |--------------|--------------------------------------------------------------|
@@ -31,9 +31,9 @@ default If no flags are provided, all (status, content, parameters, metadata) ar
 Please add `--status` and/or `--content` to don't get an error.
 ```
 
-### 🌐 Exploring the Reports
+## Exploring the Reports 🌐
 
-#### ✅ status_info.html
+### status_info.html ✅
 
 Shows whether each processing step was completed:
 
@@ -44,7 +44,7 @@ Features:
 - Radio button filters for boolean values.
 - TSV download of filtered results.
 
-#### 📊 content_info.html
+### content_info.html 📊
 
 Displays statistics such as:
 

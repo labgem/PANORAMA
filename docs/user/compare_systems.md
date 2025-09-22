@@ -132,7 +132,7 @@ The dual-cutoff system provides hierarchical filtering:
 - Moderate: gfrr_models_cutoff=[0.3, 0.3], gfrr_cutoff=[0.6, 0.7]
 - Permissive: gfrr_models_cutoff=[0.2, 0.2], gfrr_cutoff=[0.4, 0.5]
 
-## Output 🗂
+## Output 📂
 
 PANORAMA generates multiple outputs: interactive heatmaps, network graphs, and summary tables for comprehensive systems
 analysis.
