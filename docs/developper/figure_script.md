@@ -95,7 +95,7 @@ presence/absence of systems in spots or modules predicted by
 
 <p id="upsetplot"></p>
 
-### upsetplot
+### upsetplot function description
 <div style="text-align: justify">  
 The function "upsetplot" processes the data and generates the figure. <br>
 <br>

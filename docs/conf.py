@@ -69,6 +69,12 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "requirements.txt",
+    "developper/figure_script.md",
+    "developper/draw_spot_script.md",
+    "developper/draw.md",
+    "developper/system_asso_script.md",
+    "developper/write_flat_script.md",
+    "developper/conserved_spot_script.md"
 ]
 
 suppress_warning = ["myst.header", "autosectionlabel.*"]
