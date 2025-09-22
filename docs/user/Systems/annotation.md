@@ -45,7 +45,7 @@ To annotate with a HMM database, you must provide a HMM metadata file (TSV forma
 ```{warning}
 Not all the columns need to be filled with value as indicated by the mandatory column, but they should exist in the metadata file.
 ```
-```{tips}
+```{tip}
 To keep all assignations possible between a profile and a gen family, you can let the threshold columns empty.
 ```
 ```{note}
@@ -88,7 +88,7 @@ panorama annotation \
   --output results/ \
   --threads 8
 ```
-```{tips}
+```{tip}
 More options are available to annotate with a HMM database. See below.
 ```:
 ```{note}
