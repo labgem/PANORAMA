@@ -14,45 +14,25 @@
 user/user_guide
 ```
 
-[//]: # (```{toctree})
+```{toctree}
+:caption: 'Modeller Guide:'
+:maxdepth: 2
 
-[//]: # (:caption: 'Modeller Guide:')
+modeller/modeler_guide
+```
 
-[//]: # (:maxdepth: 2)
+```{toctree}
+:caption: 'Developper Guide:'
+:maxdepth: 1
 
-[//]: # ()
-[//]: # (modeller/overview)
+developper/developper_guide
+```
 
-[//]: # (modeller/modeling)
+```{toctree}
+:caption: 'API Reference:'
+:maxdepth: 1
 
-[//]: # (modeller/translate)
+api/api_ref
+```
 
-[//]: # (modeller/contribute)
-
-[//]: # (modeller/FAQ)
-
-[//]: # (```)
-
-[//]: # ()
-[//]: # (```{toctree})
-
-[//]: # (:caption: 'Developper Guide:')
-
-[//]: # (:maxdepth: 1)
-
-[//]: # ()
-[//]: # (developper/devRules)
-
-[//]: # (developper/git)
-
-[//]: # (developper/unitTest)
-
-[//]: # (developper/workflows)
-
-[//]: # (developper/buildDoc)
-
-[//]: # (api/api_ref)
-
-[//]: # (```)
-
-[//]: # (TODO: Add the citation to MyST)
+TODO: Add the citation to MyST

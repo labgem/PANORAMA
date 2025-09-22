@@ -156,7 +156,7 @@ html_theme_options = {
     # Configure pygments theme
     "pygments_light_style": "tango",
     "pygments_dark_style": "monokai",
-    "navbar_align": "content",
+    "navbar_align": "left",
     "navbar_start": ["navbar-logo"],
     "navbar_center": ["navbar-nav"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
