@@ -181,3 +181,4 @@ napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = True
 napoleon_use_rtype = False
+napoleon_custom_sections = [('Returns', 'params_style'), ('Raises', 'params_style')]
