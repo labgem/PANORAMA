@@ -1,7 +1,7 @@
 # System Detection Based on Models 🔬
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
-This detection relies on gene family [annotations](./annotation.md#gene-family-annotation), 
+This detection relies on gene family [annotations](annotation.mdene-family-annotation), 
 and a [model](../modeller/modeling.md#models) file defining the the presence/absence of specific function and the genomic organization.
 
 ## Model Detection Workflow ⚙️
@@ -59,19 +59,20 @@ panorama systems \
 | —        | --sensitivity        | Sensitivity mode: 1, 2, or 3. Higher = more precise, slower (default: 3)   |
 | —        | --threads            | Number of threads to use for parallel model evaluation                     |
 
-[//]: # (## 🔍 Sensitivity Modes)
+<!--
+## 🔍 Sensitivity Modes
 
-[//]: # ()
-[//]: # (| Level | Description                                                                            |)
 
-[//]: # (|-------|----------------------------------------------------------------------------------------|)
+| Level | Description                                                                            |
 
-[//]: # (| 1     | Global filtering of genomic context, faster, less sensitive                            |)
+|-------|----------------------------------------------------------------------------------------|
 
-[//]: # (| 2     | Global filtering context within each functional unit combination, moderate sensitivity |)
+| 1     | Global filtering of genomic context, faster, less sensitive                            |
 
-[//]: # (| 3     | Local filtering for each combination &#40;highest sensitivity, slowest&#41;                    |)
+| 2     | Global filtering context within each functional unit combination, moderate sensitivity |
 
+| 3     | Local filtering for each combination (highest sensitivity, slowest)                    |
+-->
 
 ## 🗂 Output
 

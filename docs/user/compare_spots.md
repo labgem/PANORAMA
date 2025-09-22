@@ -1,4 +1,4 @@
-## 🧬 Conserved Spots Comparison Across Pangenomes
+# Conserved Spots Comparison Across Pangenomes 🧬
 
 The compare_spots command identifies and analyzes conserved genomic spots across multiple pangenomes by comparing their
 gene family composition and genomic organization patterns.
@@ -8,7 +8,7 @@ pangenomes and uses **Gene Family Relatedness Relationship (GFRR) metrics** to i
 across different bacterial populations. Optionally, it can integrate systems detection results to analyze biological
 systems within conserved regions.
 
-### ⚙️ Conserved Spots Detection Workflow
+## ⚙️ Conserved Spots Detection Workflow
 
 The conserved spots comparison process runs as follows:
 
@@ -27,13 +27,13 @@ The conserved spots comparison process runs as follows:
     - Graph clustering algorithms identify groups of similar spots that represent conserved genomic regions across
       pangenomes based on the selected GFRR metric.
 5. 🧬 Systems Integration (Optional)
-    - When [enabled](../Systems/detection.md), systems analysis creates linkage graphs showing relationships between biological
+    - When [enabled](detection.md), systems analysis creates linkage graphs showing relationships between biological
       systems through their association with conserved spots.
 
 6. 💾 Write Results to Files
     - Conserved spots are saved as detailed TSV files and optional graph formats (GEXF, GraphML) for visualization.
 
-### 🚀 Command Line Usage*
+## 🚀 Command Line Usage*
 
 Basic conserved spots comparison:
 
@@ -60,7 +60,7 @@ panorama compare_spots \
 --threads 8
 ```
 
-### 📋 Key Options
+## 📋 Key Options
 
 | Shortcut | Argument        | Type           | Required/Optional       | Description                                                                   |
 |----------|-----------------|----------------|-------------------------|-------------------------------------------------------------------------------|
@@ -75,7 +75,7 @@ panorama compare_spots \
 | —        | --canonical     | Flag           | Optional with --systems | Include canonical systems in analysis                                         |
 | —        | --graph_formats | String(s)      | Optional                | Export graph formats: gexf, graphml                                           |
 
-### Advanced Configuration Arguments
+## Advanced Configuration Arguments
 
 | Shortcut | Argument           | Type                 | Optional | Description                                                                              |
 |----------|--------------------|----------------------|----------|------------------------------------------------------------------------------------------|
@@ -95,14 +95,14 @@ If you use let PANORAMA perform the clustering, you can look at the [Clustering]
 details about options.
 ```
 
-### 📊 GFRR Metrics
+## 📊 GFRR Metrics
 
 | Metric   | Formula                                               | Description                                                        |
 |----------|-------------------------------------------------------|--------------------------------------------------------------------|
 | min_gfrr | shared_families / min(families_spot1, families_spot2) | Conservative metric requiring high overlap relative to smaller set |
 | max_gfrr | shared_families / max(families_spot1, families_spot2) | Liberal metric allowing partial overlap relative to larger set     |
 
-### 🎯 Sensitivity Control
+## 🎯 Sensitivity Control
 
 The dual cutoff system provides fine-grained control over conservation stringency:
 
@@ -112,11 +112,11 @@ The dual cutoff system provides fine-grained control over conservation stringenc
 | Moderate     | 0.6      | 0.7      | Balanced sensitivity and specificity  |
 | Permissive   | 0.4      | 0.5      | Detects distant conservation patterns |
 
-### 🗂 Output
+## 🗂 Output
 
 PANORAMA generates multiple outputs: detailed spot information files, summary tables, and optional graph visualizations.
 
-#### File Organization
+## File Organization
 
 ```
 output_directory/
@@ -132,7 +132,7 @@ output_directory/
 └── systems_link_with_conserved_spots_mst.gexf (optional)
 ```
 
-#### Individual Conserved Spot Files
+## Individual Conserved Spot Files
 
 Each `conserved_spot_X.tsv` contains detailed RGP-level information:
 
@@ -143,7 +143,7 @@ Each `conserved_spot_X.tsv` contains detailed RGP-level information:
 | RGP_Name      | Region of Genomic Plasticity name within the spot |
 | Gene_Families | Comma-separated list of gene families in the RGP  |
 
-#### Summary File
+## Summary File
 
 all_conserved_spots.tsv provides an overview of all conserved spots:
 
@@ -155,7 +155,7 @@ all_conserved_spots.tsv provides an overview of all conserved spots:
 | Num_RGPs          | Number of RGPs in this spot                      |
 | Num_Gene_Families | Total number of gene families in this spot       |
 
-#### Conserved spots Graph Files (Optional)
+## Conserved spots Graph Files (Optional)
 
 When `--graph_formats` is enabled, additional graph files are generated:
 
@@ -168,7 +168,7 @@ Edge attributes include GFRR metric and the number of shared gene families.
 
 [PLACEHOLDER: Example conserved spots visualization across pangenomes]
 
-#### Systems Analysis Files (Optional)
+## Systems Analysis Files (Optional)
 
 When --systems is specified, genereate `systems_link_with_conserved_spots_louvain.gexf/graphml` Network graphs of
 conserved system clusters. These graphs are generated using the Louvain algorithm.

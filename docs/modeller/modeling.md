@@ -307,5 +307,5 @@ Models failing these checks will raise clear exceptions.
 
 1. Each model must be saved in its own .json file.
 2. Names are case-sensitive. 
-3. Families must match the name given during the annotation step (see [annotation command](../user/Systems/annotation.md#gene-family-annotation)). 
+3. Families must match the name given during the annotation step (see [annotation command](../user/annotation.md#gene-family-annotation)). 
 4. Exchangeable families inherit the parameters (presence, etc.) of their reference unless specified otherwise.

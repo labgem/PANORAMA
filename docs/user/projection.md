@@ -93,7 +93,7 @@ panorama write_systems \
     --output results/
 ```
 
-#### Advanced Options
+### Advanced Options
 
 ```bash
 panorama write_systems \
@@ -110,9 +110,9 @@ panorama write_systems \
     --output results/
 ```
 
-#### ⚙️ Command Line Arguments
+### ⚙️ Command Line Arguments
 
-##### Required Arguments
+#### Required Arguments
 
 | Argument       | Type | Description                                     |
 |----------------|------|-------------------------------------------------|
@@ -121,7 +121,7 @@ panorama write_systems \
 | `--models`     | Path | Path(s) to model list files                     |
 | `--sources`    | str  | Name(s) of the systems sources                  |
 
-##### Optional Arguments
+#### Optional Arguments
 
 | Argument        | Type | Default | Description                                            |
 |-----------------|------|---------|--------------------------------------------------------|
@@ -153,7 +153,7 @@ output/
             └── ...
 ```
 
-#### 1. Pangenome Systems Summary (`systems.tsv`)
+### 1. Pangenome Systems Summary (`systems.tsv`)
 
 This file provides a high-level summary of all detected systems across the pangenome:
 
@@ -177,7 +177,7 @@ This file provides a high-level summary of all detected systems across the pange
 - **spots**: Associated hotspots of genome evolution
 - **modules**: Associated functional modules
 
-#### 2. Organism Projection Files (`projection/<organism>.tsv`)
+### 2. Organism Projection Files (`projection/<organism>.tsv`)
 
 Each organism gets a detailed file with gene-level projections:
 

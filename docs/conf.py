@@ -77,7 +77,11 @@ exclude_patterns = [
     "developper/conserved_spot_script.md"
 ]
 
-suppress_warning = ["myst.header", "autosectionlabel.*"]
+suppress_warnings = [
+    "myst.header",
+    # "autosectionlabel.*",
+    "toc.not_included"
+]
 
 # The name of the default role for inline references
 default_role = "py:obj"

@@ -1,6 +1,6 @@
 # PANORAMA – Installation Guide 📦⚒
 
-## Latest version
+## Latest version 🆕⭐
 ### Installation via Conda 🐍
 
 ```{note}
@@ -17,7 +17,7 @@ For more information, see the [Conda documentation](https://docs.conda.io/projec
 (with_conda_env)=
 #### Within a Conda environmnent 🐍
 
-##### 1. Clone the Repository
+##### 1. Clone the GitHub Repository
 
 ```shell
 git clone https://github.com/labgem/PANORAMA.git
@@ -43,7 +43,6 @@ Alternatively, in one line:
 pip install .
 ```
 
-
 ##### 4. Test the Installation
 
 ```shell
@@ -60,7 +59,7 @@ git clone https://github.com/labgem/PANORAMA.git
 cd PANORAMA
 ```
 
-##### 2. Install Dependencies
+##### 2. Install PANORAMA Dependencies
 
 Install **MMSeqs2 (≥ 13.45111)** manually:
 

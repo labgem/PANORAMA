@@ -18,7 +18,24 @@ install
 :caption: 'Biological system Prediction:'
 :maxdepth: 2
 
-Systems/annotation
-Systems/detection
-Systems/write_systems
+annotation
+detection
+write_systems
+```
+
+```{toctree}
+:caption: 'Pangenomes comparison:'
+:maxdepth: 2
+
+compare_spots
+compare_systems
+```
+
+```{toctree}
+:caption: 'PANORAMA utilities:'
+:maxdepth: 2
+
+info
+align
+clustering
 ```
