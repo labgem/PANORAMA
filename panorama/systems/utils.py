@@ -9,13 +9,24 @@ from __future__ import annotations
 import logging
 from typing import Dict, Iterable, List, Set, Tuple
 from collections import defaultdict
+from pathlib import Path
 
 # installed libraries
-from itertools import combinations
 import numpy as np
 import pandas as pd
 import networkx as nx
 from ppanggolin.genome import Organism
+from bokeh.plotting import figure
+from bokeh.io import export_png, output_file, save
+from bokeh.models import (
+    BasicTicker,
+    ColorBar,
+    ColumnDataSource,
+    GlyphRenderer,
+    Glyph,
+    FactorRange,
+    HoverTool,
+)
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -203,9 +214,9 @@ def check_for_families(
             Tuple: A tuple containing the rank based on presence, the negative score (for descending order),
             and the name of the fam to determine sorting precedence.
         """
-        fam, md_info = item
+        gfam, md_info = item
         score = md_info[2]
-        return (presence_priority.get(fam.presence, 4), -score, fam.name)
+        return presence_priority.get(gfam.presence, 4), -score, gfam.name
 
     gf2meta_info: Dict[GeneFamily, Tuple[str, int]] = {}
     mandatory_seen, accessory_seen = set(), set()
@@ -390,3 +401,251 @@ def dict_families_context(
                         gf2fam[gf].add(fam_model)
 
     return gf2fam, fam2source
+
+
+class VisualizationBuilder:
+    """
+    Builds correlation matrix visualizations with shared configuration and state.
+
+    This class maintains a common configuration and provides a cohesive interface
+    for creating all components of the correlation matrix visualization.
+    """
+
+    # Constants for plot dimensions
+    TOTAL_WIDTH, TOTAL_HEIGHT = 1780, 920
+
+    LEFT_WIDTH = int(0.15 * TOTAL_WIDTH)
+    CENTER_WIDTH = int(0.75 * TOTAL_WIDTH)
+    RIGHT_WIDTH = int(0.1 * TOTAL_WIDTH)
+
+    TOP_HEIGHT = int(0.15 * TOTAL_HEIGHT)
+    MIDDLE_HEIGHT = int(0.7 * TOTAL_HEIGHT)
+    BELOW_HEIGHT = int(0.15 * TOTAL_HEIGHT)
+
+    # Constants for PNG export dimensions
+    PNG_EXPORT_WIDTH = 1920
+    PNG_EXPORT_HEIGHT = 1080
+
+    def __init__(self, name: str, output_dir: Path, formats: List[str] = None):
+        """
+        Initialize the visualization builder.
+
+        Args:
+            name: Name of the pangenome for visualization titles.
+            output_dir: Directory path where output files will be saved.
+            formats: List of output formats to generate.
+        """
+        self.logger = logging.getLogger("PANORAMA")
+        self.name = name
+        self.output_dir = output_dir
+        self.output_dir.mkdir(parents=True, exist_ok=True)
+        self.formats = formats if formats else ["html"]
+        self._main_plot = None
+        self._glyph_renderer = None
+        self._color_bar = None
+        self._left_bar = None
+
+    def _save_figure(self, fig, filename_base: str) -> None:
+        """
+        Save a Bokeh figure in the specified formats.
+
+        Args:
+            fig: The Bokeh figure object to save.
+            filename_base: Base filename without extension.
+        """
+        for fmt in self.formats:
+            if fmt == "html":
+                output_path = self.output_dir / f"{filename_base}.html"
+                output_file(output_path.absolute().as_posix())
+                save(fig)
+                self.logger.info(
+                    f"Saved {filename_base} heatmap in HTML format to {output_path}"
+                )
+
+            elif fmt == "png":
+                output_path = self.output_dir / f"{filename_base}.png"
+                output_file(output_path.absolute().as_posix())
+                export_png(
+                    fig,
+                    width=VisualizationBuilder.PNG_EXPORT_WIDTH,
+                    height=VisualizationBuilder.PNG_EXPORT_HEIGHT,
+                )
+                self.logger.debug(
+                    f"Saved {filename_base} heatmap in PNG format to {output_path}"
+                )
+
+            else:
+                raise Exception(f"Unsupported output format: {fmt}")
+
+    @property
+    def main_plot(self) -> figure:
+        if self._main_plot is None:
+            raise Exception("plot is not initialized yet.")
+
+        return self._main_plot
+
+    @main_plot.setter
+    def main_plot(self, plot: figure):
+        if not isinstance(plot, figure):
+            raise Exception("plot must be a Bokeh figure object.")
+
+        self._main_plot = plot
+
+    @property
+    def glyph_renderer(self) -> GlyphRenderer:
+        if self._glyph_renderer is None:
+            raise Exception("Glyph renderer is not initialized yet.")
+
+        return self._glyph_renderer
+
+    @glyph_renderer.setter
+    def glyph_renderer(self, glyph: GlyphRenderer):
+        if not isinstance(glyph, GlyphRenderer):
+            raise Exception("Glyph renderer must be a GlyphRenderer object.")
+
+        self._glyph_renderer = glyph
+
+    def _configure_plot_style(self) -> None:
+        """Configure common plot styling."""
+        self.main_plot.title.align = "center"
+        self.main_plot.title.text_font_size = "20pt"
+        self.main_plot.axis.axis_label_text_font_size = "16pt"
+        self.main_plot.axis.axis_line_color = None
+        self.main_plot.axis.major_label_text_font_size = "12px"
+        self.main_plot.grid.grid_line_color = None
+        self.main_plot.axis.major_tick_line_color = None
+        self.main_plot.axis.major_label_standoff = 1
+
+        # Set axis labels
+        self.main_plot.yaxis.axis_label = "System name"
+        self.main_plot.yaxis.major_label_orientation = 1 / 3
+        # xaxis is configure in child class
+
+    def _create_main_figure(
+        self,
+        correlation_matrix: pd.DataFrame,
+        x_range: FactorRange,
+        y_range: FactorRange,
+        tooltips: List[Tuple[str, str]],
+    ) -> ColumnDataSource:
+        """
+        Create the main correlation matrix heatmap figure.
+
+        Args:
+            correlation_matrix: Preprocessed correlation matrix.
+            x_range: X-axis range for the plot.
+            y_range: Y-axis range for the plot.
+
+        Returns:
+            Tuple of the Bokeh figure and GlyphRenderer objects.
+        """
+        # Create the main figure
+        tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
+        self.main_plot = figure(
+            x_range=x_range,
+            y_range=y_range,
+            width=VisualizationBuilder.CENTER_WIDTH,
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            tools=tools,
+            toolbar_location="below",
+            tooltips=tooltips,
+        )
+
+        # Configure plot appearance
+        self._configure_plot_style()
+
+        # Create data source and rectangles
+        source = ColumnDataSource(correlation_matrix.stack().reset_index(name="corr"))
+
+        return source
+
+    @property
+    def glyph(self) -> Glyph:
+        return self.glyph_renderer.glyph
+
+    @property
+    def color_bar(self) -> figure:
+        if self._color_bar is None:
+            raise Exception("Color bar is not initialized yet.")
+        return self._color_bar
+
+    @color_bar.setter
+    def color_bar(self, color_bar: figure):
+        if not isinstance(color_bar, figure):
+            raise Exception("Color bar must be a Bokeh figure object.")
+        self._color_bar = color_bar
+
+    def create_color_bar(self, title: str):
+        """
+        Create a color bar for the correlation matrix.
+
+        Args:
+
+
+        Returns:
+            Bokeh figure containing the color bar.
+        """
+        color_bar = ColorBar(
+            color_mapper=self.glyph.fill_color["transform"],
+            label_standoff=12,
+            ticker=BasicTicker(
+                desired_num_ticks=len(
+                    self.glyph.fill_color["transform"].palette
+                )
+            ),
+            border_line_color=None,
+        )
+
+        self.color_bar = figure(
+            title=title,
+            title_location="right",
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            width=VisualizationBuilder.RIGHT_WIDTH,
+            toolbar_location=None,
+            min_border=0,
+            outline_line_color=None,
+        )
+
+        self.color_bar.add_layout(color_bar, "right")
+        self.color_bar.title.align = "center"
+        self.color_bar.title.text_font_size = "14pt"
+
+    @property
+    def left_bar(self) -> figure:
+        if self._left_bar is None:
+            raise Exception("Left bar is not initialized yet.")
+        return self._left_bar
+
+    @left_bar.setter
+    def left_bar(self, left_bar: figure):
+        if not isinstance(left_bar, figure):
+            raise Exception("Left bar must be a Bokeh figure object.")
+        self._left_bar = left_bar
+
+    def create_left_bar_plot(self, source: ColumnDataSource, correlation_matrix: pd.DataFrame):
+        self.left_bar = figure(
+            y_range=list(correlation_matrix.index),
+            width=VisualizationBuilder.LEFT_WIDTH,
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            toolbar_location=None,
+            tools="",
+        )
+        self.left_bar.hbar(
+            y="system_name",
+            right="count",
+            height=0.9,
+            source=source,
+            color="navy",
+            alpha=0.6,
+        )
+        self.left_bar.add_tools(HoverTool(tooltips=[
+            ("system", "@system_name"),
+            ("count", "@count"),
+        ],))
+
+        # Configure the left bar plot
+        self.left_bar.yaxis.visible = False
+        self.left_bar.xaxis.axis_label = "Count"
+        self.left_bar.x_range.flipped = True
+        self.left_bar.grid.grid_line_color = None
+        self.left_bar.outline_line_color = None

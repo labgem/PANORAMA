@@ -21,7 +21,6 @@ import time
 # installed libraries
 from tqdm import tqdm
 import pandas as pd
-from bokeh.io import output_file, save, export_png
 from bokeh.layouts import gridplot, row
 from bokeh.plotting import figure
 from bokeh.transform import linear_cmap
@@ -31,8 +30,8 @@ from bokeh.models import (
     ColumnDataSource,
     LinearColorMapper,
     ColorBar,
-    GlyphRenderer,
     FactorRange,
+    HoverTool,
 )
 from ppanggolin.region import Region
 
@@ -40,15 +39,8 @@ from ppanggolin.region import Region
 from panorama.pangenomes import Pangenome
 from panorama.region import Spot, Module
 from panorama.systems.system import System
+from panorama.systems.utils import VisualizationBuilder
 
-# Constants for plot dimensions
-TOTAL_WIDTH, TOTAL_HEIGHT = 1780, 920
-LEFT_WIDTH, CENTER_WIDTH, RIGHT_WIDTH = [
-    int(x * TOTAL_WIDTH) for x in [0.15, 0.75, 0.1]
-]
-TOP_HEIGHT, MIDDLE_HEIGHT, BELOW_HEIGHT = [
-    int(y * TOTAL_HEIGHT) for y in [0.15, 0.7, 0.15]
-]
 # Constants for association types
 ASSOCIATION_RGPS = "RGPs"
 ASSOCIATION_SPOTS = "spots"
@@ -58,7 +50,7 @@ ASSOCIATION_MODULES = "modules"
 VALID_ASSOCIATIONS = [ASSOCIATION_RGPS, ASSOCIATION_SPOTS, ASSOCIATION_MODULES]
 
 
-class VisualizationBuilder:
+class AssociationVisualizationBuilder(VisualizationBuilder):
     """
     Builds correlation matrix visualizations with shared configuration and state.
 
@@ -66,15 +58,25 @@ class VisualizationBuilder:
     for creating all components of the correlation matrix visualization.
     """
 
-    def __init__(self, association: str):
+    def __init__(
+        self, association: str, name: str, output_dir: Path, formats: List[str] = None
+    ):
         """
         Initialize the visualization builder.
 
         Args:
             association: Type of pangenome object being visualized.
+            name: Name of the pangenome for visualization titles.
+            output_dir: Directory path where output files will be saved.
+            formats: List of output formats to generate.
         """
+        super().__init__(name, output_dir, formats)
         self.association = association
-        self.logger = logging.getLogger("PANORAMA")
+        self._top_bar = None
+        self.coverage_plot = None
+        self.coverage_color_bar = None
+        self.frequency_plot = None
+        self.frequency_color_bar = None
 
     @staticmethod
     def create_color_palette(max_value: int) -> List[str]:
@@ -97,12 +99,23 @@ class VisualizationBuilder:
             n_colors = min(max_value + 4, 256)
             return ["#ffffff"] + list(linear_palette(Reds256[::-1], n_colors))[4:]
 
+    def _configure_plot_style(self) -> None:
+        """Configure common plot styling."""
+        super()._configure_plot_style()
+        # Set x-axis labels
+        self.main_plot.xaxis.axis_label = (
+            "RGP name"
+            if self.association == ASSOCIATION_RGPS
+            else f"{self.association} ID"
+        )
+        self.main_plot.xaxis.major_label_orientation = 1
+
     def create_main_figure(
         self,
         correlation_matrix: pd.DataFrame,
         x_range: FactorRange,
         y_range: FactorRange,
-    ) -> Tuple[figure, GlyphRenderer]:
+    ):
         """
         Create the main correlation matrix heatmap figure.
 
@@ -116,30 +129,15 @@ class VisualizationBuilder:
         """
         max_correlation = correlation_matrix.values.max()
         color_palette = self.create_color_palette(max_correlation)
-
-        # Create the main figure
-        tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
-        plot = figure(
-            x_range=x_range,
-            y_range=y_range,
-            width=CENTER_WIDTH,
-            height=MIDDLE_HEIGHT,
-            tools=tools,
-            toolbar_location="below",
-            tooltips=[
-                (self.association, f"@{self.association}"),
-                ("system", "@system_name"),
-                ("count", "@corr"),
-            ],
+        tooltips = [
+            (self.association, f"@{self.association}"),
+            ("system", "@system_name"),
+            ("count", "@corr"),
+        ]
+        source = self._create_main_figure(
+            correlation_matrix, x_range, y_range, tooltips
         )
-
-        # Configure plot appearance
-        self._configure_plot_style(plot)
-
-        # Create data source and rectangles
-        source = ColumnDataSource(correlation_matrix.stack().reset_index(name="corr"))
-
-        rectangle_glyph = plot.rect(
+        self.glyph_renderer = self.main_plot.rect(
             self.association,
             "system_name",
             1,
@@ -151,70 +149,7 @@ class VisualizationBuilder:
             ),
         )
 
-        return plot, rectangle_glyph
-
-    def _configure_plot_style(self, plot: figure) -> None:
-        """Configure common plot styling."""
-        plot.title.align = "center"
-        plot.title.text_font_size = "20pt"
-        plot.axis.axis_label_text_font_size = "16pt"
-        plot.axis.axis_line_color = None
-        plot.axis.major_label_text_font_size = "12px"
-        plot.grid.grid_line_color = None
-        plot.axis.major_tick_line_color = None
-        plot.axis.major_label_standoff = 1
-
-        # Set axis labels
-        plot.xaxis.axis_label = (
-            "RGP name"
-            if self.association == ASSOCIATION_RGPS
-            else f"{self.association} ID"
-        )
-        plot.xaxis.major_label_orientation = 1
-        plot.yaxis.axis_label = "System name"
-        plot.yaxis.major_label_orientation = 1 / 3
-
-    @staticmethod
-    def create_color_bar(glyph_renderer: GlyphRenderer) -> figure:
-        """
-        Create a color bar for the correlation matrix.
-
-        Args:
-            glyph_renderer: Rectangle glyph renderer from the main plot.
-
-        Returns:
-            Bokeh figure containing the color bar.
-        """
-        color_bar = ColorBar(
-            color_mapper=glyph_renderer.glyph.fill_color["transform"],
-            label_standoff=12,
-            ticker=BasicTicker(
-                desired_num_ticks=len(
-                    glyph_renderer.glyph.fill_color["transform"].palette
-                )
-            ),
-            border_line_color=None,
-        )
-
-        color_bar_plot = figure(
-            title="# Systems",
-            title_location="right",
-            height=MIDDLE_HEIGHT,
-            width=RIGHT_WIDTH,
-            toolbar_location=None,
-            min_border=0,
-            outline_line_color=None,
-        )
-
-        color_bar_plot.add_layout(color_bar, "right")
-        color_bar_plot.title.align = "center"
-        color_bar_plot.title.text_font_size = "14pt"
-
-        return color_bar_plot
-
-    def create_coverage_plot(
-        self, coverage_df: pd.DataFrame, x_range: FactorRange
-    ) -> Tuple[figure, figure]:
+    def create_coverage_plot(self, coverage_df: pd.DataFrame, x_range: FactorRange):
         """
         Create a coverage visualization plot.
 
@@ -225,13 +160,11 @@ class VisualizationBuilder:
         Returns:
             Tuple of coverage plot and color bar plot.
         """
-        return self._create_metric_plot(
+        self.coverage_plot, self.coverage_color_bar = self._create_metric_plot(
             coverage_df, x_range, "coverage", Reds256, "Coverage"
         )
 
-    def create_frequency_plot(
-        self, frequency_df: pd.DataFrame, x_range: FactorRange
-    ) -> Tuple[figure, figure]:
+    def create_frequency_plot(self, frequency_df: pd.DataFrame, x_range: FactorRange):
         """
         Create a frequency visualization plot.
 
@@ -242,7 +175,7 @@ class VisualizationBuilder:
         Returns:
             Tuple of frequency plot and color bar plot.
         """
-        return self._create_metric_plot(
+        self.frequency_plot, self.frequency_color_bar = self._create_metric_plot(
             frequency_df, x_range, "frequency", Blues256, "Genome frequencies"
         )
 
@@ -283,8 +216,8 @@ class VisualizationBuilder:
         color_bar_plot = figure(
             title=title,
             title_location="below",
-            height=int(BELOW_HEIGHT / 3),
-            width=int(CENTER_WIDTH / 2.5),
+            height=int(VisualizationBuilder.BELOW_HEIGHT / 3),
+            width=int(VisualizationBuilder.CENTER_WIDTH / 2.5),
             toolbar_location=None,
             min_border=0,
             outline_line_color=None,
@@ -306,8 +239,8 @@ class VisualizationBuilder:
         # Main metric plot
         metric_plot = figure(
             x_range=x_range,
-            height=int(BELOW_HEIGHT / 4),
-            width=CENTER_WIDTH,
+            height=int(VisualizationBuilder.BELOW_HEIGHT / 4),
+            width=VisualizationBuilder.CENTER_WIDTH,
             tooltips=[
                 (self.association, f"@{self.association}"),
                 (metric_name, f"@{metric_name}"),
@@ -330,16 +263,62 @@ class VisualizationBuilder:
         return metric_plot, color_bar_plot
 
     @staticmethod
-    def _configure_minimal_plot(plot: figure) -> None:
+    def _configure_minimal_plot(plot) -> None:
         """Configure a minimal plot style (no axes, grid, etc.)."""
         plot.xaxis.visible = False
         plot.yaxis.visible = False
         plot.grid.grid_line_color = None
         plot.outline_line_color = None
 
-    def create_bar_plots(
-        self, correlation_matrix: pd.DataFrame
-    ) -> Tuple[figure, figure]:
+    @property
+    def top_bar(self) -> figure:
+        if self._top_bar is None:
+            raise Exception("Top bar is not initialized yet.")
+        return self._top_bar
+
+    @top_bar.setter
+    def top_bar(self, top_bar: figure):
+        if not isinstance(top_bar, figure):
+            raise Exception("Top bar must be a Bokeh figure object.")
+        self._top_bar = top_bar
+
+    def create_top_bar_plot(self, source, correlation_matrix: pd.DataFrame):
+        # Sort elements by count for better visualization
+        element_counts = correlation_matrix.sum(axis=0)
+        x_order = sorted(
+            correlation_matrix.columns,
+            key=lambda x: element_counts.loc[x],
+            reverse=True,
+        )
+
+        self.top_bar = figure(
+            x_range=x_order,
+            height=VisualizationBuilder.TOP_HEIGHT,
+            width=VisualizationBuilder.CENTER_WIDTH,
+            toolbar_location=None,
+            tools="",
+        )
+        self.top_bar.vbar(
+            x=self.association,
+            top="count",
+            width=0.9,
+            source=source,
+            color="green",
+            alpha=0.6,
+        )
+
+        self.top_bar.add_tools(HoverTool(tooltips=[
+            (self.association, f"@{self.association}"),
+            ("count", "@count"),
+        ],))
+
+        # Configure the top bar plot
+        self.top_bar.xaxis.visible = False
+        self.top_bar.yaxis.axis_label = "Count"
+        self.top_bar.grid.grid_line_color = None
+        self.top_bar.outline_line_color = None
+
+    def create_bar_plots(self, correlation_matrix: pd.DataFrame):
         """
         Create bar plots showing system and element counts.
 
@@ -360,28 +339,7 @@ class VisualizationBuilder:
             )
         )
 
-        left_bar = figure(
-            y_range=list(correlation_matrix.index),
-            width=LEFT_WIDTH,
-            height=MIDDLE_HEIGHT,
-            toolbar_location=None,
-            tools="",
-        )
-        left_bar.hbar(
-            y="system_name",
-            right="count",
-            height=0.9,
-            source=left_bar_source,
-            color="navy",
-            alpha=0.6,
-        )
-
-        # Configure the left bar plot
-        left_bar.yaxis.visible = False
-        left_bar.xaxis.axis_label = "Count"
-        left_bar.x_range.flipped = True
-        left_bar.grid.grid_line_color = None
-        left_bar.outline_line_color = None
+        self.create_left_bar_plot(left_bar_source, correlation_matrix)
 
         # Top bar plot: Element counts (sum across columns)
         element_counts = correlation_matrix.sum(axis=0)
@@ -394,36 +352,33 @@ class VisualizationBuilder:
             )
         )
 
-        # Sort elements by count for better visualization
-        x_order = sorted(
-            correlation_matrix.columns,
-            key=lambda x: element_counts.loc[x],
-            reverse=True,
-        )
+        self.create_top_bar_plot(top_bar_source, correlation_matrix)
 
-        top_bar = figure(
-            x_range=x_order,
-            height=TOP_HEIGHT,
-            width=CENTER_WIDTH,
-            toolbar_location=None,
-            tools="",
-        )
-        top_bar.vbar(
-            x=self.association,
-            top="count",
-            width=0.9,
-            source=top_bar_source,
-            color="green",
-            alpha=0.6,
-        )
+    def plot(self):
+        grid_layout_matrix = [
+            [None, self.top_bar, None, None],
+            [self.left_bar, self.main_plot, self.color_bar],
+            [None, self.coverage_plot, None],
+        ]
+        if self.frequency_plot is not None:
+            grid_layout_matrix.insert(2, [None, self.frequency_plot, None])
+            grid_layout_matrix.append(
+                [
+                    None,
+                    row(
+                        [self.frequency_color_bar, self.coverage_color_bar],
+                        align="end",
+                        spacing=100,
+                    ),
+                    None,
+                ]
+            )
+        else:
+            grid_layout_matrix.append([None, row(self.coverage_color_bar, align="center"), None])
 
-        # Configure the top bar plot
-        top_bar.xaxis.visible = False
-        top_bar.yaxis.axis_label = "Count"
-        top_bar.grid.grid_line_color = None
-        top_bar.outline_line_color = None
+        grid_layout = gridplot(grid_layout_matrix, toolbar_location="above")
 
-        return left_bar, top_bar
+        self._save_figure(grid_layout, f"correlation_{self.association}")
 
 
 def _get_region_frequency(region: Region, pangenome: Pangenome) -> float:
@@ -714,6 +669,7 @@ def write_correlation_matrix_visualization(
     association_df: pd.DataFrame,
     association: str,
     coverage_df: pd.DataFrame,
+    pangenome_name: str,
     output_dir: Path,
     frequency_df: Optional[pd.DataFrame] = None,
     output_formats: Optional[List[str]] = None,
@@ -725,6 +681,7 @@ def write_correlation_matrix_visualization(
         association_df: Association DataFrame between systems and pangenome objects.
         association: Type of pangenome object to visualize.
         coverage_df: Coverage DataFrame for the association.
+        pangenome_name (str): Name of the pangenome.
         output_dir: Directory to save output files.
         frequency_df: Optional frequency DataFrame.
         output_formats: List of output formats (default: ['html']).
@@ -748,71 +705,23 @@ def write_correlation_matrix_visualization(
     correlation_matrix = preprocess_association_data(association_df, association)
 
     # Create a visualization builder and plot components
-    viz_builder = VisualizationBuilder(association)
-    left_bar, top_bar = viz_builder.create_bar_plots(correlation_matrix)
+    viz_builder = AssociationVisualizationBuilder(
+        association, name=pangenome_name, output_dir=output_dir, formats=output_formats
+    )
+    viz_builder.create_bar_plots(correlation_matrix)
 
-    main_plot, glyph_renderer = viz_builder.create_main_figure(
-        correlation_matrix, top_bar.x_range, left_bar.y_range
+    viz_builder.create_main_figure(
+        correlation_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range
     )
 
-    color_bar_plot = viz_builder.create_color_bar(glyph_renderer)
-    coverage_plot, coverage_color_bar_plot = viz_builder.create_coverage_plot(
-        coverage_df, top_bar.x_range
-    )
+    viz_builder.create_color_bar("# Systems")
+    viz_builder.create_coverage_plot(coverage_df, viz_builder.top_bar.x_range)
 
     # Create a grid layout based on whether frequency data is available
     if frequency_df is not None:
-        frequency_plot, frequency_color_bar_plot = viz_builder.create_frequency_plot(
-            frequency_df, top_bar.x_range
-        )
+        viz_builder.create_frequency_plot(frequency_df, viz_builder.top_bar.x_range)
 
-        grid_layout = gridplot(
-            [
-                [None, top_bar, None, None],
-                [left_bar, main_plot, color_bar_plot],
-                [None, frequency_plot, None],
-                [None, coverage_plot, None],
-                [
-                    None,
-                    row(
-                        [frequency_color_bar_plot, coverage_color_bar_plot],
-                        align="end",
-                        spacing=100,
-                    ),
-                    None,
-                ],
-            ],
-            toolbar_location="above",
-        )
-    else:
-        grid_layout = gridplot(
-            [
-                [None, top_bar, None],
-                [left_bar, main_plot, color_bar_plot],
-                [None, coverage_plot, None],
-                [None, row(coverage_color_bar_plot, align="center"), None],
-            ],
-            toolbar_location="above",
-        )
-
-    # Save in requested formats
-    logger = logging.getLogger("PANORAMA")
-
-    if "html" in output_formats:
-        output_path = output_dir / f"correlation_{association}.html"
-        output_file(str(output_path))
-        save(grid_layout)
-        logger.info(f"Saved correlation matrix visualization (HTML) to {output_path}")
-
-    if "png" in output_formats:
-        output_path = output_dir / f"correlation_{association}.png"
-        export_png(
-            grid_layout,
-            filename=str(output_path),
-            width=TOTAL_WIDTH,
-            height=TOTAL_HEIGHT,
-        )
-        logger.info(f"Saved correlation matrix visualization (PNG) to {output_path}")
+    viz_builder.plot()
 
 
 def create_pangenome_system_associations(
@@ -925,11 +834,11 @@ def create_pangenome_system_associations(
             filtered_association_df = association_df.drop(
                 columns=[other for other in associations if other != association]
             )
-
             write_correlation_matrix_visualization(
                 association_df=filtered_association_df,
                 association=association,
                 coverage_df=coverage_df,
+                pangenome_name=pangenome.name,
                 output_dir=output_dir,
                 frequency_df=frequency_df,
                 output_formats=output_formats,
