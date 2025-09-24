@@ -1,20 +1,20 @@
-## System Projection on Genomes 🔭
+# System Projection on Genomes 🔭
 
 The `write_systems` command enables the projection of systems, previously detected at the pangenome level
 (see [`systems` command](detection.md)), onto individual genomes. Projection relies on system detection results and
 the genomic context of gene families within organisms.
 
-### Projection Workflow 🧪
+## Projection Workflow 🧪
 
 The projection process has been optimized and proceeds as follows:
 
-#### 1. Load Detected Systems and Metadata
+### 1. Load Detected Systems and Metadata
 
 - Detected systems from the .h5 pangenome file are loaded
 - Required metadata and gene families are retrieved
 - System-to-family mappings are established for efficient processing
 
-#### 2. Build Gene Context Components
+### 2. Build Gene Context Components
 
 For each organism and functional unit, the workflow uses a **component-based approach** instead of graph
 construction:
@@ -27,17 +27,17 @@ construction:
 
 This approach directly identifies co-localized gene clusters.
 
-#### 3. Project System Units
+### 3. Project System Units
 
 Each system unit is evaluated in organisms through the following steps:
 
-##### Unit Requirements Validation
+#### Unit Requirements Validation
 
 - **Family Requirements**: Check if required families from the model are present
 - **Completeness Calculation**: Determine what fraction of model families are found
 - **Context Analysis**: Identify additional families within the same genomic context
 
-##### System State Classification
+#### System State Classification
 
 Components are classified into three genomic organization states:
 
@@ -45,7 +45,7 @@ Components are classified into three genomic organization states:
 - **split**: Model families are present but spread across multiple disconnected components
 - **extended**: All model families are in the same context with additional intervening families
 
-##### Gene Categorization
+#### Gene Categorization
 
 Each projected gene is categorized as:
 
@@ -53,17 +53,17 @@ Each projected gene is categorized as:
 - **context**: Gene is co-localized with model genes but not part of the system definition
 - **filtered**: Gene was excluded during filtering steps
 
-#### 4. Aggregate and Filter Projections
+### 4. Aggregate and Filter Projections
 
 The projection includes advanced filtering options:
 
-##### Standard Projection
+#### Standard Projection
 
 - Collects all valid projections for each organism
 - Calculates completeness metrics
 - Maintains full system context information
 
-##### One-Unit-Per-Family Filtering
+#### One-Unit-Per-Family Filtering
 
 New optimization that handles overlapping system units:
 
@@ -74,14 +74,14 @@ New optimization that handles overlapping system units:
     - `eliminate_filtered_systems`: Remove entire systems if any model families were filtered
     - `eliminate_empty_systems`: Remove systems with no remaining model families
 
-#### 5. Write Output
+### 5. Write Output
 
 Projection results are written as TSV files with improved organization and metadata.
 See [Output Files](#output-files) for details on the organization and contents.
 
-### Projection command Line Usage 🚀
+## Projection command Line Usage 🚀
 
-#### Basic Projection
+### Basic Projection
 
 ```bash
 panorama write_systems \
@@ -93,7 +93,7 @@ panorama write_systems \
     --output results/
 ```
 
-### Advanced Options
+## Advanced Options
 
 ```bash
 panorama write_systems \
@@ -110,9 +110,17 @@ panorama write_systems \
     --output results/
 ```
 
-### Command Line Arguments ⚙️
+## Command Line Arguments ⚙️
 
-#### Required Arguments
+### Projection-specific keys 🔑
+
+| Argument        | Type | Default | Description                                            |
+|-----------------|------|---------|--------------------------------------------------------|
+| `--projection`  | flag | False   | Enable the projection of systems onto genomes          |
+| `--organisms`   | list | None    | List of organisms to project (defaults to all)         |
+| `--canonical`   | flag | False   | Also project canonical versions of systems             |
+
+### Required Arguments
 
 | Argument       | Type | Description                                     |
 |----------------|------|-------------------------------------------------|
@@ -121,19 +129,17 @@ panorama write_systems \
 | `--models`     | Path | Path(s) to model list files                     |
 | `--sources`    | str  | Name(s) of the systems sources                  |
 
-#### Optional Arguments
+### Optional Arguments
 
 | Argument        | Type | Default | Description                                            |
 |-----------------|------|---------|--------------------------------------------------------|
 | `--projection`  | flag | False   | Enable the projection of systems onto genomes          |
 | `--organisms`   | list | None    | List of organisms to project (defaults to all)         |
 | `--canonical`   | flag | False   | Also project canonical versions of systems             |
-| `--association` | list | []      | Add associations: `RGPs`, `spots`, `modules`, or `all` |
-| `--partition`   | flag | False   | Write partition heatmap files                          |
 | `--threads`     | int  | 1       | Number of parallel threads to use                      |
 | `--force`       | flag | False   | Overwrite existing projection files                    |
 
-### Output Files 📄
+## Output Files 📄
 
 Output is organized in the specified `--output` directory with subdirectories for each pangenome and source combination:
 
@@ -153,7 +159,7 @@ output/
             └── ...
 ```
 
-### 1. Pangenome Systems Summary (`systems.tsv`)
+## 1. Pangenome Systems Summary (`systems.tsv`)
 
 This file provides a high-level summary of all detected systems across the pangenome:
 
@@ -177,7 +183,7 @@ This file provides a high-level summary of all detected systems across the pange
 - **spots**: Associated hotspots of genome evolution
 - **modules**: Associated functional modules
 
-### 2. Organism Projection Files (`projection/<organism>.tsv`)
+## 2. Organism Projection Files (`projection/<organism>.tsv`)
 
 Each organism gets a detailed file with gene-level projections:
 
