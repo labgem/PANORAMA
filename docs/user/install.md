@@ -26,12 +26,15 @@ cd PANORAMA
 conda create -n panorama
 conda config --add channels bioconda
 conda config --add channels conda-forge
+conda env update -n panorama --file panorama.yml
 conda activate panorama
-conda env update --file panorama.yml
 ```
 
 Alternatively, in one line:  
-`conda env create -f panorama.yml`
+```shell
+conda env create -f panorama.yml # -n panorama ## if you want to name the environment differently
+conda activate panorama
+```
 
 ##### 3. Install PANORAMA
 
