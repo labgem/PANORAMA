@@ -1,97 +1,314 @@
 #!/usr/bin/env python3
 # coding:utf-8
+"""
+Systems partitions visualization module for pangenome analysis.
 
-# default libraries
+This module provides functionality to create heatmap visualizations for
+pangenome systems partitions and system counts across organisms.
+"""
+
 import logging
-from typing import List, Set
+from collections import defaultdict
 from pathlib import Path
+from typing import List, Optional, Set
 
-# installed libraries
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
 from bokeh.models import (
     BasicTicker,
-    ColorBar,
-    LinearColorMapper,
     CategoricalColorMapper,
+    ColorBar,
+    ColumnDataSource,
+    HoverTool,
+    LinearColorMapper,
     PrintfTickFormatter,
+    FactorRange,
 )
+from bokeh.layouts import gridplot, row
+from bokeh.transform import linear_cmap, transform
 from bokeh.palettes import Magma256
-from bokeh.io import output_file, export_png
-from bokeh.plotting import figure, save
+from bokeh.plotting import figure, show
+from tqdm import tqdm
+
+from panorama.systems.utils import VisualizationBuilder
+
+# Configuration constants
+DEFAULT_COLORS = ["#79DEFF", "#00D860", "#EB37ED", "#F7A507", "#FF2828"]
+PARTITION_TYPES = ["cloud", "shell", "accessory", "persistent", "persistent|accessory"]
+DEFAULT_FIGURE_WIDTH = 1200
+DEFAULT_FIGURE_HEIGHT = 900
+
+# Logger instance
+logger = logging.getLogger("PANORAMA")
 
 
-def systems_partition(
-    name: str, system_projection: pd.DataFrame, output: Path, disable_bar: bool = False
-) -> None:
+class SystemsPartitionVisualizer(VisualizationBuilder):
     """
-    Call functions to draw heatmap figures for the pangenome.
+    A class to create heatmap visualizations for pangenome systems partitions.
+
+    This class handles the generation of both partition and count heatmaps
+    for pangenome analysis, providing methods to visualize how systems are
+    distributed across different organisms.
+    """
+
+    def __init__(self, name: str, output_dir: Path, formats: List[str] = None):
+        """
+        Initialize the SystemsPartitionVisualizer.
+
+        Args:
+            name: Name of the pangenome for visualization titles.
+            output_dir: Directory path where output files will be saved.
+        """
+        super().__init__(name, output_dir, formats)
+        self.color_palette = ["#79DEFF", "#00D860", "#EB37ED", "#F7A507", "#FF2828"]
+        self.partitions = [
+            "cloud",
+            "shell",
+            "accessory",
+            "persistent",
+            "persistent|accessory",
+        ]
+        self.partition2color = dict(zip(self.partitions, self.color_palette))
+        self.mapper = CategoricalColorMapper(
+            palette=self.color_palette, factors=self.partitions, nan_color="white"
+        )
+        self.top_bar = None
+
+    def create_left_bar(self, source: ColumnDataSource):
+        # Create the plot
+        self.left_bar = figure(
+            y_range=source.data["systems"],
+            width=VisualizationBuilder.LEFT_WIDTH,
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            toolbar_location=None,
+            tools="",
+        )
+
+        # Add bars for each partition
+        self.left_bar.hbar_stack(
+            self.partitions,
+            y="systems",
+            color=[self.partition2color[part] for part in self.partitions],
+            source=source,
+            height=0.9,
+        )
+        #
+        # # Customize the plot
+        self.left_bar.yaxis.visible = False
+        self.left_bar.xaxis.axis_label = "Count"
+        self.left_bar.x_range.flipped = True
+        self.left_bar.grid.grid_line_color = None
+        self.left_bar.outline_line_color = None
+        #
+        # # Add hover tool
+        hover = HoverTool(
+            tooltips=[
+                ("System", "@systems"),
+                ("Partition", "$name"),
+                ("Count", "@$name{count}"),
+            ],
+        )
+        self.left_bar.add_tools(hover)
+
+        # show(self.left_bar)
+
+    def create_top_bar_plot(self, source: ColumnDataSource, data: pd.DataFrame):
+        x_order = data.sort_values("count", ascending=False)["organism"].tolist()
+        self.top_bar = figure(
+            x_range=x_order,
+            height=VisualizationBuilder.TOP_HEIGHT,
+            width=VisualizationBuilder.CENTER_WIDTH,
+            toolbar_location=None,
+            tools="",
+        )
+
+        # Add bars for each partition
+        self.top_bar.vbar(
+            x="organism",
+            top="count",
+            width=0.9,
+            source=source,
+            color="green",
+            alpha=0.6,
+        )
+        #
+        self.top_bar.add_tools(
+            HoverTool(
+                tooltips=[
+                    ("organism", "@{organism}"),
+                    ("count", "@count"),
+                ],
+            )
+        )
+
+        # Configure the top bar plot
+        self.top_bar.xaxis.visible = False
+        self.top_bar.yaxis.axis_label = "Count"
+        self.top_bar.grid.grid_line_color = None
+        self.top_bar.outline_line_color = None
+
+        # show(self.top_bar)
+
+    def create_bar_plot(self, partition_matrix: pd.DataFrame):
+        filtered_partition_matrix = partition_matrix[
+            partition_matrix["partition"] != "Not_found"
+        ]
+        pivot_df = (
+            filtered_partition_matrix.groupby(["system name", "partition"])
+            .size()
+            .unstack(fill_value=0)
+        )
+
+        # Prepare data for stacked bars using dictionary comprehension
+        source_data = {
+            "systems": pivot_df.index.tolist(),
+            **{
+                partition: pivot_df[partition].tolist()
+                for partition in self.partitions
+                if partition in pivot_df.columns
+            },
+        }
+
+        source = ColumnDataSource(source_data)
+        self.create_left_bar(source)
+
+        organism_count = pd.DataFrame(
+            filtered_partition_matrix["organism"].value_counts()
+        ).reset_index()
+        source = ColumnDataSource(organism_count)
+        self.create_top_bar_plot(source, organism_count)
+
+    def create_color_bar(self, title: str):
+        """
+        Create a color bar for the correlation matrix.
+
+        Args:
+
+
+        Returns:
+            Bokeh figure containing the color bar.
+        """
+        color_bar = ColorBar(
+            color_mapper=self.mapper,
+            major_label_text_font_size="14px",
+            label_standoff=6,
+            border_line_color=None,
+            major_label_overrides={
+                0: "Persistent",
+                1: "Shell",
+                2: "Cloud",
+                3: "Accessory",
+                4: "Persistent|accessory",
+            },
+            major_tick_line_color="black",
+            bar_line_color="black",
+            bar_line_width=0.2,
+            border_line_width=0.2,
+        )
+
+        self.color_bar = figure(
+            title=title,
+            title_location="right",
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            width=VisualizationBuilder.RIGHT_WIDTH,
+            toolbar_location=None,
+            min_border=0,
+            outline_line_color=None,
+        )
+
+        self.color_bar.add_layout(color_bar, "right")
+        self.color_bar.title.align = "center"
+        self.color_bar.title.text_font_size = "14pt"
+
+    def create_main_figure(
+        self,
+        partition_matrix: pd.DataFrame,
+        x_range: FactorRange,
+        y_range: FactorRange,
+    ):
+        """
+        Create the main correlation matrix heatmap figure.
+
+        Args:
+            partition_matrix: Preprocessed partition matrix.
+            x_range: X-axis range for the plot.
+            y_range: Y-axis range for the plot.
+
+        Returns:
+            Tuple of the Bokeh figure and GlyphRenderer objects.
+        """
+        tooltips = [
+            ("Partition", "@partition"),
+            ("Organism", "@organism"),
+            ("System", "@{system name}"),
+        ]
+        self._create_main_figure(partition_matrix, x_range, y_range, tooltips)
+        source = ColumnDataSource(partition_matrix.reset_index())
+
+        self.glyph_renderer = self.main_plot.rect(
+            "organism",
+            "system name",
+            1,
+            1,
+            source=source,
+            line_color="white",
+            fill_color={"field": "partition", "transform": self.mapper},
+        )
+        self.main_plot.xaxis.major_label_orientation = 0.5
+
+    def plot(self):
+        grid_layout_matrix = [
+            [None, self.top_bar, None, None],
+            [self.left_bar, self.main_plot, self.color_bar],
+        ]
+
+        grid_layout = gridplot(grid_layout_matrix, toolbar_location="above")
+
+        self._save_figure(grid_layout, "partition")
+
+
+def preprocess_data(data: pd.DataFrame, disable_bar: bool = False) -> pd.DataFrame:
+    """
+    Preprocess data to draw a partition heatmap figure for the pangenome.
 
     Args:
-        name (str): Name of the pangenome.
-        system_projection (pd.DataFrame): Systems in the pangenome.
-        output (Path): Path to the output directory.
+        data (pd.DataFrame): Projection of pangenome systems
         disable_bar (bool, optional): If True, disable the progress bar. Defaults to False.
     """
-    data_systems = system_projection[
-        ["system number", "system name", "organism", "partition"]
-    ]
-    system_names = data_systems["system name"].unique().tolist()
+    system_names = data["system name"].unique().tolist()
     system_names.sort(key=str.casefold)
-    organism_names = data_systems["organism"].unique().tolist()
+    organism_names = data["organism"].unique().tolist()
     organism_names.sort(key=str.casefold)
 
-    matrix_genomes_systems = np.zeros((len(organism_names), len(system_names)))
-    for i, organism in tqdm(
+    matrix_genomes_systems = np.zeros((len(system_names), len(organism_names)))
+    for j, organism in tqdm(
         enumerate(organism_names),
         unit="organisms",
         desc="Write system partition",
         disable=disable_bar,
     ):
-        data_genome = data_systems[data_systems["organism"] == organism]
+        data_genome = data[data["organism"] == organism]
         dict_defense_genome = pd.Series(
             data_genome["system name"].values, index=data_genome["system number"]
         ).to_dict()
-        for j, system in enumerate(system_names):
+        for i, system in enumerate(system_names):
             matrix_genomes_systems[i][j] = sum(
                 x == system for x in dict_defense_genome.values()
             )
-
-    figure_partition_heatmap(
-        name=name,
-        data=data_systems,
-        list_systems=system_names,
-        list_organisms=organism_names,
-        output=output,
+    data_count = pd.DataFrame(
+        matrix_genomes_systems, columns=organism_names, index=system_names
     )
-    figure_count_heatmap(
-        name=name,
-        data=matrix_genomes_systems,
-        list_system=system_names,
-        list_organism=organism_names,
-        output=output,
-    )
+    data_count.index.name = "system name"
+    data_count.columns.name = "organism"
+    return data_count
 
 
-def figure_partition_heatmap(
-    name: str,
-    data: pd.DataFrame,
-    list_systems: List[str],
-    list_organisms: List[str],
-    output: Path,
-    out_format: List[str] = None,
-) -> None:
+def preprocess_partition_data(data: pd.DataFrame) -> pd.DataFrame:
     """
-    Draw a partition heatmap figure for the pangenome.
+    Preprocess data to draw a partition heatmap figure for the pangenome.
 
     Args:
-        name (str): Name of the pangenome.
         data (pd.DataFrame): Data used to produce the heatmap.
-        list_systems (List[str]): List of systems in the pangenome.
-        list_organisms (List[str]): List of organisms in the pangenome.
-        output (Path): Path to the output directory.
-        out_format (List[str], optional): Format of the output file. Defaults to None.
     """
 
     def conciliate_system_partition(system_partition: Set[str]) -> str:
@@ -115,7 +332,6 @@ def figure_partition_heatmap(
             else:
                 return "accessory"
 
-    out_format = out_format if out_format is not None else ["html"]
     data_partition = data.pivot_table(
         index="organism",
         columns="system name",
@@ -127,159 +343,54 @@ def figure_partition_heatmap(
         data_partition.stack(), columns=["partition"]
     ).reset_index()
 
-    colors = ["#79DEFF", "#00D860", "#EB37ED", "#F7A507", "#FF2828"]
-    partitions = ["cloud", "shell", "accessory", "persistent", "persistent|accessory"]
-    mapper = CategoricalColorMapper(
-        palette=colors, factors=partitions, nan_color="white"
-    )
-    tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
-    p = figure(
-        title="Partition of systems for {0}".format(name),
-        x_range=list_systems,
-        y_range=list_organisms,
-        x_axis_location="above",
-        tools=tools,
-        toolbar_location="below",
-        tooltips=[
-            ("Partition", "@partition"),
-            ("Organism", "@organism"),
-            ("System", "@{system name}"),
-        ],
-        width=1200,
-        height=900,
-    )
-    p.title.align = "center"
-    p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = "Systems name"
-    p.xaxis.major_label_orientation = 1
-    p.yaxis.axis_label = "Genomes name"
-    p.axis.axis_label_text_font_size = "16pt"
-    p.axis.axis_line_color = None
-    p.axis.major_label_text_font_size = "12px"
-    p.axis.major_label_standoff = 2
-    p.xgrid.grid_line_color = None
-
-    p.rect(
-        x="system name",
-        y="organism",
-        width=1,
-        height=1,
-        source=df_stack_partition,
-        fill_color={"field": "partition", "transform": mapper},
-        line_color=None,
-    )
-
-    color_bar = ColorBar(
-        color_mapper=mapper,
-        major_label_text_font_size="14px",
-        label_standoff=6,
-        border_line_color=None,
-        major_label_overrides={
-            0: "Persistent",
-            1: "Shell",
-            2: "Cloud",
-            3: "Accessory",
-            4: "Persistent|accessory",
-        },
-        major_tick_line_color="black",
-        bar_line_color="black",
-        bar_line_width=0.2,
-        border_line_width=0.2,
-    )
-    p.add_layout(color_bar, "right")
-    if "html" in out_format:
-        output_path = output / "partition.html"
-        output_file(output_path)
-        save(p)
-        logging.getLogger("PANORAMA").debug(
-            f"Saved partition heatmap in HTML format to {output_path}"
-        )
-    if "png" in out_format:
-        output_path = output / "partition.png"
-        output_file(output_path)
-        export_png(p, width=1920, height=1080)
-        logging.getLogger("PANORAMA").debug(
-            f"Saved partition heatmap in PNG format to {output_path}"
-        )
+    return df_stack_partition
 
 
-def figure_count_heatmap(
+def systems_partition(
     name: str,
-    data: np.ndarray,
-    list_system: List[str],
-    list_organism: List[str],
+    system_projection: pd.DataFrame,
     output: Path,
+    output_formats: List[str] = None,
+    disable_bar: bool = False,
 ) -> None:
     """
-    Draw count heatmap figure for the pangenome.
+    Create heatmap visualizations for pangenome systems partitions.
+
+    This function serves as the main entry point for generating both partition
+    and count heatmap visualizations from pangenome system projection data.
 
     Args:
-        name (str): Name of the pangenome.
-        data (np.ndarray): Data used to produce the heatmap.
-        list_system (List[str]): List of systems in the pangenome.
-        list_organism (List[str]): List of organisms in the pangenome.
-        output (Path): Path to the output directory.
+        name: Name of the pangenome for visualization titles.
+        system_projection: DataFrame containing system projection data with columns:
+            ['system number', 'system name', 'organism', 'partition'].
+        output: Path to the directory where output files will be saved.
+        output_formats: List of output formats for visualizations.
+            Valid options: ['html', 'png']. Defaults to ['html'].
+        disable_bar: If True, disable the progress bar during processing.
+
+    Raises:
+        ValueError: If required columns are missing from system_projection DataFrame.
     """
-    output_path = output / "count.html"
-    output_file(output_path)
-    df_gcount = pd.DataFrame(data, index=list_organism, columns=list_system)
-    df_stack_gcount = pd.DataFrame(df_gcount.stack(), columns=["number"]).reset_index()
+    if output_formats is None:
+        output_formats = [VisualizationBuilder.DEFAULT_FORMAT]
 
-    mapper = LinearColorMapper(
-        palette=list(reversed(Magma256)),
-        low=1,
-        low_color="#FFFFFF",
-        high=df_stack_gcount.number.max(),
-    )
-    tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
+    # Validate output formats
 
-    p = figure(
-        title="Systems for {0}".format(name),
-        x_range=list_system,
-        y_range=list_organism,
-        x_axis_location="above",
-        tools=tools,
-        toolbar_location="below",
-        tooltips=[
-            ("Count", "@number"),
-            ("Organism", "@level_0"),
-            ("System", "@level_1"),
-        ],
-        width=1200,
-        height=900,
-    )
+    for fmt in output_formats:
+        if fmt not in VisualizationBuilder.OUTPUT_FORMATS:
+            raise ValueError(
+                f"Unsupported output format: {fmt}. "
+                f"Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
+            )
 
-    p.title.align = "center"
-    p.title.text_font_size = "20pt"
-    p.xaxis.axis_label = "Systems name"
-    p.xaxis.major_label_orientation = 1
-    p.yaxis.axis_label = "Genomes name"
-    p.axis.axis_label_text_font_size = "16pt"
-    p.axis.axis_line_color = None
-    p.axis.major_label_text_font_size = "12px"
-    p.axis.major_label_standoff = 2
-    p.xgrid.grid_line_color = None
-
-    p.rect(
-        x="level_1",
-        y="level_0",
-        width=1,
-        height=1,
-        source=df_stack_gcount,
-        fill_color={"field": "number", "transform": mapper},
-        line_color=None,
+    # data_genomes_systems = preprocess_data(system_projection, disable_bar=disable_bar)
+    partitions_matrix = preprocess_partition_data(system_projection)
+    viz_builder = SystemsPartitionVisualizer(
+        name=name, output_dir=output, formats=output_formats
     )
-
-    color_bar = ColorBar(
-        color_mapper=mapper,
-        major_label_text_font_size="14px",
-        ticker=BasicTicker(desired_num_ticks=int(data.max())),
-        formatter=PrintfTickFormatter(format="%s"),
-        label_standoff=6,
-        border_line_color=None,
+    viz_builder.create_bar_plot(partitions_matrix)
+    viz_builder.create_main_figure(
+        partitions_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range
     )
-    p.add_layout(color_bar, "right")
-    save(p)
-    logging.getLogger("PANORAMA").debug(
-        f"Saved count heatmap in HTML format to {output_path}"
-    )
+    viz_builder.create_color_bar("Partition")
+    viz_builder.plot()

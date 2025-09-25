@@ -110,6 +110,41 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         )
         self.main_plot.xaxis.major_label_orientation = 1
 
+    def create_color_bar(self, title: str):
+        """
+        Create a color bar for the correlation matrix.
+
+        Args:
+
+
+        Returns:
+            Bokeh figure containing the color bar.
+        """
+        color_bar = ColorBar(
+            color_mapper=self.glyph.fill_color["transform"],
+            label_standoff=12,
+            ticker=BasicTicker(
+                desired_num_ticks=len(
+                    self.glyph.fill_color["transform"].palette
+                )
+            ),
+            border_line_color=None,
+        )
+
+        self.color_bar = figure(
+            title=title,
+            title_location="right",
+            height=VisualizationBuilder.MIDDLE_HEIGHT,
+            width=VisualizationBuilder.RIGHT_WIDTH,
+            toolbar_location=None,
+            min_border=0,
+            outline_line_color=None,
+        )
+
+        self.color_bar.add_layout(color_bar, "right")
+        self.color_bar.title.align = "center"
+        self.color_bar.title.text_font_size = "14pt"
+
     def create_main_figure(
         self,
         correlation_matrix: pd.DataFrame,
@@ -134,9 +169,10 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             ("system", "@system_name"),
             ("count", "@corr"),
         ]
-        source = self._create_main_figure(
+        self._create_main_figure(
             correlation_matrix, x_range, y_range, tooltips
         )
+        source = ColumnDataSource(correlation_matrix.stack().reset_index(name="corr"))
         self.glyph_renderer = self.main_plot.rect(
             self.association,
             "system_name",
@@ -690,15 +726,15 @@ def write_correlation_matrix_visualization(
         ValueError: If an unsupported output format is specified.
     """
     if output_formats is None:
-        output_formats = ["html"]
+        output_formats = [VisualizationBuilder.DEFAULT_FORMAT]
 
     # Validate output formats
-    supported_formats = ["html", "png"]
+
     for fmt in output_formats:
-        if fmt not in supported_formats:
+        if fmt not in VisualizationBuilder.OUTPUT_FORMATS:
             raise ValueError(
                 f"Unsupported output format: {fmt}. "
-                f"Supported formats: {supported_formats}"
+                f"Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
             )
 
     # Preprocess data for correlation matrix

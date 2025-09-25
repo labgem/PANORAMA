@@ -422,6 +422,10 @@ class VisualizationBuilder:
     MIDDLE_HEIGHT = int(0.7 * TOTAL_HEIGHT)
     BELOW_HEIGHT = int(0.15 * TOTAL_HEIGHT)
 
+    # Output supported formats
+    OUTPUT_FORMATS = ["html", "png"]
+    DEFAULT_FORMAT = "html"
+
     # Constants for PNG export dimensions
     PNG_EXPORT_WIDTH = 1920
     PNG_EXPORT_HEIGHT = 1080
@@ -523,21 +527,18 @@ class VisualizationBuilder:
 
     def _create_main_figure(
         self,
-        correlation_matrix: pd.DataFrame,
-        x_range: FactorRange,
-        y_range: FactorRange,
-        tooltips: List[Tuple[str, str]],
-    ) -> ColumnDataSource:
+        matrix: pd.DataFrame,
+        x_range: FactorRange = None,
+        y_range: FactorRange = None,
+        tooltips: List[Tuple[str, str]] = None,
+    ) -> None:
         """
         Create the main correlation matrix heatmap figure.
 
         Args:
-            correlation_matrix: Preprocessed correlation matrix.
+            matrix: Preprocessed correlation matrix.
             x_range: X-axis range for the plot.
             y_range: Y-axis range for the plot.
-
-        Returns:
-            Tuple of the Bokeh figure and GlyphRenderer objects.
         """
         # Create the main figure
         tools = "hover,save,pan,box_zoom,reset,wheel_zoom"
@@ -553,11 +554,6 @@ class VisualizationBuilder:
 
         # Configure plot appearance
         self._configure_plot_style()
-
-        # Create data source and rectangles
-        source = ColumnDataSource(correlation_matrix.stack().reset_index(name="corr"))
-
-        return source
 
     @property
     def glyph(self) -> Glyph:
@@ -575,41 +571,6 @@ class VisualizationBuilder:
             raise Exception("Color bar must be a Bokeh figure object.")
         self._color_bar = color_bar
 
-    def create_color_bar(self, title: str):
-        """
-        Create a color bar for the correlation matrix.
-
-        Args:
-
-
-        Returns:
-            Bokeh figure containing the color bar.
-        """
-        color_bar = ColorBar(
-            color_mapper=self.glyph.fill_color["transform"],
-            label_standoff=12,
-            ticker=BasicTicker(
-                desired_num_ticks=len(
-                    self.glyph.fill_color["transform"].palette
-                )
-            ),
-            border_line_color=None,
-        )
-
-        self.color_bar = figure(
-            title=title,
-            title_location="right",
-            height=VisualizationBuilder.MIDDLE_HEIGHT,
-            width=VisualizationBuilder.RIGHT_WIDTH,
-            toolbar_location=None,
-            min_border=0,
-            outline_line_color=None,
-        )
-
-        self.color_bar.add_layout(color_bar, "right")
-        self.color_bar.title.align = "center"
-        self.color_bar.title.text_font_size = "14pt"
-
     @property
     def left_bar(self) -> figure:
         if self._left_bar is None:
@@ -622,9 +583,9 @@ class VisualizationBuilder:
             raise Exception("Left bar must be a Bokeh figure object.")
         self._left_bar = left_bar
 
-    def create_left_bar_plot(self, source: ColumnDataSource, correlation_matrix: pd.DataFrame):
+    def create_left_bar_plot(self, source: ColumnDataSource, matrix: pd.DataFrame):
         self.left_bar = figure(
-            y_range=list(correlation_matrix.index),
+            y_range=list(matrix.index),
             width=VisualizationBuilder.LEFT_WIDTH,
             height=VisualizationBuilder.MIDDLE_HEIGHT,
             toolbar_location=None,
