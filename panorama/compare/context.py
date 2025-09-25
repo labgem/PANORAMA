@@ -527,6 +527,8 @@ def get_conserved_genomics_contexts(gcA_graph: nx.Graph, gcB_graph: nx.Graph,
         rename_cgc_graph = [f'{i}-' for i in range(len(cgc_graphs))]
         all_gc_graph = nx.union_all([gcA_graph, gcB_graph] + cgc_graphs, ['', ''] + rename_cgc_graph)
         multigraph_and_cgc_graphs = nx.union(nx.MultiGraph(all_gc_graph), multigraph, rename=['', 'multi'])
+    else:
+        multigraph_and_cgc_graphs = None
 
     return cgc_infos, multigraph_and_cgc_graphs
 
