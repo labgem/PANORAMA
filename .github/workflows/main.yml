@@ -68,8 +68,14 @@ jobs:
         run: |
           panorama --version
           panorama --help
-      # Check that it is installed and displays help without error
-      - name: Check that PANORAMA is installed
+      - name: Download test data
+        uses: actions/checkout@v3
+        with:
+          repository: labgem/PANORAMA_test
+          path: test_data
+
+
+      - name: Run pytest with coverage
         shell: bash -l {0}
         run: |
-          pytest --cov=panorama
+          coverage run -m pytest --cov=panorama
