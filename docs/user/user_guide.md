@@ -12,6 +12,7 @@ myst:
 :maxdepth: 2
 
 install
+quick_usage
 ```
 
 ```{toctree}
