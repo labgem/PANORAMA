@@ -110,9 +110,11 @@ jobs:
           panorama write_systems  \
           --pangenomes pangenomes_list.tsv \
           --output write_systems_outdir \
-          --models output_models/models_list.tsv \
+          --models models_list.tsv \
           --sources defensefinder \
           --projection \
           --threads $NUM_CPUS   \
           --association all
-          cd -
+
+          
+          cd -  
