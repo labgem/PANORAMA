@@ -75,9 +75,13 @@ Here is the complete installation guide of MMSeqs2:
 Dependencies are declared in the `pyproject.toml` file:
 
 ```shell
+pip install --upgrade pip setuptools build wheel
 pip install .
 ```
 
+```{warning}
+geckodriver is not compatible with pip, so the feature that generate png image from bokeh is not supported.
+```
 * * *
 
 ## Development Version 🧪
