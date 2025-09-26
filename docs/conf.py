@@ -80,7 +80,8 @@ exclude_patterns = [
 suppress_warnings = [
     "myst.header",
     # "autosectionlabel.*",
-    "toc.not_included"
+    "toc.not_included",
+    "myst.xref_missing"
 ]
 
 # The name of the default role for inline references
