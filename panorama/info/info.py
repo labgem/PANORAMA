@@ -873,18 +873,3 @@ def parser_info(parser: argparse.ArgumentParser) -> None:
         help="Extract and export metadata information stored in pangenome files "
         "(currently not implemented)",
     )
-
-    # Optional arguments
-    optional = parser.add_argument_group(title="Optional arguments")
-    optional.add_argument(
-        "--threads",
-        type=int,
-        default=1,
-        help="Number of threads to use for processing (default: 1). "
-        "Note: Current implementation does not use multithreading",
-    )
-    optional.add_argument(
-        "--disable-prog-bar",
-        action="store_true",
-        help="Disable the progress bar during information extraction",
-    )
