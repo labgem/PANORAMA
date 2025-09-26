@@ -22,7 +22,7 @@ import pandas as pd
 import tables
 from bokeh.embed import file_html
 from bokeh.io import curdoc
-from bokeh.layouts import column, row
+from bokeh.layouts import column, row, Column
 from bokeh.models import (
     Button,
     CheckboxGroup,
@@ -39,13 +39,16 @@ from ppanggolin.info.info import read_metadata_status, read_status
 from tqdm import tqdm
 
 # Local imports
-from panorama.utils import check_tsv_sanity
+from panorama.utils import check_tsv_sanity, mkdir
 
 # Type aliases for better readability
 PangenomeInfo = Dict[str, Union[int, str]]
 PangenomePaths = Dict[str, PangenomeInfo]
 InfoDict = Dict[str, Dict[str, Any]]
 ContentDict = Dict[str, Dict[str, Union[int, float, Dict[str, Union[int, float]]]]]
+
+
+logger = logging.getLogger("PANORAMA")
 
 
 class PangenomeInfoExtractor:
@@ -643,7 +646,7 @@ class HTMLExporter:
         checkbox_group: CheckboxGroup,
         sliders: List[RangeSlider],
         download_button: Button,
-    ) -> column:
+    ) -> Column:
         """
         Layout content export components in an organized manner.
 
@@ -690,7 +693,7 @@ class HTMLExporter:
             )
             return ""
 
-    def _save_html(self, layout: column, filename: str, title: str) -> None:
+    def _save_html(self, layout: Column, filename: str, title: str) -> None:
         """
         Save Bokeh layout to the HTML file.
 
@@ -708,6 +711,24 @@ class HTMLExporter:
             file.write(html_content)
 
         self.logger.info(f"Exported {title} to {output_path}")
+
+
+def check_info_args(args: argparse.Namespace):
+    """
+    Checks the validity of arguments for the info command.
+
+    Args:
+        args (argparse.Namespace): Parsed command-line arguments
+    """
+    if args.output.is_dir():
+        if not args.force:
+            raise IOError(f"Output directory: {args.output} is not empty."
+                          f"Use --force to overwrite.")
+        else:
+            logger.warning(f"Output directory: {args.output} is not empty."
+                           f"Files could be overwritten.")
+    else:
+        mkdir(args.output)
 
 
 def export_info(info_dict: InfoDict, output: Path) -> None:
@@ -761,8 +782,9 @@ def launch(args: argparse.Namespace) -> None:
         This function orchestrates the entire workflow: validates input files,
         extracts information, and exports results to HTML files.
     """
-    logger = logging.getLogger("PANORAMA")
     logger.debug("Launching info command")
+
+    check_info_args(args)
 
     try:
         # Validate and parse input pangenome file list
