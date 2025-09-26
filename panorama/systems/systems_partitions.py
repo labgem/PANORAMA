@@ -80,7 +80,6 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         Args:
             source: ColumnDataSource containing stacked partition data
         """
-        print(source.data)
         self.left_bar = figure(
             y_range=source.data["systems"],
             width=self.LEFT_WIDTH,
@@ -357,8 +356,6 @@ def systems_partition(
                 f"Unsupported output format: {fmt}. "
                 f"Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
             )
-
-    print(system_projection["partition"])
     partitions_matrix = preprocess_partition_data(system_projection)
     viz_builder = SystemsPartitionVisualizer(
         name=name, output_dir=output, formats=output_formats
