@@ -428,34 +428,49 @@ class VisualizationBuilder(ABC):
     This class maintains a common configuration and provides a cohesive interface
     for creating all components of pangenome visualizations. It handles shared
     functionality like plot dimensions, styling, and file saving.
-
-    Attributes:
-        TOTAL_WIDTH (int): Total width of the complete visualization layout
-        TOTAL_HEIGHT (int): Total height of the complete visualization layout
-        OUTPUT_FORMATS (list): Supported output formats for saving figures
-        DEFAULT_FORMAT (str): Default output format when none specified
     """
 
     # Constants for plot dimensions
-    TOTAL_WIDTH, TOTAL_HEIGHT = 1780, 920
-
+    TOTAL_WIDTH = 1780
+    """int: Total width of the complete visualization layout.
+    """
+    TOTAL_HEIGHT = 920
+    """int: Total height of the complete visualization layout.
+    """
     # Layout proportions - these define how the total space is divided
-    LEFT_WIDTH = int(0.15 * TOTAL_WIDTH)      # Space for left bar plots
-    CENTER_WIDTH = int(0.75 * TOTAL_WIDTH)    # Space for main heatmap
-    RIGHT_WIDTH = int(0.10 * TOTAL_WIDTH)     # Space for color bars
-
-    TOP_HEIGHT = int(0.15 * TOTAL_HEIGHT)     # Space for top bar plots
-    MIDDLE_HEIGHT = int(0.70 * TOTAL_HEIGHT)  # Space for main heatmap
-    BELOW_HEIGHT = int(0.15 * TOTAL_HEIGHT)   # Space for bottom plots
-
+    LEFT_WIDTH = int(0.15 * TOTAL_WIDTH)
+    """int: Space for left bar plots
+    """
+    CENTER_WIDTH = int(0.75 * TOTAL_WIDTH)
+    """int: Space for main heatmap
+    """
+    RIGHT_WIDTH = int(0.10 * TOTAL_WIDTH)
+    """int: Space for color bars
+    """
+    TOP_HEIGHT = int(0.15 * TOTAL_HEIGHT)
+    """int Space for top bar plots
+    """
+    MIDDLE_HEIGHT = int(0.70 * TOTAL_HEIGHT)
+    """int: Space for main heatmap
+    """
+    BELOW_HEIGHT = int(0.15 * TOTAL_HEIGHT)
+    """int: Space for bottom plots
+    """
     # Output configuration
     OUTPUT_FORMATS = ["html", "png"]
+    """list: Supported output formats for saving figures
+    """
     DEFAULT_FORMAT = "html"
+    """str: Default output format when none specified
+    """
 
     # Constants for PNG export dimensions
     PNG_EXPORT_WIDTH = 1920
+    """int: Width of PNG exports
+    """
     PNG_EXPORT_HEIGHT = 1080
-
+    """int: Height of PNG exports
+    """
     def __init__(self, name: str, output_dir: Path, formats: Optional[List[str]] = None):
         """
         Initialize the visualization builder.

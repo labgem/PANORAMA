@@ -110,7 +110,7 @@ panorama write_systems \
     --output results/
 ```
 
-## Command Line Arguments ⚙️
+## Projection command Line Arguments ⚙️
 
 ### Projection-specific keys 🔑
 
@@ -139,7 +139,7 @@ panorama write_systems \
 | `--threads`     | int  | 1       | Number of parallel threads to use                      |
 | `--force`       | flag | False   | Overwrite existing projection files                    |
 
-## Output Files 📄
+## Projection Output Files 📄
 
 Output is organized in the specified `--output` directory with subdirectories for each pangenome and source combination:
 

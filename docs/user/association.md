@@ -76,7 +76,7 @@ panorama write_systems \
 
 For more information on other analysis options, here the documentation about [projection](projection.md).
 
-## Command line arguments ⚙️
+## Association command line arguments ⚙️
 
 ### Association-Specific key 🔑
 
@@ -115,7 +115,7 @@ The visualization outputs can be customized (currently HTML format is default):
 - **HTML**: Interactive Bokeh plots (default)
 - **PNG**: Static high-resolution images (if requested)
 
-## Output Files
+## Association Output Files 📁
 
 Association analysis creates organized output in the specified `--output` directory:
 
@@ -209,7 +209,7 @@ Interactive Bokeh visualizations containing:
 - **Save Tools**: Export plots or data
 - **Responsive Layout**: Adapts to different screen sizes
 
-## Data Interpretation
+## Data Interpretation 📊
 
 ### Coverage Metrics
 
@@ -241,7 +241,7 @@ Depending on the element type, coverage is computed differently:
 - **Low Values (light colors)**: Weak or no association
 - **Pattern Analysis**: Reveals functional relationships and genomic organization
 
-## Technical Details
+## Technical Details 🔧
 
 ### Visualization Technology
 
