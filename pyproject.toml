@@ -85,3 +85,12 @@ panorama = "panorama.main:main"
 packages = ["panorama"]
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
+
+[tool.pytest.ini_options]
+markers = [
+    "requires_test_data: marks tests that require test dataset path to be provided",
+]
+log_cli = true
+log_cli_level = "INFO"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"
