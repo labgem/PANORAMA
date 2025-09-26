@@ -76,7 +76,7 @@ jobs:
       - name: Run pytest with coverage
         shell: bash -l {0}
         run: |
-          coverage run -m pytest --cov=panorama  --test-data-path=test_data
+          pytest --cov=panorama  --test-data-path=test_data
       - name: Run panorama info
         shell: bash -l {0}
         run: |
