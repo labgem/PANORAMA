@@ -1,24 +1,19 @@
 # PANORAMA – Installation Guide 📦⚒
 
-## Latest version
+## Latest version 🆕⭐
 ### Installation via Conda 🐍
 
 ```{note}
-PANORAMA is not yet available on Bioconda. We hope to provide a recipe soon.
-```
-
-```{important}
-Before starting, create and activate a Conda environment. 
-For more information, see the [Conda documentation](https://docs.conda.io/projects/conda/en/latest/index.html).
+PANORAMA is not yet available on [Bioconda](https://bioconda.github.io/). We hope to provide a recipe soon.
 ```
 
 * * *
 
 ### Installing from source code (GitHub) 🐙
 (with_conda_env)=
-#### Within a Conda environmnent 🐍
+#### Within a Conda environment 🐍
 
-##### 1. Clone the Repository
+##### 1. Clone the GitHub Repository
 
 ```shell
 git clone https://github.com/labgem/PANORAMA.git
@@ -31,19 +26,21 @@ cd PANORAMA
 conda create -n panorama
 conda config --add channels bioconda
 conda config --add channels conda-forge
+conda env update -n panorama --file panorama.yml
 conda activate panorama
-conda env update --file panorama.yml
 ```
 
 Alternatively, in one line:  
-`conda create -n panorama -c bioconda -c conda-forge --file panorama.yml`
+```shell
+conda env create -f panorama.yml # -n panorama ## if you want to name the environment differently
+conda activate panorama
+```
 
 ##### 3. Install PANORAMA
 
 ```shell
 pip install .
 ```
-
 
 ##### 4. Test the Installation
 
@@ -52,7 +49,7 @@ panorama --help
 panorama --version
 ```
 
-#### 🛠️ Manual Installation (without Conda)
+#### Manual Installation (without Conda) 🛠️
 
 ##### 1. Clone the Repository
 
@@ -61,7 +58,7 @@ git clone https://github.com/labgem/PANORAMA.git
 cd PANORAMA
 ```
 
-##### 2. Install Dependencies
+##### 2. Install PANORAMA Dependencies
 
 Install **MMSeqs2 (≥ 13.45111)** manually:
 
@@ -78,12 +75,16 @@ Here is the complete installation guide of MMSeqs2:
 Dependencies are declared in the `pyproject.toml` file:
 
 ```shell
+pip install --upgrade pip setuptools build wheel
 pip install .
 ```
 
+```{warning}
+geckodriver is not compatible with pip, so the feature that generate png image from bokeh is not supported.
+```
 * * *
 
-## 🧪 Development Version
+## Development Version 🧪
 
 ### 1. Get the Development branch 
 

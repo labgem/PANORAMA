@@ -1,4 +1,4 @@
-# 🧬 PANORAMA System Models Overview
+# 🧬 PANORAMA Models Overview
 
 PANORAMA detects macromolecular systems in pangenomes using user-defined models. These models are an exhaustive and
 specific representation of a system. They describe the presence/abscence rules of protein families constituting a

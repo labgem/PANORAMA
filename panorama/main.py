@@ -29,7 +29,7 @@ import panorama.workflow
 import panorama.format.write_flat
 
 version = distribution("panorama").version
-opening = """
+opening = r"""
     ____     ___     _   __   ____     ____     ___     __  ___    ___ 
    / __ \   /   |   / | / /  / __ \   / __ \   /   |   /  |/  /   /   |
   / /_/ /  / /| |  /  |/ /  / / / /  / /_/ /  / /| |  / /|_/ /   / /| |
@@ -39,7 +39,7 @@ opening = """
 """
 opening_full = (
     opening
-    + """
+    + r"""
 
    ______                                       __  _               ____                                               _     
   / ________  ____ ___  ____  ____ __________ _/ /_(__   _____     / __ \____ _____  ____ ____  ____  ____  ____ ___  (______

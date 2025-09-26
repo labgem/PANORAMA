@@ -246,12 +246,10 @@ def create_pangenome_spots_graph(
             Used for multigenic family detection. Default: 0.05 (5%).
 
     Returns:
-        Tuple[nx.Graph, Dict[int, Set[GeneFamily]], Dict[int, str], Dict[int, Spot]]:
-            - graph (nx.Graph): NetworkX graph with spot nodes (no edges)
-            - spots2borders (Dict[int, Set[GeneFamily]]): Mapping of spot hashes to
-              their bordering gene families
-            - spots2pangenome (Dict[int, str]): Mapping of spot hashes to pangenome names
-            - spothash2spot (Dict[int, Spot]): Mapping of spot hashes to spot objects
+        graph (nx.Graph): NetworkX graph with spot nodes (no edges)
+        spots2borders (Dict[int, Set[GeneFamily]]): Mapping of spot hashes to their bordering gene families
+        spots2pangenome (Dict[int, str]): Mapping of spot hashes to pangenome names
+        spothash2spot (Dict[int, Spot]): Mapping of spot hashes to spot objects
     """
 
     def get_borders_families() -> Set[GeneFamily]:
@@ -338,14 +336,10 @@ def create_spots_graph(
         disable_bar (bool): Whether to disable the progress bar. Default: False.
 
     Returns:
-        Tuple[nx.Graph, Dict[int, Set[GeneFamily]], Dict[int, str], Dict[int, Spot]]:
-            - spots_graph (nx.Graph): Unified graph containing all spots as nodes
-            - spots2borders (Dict[int, Set[GeneFamily]]): Complete mapping of spot
-              hashes to their bordering families
-            - spots2pangenome (Dict[int, str]): Complete mapping of spot hashes to
-              pangenome names
-            - spothash2spot (Dict[int, Spot]): Complete mapping of spot hashes to
-              spot objects
+        spots_graph (nx.Graph): Unified graph containing all spots as nodes
+        spots2borders (Dict[int, Set[GeneFamily]]): Complete mapping of spot hashes to their bordering families
+        spots2pangenome (Dict[int, str]): Complete mapping of spot hashes to pangenome names
+        spothash2spot (Dict[int, Spot]): Complete mapping of spot hashes to spot objects
 
     Raises:
         RuntimeError: If parallel processing fails or produces inconsistent results.
@@ -603,12 +597,10 @@ def create_pangenome_system_graph(
         canonical (bool): Whether to use canonical systems (True) or not (False). Default: False.
 
     Returns:
-        Tuple containing:
-            - graph (nx.Graph): NetworkX graph with system nodes
-            - sys2pangenome (Dict[int, str]): Mapping of system hashes to pangenome names
-            - syshash2sys (Dict[int, Any]): Mapping of system hashes to system objects
-            - systemhash2conserved_spots (defaultdict): Mapping of system hashes to
-              sets of conserved spot IDs
+        graph (nx.Graph): NetworkX graph with system nodes
+        sys2pangenome (Dict[int, str]): Mapping of system hashes to pangenome names
+        syshash2sys (Dict[int, Any]): Mapping of system hashes to system objects
+        systemhash2conserved_spots (defaultdict): Mapping of system hashes to sets of conserved spot IDs
     """
     # Initialize data structures
     graph = nx.Graph()
@@ -936,19 +928,25 @@ def graph_systems_link_with_conserved_spots(
         if graph_formats is not None:
             for fmt in graph_formats:
                 if fmt == "gexf":
-                    graph_file = output / "systems_link_with_conserved_spots_louvain.gexf"
+                    graph_file = (
+                        output / "systems_link_with_conserved_spots_louvain.gexf"
+                    )
                     logger.info(f"Writing Louvain graph in GEXF format: {graph_file}")
                     nx.readwrite.gexf.write_gexf(louvain_graph, graph_file)
                 elif fmt == "graphml":
                     graph_file = (
                         output / "systems_link_with_conserved_spots_louvain.graphml"
                     )
-                    logger.info(f"Writing Louvain graph in GraphML format: {graph_file}")
+                    logger.info(
+                        f"Writing Louvain graph in GraphML format: {graph_file}"
+                    )
                     nx.readwrite.graphml.write_graphml(louvain_graph, graph_file)
 
     if community == "MST":
         # MINIMUM SPANNING TREE (MST) CLUSTERING ANALYSIS
-        logger.info("Performing MST-based clustering with automatic threshold detection")
+        logger.info(
+            "Performing MST-based clustering with automatic threshold detection"
+        )
 
         if len(systems_graph.edges) == 0:
             logger.warning("No edges in systems graph - skipping MST analysis")
@@ -980,7 +978,9 @@ def graph_systems_link_with_conserved_spots(
         else:
             # Fallback for the single edge case
             threshold = sorted_weights[0]
-            logger.info(f"MST threshold detection: single edge, using weight = {threshold}")
+            logger.info(
+                f"MST threshold detection: single edge, using weight = {threshold}"
+            )
 
         # Remove edges with weights above the threshold
         heavy_edges = [
@@ -992,7 +992,9 @@ def graph_systems_link_with_conserved_spots(
 
         # Identify connected components as clusters
         mst_clusters_retained = 0
-        for cluster_id, cluster_systems in enumerate(nx.connected_components(mst), start=1):
+        for cluster_id, cluster_systems in enumerate(
+            nx.connected_components(mst), start=1
+        ):
             if len(cluster_systems) > 1:
                 # Assign cluster labels to nodes
                 for sys_hash in cluster_systems:
@@ -1023,7 +1025,9 @@ def graph_systems_link_with_conserved_spots(
                     logger.info(f"Writing MST graph in GEXF format: {graph_file}")
                     nx.readwrite.gexf.write_gexf(mst, graph_file)
                 elif fmt == "graphml":
-                    graph_file = output / "systems_link_with_conserved_spots_mst.graphml"
+                    graph_file = (
+                        output / "systems_link_with_conserved_spots_mst.graphml"
+                    )
                     logger.info(f"Writing MST graph in GraphML format: {graph_file}")
                     nx.readwrite.graphml.write_graphml(mst, graph_file)
 
@@ -1248,8 +1252,14 @@ def compare_spots(
 
     # Step 2: Compute GFRR-based edges between spots
     logger.info("Step 2: Computing GFRR-based similarity edges")
-    compute_gfrr_edges(spots_graph, spots2borders, spots2pangenome, min_gfrr_cutoff=gfrr_cutoff[0],
-                       max_gfrr_cutoff=gfrr_cutoff[1], disable_bar=disable_bar)
+    compute_gfrr_edges(
+        spots_graph,
+        spots2borders,
+        spots2pangenome,
+        min_gfrr_cutoff=gfrr_cutoff[0],
+        max_gfrr_cutoff=gfrr_cutoff[1],
+        disable_bar=disable_bar,
+    )
 
     edges_count = len(spots_graph.edges)
     logger.info(f"Added {edges_count} similarity edges to spots graph")
@@ -1347,7 +1357,7 @@ def launch(args: argparse.Namespace) -> None:
 
     Raises:
         Various exceptions from underlying functions for validation, processing, or I/O errors.
-    todo:
+    TODO:
         - add a community argument
     """
     logger.info("Starting conserved spots comparison analysis")
@@ -1377,7 +1387,7 @@ def launch(args: argparse.Namespace) -> None:
         gfrr_cutoff=args.gfrr_cutoff,
         threads=args.cpus,
         lock=lock,
-        disable_bar=args.disable_prog_bar
+        disable_bar=args.disable_prog_bar,
     )
 
     # Step 5: Write conserved spots results
@@ -1388,14 +1398,20 @@ def launch(args: argparse.Namespace) -> None:
         cs_graph=spots_graph,
         graph_formats=args.graph_formats,
         force=args.force,
-        disable_bar=args.disable_prog_bar
+        disable_bar=args.disable_prog_bar,
     )
 
     # Step 6: Perform systems linkage analysis if requested
     if args.systems:
         logger.info("Performing systems linkage analysis with conserved spots")
-        graph_systems_link_with_conserved_spots(pangenomes=pangenomes, output=output, graph_formats=args.graph_formats,
-                                                threads=args.cpus, lock=lock, disable_bar=args.disable_prog_bar)
+        graph_systems_link_with_conserved_spots(
+            pangenomes=pangenomes,
+            output=output,
+            graph_formats=args.graph_formats,
+            threads=args.cpus,
+            lock=lock,
+            disable_bar=args.disable_prog_bar,
+        )
     else:
         logger.info("Systems analysis not requested - skipping systems linkage")
 
@@ -1431,10 +1447,10 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
     parser = sub_parser.add_parser(
         "compare_spots",
         description="Compare and identify conserved spots across multiple pangenomes. "
-                    "This analysis identifies genomic regions that are conserved "
-                    "across different pangenomes based on gene family similarity "
-                    "and optionally analyzes systems relationships within these regions.",
-        help="Compare spots across pangenomes to identify conserved regions"
+        "This analysis identifies genomic regions that are conserved "
+        "across different pangenomes based on gene family similarity "
+        "and optionally analyzes systems relationships within these regions.",
+        help="Compare spots across pangenomes to identify conserved regions",
     )
 
     # Configure all arguments for this subcommand
@@ -1458,15 +1474,15 @@ def parser_comparison_spots(parser: argparse.ArgumentParser) -> None:
 
     # Add spots-specific comparison options
     compare_opt.add_argument(
-        '--gfrr_metrics',
+        "--gfrr_metrics",
         required=False,
         type=str,
         default="min_gfrr",
         choices=["min_gfrr", "max_gfrr"],
         help="GFRR metric used for spots clustering. "
-             "'min_gfrr': conservative metric (shared/smaller_set), "
-             "'max_gfrr': liberal metric (shared/larger_set). "
-             "Default: min_gfrr"
+        "'min_gfrr': conservative metric (shared/smaller_set), "
+        "'max_gfrr': liberal metric (shared/larger_set). "
+        "Default: min_gfrr",
     )
 
     # Add general optional arguments
@@ -1476,51 +1492,53 @@ def parser_comparison_spots(parser: argparse.ArgumentParser) -> None:
         type=float,
         default=0.05,
         help="Minimum ratio of genomes in which a gene family must have "
-             "multiple copies to be considered 'duplicated'. This affects "
-             "multigenic family detection for spot border analysis. "
-             "Range: 0.0-1.0. Default: 0.05 (5%%)"
+        "multiple copies to be considered 'duplicated'. This affects "
+        "multigenic family detection for spot border analysis. "
+        "Range: 0.0-1.0. Default: 0.05 (5%%)",
     )
 
     # Systems analysis argument group
     systems = parser.add_argument_group(
         title="Systems analysis options",
-        description="Optional analysis of systems relationships within conserved spots"
+        description="Optional analysis of systems relationships within conserved spots",
     )
 
     systems.add_argument(
-        '--systems',
+        "--systems",
         required=False,
-        action='store_true',
+        action="store_true",
         default=False,
         help="Enable systems analysis to examine relationships between "
-             "conserved spots and detected biological systems. This adds "
-             "systems linkage graphs and enriched annotations to the output."
+        "conserved spots and detected biological systems. This adds "
+        "systems linkage graphs and enriched annotations to the output.",
     )
 
     systems.add_argument(
-        '-m', '--models',
+        "-m",
+        "--models",
         required=False,
         type=Path,
         nargs="+",
         default=None,
         metavar="MODEL_FILE",
         help="Path(s) to system model files. Multiple model files can be "
-             "specified (space-separated) for different system sources. "
-             "Must be provided in the same order as --sources. "
-             "Required if --systems is used."
+        "specified (space-separated) for different system sources. "
+        "Must be provided in the same order as --sources. "
+        "Required if --systems is used.",
     )
 
     systems.add_argument(
-        "-s", "--sources",
+        "-s",
+        "--sources",
         required=False,
         type=str,
         nargs="+",
         default=None,
         metavar="SOURCE_NAME",
         help="Name(s) of systems sources corresponding to model files. "
-             "Multiple sources can be specified (space-separated). "
-             "Must be provided in the same order as --models. "
-             "Required if --systems is used. "
+        "Multiple sources can be specified (space-separated). "
+        "Must be provided in the same order as --models. "
+        "Required if --systems is used. ",
     )
 
     systems.add_argument(
@@ -1529,6 +1547,6 @@ def parser_comparison_spots(parser: argparse.ArgumentParser) -> None:
         action="store_true",
         default=False,
         help="Include canonical versions of systems in the analysis. "
-             "This provides additional system representations that may "
-             "be useful for comprehensive systems analysis."
+        "This provides additional system representations that may "
+        "be useful for comprehensive systems analysis.",
     )

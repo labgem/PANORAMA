@@ -1,4 +1,5 @@
-## 🔗 Gene Family Clustering Across Pangenomes
+(clustering)=
+# Gene Family Clustering Across Pangenomes 🔗
 
 The cluster command groups related gene families from multiple pangenomes into homologous clusters based on sequence
 similarity using MMseqs2. This analysis identifies gene families that share common evolutionary origins across different
@@ -6,60 +7,60 @@ bacterial populations, enabling comparative genomics studies and the constructio
 supports both fast (linclust) and sensitive (cluster) methods to accommodate different accuracy and performance
 requirements.
 
-### ⚙️ Clustering Workflow
+## Clustering Workflow ⚙️
 
 The gene family clustering process runs as follows:
 
-1. 📂 Load and Validate Pangenomes
+1. Load and Validate Pangenomes
     - Multiple pangenomes are loaded from .h5 files based on a .tsv file.
     - Each pangenome is validated to ensure gene families have been clustered and sequences are available.
-2. 📝 Extract Gene Family Sequences
+2. Extract Gene Family Sequences
     - Gene family sequences are extracted from each pangenome and written to compressed FASTA files.
     - All sequences are combined while maintaining pangenome-specific identifiers.
-3. 🗃️ Create Unified MMseqs2 Database
+3. Create Unified MMseqs2 Database
     - All gene family sequences are combined into a single MMseqs2 database.
     - Database indexing optimizes subsequent clustering operations.
-4. 🔍 Perform Sequence Clustering
+4. Perform Sequence Clustering
     - **Linclust method**: Fast linear-time clustering suitable for large datasets with moderate sensitivity
       requirements.
     - **Cluster method**: Sensitive clustering with comprehensive sequence comparisons for high-accuracy results.
     - MMseqs2 applies identity and coverage thresholds to group similar sequences.
-5. 📊 Process Clustering Results
+5. Process Clustering Results
     - Binary clustering results are converted to human-readable TSV format.
     - Cluster IDs are assigned to group related gene families.
-6. 💾 Write Results to Files
+6. Write Results to Files
     - Final clustering results are saved with cluster assignments and membership details.
 
-### 🚀 Command Line Usage
+## Clustring command Line Usage 🚀
 
-Fast clustering with linclust:
+- Fast clustering with linclust:
 
-```shell
-panorama cluster \
---pangenomes pangenomes.tsv \
---output clustering_results \
---method linclust \
---cluster_identity 0.8 \
---cluster_coverage 0.8 \
---threads 8
-```
+   ```shell
+   panorama cluster \
+   --pangenomes pangenomes.tsv \
+   --output clustering_results \
+   --method linclust \
+   --cluster_identity 0.8 \
+   --cluster_coverage 0.8 \
+   --threads 8
+   ```
 
-Sensitive clustering with comprehensive parameters:
+- Sensitive clustering with comprehensive parameters:
 
-```shell
-panorama cluster \
---pangenomes pangenomes.tsv \
---output clustering_results \
---method cluster \
---cluster_identity 0.5 \
---cluster_coverage 0.8 \
---cluster_sensitivity 7.5 \
---cluster_max_seqs 500 \
---threads 8 \
---keep_tmp
-```
+   ```shell
+   panorama cluster \
+   --pangenomes pangenomes.tsv \
+   --output clustering_results \
+   --method cluster \
+   --cluster_identity 0.5 \
+   --cluster_coverage 0.8 \
+   --cluster_sensitivity 7.5 \
+   --cluster_max_seqs 500 \
+   --threads 8 \
+   --keep_tmp
+   ```
 
-### 📋 Key Options
+### Key Options 📋
 
 | Shortcut | Argument     | Type           | Required/Optional | Description                                                      |
 |----------|--------------|----------------|-------------------|------------------------------------------------------------------|
@@ -76,9 +77,7 @@ panorama cluster \
 | —        | --cluster_cov_mode | Int   | True     | Coverage mode: 0=query, 1=target, 2=shorter, 3=longer, 4=both, 5=all (default: 0) |
 | —        | --cluster_eval     | Float | True     | E-value threshold for sequence similarity (default: 1e-3)                         |
 
-### Method-Specific Parameters
-
-#### Cluster Method (Sensitive)
+### Cluster method-specific parameters
 
 | Argument               | Type  | Description                                             |
 |------------------------|-------|---------------------------------------------------------|
@@ -86,7 +85,7 @@ panorama cluster \
 | --cluster_max_seqs     | Int   | Maximum sequences per cluster representative            |
 | --cluster_min_ungapped | Int   | Minimum ungapped alignment score                        |
 
-#### Advanced Parameters (Both Methods)
+### Advanced Parameters (Both Methods)
 
 | Argument                 | Type | Description                                                                             |
 |--------------------------|------|-----------------------------------------------------------------------------------------|
@@ -105,9 +104,9 @@ panorama cluster \
 | —        | --keep_tmp         | bool (flag)          | True     | Keep temporary files after completion (useful for debugging)   |
 | —        | --threads          | int                  | True     | Number of CPU threads for parallel processing (default: 1)     |
 
-### 🎯 Clustering Methods Comparison
+## Clustering Methods Comparison 🎯
 
-#### Linclust (Fast Method)
+### Linclust (Fast Method)
 
 **Algorithm**: Linear time complexity clustering
 **Performance**: Fast execution suitable for large datasets
@@ -119,7 +118,7 @@ panorama cluster \
 | Identity: 0.5-0.7 | Balanced approach        |
 | Identity: 0.3-0.5 | Permissive clustering    |
 
-#### Cluster (Sensitive Method)
+### Cluster (Sensitive Method)
 
 **Algorithm**: Comprehensive pairwise comparisons
 **Performance**: Slower but more thorough
@@ -132,9 +131,9 @@ panorama cluster \
 | Max Seqs    | 100-300           | Balanced performance      |
 | Max Seqs    | 500-1000          | Comprehensive but slow    |
 
-### 📊 Parameter Guidelines
+## Parameter Guidelines 🦮
 
-#### Identity and Coverage Combinations
+### Identity and Coverage Combinations
 
 | Identity | Coverage | Clustering Behavior | Biological Interpretation  |
 |----------|----------|---------------------|----------------------------|
@@ -144,7 +143,7 @@ panorama cluster \
 | 0.5      | 0.7      | Permissive          | Distant homologs           |
 | 0.3      | 0.5      | Very permissive     | Potential remote homology  |
 
-#### Coverage Mode Selection
+### Coverage Mode Selection
 
 | Mode | Coverage Target  | Best Use Case                                |
 |------|------------------|----------------------------------------------|
@@ -153,18 +152,18 @@ panorama cluster \
 | 2    | Shorter sequence | Balanced approach (recommended)              |
 | 3    | Longer sequence  | Conservative clustering                      |
 
-### 🗂 Output Files
+## Output Files 📂
 
 PANORAMA generates clustering results with detailed cluster membership information.
 
-#### File Organization
+### File Organization
 
 ```
 output_directory/
 └── clustering_results.tsv
 ```
 
-#### Clustering Results Format
+### Clustering Results Format
 
 The clustering results file contains the following columns:
 
@@ -174,7 +173,7 @@ The clustering results file contains the following columns:
 | referent   | Representative gene family ID       | PG1_FAM_001 |
 | in_clust   | Gene family member of this cluster  | PG2_FAM_045 |
 
-#### Results Interpretation
+### Results Interpretation
 
 - **cluster_id**: Sequential integer identifying each cluster group
 - **referent**: The representative (typically first or most abundant) family in the cluster

@@ -11,33 +11,28 @@
 :caption: 'User Guide:'
 :maxdepth: 2
 
-user/install
-user/systems
-user/compare
-user/utility
+user/user_guide
 ```
 
 ```{toctree}
 :caption: 'Modeller Guide:'
 :maxdepth: 2
 
-modeller/overview
-modeller/modeling
-modeller/translate
-modeller/contribute
-modeller/FAQ
+modeller/modeler_guide
 ```
 
 ```{toctree}
 :caption: 'Developper Guide:'
 :maxdepth: 1
 
-developper/devRules
-developper/git
-developper/unitTest
-developper/workflows
-developper/buildDoc
+developper/developper_guide
+```
+
+```{toctree}
+:caption: 'API Reference:'
+:maxdepth: 1
+
 api/api_ref
 ```
 
-[//]: # (TODO: Add the citation to MyST)
+TODO: Add the citation to MyST

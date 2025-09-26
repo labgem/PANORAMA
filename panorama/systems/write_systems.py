@@ -25,7 +25,7 @@ from panorama.systems.systems_projection import (
     write_projection_systems,
 )
 from panorama.systems.systems_partitions import systems_partition
-from panorama.systems.systems_association import association_pangenome_systems
+from panorama.systems.systems_association import create_pangenome_system_associations
 
 
 def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
@@ -114,6 +114,7 @@ def write_flat_systems_to_pangenome(
     association: List[str] = None,
     partition: bool = False,
     proksee: str = None,
+    output_formats: List[str] = None,
     organisms: List[str] = None,
     canonical: bool = False,
     threads: int = 1,
@@ -131,6 +132,7 @@ def write_flat_systems_to_pangenome(
         association (List[str], optional): List of associations to be considered. Defaults to None.
         partition (bool, optional): If True, write partition systems. Defaults to False.
         proksee (str, optional): A placeholder for future Proksee integration. Defaults to None.
+        output_formats (List[str]): A list of output formats for visualization. Defaults to None.
         organisms (List[str], optional): List of organisms to be considered for projection. Defaults to None.
         canonical (bool, optional): If True, write the canonical version of systems too. Defaults to False.
         threads (int, optional): Number of threads to use for parallel processing. Defaults to 1.
@@ -184,10 +186,11 @@ def write_flat_systems_to_pangenome(
             logging.getLogger("PANORAMA").debug(
                 f"Write systems association for {pangenome.name}"
             )
-            association_pangenome_systems(
+            create_pangenome_system_associations(
                 pangenome,
                 association,
                 source_res_output,
+                output_formats=output_formats,
                 threads=threads,
                 disable_bar=disable_bar,
             )
@@ -205,6 +208,7 @@ def write_pangenomes_systems(
     association: List[str] = None,
     partition: bool = False,
     proksee: str = None,
+    output_formats: List[str] = None,
     organisms: List[str] = None,
     canonical: bool = False,
     threads: int = 1,
@@ -222,6 +226,7 @@ def write_pangenomes_systems(
         association (List[str], optional): Write systems association to the given pangenome object. Defaults to None.
         partition (bool, optional): Flag to enable write system partition. Defaults to False.
         proksee (str, optional): Write proksee with the systems and the given pangenome object. Defaults to None.
+        output_formats (List[str], optional): List of output formats for visualization. Defaults to None.
         organisms (List[str], optional): List of organism names to write. Defaults to all organisms.
         canonical (bool, optional): If True, write the canonical version of systems too. Defaults to False.
         threads (int, optional): Number of available threads. Defaults to 1.
@@ -240,6 +245,7 @@ def write_pangenomes_systems(
             association,
             partition,
             proksee,
+            output_formats,
             organisms,
             canonical,
             threads,
@@ -290,6 +296,7 @@ def launch(args):
         proksee=args.proksee,
         association=args.association,
         partition=args.partition,
+        output_formats=args.output_formats,
         organisms=args.organisms,
         canonical=args.canonical,
         threads=args.threads,
@@ -398,7 +405,19 @@ def parser_write(parser):
         help="Write the canonical version of systems too.",
     )
     optional.add_argument(
-        "--organisms", required=False, type=str, default=None, nargs="+",
-        help="List of organisms to write. If not specified, all organisms will be written."
+        "--organisms",
+        required=False,
+        type=str,
+        default=None,
+        nargs="+",
+        help="List of organisms to write. If not specified, all organisms will be written.",
+    )
+    optional.add_argument(
+        "--output_formats",
+        required=False,
+        choices=["html", "png"],
+        nargs="+",
+        default=["html"],
+        help="Visualization output format customization.",
     )
     optional.add_argument("--threads", required=False, type=int, default=1)

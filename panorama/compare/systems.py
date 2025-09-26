@@ -65,7 +65,7 @@ def check_compare_systems_args(args: argparse.Namespace) -> Dict:
 
     Raises:
         argparse.ArgumentError: If the number of sources and models don't match.
-    todo:
+    TODO:
         - check if output is a directory and if empty
         - incompatibility with gfrr_metric not given & graph_formats given
     """

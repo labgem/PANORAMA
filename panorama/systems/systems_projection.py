@@ -9,10 +9,10 @@ This module provides functions to project systems onto genomes.
 from __future__ import annotations
 
 import itertools
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import logging
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, NamedTuple
 from multiprocessing import Lock, get_context
 from pathlib import Path
 import time
@@ -26,7 +26,7 @@ from ppanggolin.utils import extract_contig_window
 
 
 # local libraries
-from panorama.utils import mkdir, init_lock, conciliate_partition
+from panorama.utils import mkdir, init_lock
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
 from panorama.systems.utils import (
@@ -34,6 +34,7 @@ from panorama.systems.utils import (
     dict_families_context,
     get_gfs_matrix_combination,
     check_needed_families,
+    conciliate_partition,
 )
 from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Family
@@ -78,7 +79,7 @@ def project_unit_on_organisms(
     unit: SystemUnit,
     model_genes: Set[Gene],
     association: List[str] = None,
-) -> List[List[str]]:
+) -> List[NamedTuple[str]]:
     """
     Projects a system unit onto a given organism's pangenome.
 
@@ -96,7 +97,7 @@ def project_unit_on_organisms(
 
     sub_id = 1  # to keep track of genes that are part of the same component
     for cc in components:
-        sys_state_in_org = "strict" if model_genes <= set(cc) else "split"
+        sys_genomic_organization = "strict" if model_genes <= set(cc) else "split"
         for gene in cc:
             if gene.family in unit.model_families:
                 metasource, metaid = unit.get_metainfo(gene.family)
@@ -121,9 +122,30 @@ def project_unit_on_organisms(
                 fam_annot = fam_sec = ""
 
             completeness = round(
-                len({g.family.name for g in model_genes}) / len(set(unit.model_families)),
+                len({g.family.name for g in model_genes})
+                / len(set(unit.model_families)),
                 2,
             )  # proportion of unit families in the organism
+            org_proj_name = [
+                    "unit_name",
+                    "unit_ID",
+                    "organism_name",
+                    "gf_name",
+                    "partition",
+                    "annotation",
+                    "secondary_annotation",
+                    "gene_ID",
+                    "local_ID",
+                    "contig",
+                    "start",
+                    "stop",
+                    "strand",
+                    "fragment",
+                    "category",
+                    "genomic_organization",
+                    "completeness",
+                    "product",
+                ]
             line_projection = [
                 unit.name,
                 sub_id,
@@ -140,7 +162,7 @@ def project_unit_on_organisms(
                 gene.strand,
                 gene.is_fragment,
                 category,
-                sys_state_in_org,
+                sys_genomic_organization,
                 completeness,
                 gene.product,
             ]
@@ -149,12 +171,14 @@ def project_unit_on_organisms(
                 rgp = gene.RGP
                 unit.add_region(rgp) if rgp else None
                 line_projection.append(str(rgp) if rgp else "")
+                org_proj_name.append("rgp")
             if "spots" in association:
                 spot = gene.spot
                 unit.add_spot(spot) if spot else None
                 line_projection.append(str(spot) if spot else "")
-
-            projection.append(list(map(str, line_projection)))
+                org_proj_name.append("spot")
+            org_proj_line = namedtuple("OrgLine", org_proj_name)
+            projection.append(org_proj_line(*map(str, line_projection)))
         sub_id += 1
 
     return projection
@@ -252,11 +276,7 @@ def unit_projection(
             org_proj = project_unit_on_organisms(
                 components, unit, model_genes, association
             )
-            partition = conciliate_partition(
-                set(
-                    line[4] for line in org_proj if line[-4] == "model"
-                )  # line[4] -> named_partition; line[-4] -> category
-            )
+            partition = conciliate_partition({line.partition for line in org_proj if line.category == "model"})
             strict_count = sum(
                 1 for line in org_proj if line[-3] == "strict"
             )  # line[-3] -> sys_state_in_org
@@ -547,7 +567,7 @@ def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
 
     Returns:
         pd.DataFrame: Dataframe reformated for an organism
-    Todo: This function is not used anymore, should we remove it?
+    TODO: This function is not used anymore, should we remove it?
     """
     org_name = str(org_df["organism"].unique()[0])
     org_df = org_df.drop(columns=["organism"])

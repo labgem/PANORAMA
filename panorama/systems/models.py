@@ -57,7 +57,7 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: Set[str]) -> No
         ValueError: If a parameter value in param_dict does not meet the defined constraints.
         Exception: If an unexpected error occurs during parameter validation.
 
-    Todo:
+    TODO:
         look at dataclasses to encapsulate validation rules (note ask Jerome for the example code)
     """
     try:
@@ -119,7 +119,7 @@ def check_dict(
             If a field contains a value that does not meet the required constraints.
         Exception:
             If any unexpected issues occur during the validation process.
-    Todo:
+    TODO:
         split in multiple functions: one to validate type, one to validate value, and keep this function at the main one.
         (ask Jerome for the example code)
     """
@@ -1002,7 +1002,6 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         transitivity (int): Size of the transitive closure used to build the graph.
         window (int): Number of neighboring genes considered in genomic searches.
         duplicate (int): Number of duplicates allowed.
-        model (Model): Model in which the functional unit is defined.
         exchangeable (Set[str]): List of exchangeable families.
         multi_system (bool): Flag indicating if the unit can span multiple systems.
         multi_model (bool): Flag indicating if the unit can span multiple models.
@@ -1234,7 +1233,6 @@ class Family(_BasicFeatures, _FuFamFeatures):
         transitivity (int): Represents the transitivity value, indicating the structural property of the family.
         window (int): Defines the processing window or range, typically a limit or scope.
         presence (str): Indicates the presence condition or state of the family instance.
-        func_unit (FuncUnit): Functional unit linked to the family, representing a unit of operation or behavior.
         duplicate (int): Parameter controlling the duplication count or flag for this family.
         exchangeable (Set[str]): Defines a set of exchangeable features or components related to the family.
         multi_system (bool): Specifies if the family supports operation across multiple systems.

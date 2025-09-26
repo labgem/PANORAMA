@@ -1,10 +1,10 @@
-## System Detection Based on Models 🔬
+# System Detection Based on Models 🔬
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
-This detection relies on gene family [annotations](./annotation.md#gene-family-annotation), 
-and a [model](../modeller/modeling.md#models) file defining the the presence/absence of specific function and the genomic organization.
+This detection relies on gene family [annotations](annotation.md#gene-family-annotation), 
+and a [model](../modeller/modeling.md#models) file defining the presence/absence of a specific function and the genomic organization.
 
-### Model Detection Workflow ⚙️
+## Model Detection Workflow ⚙️
 
 The detection process runs as follows:
 
@@ -14,13 +14,13 @@ The detection process runs as follows:
 
 2. Load System Models
 
-   The models are parsed from a list provided by --models.
+   The models are parsed from a list provided by `--models`.
 
 3. Search for System Units
 
    For each functional unit of each model:
    1. Gene families are matched based on annotation metadata. 
-   2. A context graph is built based on gene neighborhood (window, transitivity). 
+   2. A context graph is built based on the gene neighborhood (window, transitivity). 
    3. Jaccard similarity filters edges in the graph.
    4. Connected components are checked for necessary and forbidden families.
 
@@ -34,7 +34,7 @@ The detection process runs as follows:
 
    Detected systems are saved back into the pangenome `.h5` file, under the given source name.
 
-### Command Line Usage 🚀
+## Command Line Usage 🚀
 
 System detection command is used as such:
 ```shell
@@ -47,7 +47,7 @@ panorama systems \
 --sensitivity 3 \
 --threads 8
 ```
-#### Key Options 🔑
+## Key Options 🔑
 
 | Shortcut | Argument             | Description                                                                |
 |----------|----------------------|----------------------------------------------------------------------------|
@@ -59,22 +59,23 @@ panorama systems \
 | —        | --sensitivity        | Sensitivity mode: 1, 2, or 3. Higher = more precise, slower (default: 3)   |
 | —        | --threads            | Number of threads to use for parallel model evaluation                     |
 
-[//]: # (#### 🔍 Sensitivity Modes)
-
-[//]: # ()
-[//]: # (| Level | Description                                                                            |)
-
-[//]: # (|-------|----------------------------------------------------------------------------------------|)
-
-[//]: # (| 1     | Global filtering of genomic context, faster, less sensitive                            |)
-
-[//]: # (| 2     | Global filtering context within each functional unit combination, moderate sensitivity |)
-
-[//]: # (| 3     | Local filtering for each combination &#40;highest sensitivity, slowest&#41;                    |)
+<!--
+## 🔍 Sensitivity Modes
 
 
-### 🗂 Output
+| Level | Description                                                                            |
+
+|-------|----------------------------------------------------------------------------------------|
+
+| 1     | Global filtering of genomic context, faster, less sensitive                            |
+
+| 2     | Global filtering context within each functional unit combination, moderate sensitivity |
+
+| 3     | Local filtering for each combination (highest sensitivity, slowest)                    |
+-->
+
+## Output 📂
 
 PANORAMA integrates multiple outputs: textual, graph-based representations and figures to summarize results.
 
-See the [write_systems](.write_systems.md)
+See the [write_systems](write_systems.md#systems-analysis-output)

@@ -85,7 +85,7 @@ class SystemUnit(MetaFeatures):
     as well as set operations and metadata retrieval for gene families within the unit.
 
     Attributes:
-        functional_unit (FunUnit): FuncUnit model associated with the system unit detected.
+        ID (int): Identifier of the system unit object.
         source (str): Source of the functional unit.
     """
 
@@ -110,7 +110,7 @@ class SystemUnit(MetaFeatures):
         super().__init__()
         SystemUnit._id_counter += 1
         self.ID = SystemUnit._id_counter
-        self.functional_unit = functional_unit
+        self._fu = functional_unit
         self.source = source
         self._families_getter = {}
         self._families2metainfo = {}
@@ -233,8 +233,6 @@ class SystemUnit(MetaFeatures):
         Raises:
             AttributeError: If the functional unit is not set.
         """
-        if not hasattr(self, "_fu"):
-            raise AttributeError("functional_unit is not set.")
         return self._fu
 
     @functional_unit.setter
@@ -1030,7 +1028,7 @@ class System(MetaFeatures):
 
         Raises:
             TypeError: If `other` is not a System.
-        Todo:
+        TODO:
             - Make the method create a new system. Maybe a static method ?
             - Make merge method take multiple systems as input.
         """
@@ -1089,7 +1087,7 @@ class System(MetaFeatures):
 
         Args:
             system (System): Canonical system to incorporate.
-        Todo:
+        TODO:
             - Manage if the new canonical system has canonical itself
             - See if possible to remove the merge
         """

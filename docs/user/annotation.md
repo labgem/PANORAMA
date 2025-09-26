@@ -1,5 +1,5 @@
 (gene-family-annotation)=
-##  Gene Family annotation 🔢
+#  Gene Family annotation 🔢
 
 The `annotation` command adds **functional annotations** to gene families in pangenomes.
 You can choose between:
@@ -9,9 +9,9 @@ You can choose between:
 
 ---
 
-### Annotation Modes ⚙️
+## Annotation Modes ⚙️
 
-#### TSV-based annotation
+### TSV-based annotation
 
 This mode injects gene family metadata from a `.tsv` file.
 
@@ -23,7 +23,7 @@ The only mandatory column is `families`, which correspond to the gene families i
 See [metadata format](https://ppanggolin.readthedocs.io/en/latest/user/metadata.html#metadata-format) PPanGGOLiN documentation,
 for more information.
 
-#### HMM-based annotation
+### HMM-based annotation
 
 To annotate with a HMM database, you must provide a HMM metadata file (TSV format), containing:
 
@@ -45,7 +45,7 @@ To annotate with a HMM database, you must provide a HMM metadata file (TSV forma
 ```{warning}
 Not all the columns need to be filled with value as indicated by the mandatory column, but they should exist in the metadata file.
 ```
-```{tips}
+```{tip}
 To keep all assignations possible between a profile and a gen family, you can let the threshold columns empty.
 ```
 ```{note}
@@ -64,7 +64,7 @@ To align gene families against a HMM database, you can use different modes:
 
 ---
 
-### Command Line Usage 🚀
+## Command Line Usage 🚀
 
 To annotate gene families with precomputed metadata, do as such:
 
@@ -88,17 +88,19 @@ panorama annotation \
   --output results/ \
   --threads 8
 ```
-```{tips}
+```{tip}
 More options are available to annotate with a HMM database. See below.
-```:
-```{note}
-source name should not contain a special character. They could interfere with the h5 writing.
-```
-```{warning}
-You **must provide either** `--table` **or** `--hmm`, **but not both**. These options are mutually exclusive.
 ```
 
-#### Key options 🔑
+```{note}
+Source name should not contain a special character. They could interfere with the `.h5` writing.
+```
+```{warning}
+You **must provide either** `--table` **or** `--hmm`, **but not both**. 
+These options are mutually exclusive.
+```
+
+### Key options 🔑
 
 | Shortcut | Argument             | Description                                                                           |
 |----------|----------------------|---------------------------------------------------------------------------------------|
@@ -119,7 +121,7 @@ You **must provide either** `--table` **or** `--hmm`, **but not both**. These op
 | —        | `--threads`          | Number of threads to use                                                              |
 
 
-### Annotation Workflow 🧪
+## Annotation Workflow 🧪
 
 1. Load pangenomes
 
@@ -131,7 +133,7 @@ You **must provide either** `--table` **or** `--hmm`, **but not both**. These op
 
    - With `--hmm`: aligns families via annot_with_hmm() from hmm_search.py
 
-3. Filter HMM hits (only for hmm option)
+3. Filter HMM hits (only for the hmm option)
 
     Each hit is filtered using the thresholds defined in the HMM metadata:
     - e-value
@@ -149,10 +151,10 @@ Prefer to use the score instead of the e-value or the i-evalue to ensure reprodu
    Filtered annotations are stored in the .h5 files, under the given --source name.
 
 ```{note}
-Annotations can be viewed or reused with panorama, ppanggolin, or custom tools (*e.g.*, [vitables](https://vitables.org/index.html)).
+Annotations can be viewed or reused with PANORAMA, PPanGGOLiN, or custom tools (*e.g.*, [vitables](https://vitables.org/index.html)).
 ```
 
-### HMM Search Details 🧠
+## HMM Search Details 🧠
 
 Annotation relies on the [pyhmmer](https://pyhmmer.readthedocs.io/en/stable/index.html) Python API.
 
@@ -164,13 +166,13 @@ Depending on sequence size, PANORAMA chooses the best method:
 | hmmscan   | Streaming, used when memory is limited |
 
 ```{note}
-If sequences exceed 10% of available RAM, PANORAMA uses hmmscan, as recommended by pyhmmer documentation 
+If sequences exceed 10% of available RAM, PANORAMA uses `hmmscan`, as recommended by pyhmmer documentation 
 [here](https://pyhmmer.readthedocs.io/en/stable/examples/performance_tips.html#Performance-tips-and-tricks)
 ```
 
-### Minimal example 📦
+## Minimal example 📦
 
-#### Annotate gene families based on the reference sequence with COG HMM
+### Annotate gene families based on the reference sequence with COG HMM
 
 ```bash
 panorama annotation \

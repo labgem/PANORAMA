@@ -211,25 +211,6 @@ def init_lock(lock: Lock = None):
         return manager.Lock()
 
 
-def conciliate_partition(partition: Set[str]) -> str:
-    """
-    Conciliate  a set of partition
-
-    Args:
-        partition (Set[str]): All partitions.
-
-    Returns:
-        str: The reconciled partition.
-    """
-    if len(partition) == 1:
-        return partition.pop()
-    else:
-        if "persistent" in partition:
-            return "persistent|accessory"
-        else:
-            return 'accessory'
-
-
 def is_true_value(value: Union[str, int, bool]) -> bool:
     """
     Check if a value represents a true condition.

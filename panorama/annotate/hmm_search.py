@@ -721,7 +721,7 @@ def annot_with_hmm(
         AssertionError: If output is required but not provided.
         NotImplementedError: If "profile" mode is selected (not yet available).
 
-    Todo:
+    TODO:
         Implement "profile" mode with family alignments.
     """
     assert mode in ["sensitive", "fast", "profile"], f"Unrecognized mode: {mode}"

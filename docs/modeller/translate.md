@@ -90,7 +90,7 @@ panorama utils \
 --output padloc_translate/ \
 --binary
 ```
-```{tips}
+```{tip}
 PANORAMA automatically find all required files on its own, as the structure is already known.
 ```
 

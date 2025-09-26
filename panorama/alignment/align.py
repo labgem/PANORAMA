@@ -437,9 +437,9 @@ def align_db(
             Minimum coverage threshold (0.0-1.0). Defaults to 0.8.
         cov_mode:
             Coverage mode for MMseqs2 (0-5). Defaults to 0.
-            - 0: coverage of the query,
-            - 1: coverage of the target,
-            - 2: coverage of the shorter sequence.
+                - 0: coverage of the query,
+                - 1: coverage of the target,
+                - 2: coverage of the shorter sequence.
         threads:
             Number of threads for alignment. Defaults to 1.
 
@@ -450,7 +450,7 @@ def align_db(
         AlignmentError: If alignment execution fails.
         AlignmentValidationError: If parameters are invalid.
         FileNotFoundError: If input databases don't exist.
-    Todo:
+    TODO:
         - see how validate input databases
     """
 

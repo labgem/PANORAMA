@@ -6,14 +6,16 @@ build-backend = "setuptools.build_meta"
 name = "PANORAMA"
 
 authors = [
-    { name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr" },
+    { name = "Jérôme Arnoux", email = "arnoux.jeromepj@gmail.com"},
+    { name = "Jean Mainguy", email = "jmainguy@genoscope.cns.fr"},
+
 ]
 #maintainers
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
 description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
 requires-python = ">=3.8"
-license = { file = "LICENCE.txt" }
+license = { file = "LICENCE" }
 classifiers = ["Development Status :: Open alpha",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
@@ -26,19 +28,23 @@ dynamic = ["version"]
 dependencies = [
     "ppanggolin>=2.1.0",
     "pyhmmer>=0.6",
-    "lxml>=4.9.2"
+    "lxml>=4.9.2",
+    "selenium>=4.35.0",
 ]
 
 
 [project.optional-dependencies]
 doc = [
-    "sphinx==6.2.1",
-    "sphinx_rtd_theme==1.2.2",
-    "readthedocs-sphinx-search==0.3.2",
-    "sphinx-autobuild==2021.3.14",
-    "myst-parser==2",
-    "docutils==0.18.1",
-    "sphinxcontrib.mermaid==0.9.2",
+    "sphinx>=8.2.3",
+    "sphinx_rtd_theme>=3.0.2",
+    "readthedocs-sphinx-search>=0.3.2",
+    "sphinx-autobuild>=2025.8.25",
+    "myst-parser>=4.0.1",
+    "docutils>=0.21.2",
+    "sphinxcontrib.mermaid>=1.0.0",
+    "sphinx_design>=0.6.1",
+    "pydata-sphinx-theme>=0.16.1",
+    "sphinx-autodoc-napoleon-typehints>=2.1.6"
 ]
 dev = [
     "matplotlib>=3.8",
