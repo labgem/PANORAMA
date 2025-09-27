@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
+import sys
 import time
 from typing import Any, Dict, Tuple
 from pathlib import Path
@@ -265,8 +266,8 @@ def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
     group = metadata_df.groupby(["families", "protein_name"])
     metadata_df = group.first().assign(
         secondary_names=group.agg(
-            {"secondary_names": lambda x: ",".join(set(x.dropna()))}
-        ).replace("", nan)
+            {"secondary_names": lambda x: ",".join(set(x.dropna())) or nan}
+        )
     )
     metadata_df = metadata_df.reset_index()
     return metadata_df
@@ -284,9 +285,28 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
         pd.DataFrame: Filtered metadata dataframe with only the k best hits.
     """
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
-    return metadata.groupby(["families"], group_keys=False).apply(
-        get_k_best_hit, k_best_hit
-    )
+    # Sort by the priority criteria
+    metadata_sorted = metadata.sort_values([
+        'score',      # Highest score first (descending)
+        'bias',       # Lowest bias first (ascending)
+        'e_value',    # Lowest e_value first (ascending)
+        'i_e_value'   # Lowest i_e_value first (ascending)
+    ], ascending=[False, True, True, True])
+
+    # # Group by families and take the top k hits
+    # test_1 = metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
+    # # print(test_1)
+    # test_2 = metadata.groupby(["families"], group_keys=False).apply(
+    #     get_k_best_hit, k_best_hit
+    # )
+    # if not test_1.equals(test_2):
+    #     print(test_1.sort_values('families'), test_2.sort_values('families'))
+    #     diff = pd.concat([test_1, test_2]).drop_duplicates()
+    #     value_counts = diff["families"].value_counts()
+    #     freq_value = value_counts[value_counts >= 2].index
+    #     print(diff[diff["families"].isin(freq_value)].sort_values("families"))
+    #     raise Exception("not hte same")
+    return metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
 
 
 def write_annotations_to_pangenome(
