@@ -75,6 +75,8 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
                 argument=None,
                 message="--table is Incompatible option with '--only_best_hit'.",
             )
+        if args.output:
+            logging.getLogger("PANORAMA").warning("--output option is incompatible with --table.")
 
     else:  # args.hmm is not None
         args.mode = "fast" if args.mode is None else args.mode
@@ -145,6 +147,9 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
                 hmm_kwgs["domtblout"] = True
             if "pfamtblout" in args.save_hits:
                 hmm_kwgs["pfamtblout"] = True
+        else:
+            if args.output:
+                logging.getLogger("PANORAMA").warning("--output option is compatible only with --save_hits.")
     return need_info, hmm_kwgs
 
 
