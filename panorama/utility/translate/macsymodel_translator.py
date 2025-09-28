@@ -327,7 +327,6 @@ def translate_macsyfinder_model(
         if elem.tag == "gene":
             fam_list.append(translate_gene(elem, data_json, hmm_df, transitivity_mut))
         elif elem.tag == "functional_unit":
-            print("reach")
             fu_list.append(
                 translate_functional_unit(elem, data_json, hmm_df, transitivity_mut)
             )

@@ -304,20 +304,6 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
         'e_value',    # Lowest e_value first (ascending)
         'i_e_value'   # Lowest i_e_value first (ascending)
     ], ascending=[False, True, True, True])
-
-    # # Group by families and take the top k hits
-    # test_1 = metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
-    # # print(test_1)
-    # test_2 = metadata.groupby(["families"], group_keys=False).apply(
-    #     get_k_best_hit, k_best_hit
-    # )
-    # if not test_1.equals(test_2):
-    #     print(test_1.sort_values('families'), test_2.sort_values('families'))
-    #     diff = pd.concat([test_1, test_2]).drop_duplicates()
-    #     value_counts = diff["families"].value_counts()
-    #     freq_value = value_counts[value_counts >= 2].index
-    #     print(diff[diff["families"].isin(freq_value)].sort_values("families"))
-    #     raise Exception("not hte same")
     return metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
 
 
