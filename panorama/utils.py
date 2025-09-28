@@ -7,6 +7,7 @@ This module contains functions for managing files and directories, and checking 
 
 # default libraries
 import sys
+import os
 import argparse
 import logging
 from typing import Dict, TextIO, Set, Union
@@ -150,6 +151,19 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         raise Exception("An unexpected error happened. Please report on our GitHub")
     else:
         return Path(output)
+
+
+def is_empty(filepath):
+    """
+    Checks if a file is empty.
+
+    Args:
+        filepath (str): The path to the file to check.
+
+    Returns:
+        bool: True if the file is empty, False otherwise.
+    """
+    return os.path.getsize(filepath) == 0
 
 
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:

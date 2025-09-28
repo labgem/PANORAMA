@@ -21,7 +21,7 @@ from numpy import nan
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries
-from panorama.utils import init_lock, mkdir
+from panorama.utils import init_lock, mkdir, is_empty
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
 from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
@@ -57,6 +57,8 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
             raise argparse.ArgumentError(
                 argument=None, message="--table is incompatible option with '--mode'."
             )
+        if is_empty(args.table):
+            raise IOError(f"File: {args.table} is empty.")
         if args.k_best_hit is not None:
             logging.getLogger("PANORAMA").error(
                 "You cannot specify both --table and --k_best_hit in the same command"
@@ -78,6 +80,11 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
         args.mode = "fast" if args.mode is None else args.mode
 
         hmm_kwgs["mode"] = args.mode
+
+        if not args.hmm.exists():
+            raise IOError(f"File: {args.hmm} not exists.")
+        if is_empty(args.hmm):
+            raise IOError(f"File: {args.hmm} is empty.")
         if args.mode == "fast":
             need_info["need_families_sequences"] = True
 
