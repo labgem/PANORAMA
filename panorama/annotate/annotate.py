@@ -532,34 +532,38 @@ def launch(args: argparse.Namespace) -> None:
     manager = Manager()
     lock = manager.Lock()
     need_info, hmm_kwgs = check_annotate_args(args)
-    pangenomes = load_pangenomes(
-        pangenome_list=args.pangenomes,
-        need_info=need_info,
-        check_function=check_pangenome_annotation,
-        max_workers=args.threads,
-        lock=lock,
-        disable_bar=args.disable_prog_bar,
-        source=args.source,
-        force=args.force,
-    )
-    annot_pangenomes(
-        pangenomes=pangenomes,
-        source=args.source,
-        table=args.table,
-        hmm=args.hmm,
-        threads=args.threads,
-        k_best_hit=args.k_best_hit,
-        lock=lock,
-        force=args.force,
-        disable_bar=args.disable_prog_bar,
-        **hmm_kwgs,
-    )
-    if not args.keep_tmp:
-        shutil.rmtree(hmm_kwgs["tmp"])
-    else:
-        logging.getLogger("PANORAMA").info(
-            f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}"
+    try:
+        pangenomes = load_pangenomes(
+            pangenome_list=args.pangenomes,
+            need_info=need_info,
+            check_function=check_pangenome_annotation,
+            max_workers=args.threads,
+            lock=lock,
+            disable_bar=args.disable_prog_bar,
+            source=args.source,
+            force=args.force,
         )
+        annot_pangenomes(
+            pangenomes=pangenomes,
+            source=args.source,
+            table=args.table,
+            hmm=args.hmm,
+            threads=args.threads,
+            k_best_hit=args.k_best_hit,
+            lock=lock,
+            force=args.force,
+            disable_bar=args.disable_prog_bar,
+            **hmm_kwgs,
+        )
+    except Exception as e:
+        raise Exception(f"Annotation failed from : {e}") from e
+    finally:
+        if not args.keep_tmp:
+            shutil.rmtree(hmm_kwgs["tmp"])
+        else:
+            logging.getLogger("PANORAMA").info(
+                f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}"
+            )
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -731,7 +735,7 @@ def parser_annot(parser):
         required=False,
         nargs="?",
         type=Path,
-        default=None,
+        default=Path(tempfile.gettempdir()),
         help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir()) / 'panorama'}",
     )
     optional = parser.add_argument_group(title="Optional arguments")
