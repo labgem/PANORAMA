@@ -1,136 +1,147 @@
-# Build the documentation
-This part help developper to build the documentation before to merge on main.
+# Building the Documentation 📚
+
+This guide will help you build and preview the PANORAMA documentation locally before merging your changes. Whether
+you're fixing a typo or adding a whole new section, testing your docs locally saves time and catches issues early!
 
 ```{danger}
-When you will merge or pull request your branch on main, a bot from readthedoc will see it and update the doc online.
-Be sure that your doc is clean and without error. 
+When you merge your branch into `main`, ReadTheDocs will automatically rebuild and deploy the documentation online. Make sure everything looks good locally first - broken docs are visible to everyone! 
 ```
 
-## Install required packages
+## Installing Documentation Dependencies 📦
 
-Required packages are listed in [sphinx_requirements file](../sphinx_requirements.txt) at the root of the doc folder.
-To build the doc you need to use an environnement with panorama installed. 
-To make think easier [pyproject.toml file](../../pyproject.toml) contain the same list of requirement and can install
-everything automatically with pip.
+The documentation requires some specific packages to build. We've made this easy for you!
+
+All required packages are listed in the [sphinx_requirements.txt](../sphinx_requirements.txt) file. But here's an even
+simpler way - the [pyproject.toml](../../pyproject.toml) includes everything you need:
+
 ```shell
-# PANORAMA=/path/to/panorama/
-pip install $PANORAMA[doc]  # You can add -e to install in editable mode
+# From the PANORAMA root directory
+pip install -e .[doc]  # -e for editable mode (recommended for development)
+
+# Or without editable mode
+pip install .[doc]
 ```
-## Build documentation with sphinx
 
-You can look at your modification in live by using **sphinx-autobuild** (installed previously).
+This installs PANORAMA plus all the documentation tools: Sphinx, MyST-Parser, the ReadTheDocs theme, and more.
+
+## Building and Previewing Documentation 🔨
+
+Want to see your changes in real-time as you write? Use `sphinx-autobuild` (installed with the doc dependencies):
 
 ```shell
-cd $PANORAMA/.docs
+cd docs  # Navigate to the docs folder
 sphinx-autobuild source/ build/
-#copy server adresse, for me (as example) http://127.0.0.1:8000
-#paste the adresse in your browser
+
+# The server will start and give you a URL like:
+# Serving on http://127.0.0.1:8000
+# Open this URL in your browser
 ```
+
+The documentation will automatically rebuild whenever you save a file. Just refresh your browser to see changes! 🎉
 
 ```{note}
-The package [readthedocs-sphinx-search](https://readthedocs-sphinx-search.readthedocs.io/en/latest/) "enable search as 
-you type for docs hosted on Read the Docs". It's only work on ReadTheDocs web site `[INFO] Docs are not being served on Read the Docs, readthedocs-sphinx-search will not work.`, don't try to make it work.
+You might see a message about [readthedocs-sphinx-search](https://readthedocs-sphinx-search.readthedocs.io/en/latest/) not working locally - that's expected! This package only works on the live ReadTheDocs site. The message `[INFO] Docs are not being served on Read the Docs, readthedocs-sphinx-search will not work.` is harmless.
 ```
 
-### Modify existing documentation
-In this part we will speak about how to change already existing file. To adding file for command, package, ... 
-See [Adding section](#heading-adding)
+## Modifying Existing Documentation ✏️
 
-To modify the existing user or developper documentation, you simply need to go to the file that you want to change and modify it.
+### User and Developer Guides
 
-The API documentation is automatically update when you modify the code. 
-It's working also when you add function in the package, but not if you add new package, for this look at the next section.  
+To update existing documentation, just open the relevant markdown file and edit it! The structure is straightforward:
+
+- **User documentation**: `docs/user/`
+- **Modeler documentation**: `docs/modeler/`
+- **Developer documentation**: `docs/developer/`
+- **API reference**: `docs/api/`
+
+Save your changes and check them in your browser with `sphinx-autobuild` running.
+
+### API Documentation
+
+Good news - the API documentation updates automatically when you change docstrings in the code! Just modify your
+docstrings and rebuild.
+
+**However**, if you add a new package or module, you'll need to regenerate the API docs. See
+the [Updating API documentation](#updating-api) section below.
 
 (heading-adding)=
-### Adding to existing documentation
-#### Adding command documentation
-Documentation to a new command should be in the user documentation. 
-A new file should be created with a name corresponding to the commande name. 
-When the file is created, you can add it to the index in the *toctree UserGuide* by adding a line `user/filename` 
-without the file extension (.md).
+## Adding to Existing Documentation ➕
 
-#### New guidelines for development
-All new guidelines that seems interesting are welcomed. 
-If you think that the guidelines could not be add to an existing file you can create a new one.   
-Use an explicit name for you file and add it to the *toctree DevelopperGuide* 
+### Adding New Command Documentation
 
-#### Update API documentation
-The API documentation is build automatically. 
-To update the API documentation and keep the automatic update when a new package, module, submodules is added follow the
-next lines:
+When you add a new command to PANORAMA, document it for users:
+
+1. **Create a new markdown file** in `docs/source/user/` named after your command (e.g., `detect_systems.md`)
+2. **Write clear documentation** with examples, parameters, and use cases
+3. **Add it to the table of contents** by editing the `toctree` in the User Guide index:
+
+```markdown
+    ```{toctree}
+    user/installation
+    user/quickstart
+    user/your_new_command  # Add this line (without .md extension)
+    ```
+```
+
+### Adding New Developer Guidelines
+
+Got ideas for improving the developer docs? Awesome! We welcome contributions.
+
+- **If it fits an existing guide**, just add your content there
+- **If it needs its own file**, create a new markdown file with a descriptive name
+- **Add it to the Developer Guide toctree** so people can find it
+
+We're pretty flexible about what goes into developer docs - if you think it'll help someone, it probably belongs!
+
+(updating-api)=
+### Updating API Documentation
+
+When you add new packages or modules to PANORAMA, regenerate the API reference:
+
 ```shell
-sphinx-apidoc -o api $PANORAMA/panorama -f
-```
-```{attention}
-*sphinx-apidoc* will generate ReStructeredText files. You need to convert them in markdown. For this follow the guides 
-[here](#rst2md)
+# From the PANORAMA root directory
+sphinx-apidoc -o docs/source/api panorama/ -f
 ```
 
-### Creating a new documentation from scratch
-#### Quickstart with sphinx
-```{warning}
-This must be discuss and validate by other collaborator.
+```{attention}
+The `sphinx-apidoc` command generates ReStructuredText (.rst) files, but we use Markdown. Convert them using the instructions in the [RST to Markdown section](#rst2md) below.
 ```
-To create the documentation from scratch, rename the existing documentation (or use another name for the new one)
-and follow the next steps.
+
+## Creating Documentation from Scratch 🏗️
+
+```{warning}
+This section is for major documentation overhauls. If you're considering this, please discuss with other maintainers first! Usually, you just need to modify existing docs.
+```
+
+If you really need to start fresh, here's how:
+
+### Initialize with Sphinx
 
 ```shell
 DOCS=path/to/documentation/folder
 sphinx-quickstart $DOCS
-#Welcome to the Sphinx 6.2.1 quickstart utility.
-#
-#Please enter values for the following settings (just press Enter to
-#accept a default value, if one is given in brackets).
-#
-#Selected root path: docs_scratch
-#
-#You have two options for placing the build directory for Sphinx output.
-#Either, you use a directory "_build" within the root path, or you separate
-#"source" and "build" directories within the root path.
-#> Separate source and build directories (y/n) [n]: y
-#
-#The project name will occur in several places in the built documentation.
-#> Project name: PANORAMA
-#> Author name(s): Jérôme Arnoux
-#> Project release []: 0.2.65
-#
-#If the documents are to be written in a language other than English,
-#you can select a language here by its language code. Sphinx will then
-#translate text that it generates into that language.
-#
-#For a list of supported codes, see
-#https://www.sphinx-doc.org/en/master/usage/configuration.html#confval-language.
-#> Project language [en]: 
-#
-#Creating file /home/jarnoux/Projects/PANORAMA/docs_scratch/source/conf.py.
-#Creating file /home/jarnoux/Projects/PANORAMA/docs_scratch/source/index.rst.
-#Creating file /home/jarnoux/Projects/PANORAMA/docs_scratch/Makefile.
-#Creating file /home/jarnoux/Projects/PANORAMA/docs_scratch/make.bat.
-#
-#Finished: An initial directory structure has been created.
-#
-#You should now populate your master file /home/jarnoux/Projects/PANORAMA/docs_scratch/source/index.rst and create other documentation
-#source files. Use the Makefile to build the docs, like so:
-#   make builder
-#where "builder" is one of the supported builders, e.g. html, latex or linkcheck.
 ```
 
-Now you have a documentation folder ready to use.
-#### Configuration file
-In the *source* directory you should find a `conf.py` file. Replace the code inside by the following.
+Follow the prompts:
+
+- **Separate source and build directories?** → `y`
+- **Project name** → `PANORAMA`
+- **Author name** → Your name
+- **Project release** → Current version number
+- **Project language** → `en` (or press Enter)
+
+This creates the basic structure: `source/`, `build/`, `Makefile`, etc.
+
+### Configuration File
+
+Replace the contents of `source/conf.py` with this configuration:
+
 ```python
 # Configuration file for the Sphinx documentation builder.
 #
-# This file only contains a selection of the most common options. For a full
-# list see the documentation:
+# For the full list of options, see:
 # https://www.sphinx-doc.org/en/master/usage/configuration.html
 
-# -- Path setup --------------------------------------------------------------
-
-# If extensions (or modules to document with autodoc) are in another directory,
-# add these directories to sys.path here. If the directory is relative to the
-# documentation root, use os.path.abspath to make it absolute, like shown here.
-#
 from pathlib import Path
 
 # -- Project information -----------------------------------------------------
@@ -139,105 +150,152 @@ project = 'PANORAMA'
 copyright = '2023, Jérôme Arnoux'
 author = 'Jérôme Arnoux'
 
-# The full version, including alpha/beta/rc tags
-release = open(Path(__file__).resolve().parents[2]/"VERSION").read().rstrip()  # Get release number in the VERSION file
-
+# Get version from VERSION file
+release = open(Path(__file__).resolve().parents[2] / "VERSION").read().rstrip()
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
 extensions = [
     "myst_parser",
-    # "sphinxcontrib.jquery",
     "sphinx.ext.duration",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.autodoc",
     'sphinx_search.extension',
 ]
 
-# Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
-
-# List of patterns, relative to source directory, that match files and
-# directories to ignore when looking for source files.
-# This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 # -- Options for HTML output -------------------------------------------------
 
-# The theme to use for HTML and HTML Help pages.  See the documentation for
-# a list of builtin themes.
-#
 html_theme = 'sphinx_rtd_theme'
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
 html_static_path = ['_static']
-
 ```
+
 (rst2md)=
-#### ReStructeredText to markdown
-reStructuredText (rst) is the default plaintext markup language used by both Docutils and Sphinx. 
-More complete but a little bit older than Markdown, which is easier to use too, we are going to change 
-rst for Markdown (md). To translate rst and keep all the features we will use [MyST](https://mystmd.org/guide).
 
-For this case we will need to install a new package `rst-to-myst`.
-```{note} We advice to use another environment, because this package is not compatible with our sphinx version
+### Converting ReStructuredText to Markdown
+
+Sphinx uses ReStructuredText (.rst) by default, but we prefer Markdown because it's simpler and more widely used. Here's
+how to convert:
+
+```{note}
+The `rst-to-myst` package isn't compatible with our Sphinx version, so use a separate environment for the conversion.
 ```
 
 ```shell
+# In a separate environment
 pip install rst-to-myst[sphinx]
-# Go to your environment with rst2myst
+
+# Convert the files
 rst2myst convert source/index.rst
-# Go back to your environment with panorama
-rm source/index.rst
-```
-#### README in index.md
-It's possible to add the **README** file in the index to don't have to rewrite it in the doc. 
-Simply add the following line in `index.md`
-```markdown
-    ```{include} ../../README.md
-    :relative-images: % To
-    ```
-% Without tabulation
-```
-
-#### User documentation
-The user documentation is completely handwritten. Moreover, we advise to respect the following guidelines:
-
-1. One file per panorama command with an explicit text on the feature
-2. One file for the installation guidelines
-3. One file on how to report issue or enhancement
-4. Don't ref to any function in the panorama code. This is reserved for developper documentation
-
-#### Developper documentation
-The developper documentation is handwritten too. We advise to respect the following guidelines:
-1. Spoke about the PEP rules
-2. Give guidelines on how to use git and GitHub for version control
-3. Explain how to write unit test and modify GitHub workflows
-4. Write how to enhance the documentation
-5. Select some function, class or command that are central in the code and provide a more complete description of them.
-
-
-#### API documentation
-To build the API documentation and use the docstring in code you can use the command `sphinx-apidoc` as follows:
-```shell
-sphinx-apidoc -o api $PANORAMA/panorama
-# Go to your environment with rst2myst
+# or for multiple files
 rst2myst convert api/*.rst
-# Go back to your environment with panorama
-rm api/*.rst
+
+# Back in your PANORAMA environment, clean up
+rm source/index.rst  # or api/*.rst
 ```
-You have now documentation for panorama api. To ref api in your doc you can paste **\{ref\}\`package panorama\`**
+
+### Including the README
+
+Want to include the project README in your documentation? Smart move - less duplication!
+
+Add this to your `index.md`:
+
+```markdown
+```{include} ../../README.md
+:relative-images:
+```
+
+```
+
+### Structure Your Documentation
+
+Here's how we organize PANORAMA docs:
+
+#### User Documentation
+
+User docs should be practical and example-driven:
+
+1. **One file per command** - Each command gets its own guide
+2. **Installation guide** - Help users get started
+3. **Contributing guide** - How to report issues or request features
+4. **No code references** - Focus on usage, not implementation
+
+Write for bioinformaticians who want to use PANORAMA, not necessarily code it.
+
+#### Developer Documentation
+
+Developer docs are for people working on PANORAMA's code:
+
+1. **PEP standards** - Code style and Python conventions
+2. **Git workflow** - How we use version control (you're reading one now!)
+3. **Testing guide** - Writing and running tests
+4. **Documentation guide** - How to improve these docs (meta!)
+5. **Architecture deep-dives** - Explain complex parts of the codebase
+
+Feel free to reference code, classes, and implementation details here.
+
+#### API Documentation
+
+Generate API docs automatically from your docstrings:
+
+```shell
+# Generate API reference files
+sphinx-apidoc -o docs/source/api panorama/
+
+# Convert RST to Markdown
+rst2myst convert docs/source/api/*.rst
+rm docs/source/api/*.rst
+```
+
+Now you can reference API elements in your docs: `{ref}\`package panorama\``
 
 ```{tip}
-With the "sphinx.ext.autosectionlabel", you will certainly get multiple warning for duplicate label. 
-To remove them you have to remove or modify the label in one of the cited file. 
+The `sphinx.ext.autosectionlabel` extension can create duplicate label warnings when rebuilding. If this happens, just rename or remove duplicate section titles in the affected files.
 ```
+
 ```{tip}
-When you use "sphinx-apidoc" a modules.md file is created but he is not used. we advice to removed it to prevent warning.
+`sphinx-apidoc` creates a `modules.md` file that's not actually used. Feel free to delete it to avoid warnings.
 ```
+
+## Troubleshooting Common Issues 🔧
+
+**Build errors?**
+
+- Check that all markdown syntax is valid
+- Make sure file paths in `toctree` entries are correct (and don't include `.md`)
+- Verify all referenced files actually exist
+
+**Styles look wrong?**
+
+- Clear the build directory: `rm -rf build/`
+- Rebuild: `sphinx-build source/ build/`
+
+**Changes not showing up?**
+
+- Hard refresh your browser (Ctrl+Shift+R or Cmd+Shift+R)
+- Restart `sphinx-autobuild`
+- Check you're editing the right file (happens to everyone!)
+
+## Best Practices 💡
+
+- **Test locally before pushing** - Catch formatting issues early
+- **Use meaningful section headers** - They become navigation links
+- **Include code examples** - Show, don't just tell
+- **Add screenshots when helpful** - A picture is worth a thousand words
+- **Link related sections** - Help readers navigate
+- **Keep it up-to-date** - Update docs when you change code
+
+## Getting Help 🆘
+
+Documentation giving you trouble? Here's what to do:
+
+1. **Check Sphinx documentation** - [sphinx-doc.org](https://www.sphinx-doc.org/)
+2. **Check MyST documentation** - [mystmd.org/guide](https://mystmd.org/guide)
+2. **Check MyST parser documentation** - [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/en/latest/index.html)
+2. **Check PyData Sphinx theme documentation** - [pydata-sphinx-theme.readthedocs.io](https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html)
+3. **Ask in discussions** - Other contributors can help
+4. **Open a draft PR** - Get feedback on your documentation changes
+
+Remember: good documentation is just as important as good code. Thanks for taking the time to document your work! 🙏
