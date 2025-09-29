@@ -127,11 +127,15 @@ html_theme_options = {
         #     "name": "Paper",
         # },
         {
+            "url": "https://github.com/labgem/PANORAMA",
+            "name": "PANORAMA",
+        },
+        {
             "url": "https://github.com/labgem/PPanGGOLiN",
             "name": "PPanGGOLiN",
         }
     ],
-    "header_links_before_dropdown": 5,  # default value
+    "header_links_before_dropdown": 4,  # default value
     "icon_links": [
         {
             "name": "GitHub",
