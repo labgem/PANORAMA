@@ -325,21 +325,24 @@ def create_hmm_list_file(
         hmm_df["hmm_cov_threshold"] = hmm_coverage
     if target_coverage is not None:
         hmm_df["target_cov_threshold"] = target_coverage
-    hmm_df = hmm_df[
-        [
-            "name",
-            "accession",
-            "path",
-            "length",
-            "protein_name",
-            "secondary_name",
-            "score_threshold",
-            "eval_threshold",
-            "ieval_threshold",
-            "hmm_cov_threshold",
-            "target_cov_threshold",
-            "description",
-        ]
+    
+    # Define the desired column order
+    desired_columns = [
+        "name",
+        "accession",
+        "path",
+        "length",
+        "protein_name",
+        "secondary_name",
+        "score_threshold",
+        "eval_threshold",
+        "ieval_threshold",
+        "hmm_cov_threshold",
+        "target_cov_threshold",
+        "description",
     ]
+    
+    # Reindex to desired order, filling missing columns with None/NaN
+    hmm_df = hmm_df.reindex(columns=desired_columns)
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)
     logging.getLogger("PANORAMA").info("HMM list file created.")
