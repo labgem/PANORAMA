@@ -13,9 +13,9 @@ myst:
 :caption: 'Developper Guide:'
 :maxdepth: 1
 
+contribute
 devRules
 git
 unitTest
-workflows
 buildDoc
 ```
