@@ -52,7 +52,8 @@ dev = [
     "seaborn>=0.13",
     "vitables>=3.0.0",
     "viztracer>=0.16.2",
-    "black==24.*"
+    "black>=24.*",
+    "flake8>=7.3.0"
 ]
 notebook = [
     "jupyter-book>=1.0.0",

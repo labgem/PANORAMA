@@ -185,7 +185,20 @@ black --check panorama/ tests/
 
 Black makes code reviews smoother since we're focusing on logic, not style.
 
-### 3. Update Documentation
+### 3. Linting with Flake8
+[flake8](https://flake8.pycqa.org/) catches potential bugs and style issues:
+
+```shell
+# Check the entire project
+flake8 panorama/ tests/
+
+# Check specific files
+flake8 panorama/systems/system.py
+```
+
+Fix the issues flake8 reports before pushing. Most are quick fixes!
+
+### 4. Update Documentation
 
 Documentation is code too! If you:
 
@@ -196,7 +209,7 @@ Documentation is code too! If you:
 More information on how to write good documentation can be found in the 
 ["how to build the documentation"](buildDoc.md).
 
-### 4. Review Your Own Changes
+### 5. Review Your Own Changes
 
 Before asking others to review, review yourself:
 
@@ -211,7 +224,7 @@ git log origin/dev..HEAD --oneline
 grep -r "print(" panorama/  # Just an example!
 ```
 
-### 5. Update the VERSION File
+### 6. Update the VERSION File
 
 Don't forget to bump the patch version! See the [Versioning section](#versioning-and-releases-🏷️) above.
 
