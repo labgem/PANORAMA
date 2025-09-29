@@ -1,8 +1,8 @@
-# 🧬 PANORAMA – Model Translation Guide
+# PANORAMA – Model Translation Guide 🔁
 
 The model translation module in PANORAMA allows you to convert system detection models from other tools into the
 PANORAMA format.
-Also it will prepare all required input files, so they can be used directly for annotation and analysis in PANORAMA.
+Also, it will prepare all required input files, so they can be used directly for annotation and analysis in PANORAMA.
 
 **Supported Sources**
 
@@ -14,17 +14,17 @@ Also it will prepare all required input files, so they can be used directly for 
     - TXSScan (type secretion systems),
     - TFFScan (type IV pili),
 
-## 🎯 When should you use it?
+## When should you use it? 🎯
 
 ```{important}
 Translated and updated versions of models are already available [here](https://github.com/PANORAMA-models).
 ```
 
 1. When a new version exists, and it's not yet available on [PANORAMA models](https://github.com/PANORAMA-models),
-2. When you want to use a specif anterior version not available on [PANORAMA models](https://github.com/PANORAMA-models)
-3. When you have your own version of models that use the same grammar than supported sources.
+2. When you want to use a specif version, not available on [PANORAMA models](https://github.com/PANORAMA-models)
+3. When you have your own version of models that use the same grammar as supported sources.
 
-## 📂 What do you need?
+## What do you need? 🧵
 
 You should have:
 
@@ -33,7 +33,7 @@ You should have:
 | PADLOC               | Hidden Markov Model profiles (.hmm) | Models in YAML format (.yaml) | File containing HMM information (.txt) |
 | MacSyModel (or like) | Hidden Markov Model profiles (.hmm) | Models in XML format (.xml)   |                                        | 
 
-## 🚀 How to run it?
+## How to run it? 🚀
 
 Use the command line interface (CLI):
 
@@ -47,7 +47,7 @@ panorama utils \
 --target_coverage 0.8
 ```
 
-### 🔑 Key options
+### Key options 🔑
 
 | Parameter           | Type     | Description                                                               |
 |---------------------|----------|---------------------------------------------------------------------------|
@@ -66,7 +66,7 @@ This default behavior is tunable with the `--hmm_coverage` and `--target_coverag
 that will affect a threshold for all profiles.
 ```
 
-## 📁 What files are created?
+## What files are created? 📁
 
 After translation, you’ll get:
 
@@ -77,7 +77,7 @@ After translation, you’ll get:
 
 These files can be used directly in PANORAMA commands.
 
-## 🛠️ Example
+## Example 🛠️
 
 ### Translate PADLOC
 

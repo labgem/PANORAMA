@@ -7,7 +7,7 @@ myst:
       Models
 ---
 
-# Modeller Documentation
+# Modeler Documentation
 
 ```{toctree}
 :caption: 'Get Started:'
@@ -16,5 +16,4 @@ myst:
 overview
 modeling
 translate
-contribute
 ```

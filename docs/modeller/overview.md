@@ -1,4 +1,4 @@
-# 🧬 PANORAMA Models Overview
+# PANORAMA Models Overview 🔭
 
 PANORAMA detects macromolecular systems in pangenomes using user-defined models. These models are an exhaustive and
 specific representation of a system. They describe the presence/abscence rules of protein families constituting a
@@ -9,12 +9,12 @@ optional elements of complex systems.
 
 ---
 
-## 🧭 Definition and Purpose
+## Definition and Purpose 🧭
 
 A **system model** in PANORAMA serves two main purposes:
 
 1. **Represent the system in a unique way**  
-   Models specify which protein families are required, optional, or excluded for a given system.
+   Models specify which protein families are required, optional, or excluded for a given system. 
 
 2. **Guide the detection process**  
    The model governs how PANORAMA searches for gene co-occurrence and proximity in the pangenome context graph.
@@ -29,13 +29,13 @@ Models allow users to capture:
 
 ---
 
-## 🧱 Structure (Brief)
+## Structure (Brief) 🧱
 
 Each model file is a single JSON object composed of:
 
 - **`name`**: The system’s identifier.
 - **`parameters`**: Detection parameters at the model level (e.g. quorum, transitivity).
-- **`func_units`**: A list of *Functional Units* (modules), each of which groups multiple protein families.
+- **`func_units`**: A list of *Functional Units* (modules), each of which groups multiple **protein families**.
 
 The structure is hierarchical:
 
@@ -52,7 +52,7 @@ Model
 Each **Functional Unit** and **Family** has a `presence` type (`mandatory`, `accessory`, `neutral`, `forbidden`) that
 governs how it contributes to system detection.
 
-Detection rules are defined at **both the model level** and the **unit level**, using parameters such as:
+Detection rules are defined at **both the model level** and the **functional unit level**, using parameters such as:
 
 - `min_mandatory`
 - `min_total`
@@ -67,17 +67,18 @@ For full details, see:
 
 ---
 
-## PANORAMA models gallery
+## PANORAMA models gallery 🎨
 
 All existing PANORAMA models are available on the [PANORAMA models repository](https://github.com/PANORAMA-models).
 
-Most of them are directly translated from different sources.
+Most of them are directly translated from different sources, such as [PADLOC](https://github.com/padlocbio/padloc) or 
+[MacSyFinder](https://github.com/gem-pasteur/macsyfinder).
 
 We welcome contributions and would like to provide PANORAMA users with a variety of models for a multitude of analyses.
-You can contribute to the creation of new models by following the
-guide [here](contribute.md#how-to-contribute-to-panorama-models).
+You can contribute to the creation of new models by following the guide
+[here](contribute.md#how-to-contribute-to-panorama-models).
 
-## Translate models
+## Translate models 🔁
 
 PANORAMA can translate several sources (see [PANORAMA models repository](https://github.com/PANORAMA-models)).
 
