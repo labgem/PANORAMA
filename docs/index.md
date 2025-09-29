@@ -22,10 +22,10 @@ modeller/modeler_guide
 ```
 
 ```{toctree}
-:caption: 'Developper Guide:'
+:caption: 'Developer Guide:'
 :maxdepth: 1
 
-developper/developper_guide
+developer/developer_guide
 ```
 
 ```{toctree}
