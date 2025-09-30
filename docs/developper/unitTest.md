@@ -50,7 +50,7 @@ tests/test_functional.py::test_something SKIPPED (Test data not available. Clone
 
 - `--test-data-path=PATH`: Path to test dataset repository. When provided, functional tests will be executed automatically.
 - `--cpu=N`: Number of CPUs to use in functional tests (default: 1)
-- `--update-golden`: Update golden hashes JSON instead of just testing
+- `--update-golden`: Update expected files instead of just testing
 
 ## Test Markers
 
