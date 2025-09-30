@@ -134,8 +134,9 @@ def pangenome_list_file(test_data_path, tmp_path_factory):
             tmp_pangenome_file = tmp_pangenome_dir / pangenome_file.name
             shutil.copy2(pangenome_file, tmp_pangenome_file)
             
+            pangenome_name = pangenome_file.name.rsplit(".h5", 1)[0]
             # Write the path to the copied file in the list
-            f.write(f"{pangenome_file.name}\t{tmp_pangenome_file}\n")
+            f.write(f"{pangenome_name}\t{tmp_pangenome_file}\n")
 
     return pangenome_list_tsv
 
