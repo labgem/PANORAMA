@@ -16,7 +16,7 @@ def assert_or_update_file(expected_file_name: Path, file_path: Path, update_gold
     else:
         assert (
             golden_file.exists()
-        ), f"No golden file for '{expected_file_name}'. Run pytest with --update-golden first."
+        ), f"No golden file for '{expected_file_name}' found in {GOLDEN_DIR}. Run pytest with --update-golden first."
         content_actual = file_path.read_text()
         content_expected = golden_file.read_text()
         print(content_actual)
