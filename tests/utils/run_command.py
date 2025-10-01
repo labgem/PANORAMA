@@ -8,6 +8,6 @@ logger = logging.getLogger(__name__)
 
 
 def run_command(cmd):
-    logger.warning(cmd)
+    logger.info(cmd)
     with patch("sys.argv", cmd.split()):
         main()

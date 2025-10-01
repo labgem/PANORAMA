@@ -17,6 +17,17 @@ from panorama.systems.system import System
 logger = logging.getLogger(__name__)
 
 
+def pytest_configure(config):
+    """Configure logging for tests."""
+    # Set PANORAMA logger to WARNING level to reduce noise during tests
+    # This will suppress DEBUG and INFO logs from PANORAMA but keep warnings and errors
+    panorama_logger = logging.getLogger("PANORAMA")
+    
+    # Allow override via environment variable
+    log_level = os.environ.get("PANORAMA_LOG_LEVEL", "WARNING").upper()
+    panorama_logger.setLevel(getattr(logging, log_level, logging.WARNING))
+
+
 def validate_test_data_path(path_str: str = None) -> Path:
     """
     Validate and return the test data path.
