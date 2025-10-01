@@ -14,6 +14,7 @@ def assert_or_update_file(expected_file_name: Path, file_path: Path, update_gold
         shutil.copy(file_path, golden_file)
         print(f"[update-golden] Updated golden file for {file_path.name}")
     else:
+        print(f"[compare] Comparing {file_path} with golden file {golden_file}")
         assert (
             golden_file.exists()
         ), f"No golden file for '{expected_file_name}' found in {GOLDEN_DIR}. Run pytest with --update-golden first."
