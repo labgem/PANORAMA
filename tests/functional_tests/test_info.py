@@ -8,7 +8,7 @@ def test_panorama_info(pangenome_list_file:Path, tmp_path:Path):
     output_dir = tmp_path / 'output'
 
     command = (f"panorama info -p {pangenome_list_file} -o {output_dir} "
-                "--status --content --disable-prog-bar --verbose 2")
+                "--status --content --disable_prog_bar --verbose 2")
     # command = "panorama info -h"
     run_command(command)
 
@@ -26,7 +26,7 @@ def test_panorama_info_content_only(pangenome_list_file:Path, tmp_path:Path):
     output_dir = tmp_path / 'output'
 
     command = (f"panorama info -p {pangenome_list_file} -o {output_dir} "
-                "--content --disable-prog-bar --verbose 2")
+                "--content --disable_prog_bar --verbose 2")
     # command = "panorama info -h"
     run_command(command)
 
