@@ -1,4 +1,4 @@
-# Systems Comparison Across Pangenomes 🧬
+# Systems Comparison Across Pangenomes
 
 The `compare_systems` command identifies and analyzes conserved biological systems across multiple pangenomes by
 comparing their gene family composition and computing similarity metrics.
@@ -7,7 +7,7 @@ Family Relatedness Relationship (GFRR) metrics** to identify systems that are co
 populations. The analysis generates visualizations showing system distribution patterns and creates graphs of conserved
 system clusters.
 
-## Systems Comparison Workflow ⚙️
+## Systems Comparison Workflow
 
 The systems comparison process runs as follows:
 
@@ -42,7 +42,7 @@ The systems comparison process runs as follows:
 
    Conserved systems are saved as graph files (GEXF, GraphML) and summary tables for further analysis and visualization.
 
-## System comparison command Line Usage 🚀
+## System comparison command Line Usage
 
 Basic systems comparison with heatmap generation:
 
@@ -72,7 +72,7 @@ panorama compare_systems \
 --threads 8
 ```
 
-### Key Options 📋
+### Key Options
 
 | Shortcut | Argument             | Type                   | Optional | Description                                                                                         |
 |----------|----------------------|------------------------|----------|-----------------------------------------------------------------------------------------------------|
@@ -132,7 +132,7 @@ The dual-cutoff system provides hierarchical filtering:
 - Moderate: gfrr_models_cutoff=[0.3, 0.3], gfrr_cutoff=[0.6, 0.7]
 - Permissive: gfrr_models_cutoff=[0.2, 0.2], gfrr_cutoff=[0.4, 0.5]
 
-## Output 📂
+## Output
 
 PANORAMA generates multiple outputs: interactive heatmaps, network graphs, and summary tables for comprehensive systems
 analysis.
@@ -169,7 +169,7 @@ Interactive HTML heatmaps showing system distribution patterns:
 #### Conserved System Clustering
 
 ##### Network Graphs
-When `--gfrr_metrics` and `--graph_formats` are specified, genereate `conserved_systems.gexf/graphml` Network graphs of
+When `--gfrr_metrics` and `--graph_formats` are specified, generate `conserved_systems.gexf/graphml` Network graphs of
 conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
 Edge attributes contain GFRR similarity scores and the number of shared gene families.
