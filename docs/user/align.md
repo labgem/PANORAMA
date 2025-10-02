@@ -1,11 +1,11 @@
-## Gene Family Alignment Across Pangenomes  📏
+## Gene Family Alignment Across Pangenomes 
 
 The align command performs sequence alignment of gene families between multiple pangenomes using MMseqs2 to identify
 homologous relationships and sequence similarities across different bacterial populations. This analysis supports both
 targeted inter-pangenome comparisons (excluding intra-pangenome alignments) and comprehensive all-against-all alignments
 that capture both inter- and intra-pangenome relationships.
 
-###  Alignment Workflow ⚙️
+###  Alignment Workflow
 
 The gene family alignment process runs as follows:
 
@@ -28,7 +28,7 @@ The gene family alignment process runs as follows:
 6. Write Results to Files
     - Final alignment results are saved as detailed TSV files containing sequence similarity metrics.
 
-### Alignment command Line Usage 🚀
+### Alignment command Line Usage
 
 - Basic inter-pangenome alignment:
 
@@ -56,7 +56,7 @@ The gene family alignment process runs as follows:
    --keep_tmp
    ```
 
-#### Key Options 📋
+#### Key Options
 
 | Shortcut | Argument           | Type           | Required/Optional | Description                                                            |
 |----------|--------------------|----------------|-------------------|------------------------------------------------------------------------|
@@ -81,7 +81,7 @@ The gene family alignment process runs as follows:
 | —        | --keep_tmp         | bool (flag)          | True     | Keep temporary files after completion (useful for debugging)   |
 | —        | --threads          | int                  | True     | Number of CPU threads for parallel processing (default: 1)     |
 
-#### 🎯 Alignment Modes
+#### Alignment Modes
 
 ##### Inter-Pangenome Alignment
 
@@ -97,7 +97,7 @@ This mode performs comprehensive alignments including both inter- and intra-pang
 - **Use case**: Complete similarity analysis including within-population diversity
 - **Results**: Complete gene family relationship matrix
 
-### Parameter Guidelines 🦮
+### Parameter Guidelines
 
 #### Identity Thresholds
 
@@ -124,7 +124,7 @@ This mode performs comprehensive alignments including both inter- and intra-pang
 | 1    | Target coverage           |
 | 2    | Shorter sequence coverage |
 
-### Output Files 📂
+### Output Files
 
 PANORAMA generates alignment results in standardized TSV format with detailed similarity metrics.
 

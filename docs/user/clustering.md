@@ -1,5 +1,5 @@
 (clustering)=
-# Gene Family Clustering Across Pangenomes 🔗
+# Gene Family Clustering Across Pangenomes
 
 The cluster command groups related gene families from multiple pangenomes into homologous clusters based on sequence
 similarity using MMseqs2. This analysis identifies gene families that share common evolutionary origins across different
@@ -7,7 +7,7 @@ bacterial populations, enabling comparative genomics studies and the constructio
 supports both fast (linclust) and sensitive (cluster) methods to accommodate different accuracy and performance
 requirements.
 
-## Clustering Workflow ⚙️
+## Clustering Workflow
 
 The gene family clustering process runs as follows:
 
@@ -27,11 +27,11 @@ The gene family clustering process runs as follows:
     - MMseqs2 applies identity and coverage thresholds to group similar sequences.
 5. Process Clustering Results
     - Binary clustering results are converted to human-readable TSV format.
-    - Cluster IDs are assigned to group related gene families.
+    - Cluster IDs are assigned to group-related gene families.
 6. Write Results to Files
     - Final clustering results are saved with cluster assignments and membership details.
 
-## Clustring command Line Usage 🚀
+## Clustering command Line Usage
 
 - Fast clustering with linclust:
 
@@ -60,7 +60,7 @@ The gene family clustering process runs as follows:
    --keep_tmp
    ```
 
-### Key Options 📋
+### Key Options
 
 | Shortcut | Argument     | Type           | Required/Optional | Description                                                      |
 |----------|--------------|----------------|-------------------|------------------------------------------------------------------|
@@ -104,7 +104,7 @@ The gene family clustering process runs as follows:
 | —        | --keep_tmp         | bool (flag)          | True     | Keep temporary files after completion (useful for debugging)   |
 | —        | --threads          | int                  | True     | Number of CPU threads for parallel processing (default: 1)     |
 
-## Clustering Methods Comparison 🎯
+## Clustering Methods Comparison
 
 ### Linclust (Fast Method)
 
@@ -131,7 +131,7 @@ The gene family clustering process runs as follows:
 | Max Seqs    | 100-300           | Balanced performance      |
 | Max Seqs    | 500-1000          | Comprehensive but slow    |
 
-## Parameter Guidelines 🦮
+## Parameter Guidelines
 
 ### Identity and Coverage Combinations
 
@@ -152,7 +152,7 @@ The gene family clustering process runs as follows:
 | 2    | Shorter sequence | Balanced approach (recommended)              |
 | 3    | Longer sequence  | Conservative clustering                      |
 
-## Output Files 📂
+## Output Files
 
 PANORAMA generates clustering results with detailed cluster membership information.
 
