@@ -268,10 +268,33 @@ class TestSystemUnit(TestFixture):
         unit2 = SystemUnit(functional_unit, "test_source", gene_families, fam2meta_info)
 
         assert unit1 == unit2
+        assert hash(unit1) == hash(unit2)
 
         unit1.add_family(GeneFamily(3, "new_family"), "test_source", 1)
 
         assert unit1 != unit2
+        assert hash(unit1) != hash(unit2)
+
+    def test_hash(self):
+        gf3 = GeneFamily(3, "new_family")
+        gf4 = GeneFamily(4, "context_family")
+        fam2meta_info = {gf3: ("test_source", 1), gf4: ("test_source", 2)}
+
+        gf3_prime = GeneFamily(3, "new_family")
+        gf4_prime = GeneFamily(4, "context_family")
+        fam2meta_info_prime = {gf4_prime: ("test_source", 2), gf3_prime: ("test_source", 1), }
+
+        fu = FuncUnit(name="test_unit", presence="mandatory", min_total=2)
+        fu_prime = FuncUnit(name="test_unit", presence="mandatory", min_total=2)
+        
+        su = SystemUnit(fu, "test_source", {gf3}, fam2meta_info)
+        su_prime = SystemUnit(fu_prime, "test_source", {gf3_prime}, fam2meta_info_prime)
+
+        assert hash(su) == hash(su_prime)
+        
+        expected_hash = 589505881
+        assert hash(su) == expected_hash
+        assert su.ID != su_prime.ID
 
     def test_is_superset(self, functional_unit, gene_families):
         """Test superset comparison between SystemUnits."""

@@ -85,6 +85,7 @@ panorama annotation \
   --hmm hmms.tsv \
   --mode sensitive \
   --k_best_hit 3 \    # <-- or use the alias -b to keep only the best hit
+  --save_hits tblout \
   --output results/ \
   --threads 8
 ```

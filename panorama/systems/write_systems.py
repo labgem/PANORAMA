@@ -92,7 +92,7 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
     if pangenome.status["systems"] != "inFile":
         raise AttributeError(
             "Systems have not been detected."
-            "Use 'panorama detect' subcommand to detect systems in pangenomes."
+            "Use 'panorama systems' subcommand to detect systems in pangenomes."
         )
     else:
         for systems_source in sources:
@@ -103,7 +103,7 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
                 )
                 raise KeyError(
                     f"There is no systems in pangenome {pangenome.name}, for the source: {systems_source}."
-                    f"Look at 'panorama detect' subcommand to detect systems in {pangenome.name}."
+                    f"Look at 'panorama systems' subcommand to detect systems in {pangenome.name}."
                 )
 
 

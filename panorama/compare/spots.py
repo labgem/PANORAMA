@@ -204,7 +204,7 @@ def check_pangenome_cs(
             raise AttributeError(
                 f"Systems have not been detected for pangenome '{pangenome_name}'. "
                 f"Current status: {systems_status}. "
-                "Use 'panorama detect' subcommand to detect systems before "
+                "Use 'panorama systems' subcommand to detect systems before "
                 "including systems in conserved spots analysis."
             )
 
@@ -220,7 +220,7 @@ def check_pangenome_cs(
             raise KeyError(
                 f"Missing system sources in pangenome '{pangenome_name}': "
                 f"{list(missing_sources)}. "
-                f"Use 'panorama detect' subcommand to detect systems for "
+                f"Use 'panorama systems' subcommand to detect systems for "
                 f"these sources in '{pangenome_name}'."
             )
 

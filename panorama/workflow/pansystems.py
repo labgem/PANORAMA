@@ -46,7 +46,7 @@ def check_pansystems_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Any
     Raises:
         argparse.ArgumentError: If no type of systems writing is chosen.
     """
-    need_info, hmm_kwgs = check_annotate_args(args)
+    need_info, hmm_kwgs = check_annotate_args(args, silence_warning=True)
     if 'output' not in hmm_kwgs:
         hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
     args.annotation_sources = None

@@ -11,6 +11,7 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 from collections import defaultdict
 from pathlib import Path
 from abc import ABC, abstractmethod
+import warnings
 
 # installed libraries
 import numpy as np
@@ -22,10 +23,12 @@ from bokeh.io import export_png, output_file, save
 from bokeh.models import (
     ColumnDataSource,
     GlyphRenderer,
-    Glyph,
     FactorRange,
     HoverTool,
 )
+from bokeh.models.glyph import Glyph
+from bokeh.core.validation import silence
+from bokeh.core.validation.warnings import MISSING_RENDERERS
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -33,6 +36,16 @@ from panorama.systems.models import Model, FuncUnit, Family
 from panorama.pangenomes import Pangenome
 
 pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+# Silence-specific warning
+silence(MISSING_RENDERERS, True)
+# Silence output file will be overwritten info from bokeh
+logging.getLogger("bokeh.io.state").setLevel(logging.WARNING)
+# Silence-specific UserWarning while keeping others
+warnings.filterwarnings(
+    "ignore",
+    message="Export method called with width or height argument on a non-Plot model.*",
+    category=UserWarning,
+)
 
 
 def filter_global_context(
@@ -418,7 +431,7 @@ def conciliate_partition(partition: Set[str]) -> str:
         if "persistent" in partition:
             return "persistent|accessory"
         else:
-            return 'accessory'
+            return "accessory"
 
 
 class VisualizationBuilder(ABC):
@@ -471,7 +484,10 @@ class VisualizationBuilder(ABC):
     PNG_EXPORT_HEIGHT = 1080
     """int: Height of PNG exports
     """
-    def __init__(self, name: str, output_dir: Path, formats: Optional[List[str]] = None):
+
+    def __init__(
+        self, name: str, output_dir: Path, formats: Optional[List[str]] = None
+    ):
         """
         Initialize the visualization builder.
 
@@ -591,7 +607,9 @@ class VisualizationBuilder(ABC):
             if fmt == "html":
                 output_file(output_path.absolute().as_posix())
                 save(fig)
-                self.logger.info(f"Saved {filename_base} visualization in HTML format to {output_path}")
+                self.logger.info(
+                    f"Saved {filename_base} visualization in HTML format to {output_path}"
+                )
 
             elif fmt == "png":
                 export_png(
@@ -600,7 +618,9 @@ class VisualizationBuilder(ABC):
                     width=self.PNG_EXPORT_WIDTH,
                     height=self.PNG_EXPORT_HEIGHT,
                 )
-                self.logger.debug(f"Saved {filename_base} visualization in PNG format to {output_path}")
+                self.logger.debug(
+                    f"Saved {filename_base} visualization in PNG format to {output_path}"
+                )
 
             else:
                 raise ValueError(f"Unsupported output format: {fmt}")
@@ -634,11 +654,11 @@ class VisualizationBuilder(ABC):
         self.main_plot.yaxis.major_label_orientation = 1 / 3
 
     def _create_main_figure(
-            self,
-            matrix: pd.DataFrame,
-            x_range: Optional[FactorRange] = None,
-            y_range: Optional[FactorRange] = None,
-            tooltips: Optional[List[Tuple[str, str]]] = None,
+        self,
+        matrix: pd.DataFrame,
+        x_range: Optional[FactorRange] = None,
+        y_range: Optional[FactorRange] = None,
+        tooltips: Optional[List[Tuple[str, str]]] = None,
     ) -> None:
         """
         Create the main heatmap figure with common configuration.
@@ -673,12 +693,12 @@ class VisualizationBuilder(ABC):
         self._configure_plot_style()
 
     def create_left_bar_plot(
-            self,
-            source: ColumnDataSource,
-            matrix: pd.DataFrame,
-            y_field: str = "system_name",
-            value_field: str = "count",
-            color: str = "navy"
+        self,
+        source: ColumnDataSource,
+        matrix: pd.DataFrame,
+        y_field: str = "system_name",
+        value_field: str = "count",
+        color: str = "navy",
     ) -> None:
         """
         Create a horizontal bar plot on the left side of the visualization.
@@ -709,21 +729,27 @@ class VisualizationBuilder(ABC):
         )
 
         # Add hover tool
-        self.left_bar.add_tools(HoverTool(tooltips=[
-            ("System", f"@{y_field}"),
-            ("Count", f"@{value_field}"),
-        ]))
+        self.left_bar.add_tools(
+            HoverTool(
+                tooltips=[
+                    ("System", f"@{y_field}"),
+                    ("Count", f"@{value_field}"),
+                ]
+            )
+        )
 
         # Configure appearance
-        self._configure_bar_plot_style(self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True)
+        self._configure_bar_plot_style(
+            self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True
+        )
 
     def create_top_bar_plot(
-            self,
-            source: ColumnDataSource,
-            x_field: str,
-            value_field: str = "count",
-            color: str = "green",
-            x_order: Optional[List[str]] = None
+        self,
+        source: ColumnDataSource,
+        x_field: str,
+        value_field: str = "count",
+        color: str = "green",
+        x_order: Optional[List[str]] = None,
     ) -> None:
         """
         Create a vertical bar plot on the top of the visualization.
@@ -760,22 +786,26 @@ class VisualizationBuilder(ABC):
         )
 
         # Add hover tool
-        self.top_bar.add_tools(HoverTool(tooltips=[
-            (x_field.title(), f"@{x_field}"),
-            ("Count", f"@{value_field}"),
-        ]))
+        self.top_bar.add_tools(
+            HoverTool(
+                tooltips=[
+                    (x_field.title(), f"@{x_field}"),
+                    ("Count", f"@{value_field}"),
+                ]
+            )
+        )
 
         # Configure appearance
         self._configure_bar_plot_style(self.top_bar, y_label="Count", hide_x_axis=True)
 
     @staticmethod
     def _configure_bar_plot_style(
-            plot: figure,
-            x_label: Optional[str] = None,
-            y_label: Optional[str] = None,
-            flip_x: bool = False,
-            hide_x_axis: bool = False,
-            hide_y_axis: bool = False
+        plot: figure,
+        x_label: Optional[str] = None,
+        y_label: Optional[str] = None,
+        flip_x: bool = False,
+        hide_x_axis: bool = False,
+        hide_y_axis: bool = False,
     ) -> None:
         """
         Configure styling for bar plots.

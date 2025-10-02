@@ -284,7 +284,6 @@ class Models:
         """
         fam2model = {}
         for family in self.families:
-            print(family, family.model)
             fam2model[family] = family.model
         return fam2model
 

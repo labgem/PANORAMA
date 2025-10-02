@@ -56,7 +56,7 @@ opening_full = (
 """
 )
 epilog = f"""
-By Jérôme Arnoux <jarnoux@genoscope.cns.fr> 
+By Jérôme Arnoux <arnoux.jeromepj@gmail.com> 
 PANORAMA ({version}) is an opensource bioinformatic tools under CeCILL FREE SOFTWARE LICENSE AGREEMENT
 LABGeM
 """
