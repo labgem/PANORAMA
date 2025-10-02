@@ -25,6 +25,7 @@ from panorama.pangenomes import Pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.cluster import (
+    _prepare_mmseqs2_options,
     cluster_gene_families,
     write_clustering,
     parser_mmseqs2_cluster,
@@ -205,22 +206,7 @@ def common_launch(
     # Handle gene family clustering workflow
     if args.cluster is None:
         # Configure MMSeqs2 clustering parameters from command-line arguments
-        mmseqs2_options = {
-            "max_seqs": args.max_seqs,  # Maximum sequences per query
-            "min_ungapped": args.min_ungapped,  # Minimum ungapped alignment score
-            "comp_bias_corr": args.comp_bias_corr,  # Composition bias correction
-            "sensitivity": args.sensitivity,  # Search sensitivity level
-            "kmer_per_seq": args.kmer_per_seq,  # K-mers per sequence
-            "identity": args.clust_identity,  # Sequence identity threshold
-            "coverage": args.clust_coverage,  # Coverage threshold
-            "cov_mode": args.clust_cov_mode,  # Coverage calculation mode
-            "eval": args.eval,  # E-value threshold
-            "max_seq_len": args.max_seq_len,  # Maximum sequence length
-            "max_reject": args.max_reject,  # Maximum rejections per query
-            "align_mode": args.align_mode,  # Alignment mode
-            "clust_mode": args.clust_mode,  # Clustering mode
-            "reassign": args.reassign,  # Whether to reassign sequences
-        }
+        mmseqs2_options = _prepare_mmseqs2_options(args)
 
         logging.getLogger("PANORAMA").info(
             f"Starting gene family clustering with method: {args.method}"

@@ -1438,11 +1438,6 @@ def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser
 
     Returns:
         argparse.ArgumentParser: Configured parser for the compare_spots command.
-
-    Example:
-        >>> main_parser = argparse.ArgumentParser()
-        >>> subparsers = main_parser.add_subparsers()
-        >>> compare_parser = subparser(subparsers)
     """
     parser = sub_parser.add_parser(
         "compare_spots",

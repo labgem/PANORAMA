@@ -440,6 +440,7 @@ def _execute_clustering_command(
         )
 
         if result.returncode != 0:
+            logger.error(cmd)
             error_msg = (
                 f"MMseqs2 {method_name} failed with return code {result.returncode}"
             )
@@ -1086,7 +1087,6 @@ def parser_mmseqs2_cluster(parser: argparse.ArgumentParser) -> argparse._Argumen
         "--cluster_comp_bias_corr",
         required=False,
         type=int,
-        choices=[0, 1],
         metavar="INT",
         help="Compositional bias correction: 0=disabled, 1=enabled",
     )
@@ -1125,7 +1125,7 @@ def parser_mmseqs2_cluster(parser: argparse.ArgumentParser) -> argparse._Argumen
     )
 
     mmseqs_group.add_argument(
-        "--cluster_clust_mode",
+        "--cluster_mode",
         required=False,
         type=int,
         choices=[0, 1, 2, 3],
