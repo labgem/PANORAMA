@@ -1,13 +1,13 @@
-# PANORAMA – Installation Guide 📦⚒
+# Installation Guide 🦮
 
-## Latest version 🆕⭐
+## Latest version
 ### Installation via Conda 🐍
 
 ```{note}
 PANORAMA is not yet available on [Bioconda](https://bioconda.github.io/). We hope to provide a recipe soon.
 ```
 
-* * *
+---
 
 ### Installing from source code (GitHub) 🐙
 (with_conda_env)=
@@ -82,9 +82,9 @@ pip install .
 ```{warning}
 geckodriver is not compatible with pip, so the feature that generate png image from bokeh is not supported.
 ```
-* * *
+---
 
-## Development Version 🧪
+## Development Version
 
 ### 1. Get the Development branch 
 
@@ -111,5 +111,3 @@ pip install .
 
 If you encounter any problems, please check the known issues below.
 If you still can't solve your problem, please [open an issue on GitHub](https://github.com/labgem/PANORAMA/issues).
-
-**No issues yet**
