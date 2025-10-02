@@ -1,4 +1,9 @@
 from collections import defaultdict
+import os
+import warnings
+import logging
+from pathlib import Path
+import shutil
 
 import pytest
 import pandas as pd
@@ -8,6 +13,168 @@ from ppanggolin.genome import Gene, Organism, Contig
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Model, FuncUnit, Family
 from panorama.systems.system import System
+
+logger = logging.getLogger(__name__)
+
+
+def validate_test_data_path(path_str: str = None) -> Path:
+    """
+    Validate and return the test data path.
+    
+    Args:
+        path_str: Optional path string. If None, will check environment variable.
+        
+    Returns:
+        Path object if valid, None otherwise
+        
+    Issues warnings for missing or invalid paths.
+    """
+    # If not provided, check environment variable
+    if path_str is None:
+        path_str = os.environ.get("PANORAMA_TEST_DATA_PATH")
+    
+    # If still not provided, issue a warning
+    if path_str is None:
+        warnings.warn(
+            "Test data path not provided. Functional tests requiring datasets will be skipped. "
+            "Clone https://github.com/labgem/PANORAMA_test and set via --test-data-path argument or PANORAMA_TEST_DATA_PATH environment variable.",
+            UserWarning,
+            stacklevel=3
+        )
+        return None
+    
+    # Convert to Path object, expand user (~) and validate that it exists
+    path = Path(path_str).expanduser().resolve()
+    if not path.exists():
+        warnings.warn(
+            f"Test data path '{path}' does not exist. "
+            "Functional tests requiring datasets will be skipped.",
+            UserWarning,
+            stacklevel=3
+        )
+        return None
+    
+    return path
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--cpu",
+        action="store",
+        default="1",
+        help="Number of CPUs to use in functional tests",
+    )
+    parser.addoption(
+        "--update-golden",
+        action="store_true",
+        default=False,
+        help="Update golden hashes JSON instead of just testing.",
+    )
+    parser.addoption(
+        "--test-data-path",
+        action="store",
+        default=None,
+        help="Path to test dataset repository. Can also be set via PANORAMA_TEST_DATA_PATH environment variable. "
+             "To get test data: git clone https://github.com/labgem/PANORAMA_test",
+    )
+
+@pytest.fixture(scope="session")
+def num_cpus(request):
+    return request.config.getoption("--cpu")
+
+
+@pytest.fixture
+def update_golden(request):
+    return request.config.getoption("--update-golden")
+
+
+@pytest.fixture(scope="session")
+def golden_files_path():
+    """
+    Fixture to provide the path to golden files directory.
+    Golden files are stored alongside the test code for version control.
+    """
+    return Path(__file__).parent / "golden"
+
+
+@pytest.fixture(scope="session")
+def test_data_path(request):
+    """
+    Fixture to provide the path to test datasets.
+    
+    Path can be provided via:
+    1. --test-data-path command line argument
+    2. PANORAMA_TEST_DATA_PATH environment variable
+    3. If neither is provided, returns None and shows a warning
+    """
+    # First check command line argument
+    path_str = request.config.getoption("--test-data-path")
+    
+    return validate_test_data_path(path_str)
+
+
+@pytest.fixture(scope="session")
+def pangenome_list_file(test_data_path, tmp_path_factory):
+    """
+    Create a temporary pangenome list file for testing.
+    Copies pangenome files to temporary directory to avoid modifying originals.
+    Uses tmp_path_factory for session scope compatibility.
+    """
+    pangenome_dir = test_data_path / "pangenomes"
+    tmp_path = tmp_path_factory.mktemp("panorama_test")
+    
+    # Create a subdirectory for copied pangenome files
+    tmp_pangenome_dir = tmp_path / "pangenomes"
+    tmp_pangenome_dir.mkdir()
+    
+    pangenome_list_tsv = tmp_path / "pangenomes_list.tsv"
+
+    with open(pangenome_list_tsv, "w") as f:
+        for pangenome_file in pangenome_dir.glob("*.h5"):
+            # Copy pangenome file to temporary directory
+            tmp_pangenome_file = tmp_pangenome_dir / pangenome_file.name
+            shutil.copy2(pangenome_file, tmp_pangenome_file)
+            
+            pangenome_name = pangenome_file.name.rsplit(".h5", 1)[0]
+            # Write the path to the copied file in the list
+            f.write(f"{pangenome_name}\t{tmp_pangenome_file}\n")
+
+    return pangenome_list_tsv
+
+
+def pytest_collection_modifyitems(config, items):
+    """Handle test collection: skip functional tests when no test data is available and reorder tests."""
+    
+    # Get test data path from command line or environment
+    test_data_path_str = config.getoption("--test-data-path")
+    test_data_path_obj = validate_test_data_path(test_data_path_str)
+    
+    # Skip tests that require test data if no valid test data path is available
+    if test_data_path_obj is None:
+        logger.warning("No valid test data path available. Functional tests will be skipped.")
+        skip_functional = pytest.mark.skip(reason="Test data not available. Clone https://github.com/labgem/PANORAMA_test and set --test-data-path or PANORAMA_TEST_DATA_PATH environment variable.")
+        
+        for item in items:
+            # Skip tests that specifically require test data
+            if "requires_test_data" in item.keywords:
+                item.add_marker(skip_functional)
+    else:
+        logger.info(f"Using test data path: '{test_data_path_obj}'")
+    
+    # Reorder tests: utils first, then detection, then others
+    utils_tests = []
+    detection_tests = []
+    other_tests = []
+
+    for item in items:
+        if "test_utils" in str(item.fspath):
+            utils_tests.append(item)
+        elif "test_detection" in str(item.fspath):
+            detection_tests.append(item)
+        else:
+            other_tests.append(item)
+
+    # Reorder: utils first, then detection, then others
+    items[:] = utils_tests + detection_tests + other_tests
 
 
 # Fixtures used across tests
@@ -168,23 +335,3 @@ class DummyGeneFamily:
         self.name = name
         self.organisms = organisms
 
-
-# Specifying the order of test files execution
-
-
-def pytest_collection_modifyitems(config, items):
-    """Reorder tests: utils first, then detection, then others."""
-    utils_tests = []
-    detection_tests = []
-    other_tests = []
-
-    for item in items:
-        if "test_utils" in str(item.fspath):
-            utils_tests.append(item)
-        elif "test_detection" in str(item.fspath):
-            detection_tests.append(item)
-        else:
-            other_tests.append(item)
-
-    # Reorder: utils first, then detection, then others
-    items[:] = utils_tests + detection_tests + other_tests

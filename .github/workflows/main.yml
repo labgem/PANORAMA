@@ -16,6 +16,9 @@ on:
       - 'pyproject.toml'
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   NUM_CPUS: 1
@@ -68,3 +71,12 @@ jobs:
         run: |
           panorama --version
           panorama --help
+      - name: Download test data
+        uses: actions/checkout@v3
+        with:
+          repository: labgem/PANORAMA_test
+          path: test_data
+      - name: Run pytest with coverage
+        shell: bash -l {0}
+        run: |
+          pytest --cov=panorama  --test-data-path=test_data
