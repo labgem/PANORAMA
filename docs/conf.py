@@ -133,7 +133,11 @@ html_theme_options = {
         {
             "url": "https://github.com/labgem/PPanGGOLiN",
             "name": "PPanGGOLiN",
-        }
+        },
+        {
+            "url": "https://labgem.genoscope.cns.fr/",
+            "name": "LABGeM",
+        },
     ],
     "header_links_before_dropdown": 4,  # default value
     "icon_links": [
