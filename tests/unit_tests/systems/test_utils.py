@@ -16,7 +16,7 @@ from panorama.systems.utils import (
     check_for_families,
     check_needed_families,
 )
-from conftest import DummyGeneFamily
+from tests.conftest import DummyGeneFamily
 
 
 def test_get_metadata_to_families_simple_case(simple_pangenome):

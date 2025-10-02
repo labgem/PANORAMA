@@ -62,8 +62,9 @@ notebook = [
 #
 test = [
     "pytest==7",
-    "natsort>=8"
-]
+    "natsort>=8",
+    "pytest-cov>=6.0.0",
+    ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"
@@ -84,3 +85,12 @@ panorama = "panorama.main:main"
 packages = ["panorama"]
 [tool.setuptools.dynamic]
 version = { file = "VERSION" }
+
+[tool.pytest.ini_options]
+markers = [
+    "requires_test_data: marks tests that require test dataset path to be provided",
+]
+log_cli = true
+log_cli_level = "WARNING"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"

@@ -788,6 +788,7 @@ def search_systems(
                 len(x.model.canonical),
                 -len(x),
                 -x.number_of_model_gene_families,
+                hash(x)
             ),
         ),
         start=1,

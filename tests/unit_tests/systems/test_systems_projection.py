@@ -1,6 +1,7 @@
 import pandas as pd
 import pandas.testing as pdt
 import networkx as nx
+from collections import namedtuple
 
 from panorama.systems.system import SystemUnit, System
 from panorama.systems.systems_projection import (
@@ -135,7 +136,27 @@ def test_project_unit_on_organisms(simple_gfs, simple_fu, simple_pangenome):
     )
     model_genes = {gf[f"gene_{i}_0"] for i, gf in enumerate(simple_gfs[:4])}
     components = [[gf[f"gene_{i}_0"] for i, gf in enumerate(simple_gfs[:6])]]
-
+    org_proj_name = [
+        "unit_name",
+        "unit_ID",
+        "organism_name",
+        "gf_name",
+        "partition",
+        "annotation",
+        "secondary_annotation",
+        "gene_ID",
+        "local_ID",
+        "contig",
+        "start",
+        "stop",
+        "strand",
+        "fragment",
+        "category",
+        "genomic_organization",
+        "completeness",
+        "product",
+    ]
+    org_proj_line = namedtuple("OrgLine", org_proj_name)
     expected = [
         [
             "fu",
@@ -258,7 +279,8 @@ def test_project_unit_on_organisms(simple_gfs, simple_fu, simple_pangenome):
             "",
         ],
     ]
-    assert project_unit_on_organisms(components, unit, model_genes) == expected
+    expected_res = [org_proj_line(*map(str, exp)) for exp in expected]
+    assert project_unit_on_organisms(components, unit, model_genes) == expected_res
 
 
 def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome):
@@ -293,34 +315,34 @@ def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome)
     # Expected organisms projection DataFrame
     expected_organisms = pd.DataFrame(
         {
-            0: ["fu"] * 18,
-            1: ["1"] * 18,
-            2: ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
-            3: ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
-            4: ["persistent"] * 18,
-            5: ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,
-            6: [""] * 18,
-            7: [f"gene_{i}_{org}" for org in range(3) for i in range(6)],
-            8: [""] * 18,
-            9: [f"contig_{org}" for org in range(3) for i in range(6)],
-            10: ["100", "200", "300", "400", "500", "600"] * 3,
-            11: ["200", "300", "400", "500", "600", "700"] * 3,
-            12: ["+"] * 18,
-            13: ["False"] * 18,
-            14: ["model", "model", "model", "model", "context", "context"] * 3,
-            15: ["strict"] * 18,
-            16: ["1.0"] * 18,
-            17: [""] * 18,
+            'unit_name': ["fu"] * 18,
+            'unit_ID': ["1"] * 18,
+            'organism_name': ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
+            'gf_name': ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
+            'partition': ["persistent"] * 18,
+            'annotation': ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,
+            'secondary_annotation': [""] * 18,
+            'gene_ID': [f"gene_{i}_{org}" for org in range(3) for i in range(6)],
+            'local_ID': [""] * 18,
+            'contig': [f"contig_{org}" for org in range(3) for i in range(6)],
+            'start': ["100", "200", "300", "400", "500", "600"] * 3,
+            'stop': ["200", "300", "400", "500", "600", "700"] * 3,
+            'strand': ["+"] * 18,
+            'fragment': ["False"] * 18,
+            'category': ["model", "model", "model", "model", "context", "context"] * 3,
+            'genomic_organization': ["strict"] * 18,
+            'completeness': ["1.0"] * 18,
+            'product': [""] * 18,
         }
     )
 
     pangenome_proj = pangenome_proj.sort_values(by=[1]).reset_index(
         drop=True
     )  # Sort by organism
-    org_proj = org_proj.sort_values(by=[2, 3]).reset_index(
+    org_proj = org_proj.sort_values(by=["organism_name", "gf_name"]).reset_index(
         drop=True
     )  # Sort by organism, then gene family
-
+    print(org_proj.columns, expected_organisms)
     pdt.assert_frame_equal(pangenome_proj, expected_pangenome)
     pdt.assert_frame_equal(org_proj, expected_organisms)
 
