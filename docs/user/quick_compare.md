@@ -32,7 +32,7 @@ panorama compare_spots \
     --threads 8
 ```
 
-### Key Arguments
+### Compare spots key Arguments
 
 | Argument         | Description                                                 |
 |------------------|-------------------------------------------------------------|
@@ -79,7 +79,7 @@ panorama compare_systems \
     --threads 8
 ```
 
-### Key Arguments
+### Compare systems key Arguments
 
 | Argument               | Description                                                 |
 |------------------------|-------------------------------------------------------------|

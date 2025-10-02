@@ -11,11 +11,7 @@ myst:
 
 ```{toctree}
 :caption: 'Developper Guide:'
-:maxdepth: 1
+:maxdepth: 2
 
-devRules
-git
-unitTest
-workflows
 buildDoc
 ```

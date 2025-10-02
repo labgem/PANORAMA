@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import logging
 import shutil
+import sys
 import time
 from typing import Any, Dict, Tuple
 from pathlib import Path
@@ -20,19 +21,21 @@ from numpy import nan
 from ppanggolin.meta.meta import check_metadata_format, assign_metadata
 
 # local libraries
-from panorama.utils import init_lock, mkdir
+from panorama.utils import init_lock, mkdir, is_empty
 from panorama.format.write_binaries import write_pangenome, erase_pangenome
 from panorama.format.read_binaries import load_pangenomes
 from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Checks the provided arguments to ensure that they are valid.
 
     Args:
         args (argparse.Namespace): The parsed arguments.
+        silence_warning (bool, optional): Flag to silence warning messages. Defaults to False.
+            This option is used for pansystems workflow to not have unwanted warnings.
 
     Returns:
         Tuple[Dict[str, Any], Dict[str, Any]]: Two dictionaries containing necessary information and HMM keyword arguments.
@@ -56,6 +59,8 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
             raise argparse.ArgumentError(
                 argument=None, message="--table is incompatible option with '--mode'."
             )
+        if is_empty(args.table):
+            raise IOError(f"File: {args.table} is empty.")
         if args.k_best_hit is not None:
             logging.getLogger("PANORAMA").error(
                 "You cannot specify both --table and --k_best_hit in the same command"
@@ -72,11 +77,19 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
                 argument=None,
                 message="--table is Incompatible option with '--only_best_hit'.",
             )
+        if args.output and not silence_warning:
+            logging.getLogger("PANORAMA").warning("--output option is incompatible with --table.")
 
     else:  # args.hmm is not None
+        # todo: See to make this the default value in argparse
         args.mode = "fast" if args.mode is None else args.mode
 
         hmm_kwgs["mode"] = args.mode
+
+        if not args.hmm.exists():
+            raise IOError(f"File: {args.hmm} not exists.")
+        if is_empty(args.hmm):
+            raise IOError(f"File: {args.hmm} is empty.")
         if args.mode == "fast":
             need_info["need_families_sequences"] = True
 
@@ -84,11 +97,8 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
             need_info["need_annotations"] = True
             need_info["need_gene_sequences"] = True
 
-        if args.mode == "fast":
-            if args.keep_tmp:
-                logging.warning("--keep_tmp is not working with --mode fast")
-            if args.tmp:
-                logging.warning("--tmp is not working with --mode fast")
+        if args.mode == "fast" and args.keep_tmp:
+            logging.getLogger("PANORAMA").warning("--keep_tmp is not working with --mode fast")
         hmm_kwgs["tmp"] = Path(tempfile.mkdtemp(prefix="panorama_tmp", dir=args.tmp))
 
         if args.msa is not None and args.mode != "profile":
@@ -137,6 +147,9 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
                 hmm_kwgs["domtblout"] = True
             if "pfamtblout" in args.save_hits:
                 hmm_kwgs["pfamtblout"] = True
+        else:
+            if args.output and not silence_warning:
+                logging.getLogger("PANORAMA").warning("--output option is compatible only with --save_hits.")
     return need_info, hmm_kwgs
 
 
@@ -265,8 +278,8 @@ def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
     group = metadata_df.groupby(["families", "protein_name"])
     metadata_df = group.first().assign(
         secondary_names=group.agg(
-            {"secondary_names": lambda x: ",".join(set(x.dropna()))}
-        ).replace("", nan)
+            {"secondary_names": lambda x: ",".join(set(x.dropna())) or nan}
+        )
     )
     metadata_df = metadata_df.reset_index()
     return metadata_df
@@ -284,9 +297,14 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
         pd.DataFrame: Filtered metadata dataframe with only the k best hits.
     """
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
-    return metadata.groupby(["families"], group_keys=False).apply(
-        get_k_best_hit, k_best_hit
-    )
+    # Sort by the priority criteria
+    metadata_sorted = metadata.sort_values([
+        'score',      # Highest score first (descending)
+        'bias',       # Lowest bias first (ascending)
+        'e_value',    # Lowest e_value first (ascending)
+        'i_e_value'   # Lowest i_e_value first (ascending)
+    ], ascending=[False, True, True, True])
+    return metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
 
 
 def write_annotations_to_pangenome(
@@ -500,34 +518,38 @@ def launch(args: argparse.Namespace) -> None:
     manager = Manager()
     lock = manager.Lock()
     need_info, hmm_kwgs = check_annotate_args(args)
-    pangenomes = load_pangenomes(
-        pangenome_list=args.pangenomes,
-        need_info=need_info,
-        check_function=check_pangenome_annotation,
-        max_workers=args.threads,
-        lock=lock,
-        disable_bar=args.disable_prog_bar,
-        source=args.source,
-        force=args.force,
-    )
-    annot_pangenomes(
-        pangenomes=pangenomes,
-        source=args.source,
-        table=args.table,
-        hmm=args.hmm,
-        threads=args.threads,
-        k_best_hit=args.k_best_hit,
-        lock=lock,
-        force=args.force,
-        disable_bar=args.disable_prog_bar,
-        **hmm_kwgs,
-    )
-    if not args.keep_tmp:
-        shutil.rmtree(hmm_kwgs["tmp"])
-    else:
-        logging.getLogger("PANORAMA").info(
-            f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}"
+    try:
+        pangenomes = load_pangenomes(
+            pangenome_list=args.pangenomes,
+            need_info=need_info,
+            check_function=check_pangenome_annotation,
+            max_workers=args.threads,
+            lock=lock,
+            disable_bar=args.disable_prog_bar,
+            source=args.source,
+            force=args.force,
         )
+        annot_pangenomes(
+            pangenomes=pangenomes,
+            source=args.source,
+            table=args.table,
+            hmm=args.hmm,
+            threads=args.threads,
+            k_best_hit=args.k_best_hit,
+            lock=lock,
+            force=args.force,
+            disable_bar=args.disable_prog_bar,
+            **hmm_kwgs,
+        )
+    except Exception as e:
+        raise Exception(f"Annotation failed from : {e}") from e
+    finally:
+        if not args.keep_tmp:
+            shutil.rmtree(hmm_kwgs["tmp"])
+        else:
+            logging.getLogger("PANORAMA").info(
+                f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}"
+            )
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -699,7 +721,7 @@ def parser_annot(parser):
         required=False,
         nargs="?",
         type=Path,
-        default=None,
+        default=Path(tempfile.gettempdir()),
         help=f"Path to temporary directory, defaults path is {Path(tempfile.gettempdir()) / 'panorama'}",
     )
     optional = parser.add_argument_group(title="Optional arguments")

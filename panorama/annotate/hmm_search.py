@@ -109,8 +109,8 @@ def digit_gene_sequences(
         disable_bar=disable_bar,
     )
     available_memory = psutil.virtual_memory().available
-    target_size = os.stat(tmp / "all_protein_genes.fna").st_size
-    seq_file = SequenceFile(tmp / "all_protein_genes.fna", digital=True)
+    target_size = os.stat(tmp / "all_protein_genes.faa").st_size
+    seq_file = SequenceFile(tmp / "all_protein_genes.faa", digital=True)
     return seq_file, True if target_size < available_memory * 0.1 else False
 
 
@@ -632,8 +632,8 @@ def get_metadata_df(
             Cleaned and optionally merged metadata DataFrame.
     """
     metadata_df = pd.DataFrame(result).fillna(nan)
-    metadata_df = metadata_df.replace(to_replace="-", value=nan)
-    metadata_df = metadata_df.replace(to_replace="", value=nan)
+    metadata_df = metadata_df.where(metadata_df != "-", nan)
+    metadata_df = metadata_df.where(metadata_df != "", nan)
     if mode == "sensitive":
         assert (
             gene2family is not None
@@ -663,7 +663,7 @@ def get_metadata_df(
             group.first()
             .assign(
                 secondary_name=group.agg(
-                    {"secondary_name": lambda x: ",".join(set(x.dropna()))}
+                    {"secondary_names": lambda x: ",".join(set(x.dropna()))}
                 ).replace("", nan)
             )
             .reset_index()

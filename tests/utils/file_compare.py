@@ -2,10 +2,13 @@ from pathlib import Path
 import shutil
 
 
-GOLDEN_DIR = Path("tests/functional_tests/expected_outputs")
+TESTS_DIR = Path(__file__).parent.parent
+GOLDEN_DIR = TESTS_DIR/"functional_tests/expected_outputs"
 
 
-def assert_or_update_file(expected_file_name: Path, file_path: Path, update_golden: bool):
+def assert_or_update_file(
+    expected_file_name: Path, file_path: Path, update_golden: bool
+):
     """Compare file content with golden file or update it if --update-golden is set."""
     golden_file = GOLDEN_DIR / expected_file_name
 
@@ -25,4 +28,3 @@ def assert_or_update_file(expected_file_name: Path, file_path: Path, update_gold
             f"Content mismatch for {file_path.name}. "
             f"Use --update-golden to update the reference."
         )
-
