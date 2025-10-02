@@ -69,12 +69,12 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "requirements.txt",
-    "developper/figure_script.md",
-    "developper/draw_spot_script.md",
-    "developper/draw.md",
-    "developper/system_asso_script.md",
-    "developper/write_flat_script.md",
-    "developper/conserved_spot_script.md"
+    "developer/figure_script.md",
+    "developer/draw_spot_script.md",
+    "developer/draw.md",
+    "developer/system_asso_script.md",
+    "developer/write_flat_script.md",
+    "developer/conserved_spot_script.md"
 ]
 
 suppress_warnings = [
@@ -103,7 +103,7 @@ html_static_path = ["_static"]
 html_context = {
     "github_user": "labgem",
     "github_repo": "PANORAMA",
-    "github_version": "main",
+    "github_version": "doc",  # Automatically go to the doc branch for tiny modification.
     "doc_path": "docs",
 }
 
@@ -127,11 +127,19 @@ html_theme_options = {
         #     "name": "Paper",
         # },
         {
+            "url": "https://github.com/labgem/PANORAMA",
+            "name": "PANORAMA",
+        },
+        {
             "url": "https://github.com/labgem/PPanGGOLiN",
             "name": "PPanGGOLiN",
-        }
+        },
+        {
+            "url": "https://labgem.genoscope.cns.fr/",
+            "name": "LABGeM",
+        },
     ],
-    "header_links_before_dropdown": 5,  # default value
+    "header_links_before_dropdown": 4,  # default value
     "icon_links": [
         {
             "name": "GitHub",

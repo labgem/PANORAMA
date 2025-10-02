@@ -885,13 +885,15 @@ def parser_info(parser: argparse.ArgumentParser) -> None:
         "-a",
         "--parameters",
         action="store_true",
-        help="Extract and export parameters used at each step of pangenome "
-        "generation (currently not implemented)",
+        # help="Extract and export parameters used at each step of pangenome "
+        # "generation (currently not implemented)",
+        help=argparse.SUPPRESS,
     )
     display.add_argument(
         "-m",
         "--metadata",
         action="store_true",
-        help="Extract and export metadata information stored in pangenome files "
-        "(currently not implemented)",
+        # help="Extract and export metadata information stored in pangenome files "
+        # "(currently not implemented)",
+        help=argparse.SUPPRESS,
     )

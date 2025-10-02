@@ -13,6 +13,7 @@ myst:
 
 install
 quick_usage
+issues
 ```
 
 ```{toctree}

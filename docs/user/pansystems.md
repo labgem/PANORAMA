@@ -1,4 +1,4 @@
-# Pansystems - Complete Biological Systems Prediction Workflow
+# Complete Biological Systems Prediction Workflow 
 
 The `pansystems` command provides a comprehensive, all-in-one workflow to detect biological systems in multiple
 pangenomes. This command combines [gene family annotation](annotation.md), [system detection](detection.md),
@@ -6,7 +6,7 @@ and [results visualization](write_systems.md) into a single streamlined process.
 
 ---
 
-## Pansystems Workflow 🧪
+## Pansystems Workflow
 
 The pansystems process integrates three main steps:
 
@@ -21,7 +21,7 @@ The pansystems process integrates three main steps:
 
 ---
 
-## Command Line Usage 🚀
+## Command Line Usage
 
 ### HMM-based Annotation and Detection
 
@@ -57,7 +57,7 @@ panorama pansystems \
 
 ---
 
-## Key Arguments 🔑
+## Key Arguments
 
 ### Required Arguments
 
@@ -95,7 +95,6 @@ For more detection parameters, see the [systems command documentation](detection
 | `--projection`  | Project systems onto individual organisms                        |
 | `--partition`   | Write partition heatmap showing system distribution              |
 | `--association` | Associate systems with pangenome elements (RGPs, spots, modules) |
-| `--proksee`     | Write proksee-compatible visualization files                     |
 
 ```{note}
 For complete output options and file formats, see:

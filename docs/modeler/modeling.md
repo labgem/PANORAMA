@@ -1,7 +1,7 @@
 (models)=
-# 🧬 PANORAMA System Modeling
+# PANORAMA System Modeling
 
-## 🧰 Definition
+## Definition
 
 PANORAMA detects macromolecular systems in pangenomes using user-defined models. These models specify what protein
 families constitute a system and how they are expected to be organized genomically.
@@ -19,18 +19,18 @@ or [PADLOC](https://github.com/padlocbio/padloc) modeling format, PANORAMA intro
 PANORAMA system models are written in JSON format.
 ```
 
-## 🧱 Model Structure
+## Model Structure
 
 A model is composed of:
 
 - One or more **Functional Units**, each containing one or more **Families**
 - A set of parameters to specify the *quorum* and the co-localization rules
 
-### 🔎 Example
+### Example
 
 ```json
 {
-  "name": "NanoDefense_V1",
+  "name": "Defense_System",
   "parameters": {
     "transitivity": 4,
     "window": 5,
@@ -39,7 +39,7 @@ A model is composed of:
   },
   "func_units": [
     {
-      "name": "DetectionUnit",
+      "name": "SensorUnit",
       "presence": "mandatory",
       "parameters": {
         "min_mandatory": 1,
@@ -116,11 +116,10 @@ A model is composed of:
 This fictional system represents a defense mechanism composed of sensor, effector, and regulatory units.
 It models a modular system architecture using three functional units:
 
-- Detection unit (mandatory): Detects environmental signals or threats.
+- Sensor unit (mandatory): Detects environmental signals or threats.
     - ND-SensorA: mandatory — at least one detection family must be present.
     - ND-SensorB: accessory — may appear in some variants, enhancing specificity.
-    - ND-Disruptor: forbidden — if present, disqualifies the system (may represent a mobile element or anti-system
-      gene).
+    - ND-Disruptor: forbidden — if present, disqualifies the system (may represent an anti-system gene).
     - To validate this unit, one mandatory and a total of one family is required.
 - Response unit (mandatory): Delivers a toxic response to eliminate the threat.
     - ND-Toxin1: mandatory, but exchangeable with ND-Toxin2 — either can fulfill the same role.
@@ -129,8 +128,8 @@ It models a modular system architecture using three functional units:
 - Control unit (accessory): An optional regulatory unit that may fine-tune the response.
     - ND-Regulator: mandatory within the unit, but the whole unit is accessory.
     - To validate this unit, one mandatory and a total of one family is required.
-- Insert unit (neutral): A neutral unit often found in the system context but without known function.
-    - NS-md: mandatory within the unit, if the unit is found this family is too
+- Insert unit (neutral): A neutral unit is often found in the system context but without known function.
+    - NS-md: mandatory within the unit, if the unit is found, this family is too
     - NV-ac: accessory within the unit, not always present in the unit.
 
 ```{seealso}
@@ -138,7 +137,7 @@ This example shows a fairly complete and specific model.
 In the next section, we'll look at how to create more simplified models.
 ```
 
-### 🧩 Components
+### Components
 
 #### Model
 
@@ -179,7 +178,7 @@ A family must be included in a functional unit.
 A family can theoretically be in multiple unit, but this feature has never been tested.
 ```
 
-### 🎯 Presence Types Explained
+### Presence Types Explained
 
 Each family and each functional unit in a PANORAMA model must be assigned a presence type.
 This type determines how the element contributes to system detection and scoring.
@@ -200,7 +199,7 @@ Below is a complete reference:
 | neutral       | Family, Unit | 〰 Ignored               | ❌ No            | ✔ Yes                         | Ignored for scoring, but included in the graph. Helps connect elements that are close in genomic context.   |
 
 (detection-rules)=
-### ⚙️ Detection rules
+### Detection rules
 
 Parameters are defined at the model or functional unit level, such as:
 
@@ -216,7 +215,7 @@ Parameters are defined at the model or functional unit level, such as:
 
 #### Quorum rules
 
-The same model can represent systems with the same function, but a different composition.
+The same model can represent systems with the same function but a different composition.
 Quorum parameters are used to define the quantity of elements required to guarantee a functional system.
 
 | Parameter     | Description                                      | Required/Optional | Possible Values           |
@@ -275,7 +274,7 @@ Either it's possible to don't precise all parameters in functional unit, the `pa
 To let the functional unit inherits all parameter you can let the dictionary empty.
 ```
 
-### 🧪 Canonical Models
+### Canonical Models 🧪
 
 PANORAMA supports the concept of canonical models, which represent partial, hypothetical,
 or computationally predicted systems.
@@ -285,14 +284,16 @@ Canonical model can help detect system variants or candidates for novel systems.
 To define a canonical model, include:
 
 ```json
-"canonical": [
-        non-canonical_model_A,
-        non-canonical_model_B,
-        non-canonical_model_C
-]
+{
+  "canonical": [
+    "non-canonical_model_A",
+    "non-canonical_model_B",
+    "non-canonical_model_C"
+  ]
+}
 ```
 
-## ✅ Validation Rules
+## Validation Rules ✅
 
 Model files are automatically validated and loaded using the PANORAMA engine (models.py). Checks include:
 
@@ -303,7 +304,7 @@ Model files are automatically validated and loaded using the PANORAMA engine (mo
 
 Models failing these checks will raise clear exceptions.
 
-## 📝 Notes
+## Notes 📝
 
 1. Each model must be saved in its own .json file.
 2. Names are case-sensitive. 

@@ -1,4 +1,4 @@
-# Conserved Spots Comparison Across Pangenomes 🎯
+# Conserved Spots Comparison Across Pangenomes
 
 The compare_spots command identifies and analyzes conserved genomic spots across multiple pangenomes by comparing their
 gene family composition and genomic organization patterns.
@@ -8,7 +8,7 @@ pangenomes and uses **Gene Family Relatedness Relationship (GFRR) metrics** to i
 across different bacterial populations. Optionally, it can integrate systems detection results to analyze biological
 systems within conserved regions.
 
-## Conserved Spots Detection Workflow ⚙️
+## Conserved Spots Detection Workflow
 
 The conserved spots comparison process runs as follows:
 
@@ -30,10 +30,10 @@ The conserved spots comparison process runs as follows:
     - When [enabled](detection.md), systems analysis creates linkage graphs showing relationships between biological
       systems through their association with conserved spots.
 
-6. 💾 Write Results to Files
+6. Write Results to Files
     - Conserved spots are saved as detailed TSV files and optional graph formats (GEXF, GraphML) for visualization.
 
-## Compare spots command Line Usage 🚀
+## Compare spots command Line Usage
 
 Basic conserved spots comparison:
 
@@ -112,7 +112,7 @@ The dual cutoff system provides fine-grained control over conservation stringenc
 | Moderate     | 0.6      | 0.7      | Balanced sensitivity and specificity  |
 | Permissive   | 0.4      | 0.5      | Detects distant conservation patterns |
 
-## Output 📂
+## Output
 
 PANORAMA generates multiple outputs: detailed spot information files, summary tables, and optional graph visualizations.
 
@@ -132,7 +132,7 @@ output_directory/
 └── systems_link_with_conserved_spots_mst.gexf (optional)
 ```
 
-##" Individual Conserved Spot Files
+## Individual Conserved Spot Files
 
 Each `conserved_spot_X.tsv` contains detailed RGP-level information:
 

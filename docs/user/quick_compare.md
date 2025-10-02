@@ -10,7 +10,7 @@ Family Relatedness Relationship (GFRR) metrics](#gfrr_overview).
 The `compare_spots` command identifies conserved genomic spots across multiple pangenomes by comparing gene family
 composition at spot borders.
 
-### Compare spots command-line usage 🚀
+### Compare spots command-line usage
 
 ```bash
 # Basic conserved spots comparison

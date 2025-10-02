@@ -13,5 +13,10 @@ myst:
 :caption: 'Developper Guide:'
 :maxdepth: 2
 
+contribute
+devRules
+git
+unitTest
 buildDoc
+tipsandtricks
 ```

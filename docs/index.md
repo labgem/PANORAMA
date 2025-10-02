@@ -7,6 +7,8 @@
 :relative-images:
 ```
 
+---
+
 ```{toctree}
 :caption: 'User Guide:'
 :maxdepth: 2
@@ -15,17 +17,17 @@ user/user_guide
 ```
 
 ```{toctree}
-:caption: 'Modeller Guide:'
+:caption: 'Modeler Guide:'
 :maxdepth: 2
 
-modeller/modeler_guide
+modeler/modeler_guide
 ```
 
 ```{toctree}
-:caption: 'Developper Guide:'
+:caption: 'Developer Guide:'
 :maxdepth: 1
 
-developper/developper_guide
+developer/developer_guide
 ```
 
 ```{toctree}

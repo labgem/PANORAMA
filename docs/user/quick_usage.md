@@ -1,4 +1,4 @@
-# Quick usage
+# Quick usage 🦅
 
 ```{toctree}
 :maxdepth: 2
