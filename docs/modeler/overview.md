@@ -1,7 +1,7 @@
 # PANORAMA Models Overview 🔭
 
 PANORAMA detects macromolecular systems in pangenomes using user-defined models. These models are an exhaustive and
-specific representation of a system. They describe the presence/abscence rules of protein families constituting a
+specific representation of a system. They describe the presence/absence rules of protein families constituting a
 system, how they are organized in genomes, and what genomic constraints govern their presence.
 
 System models are written in JSON and provide a flexible, hierarchical structure that captures both essential and
@@ -29,12 +29,12 @@ Models allow users to capture:
 
 ---
 
-## Structure (Brief) 🧱
+## Structure (Brief)
 
 Each model file is a single JSON object composed of:
 
 - **`name`**: The system’s identifier.
-- **`parameters`**: Detection parameters at the model level (e.g. quorum, transitivity).
+- **`parameters`**: Detection parameters at the model level (e.g., quorum, transitivity).
 - **`func_units`**: A list of *Functional Units* (modules), each of which groups multiple **protein families**.
 
 The structure is hierarchical:
@@ -61,9 +61,9 @@ Detection rules are defined at **both the model level** and the **functional uni
 
 For full details, see:
 
-- 📄 [Model structure](modeling.md#-model-structure)
-- 🧩 [Presence Types](modeling.md#-presence-types-explained)
-- 🧰 [Detection rules](modeling.md#-detection-parameters)
+- [Model structure](modeling.md#-model-structure)
+- [Presence Types](modeling.md#presence-types-explained)
+- [Detection rules](modeling.md#-detection-parameters)
 
 ---
 
@@ -78,7 +78,7 @@ We welcome contributions and would like to provide PANORAMA users with a variety
 You can contribute to the creation of new models by following the guide
 [here](contribute.md#how-to-contribute-to-panorama-models).
 
-## Translate models 🔁
+## Translate models
 
 PANORAMA can translate several sources (see [PANORAMA models repository](https://github.com/PANORAMA-models)).
 

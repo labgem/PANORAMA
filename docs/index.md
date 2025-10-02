@@ -20,7 +20,7 @@ user/user_guide
 :caption: 'Modeler Guide:'
 :maxdepth: 2
 
-modeller/modeler_guide
+modeler/modeler_guide
 ```
 
 ```{toctree}
