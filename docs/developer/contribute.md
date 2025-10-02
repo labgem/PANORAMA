@@ -145,6 +145,10 @@ VERSION will be updated by the maintainers when merging PRs.
 But you can also update it manually to make his life easier (he will appreciate it).
 ```
 
+## Tips and Tricks
+
+For more tips and tricks, see our [Tips and Tricks](tipsandtricks.md) page.
+
 ## Getting Help 🆘
 
 Stuck on something? Here's where you can find help:

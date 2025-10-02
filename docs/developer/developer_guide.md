@@ -18,4 +18,5 @@ devRules
 git
 unitTest
 buildDoc
+tipsandtricks
 ```
