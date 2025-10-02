@@ -2,7 +2,7 @@
 name: Asking Questions or Sharing Ideas
 about: Describe this issue template's purpose here.
 title: "[Q&A]"
-labels: ''
+labels: help wanted, question
 assignees: ''
 
 ---

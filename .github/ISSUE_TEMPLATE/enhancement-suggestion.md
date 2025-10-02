@@ -2,7 +2,7 @@
 name: Enhancement Suggestion
 about: Some idea to enhance PANORAMA
 title: "[ENHANCEMENT]"
-labels: ''
+labels: enhancement
 assignees: ''
 
 ---

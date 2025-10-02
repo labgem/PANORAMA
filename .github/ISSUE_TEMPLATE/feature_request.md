@@ -2,7 +2,7 @@
 name: Feature request
 about: Suggest a new feature for PANORAMA
 title: "[FEAT]"
-labels: ''
+labels: new feature
 assignees: ''
 
 ---
