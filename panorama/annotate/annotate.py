@@ -496,16 +496,22 @@ def annot_pangenomes(
             disable_bar=disable_bar,
             **hmm_kwgs,
         )
-    write_annotations_to_pangenomes(
-        pangenomes,
-        pangenomes2metadata,
-        source,
-        k_best_hit,
-        threads,
-        lock,
-        force,
-        disable_bar,
-    )
+    try:
+        write_annotations_to_pangenomes(
+            pangenomes,
+            pangenomes2metadata,
+            source,
+            k_best_hit,
+            threads,
+            lock,
+            force,
+            disable_bar,
+        )
+    except Exception as e:
+        for pangenome in pangenomes:
+            erase_pangenome(pangenome, metadata=True, source=source)
+            logging.getLogger("PANORAMA").debug(f"erase annotation from {source} in {pangenome.name}")
+        raise Exception(f"Annotation failed from : {e}") from e
 
 
 def launch(args: argparse.Namespace) -> None:
