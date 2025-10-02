@@ -28,12 +28,14 @@ from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Checks the provided arguments to ensure that they are valid.
 
     Args:
         args (argparse.Namespace): The parsed arguments.
+        silence_warning (bool, optional): Flag to silence warning messages. Defaults to False.
+            This option is used for pansystems workflow to not have unwanted warnings.
 
     Returns:
         Tuple[Dict[str, Any], Dict[str, Any]]: Two dictionaries containing necessary information and HMM keyword arguments.
@@ -75,10 +77,11 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
                 argument=None,
                 message="--table is Incompatible option with '--only_best_hit'.",
             )
-        if args.output:
+        if args.output and not silence_warning:
             logging.getLogger("PANORAMA").warning("--output option is incompatible with --table.")
 
     else:  # args.hmm is not None
+        # todo: See to make this the default value in argparse
         args.mode = "fast" if args.mode is None else args.mode
 
         hmm_kwgs["mode"] = args.mode
@@ -94,11 +97,8 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
             need_info["need_annotations"] = True
             need_info["need_gene_sequences"] = True
 
-        if args.mode == "fast":
-            if args.keep_tmp:
-                logging.warning("--keep_tmp is not working with --mode fast")
-            if args.tmp:
-                logging.warning("--tmp is not working with --mode fast")
+        if args.mode == "fast" and args.keep_tmp:
+            logging.getLogger("PANORAMA").warning("--keep_tmp is not working with --mode fast")
         hmm_kwgs["tmp"] = Path(tempfile.mkdtemp(prefix="panorama_tmp", dir=args.tmp))
 
         if args.msa is not None and args.mode != "profile":
@@ -148,7 +148,7 @@ def check_annotate_args(args: argparse.Namespace) -> Tuple[Dict[str, Any], Dict[
             if "pfamtblout" in args.save_hits:
                 hmm_kwgs["pfamtblout"] = True
         else:
-            if args.output:
+            if args.output and not silence_warning:
                 logging.getLogger("PANORAMA").warning("--output option is compatible only with --save_hits.")
     return need_info, hmm_kwgs
 
