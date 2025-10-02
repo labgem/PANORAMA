@@ -1,10 +1,10 @@
-# System Association with Pangenome Elements 🤝
+# System Association with Pangenome Elements
 
 The `write_systems` command enables the creation of associations between systems and other pangenome elements such as
 RGPs (Regions of Genomic Plasticity), spots, and modules. Association analysis provides correlation matrices and
 visualizations to analyze relationships between systems and various pangenome components.
 
-## Association Workflow 🧪
+## Association Workflow
 
 The association process creates comprehensive correlation matrices and coverage analyses:
 
@@ -33,7 +33,7 @@ The association analysis produces interactive correlation matrix heatmaps with:
 - **Bar Charts**: Summary statistics for systems and elements
 - **Color Bars**: Legend and scaling information
 
-## Association Command Line Usage 🚀
+## Association Command Line Usage
 
 ### Basic Association Analysis
 
@@ -74,11 +74,11 @@ panorama write_systems \
     --output results/
 ```
 
-For more information on other analysis options, here the documentation about [projection](projection.md).
+For more information on other analysis options, here is the documentation about [projection](projection.md).
 
-## Association command line arguments ⚙️
+## Association command line arguments
 
-### Association-Specific key 🔑
+### Association-Specific key
 
 | Argument        | Type | Choices                           | Description                                  |
 |-----------------|------|-----------------------------------|----------------------------------------------|
@@ -90,7 +90,7 @@ For more information on other analysis options, here the documentation about [pr
 - **spots**: Hotspots of genome evolution - frequently variable loci
 - **modules**: Functional modules - co-evolving gene clusters
 - **all**: Analyze all three association types
-- 
+
 ### Required Arguments
 
 | Argument       | Type | Description                                     |
@@ -110,12 +110,12 @@ For more information on other analysis options, here the documentation about [pr
 
 **Output Format Options**
 
-The visualization outputs can be customized (currently HTML format is default):
+The visualization outputs can be customized (currently the HTML format is default):
 
 - **HTML**: Interactive Bokeh plots (default)
 - **PNG**: Static high-resolution images (if requested)
 
-## Association Output Files 📁
+## Association Output Files
 
 Association analysis creates organized output in the specified `--output` directory:
 
@@ -209,25 +209,25 @@ Interactive Bokeh visualizations containing:
 - **Save Tools**: Export plots or data
 - **Responsive Layout**: Adapts to different screen sizes
 
-## Data Interpretation 📊
+## Data Interpretation
 
 ### Coverage Metrics
 
 **Coverage** represents the number of element gene families covered by the associated systems:
 
-- **1.0 (dark red)**: All families in the element are covered by associated systems
-- **0.5 (light red)**: Half of the element's families are explained by systems
+- **1.0 (dark red)**: Associated systems cover all families in the element
+- **0.5 (light red)**: Systems explain half of the element's families
 - **0.0 (white)**: No overlap between element and system families
 
 Depending on the element type, coverage is computed differently:
 
-- **RGP**: use the intersection between gene of the RGP and gene of associated system present in the genome of the RGP
+- **RGP**: use the intersection between the gene of the RGP and gene of an associated system present in the genome of the RGP
 - **Spot**: use gene families between borders of the spot
-- **Module**: use the intersection of gene families of the module and gene families of associated system
+- **Module**: use the intersection of the module's gene families and the gene families of an associated system
 
 ### Frequency Metrics
 
-**Frequency** indicates how commonly elements and associated systems appear across genomes:
+**Frequency** indicates how common elements and associated systems appear across genomes:
 
 - **High Frequency (dark blue)**: Element found in many genomes
 - **Low Frequency (light blue)**: Element found in few genomes
@@ -237,11 +237,11 @@ Depending on the element type, coverage is computed differently:
 
 **Correlation values** in the heatmap show system-element co-occurrence:
 
-- **High Values (dark colors)**: high number of system type associated with the element
+- **High Values (dark colors)**: high number of system types associated with the element
 - **Low Values (light colors)**: Weak or no association
 - **Pattern Analysis**: Reveals functional relationships and genomic organization
 
-## Technical Details 🔧
+## Technical Details
 
 ### Visualization Technology
 

@@ -1,15 +1,15 @@
 (gene-family-annotation)=
-#  Gene Family annotation 🔢
+# Gene Family annotation
 
 The `annotation` command adds **functional annotations** to gene families in pangenomes.
 You can choose between:
 
-- 📄 A **TSV file** with metadata
-- 🧬 A **HMM database**, searched with [pyhmmer](https://pyhmmer.readthedocs.io/en/stable/index.html)
+- A **TSV file** with metadata
+- A **HMM database**, searched with [pyhmmer](https://pyhmmer.readthedocs.io/en/stable/index.html)
 
 ---
 
-## Annotation Modes ⚙️
+## Annotation Modes
 
 ### TSV-based annotation
 
@@ -20,8 +20,8 @@ A TSV file where each row lists a pangenome name and the path to its gene family
 
 These annotation files contain functional details (e.g., protein name, accession, score, etc.).
 The only mandatory column is `families`, which correspond to the gene families identifier.
-See [metadata format](https://ppanggolin.readthedocs.io/en/latest/user/metadata.html#metadata-format) PPanGGOLiN documentation,
-for more information.
+See [metadata format](https://ppanggolin.readthedocs.io/en/latest/user/metadata.html#metadata-format) PPanGGOLiN
+documentation, for more information.
 
 ### HMM-based annotation
 
@@ -45,9 +45,11 @@ To annotate with a HMM database, you must provide a HMM metadata file (TSV forma
 ```{warning}
 Not all the columns need to be filled with value as indicated by the mandatory column, but they should exist in the metadata file.
 ```
+
 ```{tip}
 To keep all assignations possible between a profile and a gen family, you can let the threshold columns empty.
 ```
+
 ```{note}
 You can generate the input files expected by PANORAMA using `panorama utils --hmm`.
 
@@ -64,7 +66,7 @@ To align gene families against a HMM database, you can use different modes:
 
 ---
 
-## Command Line Usage 🚀
+## Command Line Usage
 
 To annotate gene families with precomputed metadata, do as such:
 
@@ -89,6 +91,7 @@ panorama annotation \
   --output results/ \
   --threads 8
 ```
+
 ```{tip}
 More options are available to annotate with a HMM database. See below.
 ```
@@ -96,33 +99,33 @@ More options are available to annotate with a HMM database. See below.
 ```{note}
 Source name should not contain a special character. They could interfere with the `.h5` writing.
 ```
+
 ```{warning}
 You **must provide either** `--table` **or** `--hmm`, **but not both**. 
 These options are mutually exclusive.
 ```
 
-### Key options 🔑
+### Key options
 
-| Shortcut | Argument             | Description                                                                           |
-|----------|----------------------|---------------------------------------------------------------------------------------|
-| `-p`     | `--pangenomes`       | TSV file listing `.h5` pangenomes                                                     |
-| `-s`     | `--source`           | Name of the annotation source (e.g. `KO2024`, `Pfam`)                                 |
-| —        | `--table`            | **Mutually exclusive with `--hmm`**. TSV linking pangenome names to annotation files  |
-| —        | `--hmm`              | **Mutually exclusive with `--table`**. HMM metadata TSV (from `panorama utils --hmm`) |
-| —        | `--mode`             | Required with `--hmm`. Alignment strategy: `fast`, `profile`, or `sensitive`          |
-| —        | `--msa`              | (Used only in `profile` mode) TSV listing MSAs per gene family                        |
-| `-b`     | `--only_best_hit`    | Equivalent to `--k_best_hit 1`                                                        |
-| —        | `--k_best_hit`       | Keep up to `k` best hits per gene family                                              |
-| —        | `--output`           | Output directory for HMM result files (optional, used with `--save_hits`)             |
-| —        | `--save_hits`        | Save HMM alignment results in formats: `tblout`, `domtblout`, `pfamtblout`            |
-| —        | `--tmp`              | Temporary directory (used with HMM mode)                                              |
-| —        | `--keep_tmp`         | Keep temporary files after HMM alignment                                              |
-| —        | `--Z`                | Custom Z value for e-value scaling (advanced HMMER option)                            |
-| —        | `--msa-format`       | Format of MSA files (default: `afa`) — rarely changed                                 |
-| —        | `--threads`          | Number of threads to use                                                              |
+| Shortcut | Argument          | Description                                                                           |
+|----------|-------------------|---------------------------------------------------------------------------------------|
+| `-p`     | `--pangenomes`    | TSV file listing `.h5` pangenomes                                                     |
+| `-s`     | `--source`        | Name of the annotation source (e.g. `KO2024`, `Pfam`)                                 |
+| —        | `--table`         | **Mutually exclusive with `--hmm`**. TSV linking pangenome names to annotation files  |
+| —        | `--hmm`           | **Mutually exclusive with `--table`**. HMM metadata TSV (from `panorama utils --hmm`) |
+| —        | `--mode`          | Required with `--hmm`. Alignment strategy: `fast`, `profile`, or `sensitive`          |
+| —        | `--msa`           | (Used only in `profile` mode) TSV listing MSAs per gene family                        |
+| `-b`     | `--only_best_hit` | Equivalent to `--k_best_hit 1`                                                        |
+| —        | `--k_best_hit`    | Keep up to `k` best hits per gene family                                              |
+| —        | `--output`        | Output directory for HMM result files (optional, used with `--save_hits`)             |
+| —        | `--save_hits`     | Save HMM alignment results in formats: `tblout`, `domtblout`, `pfamtblout`            |
+| —        | `--tmp`           | Temporary directory (used with HMM mode)                                              |
+| —        | `--keep_tmp`      | Keep temporary files after HMM alignment                                              |
+| —        | `--Z`             | Custom Z value for e-value scaling (advanced HMMER option)                            |
+| —        | `--msa-format`    | Format of MSA files (default: `afa`) — rarely changed                                 |
+| —        | `--threads`       | Number of threads to use                                                              |
 
-
-## Annotation Workflow 🧪
+## Annotation Workflow
 
 1. Load pangenomes
 
@@ -130,24 +133,24 @@ These options are mutually exclusive.
 
 2. Retrieve annotations
 
-   - With `--table`: loads metadata from TSV
+    - With `--table`: loads metadata from TSV
 
-   - With `--hmm`: aligns families via annot_with_hmm() from hmm_search.py
+    - With `--hmm`: aligns families via annot_with_hmm() from hmm_search.py
 
 3. Filter HMM hits (only for the hmm option)
 
-    Each hit is filtered using the thresholds defined in the HMM metadata:
+   Each hit is filtered using the thresholds defined in the HMM metadata:
     - e-value
-   - i-evalue
-   - score
-   - target coverage
-   - HMM coverage
+    - i-evalue
+    - score
+    - target coverage
+    - HMM coverage
 
 ```{tip}
 Prefer to use the score instead of the e-value or the i-evalue to ensure reproducibility of the results even if the size of your targets changes.
 ```
 
-4. 💾 Write annotations
+4. Write annotations
 
    Filtered annotations are stored in the .h5 files, under the given --source name.
 
@@ -155,7 +158,7 @@ Prefer to use the score instead of the e-value or the i-evalue to ensure reprodu
 Annotations can be viewed or reused with PANORAMA, PPanGGOLiN, or custom tools (*e.g.*, [vitables](https://vitables.org/index.html)).
 ```
 
-## HMM Search Details 🧠
+## HMM Search Details
 
 Annotation relies on the [pyhmmer](https://pyhmmer.readthedocs.io/en/stable/index.html) Python API.
 
@@ -171,7 +174,7 @@ If sequences exceed 10% of available RAM, PANORAMA uses `hmmscan`, as recommende
 [here](https://pyhmmer.readthedocs.io/en/stable/examples/performance_tips.html#Performance-tips-and-tricks)
 ```
 
-## Minimal example 📦
+## Minimal example
 
 ### Annotate gene families based on the reference sequence with COG HMM
 

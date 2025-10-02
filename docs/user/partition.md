@@ -1,11 +1,11 @@
-# System Partition Analysis ➗
+# System Partition Analysis
 
 The `write_systems` command enables the creation of partition visualizations for pangenome systems, showing how genetic
 systems are distributed across different partition categories (persistent, shell, cloud, etc.) in pangenomes. Partition
 analysis provides interactive heatmap visualizations to understand the conservation patterns and evolutionary dynamics
 of genetic systems across organisms.
 
-## Partition Workflow 🧪
+## Partition Workflow
 
 The partition analysis creates comprehensive heatmap visualizations showing system distribution patterns:
 
@@ -35,7 +35,7 @@ The partition analysis produces comprehensive interactive heatmaps with:
 - **Color Bar**: Legend showing partition type color coding
 - **Hover Tooltips**: Interactive information display
 
-## Partition Command Line Usage 🚀
+## Partition Command Line Usage
 
 ### Basic Partition Analysis
 
@@ -80,9 +80,9 @@ panorama write_systems \
 For more information on other analysis options, see the documentation about [projection](projection.md)
 and [association](association.md).
 
-## Partition command Line Arguments ⚙️
+## Partition command Line Arguments
 
-### Partition-Specific Key 🔑
+### Partition-Specific Key
 
 | Argument      | Type | Description                                                      |
 |---------------|------|------------------------------------------------------------------|
@@ -113,7 +113,7 @@ The visualization outputs can be customized:
 - **HTML**: Interactive Bokeh plots with hover tooltips and zoom capabilities (default)
 - **PNG**: Static high-resolution images for publications and reports
 
-## Partition Categories 📊
+## Partition Categories
 
 The partition analysis classifies systems into five main categories based on the partition of gene families coding
 a function in the system:
@@ -121,12 +121,12 @@ a function in the system:
 | Partition Category        | Color Code | Description                                               |
 |---------------------------|------------|-----------------------------------------------------------|
 | **Persistent**            | 🟠 Orange  | All systems gene families are persistent                  |
-| **Persistent\|Accessory** | 🔴 Red     | Systems gene families spanning both all paritions         |
+| **Persistent\|Accessory** | 🔴 Red     | Systems gene families spanning both all partitions        |
 | **Accessory**             | 🟣 Purple  | Systems gene families spanning cloud and shell partitions |
 | **Shell**                 | 🟢 Green   | All systems gene families are shell                       |
 | **Cloud**                 | 🔵 Blue    | All systems gene families are cloud                       |
 
-## Partition Output Files 📁
+## Partition Output Files
 
 Partition analysis creates organized output in the specified `--output` directory:
 
@@ -145,7 +145,7 @@ output/
 
 #### Partition Heatmap (`partition.html`)
 
-Interactive Bokeh visualization containing:
+Interactive Bokeh visualization contains:
 
 **Main Components:**
 
@@ -183,7 +183,7 @@ Interactive Bokeh visualization containing:
 - **Comparative Analysis**: Organisms can be compared for their system repertoire size
 - **Ecological Adaptation**: System-rich organisms may inhabit complex or challenging environments
 
-## Technical Details 🔧
+## Technical Details
 
 ### Visualization Technology
 
