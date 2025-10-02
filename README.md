@@ -8,10 +8,12 @@
 [![Docs](https://img.shields.io/readthedocs/panorama/latest?style=flat-square&maxAge=600)](https://panorama.readthedocs.io)
 [![Downloads](https://anaconda.org/bioconda/panorama/badges/downloads.svg)](https://bioconda.github.io/recipes/panorama/README.html#download-stats)
 
-PANORAMA is a software suite used to analyse and compare partitioned pangenomes graph provided. It benefits from
+PANORAMA is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
+
+---
 
 # Quick Installation
 
@@ -33,12 +35,14 @@ conda env update --file panorama.yml
 
 [//]: # (You can find more information on the installation [here]&#40;link_read_the_doc&#41;)
 
+---
+
 # PANORAMA overview
 
 ## Input files
 
 PANORAMA can process multiple pangenomes at a time.
-The common input file of most of the commands is a *TSV* file with 2 columns.
+The common input file of most of the commands is a *TSV* file with two columns.
 In the following we will name this file *pangenomes.tsv*
 
 | Name       | Path               |
@@ -47,15 +51,15 @@ In the following we will name this file *pangenomes.tsv*
 | ...        | ...                |
 | PangenomeX | path/to/pangenomeX |
 
-*NB: We recommand to use an absolute path in this file to avoid errors.
-You can use the path from your current directory or the path from the input file as relative path to find pangenomes*
+*NB: We recommend using an absolute path in this file to avoid errors.
+You can use the path from your current directory or the path from the input file as a relative path to find pangenomes*
 
 ## Biological systems detection
 
-PANORAMA allow to detect systems in pangenomes by using models.
+PANORAMA allows detecting systems in pangenomes by using models.
 A model is an exhaustive and specific representation of a system.
-PANORAMA models are flexible to describe any models provide by user.
-PANORAMA provide a command to perform the complete detection workflow as follow:
+PANORAMA models are flexible to describe any models provided by the user.
+PANORAMA provides a command to perform the complete detection workflow as follows:
 
 ```shell
 panorama pansystems \
@@ -64,12 +68,14 @@ panorama pansystems \
  -m /PATH/TO/MODELS/LIST/FILE/models_list.tsv \
  -s system_model_source_name \
 -o PATH/TO/OUPUT/DIRECTORY \
---projection
+--projection \
+--association all \
+--partition
 ```
 
 ## Pangenome comparison
 
-PANORAMA allow to compare pangenomes based on pangenome structure previously detected.
+PANORAMA allows comparing pangenomes based on pangenome structure previously detected.
 
 ### Pangenome comparison based on spots
 
@@ -100,10 +106,21 @@ panorama compare_systems \
 
 ## Utilities
 
+### info Command — Extract and Visualize Pangenome Information
+
+The info subcommand extracts summary information from PPanGGOLiN **.h5 pangenome files** and generates interactive HTML
+reports. These reports support quick content comparison of each pangenome.
+
+## Info command line usage ️️📋
+
+```shell
+panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--content]
+```
+
 ### Alignment & clustering of gene families
 
 To perform the comparison of pangenomes, gene families are aligned and cluster.
-PANORAMA provide commands to perform the alignment and clustering of gene families before the comparison of pangenomes.
+PANORAMA provides commands to perform the alignment and clustering of gene families before the comparison of pangenomes.
 
 Comprehensive all-against-all alignment:
 
@@ -131,7 +148,9 @@ panorama cluster \
 --threads 8
 ```
 
-## 💬 Feedback & Contribution
+---
+
+# 💬 Feedback & Contribution
 
 **Give us feedback**  
 PANORAMA is still in early development.
@@ -139,4 +158,4 @@ PANORAMA is still in early development.
 Have suggestions, ideas, or bug reports?  
 👉 [Open an issue on GitHub](https://github.com/labgem/PANORAMA/issues)
 
-We cannot correct bugs if we do not know about them, and will try to help you the best we can.
+**We cannot correct bugs if we do not know about them and will try to help you the best we can.**

@@ -7,6 +7,8 @@
 :relative-images:
 ```
 
+---
+
 ```{toctree}
 :caption: 'User Guide:'
 :maxdepth: 2
