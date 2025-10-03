@@ -3,29 +3,29 @@
 
 # default libraries
 from __future__ import annotations
+
 import argparse
 import logging
 import shutil
-import sys
-import time
-from typing import Any, Dict, Tuple
-from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Manager, Lock
 import tempfile
+import time
+from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Lock, Manager
+from pathlib import Path
+from typing import Any, Dict, Tuple
 
 # installed libraries
-from tqdm import tqdm
 import pandas as pd
 from numpy import nan
-from ppanggolin.meta.meta import check_metadata_format, assign_metadata
+from ppanggolin.meta.meta import assign_metadata, check_metadata_format
+from tqdm import tqdm
 
 # local libraries
-from panorama.utils import init_lock, mkdir, is_empty
-from panorama.format.write_binaries import write_pangenome, erase_pangenome
+from panorama.annotate.hmm_search import annot_with_hmm, read_hmms
 from panorama.format.read_binaries import load_pangenomes
-from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
+from panorama.format.write_binaries import erase_pangenome, write_pangenome
 from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.utils import init_lock, is_empty, mkdir
 
 
 def check_annotate_args(
@@ -40,7 +40,8 @@ def check_annotate_args(
             This option is used for pansystems workflow to not have unwanted warnings.
 
     Returns:
-        Tuple[Dict[str, Any], Dict[str, Any]]: Two dictionaries containing necessary information and HMM keyword arguments.
+        Tuple[Dict[str, Any], Dict[str, Any]]:
+        Two dictionaries containing necessary information and HMM keyword arguments.
 
     Raises:
         argparse.ArgumentError: If any required arguments are missing or invalid.
@@ -48,25 +49,18 @@ def check_annotate_args(
     if args.table is None and args.hmm is None:
         raise argparse.ArgumentError(
             argument=None,
-            message="Please provide either a table with annotation for gene "
-            "families or a hmms to annotate them.",
+            message="Please provide either a table with annotation for gene families or a hmms to annotate them.",
         )
     need_info = {"need_families": True}
     hmm_kwgs = {}
     if args.table is not None:
         if args.mode is not None:
-            logging.getLogger("PANORAMA").error(
-                "You cannot specify both --table and --mode in the same command"
-            )
-            raise argparse.ArgumentError(
-                argument=None, message="--table is incompatible option with '--mode'."
-            )
+            logging.getLogger("PANORAMA").error("You cannot specify both --table and --mode in the same command")
+            raise argparse.ArgumentError(argument=None, message="--table is incompatible option with '--mode'.")
         if is_empty(args.table):
             raise IOError(f"File: {args.table} is empty.")
         if args.k_best_hit is not None:
-            logging.getLogger("PANORAMA").error(
-                "You cannot specify both --table and --k_best_hit in the same command"
-            )
+            logging.getLogger("PANORAMA").error("You cannot specify both --table and --k_best_hit in the same command")
             raise argparse.ArgumentError(
                 argument=None,
                 message="--table is Incompatible option with '--k_best_hit'.",
@@ -80,9 +74,7 @@ def check_annotate_args(
                 message="--table is Incompatible option with '--only_best_hit'.",
             )
         if args.output and not silence_warning:
-            logging.getLogger("PANORAMA").warning(
-                "--output option is incompatible with --table."
-            )
+            logging.getLogger("PANORAMA").warning("--output option is incompatible with --table.")
 
     else:  # args.hmm is not None
         # todo: See to make this the default value in argparse
@@ -102,15 +94,11 @@ def check_annotate_args(
             need_info["need_gene_sequences"] = True
 
         if args.mode == "fast" and args.keep_tmp:
-            logging.getLogger("PANORAMA").warning(
-                "--keep_tmp is not working with --mode fast"
-            )
+            logging.getLogger("PANORAMA").warning("--keep_tmp is not working with --mode fast")
         hmm_kwgs["tmp"] = Path(tempfile.mkdtemp(prefix="panorama_tmp", dir=args.tmp))
 
         if args.msa is not None and args.mode != "profile":
-            raise argparse.ArgumentError(
-                argument=None, message="--msa is working only with --profile"
-            )
+            raise argparse.ArgumentError(argument=None, message="--msa is working only with --profile")
 
         hmm_kwgs["msa"] = args.msa
         hmm_kwgs["msa_format"] = args.msa_format
@@ -123,8 +111,7 @@ def check_annotate_args(
             if args.only_best_hit:
                 if args.k_best_hit == 1:
                     logging.getLogger("PANORAMA").warning(
-                        "'--only_best_hit' is an alias for '--k_best_hit 1'. "
-                        "You can use only one of them."
+                        "'--only_best_hit' is an alias for '--k_best_hit 1'. You can use only one of them."
                     )
                 else:
                     logging.getLogger("PANORAMA").error(
@@ -142,9 +129,7 @@ def check_annotate_args(
 
         if args.save_hits is not None:
             if args.output is None:
-                raise argparse.ArgumentError(
-                    argument=None, message="--output is required to save hits results."
-                )
+                raise argparse.ArgumentError(argument=None, message="--output is required to save hits results.")
             else:
                 hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
             if "tblout" in args.save_hits:
@@ -155,9 +140,7 @@ def check_annotate_args(
                 hmm_kwgs["pfamtblout"] = True
         else:
             if args.output and not silence_warning:
-                logging.getLogger("PANORAMA").warning(
-                    "--output option is compatible only with --save_hits."
-                )
+                logging.getLogger("PANORAMA").warning("--output option is compatible only with --save_hits.")
     return need_info, hmm_kwgs
 
 
@@ -173,10 +156,7 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
     Raises:
         KeyError: If a source with the same name already exists, and force is False.
     """
-    if (
-        pangenome.status["metadata"]["families"] == "inFile"
-        and source in pangenome.status["metasources"]["families"]
-    ):
+    if pangenome.status["metadata"]["families"] == "inFile" and source in pangenome.status["metasources"]["families"]:
         if force:
             erase_pangenome(pangenome, metadata=True, source=source)
         else:
@@ -186,9 +166,7 @@ def check_pangenome_annotation(pangenome: Pangenome, source: str, force: bool = 
             )
 
 
-def read_families_metadata(
-    pangenome: Pangenome, metadata: Path
-) -> Tuple[pd.DataFrame, str]:
+def read_families_metadata(pangenome: Pangenome, metadata: Path) -> Tuple[pd.DataFrame, str]:
     """
     Read gene families metadata for one pangenome.
 
@@ -225,23 +203,13 @@ def read_families_metadata_mp(
     """
     t0 = time.time()
     path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(
-            total=len(pangenomes), unit="pangenome", disable=disable_bar
-        ) as progress:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="pangenome", disable=disable_bar) as progress:
             futures = []
             for pangenome in pangenomes:
-                logging.getLogger("PANORAMA").debug(
-                    f"read metadata for pangenome {pangenome.name}"
-                )
-                metadata_file = path_to_metadata.loc[
-                    path_to_metadata["Pangenome"] == pangenome.name
-                ]["path"].squeeze()
-                future = executor.submit(
-                    read_families_metadata, pangenome, metadata_file
-                )
+                logging.getLogger("PANORAMA").debug(f"read metadata for pangenome {pangenome.name}")
+                metadata_file = path_to_metadata.loc[path_to_metadata["Pangenome"] == pangenome.name]["path"].squeeze()
+                future = executor.submit(read_families_metadata, pangenome, metadata_file)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
 
@@ -249,9 +217,7 @@ def read_families_metadata_mp(
             for future in futures:
                 res = future.result()
                 results[res[1]] = res[0]
-    logging.getLogger("PANORAMA").info(
-        f"Pangenomes annotation ridden from TSV file in {time.time() - t0:2f} seconds"
-    )
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation ridden from TSV file in {time.time() - t0:2f} seconds")
     return results
 
 
@@ -280,14 +246,10 @@ def remove_redundant_annotation(metadata: pd.DataFrame) -> pd.DataFrame:
         pd.DataFrame: Dataframe with redundant annotations removed.
     """
     logging.getLogger("PANORAMA").debug("Remove duplicate hits and keep the best score")
-    metadata_df = metadata.sort_values(
-        by=["score", "e_value", "bias"], ascending=[False, True, False]
-    )
+    metadata_df = metadata.sort_values(by=["score", "e_value", "bias"], ascending=[False, True, False])
     group = metadata_df.groupby(["families", "protein_name"])
     metadata_df = group.first().assign(
-        secondary_names=group.agg(
-            {"secondary_names": lambda x: ",".join(set(x.dropna())) or nan}
-        )
+        secondary_names=group.agg({"secondary_names": lambda x: ",".join(set(x.dropna())) or nan})
     )
     metadata_df = metadata_df.reset_index()
     return metadata_df
@@ -342,12 +304,8 @@ def write_annotations_to_pangenome(
     meta_df = remove_redundant_annotation(metadata)
     if k_best_hit is not None:
         meta_df = keep_best_hit(meta_df, k_best_hit)
-    meta_df = meta_df.sort_values(
-        by=["score", "e_value", "bias"], ascending=[False, True, False]
-    )
-    assign_metadata(
-        meta_df, pangenome, source, "families", omit=True, disable_bar=disable_bar
-    )
+    meta_df = meta_df.sort_values(by=["score", "e_value", "bias"], ascending=[False, True, False])
+    assign_metadata(meta_df, pangenome, source, "families", omit=True, disable_bar=disable_bar)
     write_pangenome(pangenome, pangenome.file, force=force, disable_bar=disable_bar)
 
 
@@ -366,7 +324,8 @@ def write_annotations_to_pangenomes(
 
     Args:
         pangenomes (Pangenomes): Pangenomes object containing all the pangenome to annotate.
-        pangenomes2metadata (Dict[str, pd.DataFrame]): Dictionary with for each pangenome the metadata dataframe associated.
+        pangenomes2metadata (Dict[str, pd.DataFrame]): Dictionary with for each pangenome
+        the metadata dataframe associated.
         source (str): Metadata source.
         k_best_hit (int, optional): Number of best hits to keep. Defaults to None.
         threads (int, optional): Number of available threads. Defaults to 1.
@@ -374,18 +333,12 @@ def write_annotations_to_pangenomes(
         force (bool, optional): Boolean to allow force to write in pangenomes. Defaults to False.
         disable_bar (bool, optional): Allow disabling the progress bar. Defaults to False.
     """
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(
-            total=len(pangenomes), unit="pangenome", disable=disable_bar
-        ) as progress:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="pangenome", disable=disable_bar) as progress:
             futures = []
             for pangenome_name, metadata in pangenomes2metadata.items():
                 pangenome = pangenomes.get(pangenome_name)
-                logging.getLogger("PANORAMA").debug(
-                    f"Write annotation for pangenome {pangenome.name}"
-                )
+                logging.getLogger("PANORAMA").debug(f"Write annotation for pangenome {pangenome.name}")
                 future = executor.submit(
                     write_annotations_to_pangenome,
                     pangenome,
@@ -424,19 +377,16 @@ def annot_pangenomes_with_hmm(
         **hmm_kwgs: Arbitrary keyword arguments for HMM annotation.
 
     Returns:
-        Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe containing gene families metadata given by HMM.
+        Dict[str, pd.DataFrame]: Dictionary with for each pangenome a dataframe
+        containing gene families metadata given by HMM.
     """
     t0 = time.time()
     logging.getLogger("PANORAMA").info("Begin HMM searching")
     # Get the list of HMM with Plan7's data model
     pangenome2annot = {}
     hmms, hmm_df = read_hmms(hmm, disable_bar=disable_bar)
-    for pangenome in tqdm(
-        pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar
-    ):
-        logging.getLogger("PANORAMA").debug(
-            f"Align gene families to HMM for {pangenome.name}"
-        )
+    for pangenome in tqdm(pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar):
+        logging.getLogger("PANORAMA").debug(f"Align gene families to HMM for {pangenome.name}")
         pangenome2annot[pangenome.name] = annot_with_hmm(
             pangenome,
             hmms,
@@ -447,9 +397,7 @@ def annot_pangenomes_with_hmm(
             disable_bar=disable_bar,
             **hmm_kwgs,
         )
-    logging.getLogger("PANORAMA").info(
-        f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds"
-    )
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
     return pangenome2annot
 
 
@@ -495,9 +443,7 @@ def annot_pangenomes(
     """
     assert table is not None or hmm is not None, "Must provide either table or hmm"
     if table is not None:
-        pangenomes2metadata = read_families_metadata_mp(
-            pangenomes, table, threads, disable_bar
-        )
+        pangenomes2metadata = read_families_metadata_mp(pangenomes, table, threads, disable_bar)
     else:  # hmm is not None:
         pangenomes2metadata = annot_pangenomes_with_hmm(
             pangenomes,
@@ -521,9 +467,7 @@ def annot_pangenomes(
     except Exception as e:
         for pangenome in pangenomes:
             erase_pangenome(pangenome, metadata=True, source=source)
-            logging.getLogger("PANORAMA").debug(
-                f"erase annotation from {source} in {pangenome.name}"
-            )
+            logging.getLogger("PANORAMA").debug(f"erase annotation from {source} in {pangenome.name}")
         raise Exception(f"Annotation failed from : {e}") from e
 
 
@@ -566,9 +510,7 @@ def launch(args: argparse.Namespace) -> None:
         if not args.keep_tmp:
             shutil.rmtree(hmm_kwgs["tmp"])
         else:
-            logging.getLogger("PANORAMA").info(
-                f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}"
-            )
+            logging.getLogger("PANORAMA").info(f"Temporary file has been saved here: {hmm_kwgs['tmp'].as_posix()}")
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:
@@ -595,8 +537,7 @@ def parser_annot_hmm(parser):
     """
     hmm_param = parser.add_argument_group(
         title="HMM arguments",
-        description="All of the following arguments are required,"
-        " if you're using HMM mode :",
+        description="All of the following arguments are required, if you're using HMM mode :",
     )
     hmm_param.add_argument(
         "--mode",
@@ -615,8 +556,7 @@ def parser_annot_hmm(parser):
         required=False,
         type=int,
         default=None,
-        help="Keep the k best annotation hit per gene family."
-        "If not specified, all hit will be kept.",
+        help="Keep the k best annotation hit per gene family.If not specified, all hit will be kept.",
     )
     hmm_param.add_argument(
         "-b",
