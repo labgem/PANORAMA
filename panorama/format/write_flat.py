@@ -3,25 +3,29 @@
 
 # default libraries
 from __future__ import annotations
+
 import argparse
 import logging
-from pathlib import Path
-from typing import Any, Dict, Union, List, Tuple
-from multiprocessing import Manager, Lock
 from concurrent.futures import ThreadPoolExecutor
+from multiprocessing import Lock, Manager
+from pathlib import Path
+from typing import Any, Dict, List, Tuple, Union
 
-# installed libraries
+# Third-party imports
+import tables
 from tqdm import tqdm
 import numpy as np
 import pandas as pd
+
+# PPanGGOLiN format imports
 import ppanggolin.metadata
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gf
 from panorama.format.read_binaries import load_pangenomes
-from panorama.utils import mkdir, init_lock
 from panorama.geneFamily import GeneFamily
-from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.utils import init_lock, mkdir
 
 
 def check_flat_parameters(
@@ -39,8 +43,7 @@ def check_flat_parameters(
     if not args.hmm and not args.annotations and not args.conserved_spots:
         raise argparse.ArgumentError(
             argument=None,
-            message="You need to provide at least "
-            "--annotation, --hmm or --conserved_spots",
+            message="You need to provide at least --annotation, --hmm or --conserved_spots",
         )
     else:
         need_info = {}
@@ -49,8 +52,7 @@ def check_flat_parameters(
             if args.sources is None:
                 raise argparse.ArgumentError(
                     argument=None,
-                    message="You need to provide at least "
-                    "one annotation source to write annotation",
+                    message="You need to provide at least one annotation source to write annotation",
                 )
             else:
                 need_info.update(
@@ -64,9 +66,7 @@ def check_flat_parameters(
                 kwargs["sources"] = args.sources
         if args.hmm:
             if args.msa is None or args.msa_format is None:
-                raise argparse.ArgumentError(
-                    None, "To write HMM you need to give msa files and format"
-                )
+                raise argparse.ArgumentError(None, "To write HMM you need to give msa files and format")
             else:
                 need_info["need_families"] = True
                 kwargs["msa"] = args.msa
@@ -103,9 +103,7 @@ def check_pangenome_write_flat_annotations(func):
                 "Computed",
                 "Loaded",
             ]:
-                raise ValueError(
-                    "Pangenome families are not associated to any metadata/annotation"
-                )
+                raise ValueError("Pangenome families are not associated to any metadata/annotation")
             else:
                 for source in kwargs["sources"]:
                     if source not in pangenome.status["metasources"]["families"]:
@@ -142,9 +140,7 @@ def check_pangenome_write_flat_hmm(func):
         """
         if kwargs.get("check_hmm", False):
             if pangenome.status["geneFamilySequences"] == "No":
-                raise AttributeError(
-                    "There is no sequences associated to the gene families."
-                )
+                raise AttributeError("There is no sequences associated to the gene families.")
         return func(pangenome, *args, **kwargs)
 
     return wrapper
@@ -160,8 +156,7 @@ def check_pangenome_write_flat(pangenome: Pangenome, **kwargs) -> None:
     """
     if pangenome.status["genesClustered"] == "No":
         raise AttributeError(
-            "You did not cluster the genes. "
-            "See the 'ppanggolin cluster' command if you want to do that."
+            "You did not cluster the genes. See the 'ppanggolin cluster' command if you want to do that."
         )
 
 
@@ -178,19 +173,12 @@ def write_pangenome_families_annotations(
         disable_bar: Flag to disable the progress bar (default: False)
     """
 
-    source_column_name = [
-        f"Annotation_{source},Accession_{source},Secondary_names_{source}"
-        for source in sources
-    ]
-    column_name = np.array(
-        f"Pangenome,families,{','.join(source_column_name)}".split(",")
-    )
+    source_column_name = [f"Annotation_{source},Accession_{source},Secondary_names_{source}" for source in sources]
+    column_name = np.array(f"Pangenome,families,{','.join(source_column_name)}".split(","))
     array_list = []
     for gf in tqdm(pangenome.gene_families, unit="gene families", disable=disable_bar):
         if any(source in sources for source in gf.sources):
-            annot_array = np.empty(
-                (gf.max_metadata_by_source()[1], 2 + len(sources) * 3), dtype=object
-            )
+            annot_array = np.empty((gf.max_metadata_by_source()[1], 2 + len(sources) * 3), dtype=object)
             if annot_array.shape[0] > 0:
                 annot_array[:, 0] = pangenome.name
                 annot_array[:, 1] = gf.name
@@ -200,28 +188,19 @@ def write_pangenome_families_annotations(
                     if source in gf.sources:
                         for annotation in gf.get_metadata_by_source(source).values():
                             annotation: ppanggolin.metadata.Metadata
-                            annot_array[index_annot, index_source] = (
-                                annotation.protein_name
-                            )
-                            annot_array[index_annot, index_source + 1] = (
-                                annotation.Accession
-                            )
+                            annot_array[index_annot, index_source] = annotation.protein_name
+                            annot_array[index_annot, index_source + 1] = annotation.Accession
                             if "secondary_name" in annotation.__dict__.keys() and (
-                                annotation.secondary_name is not None
-                                or annotation.secondary_name != pd.NA
+                                annotation.secondary_name is not None or annotation.secondary_name != pd.NA
                             ):
-                                annot_array[index_annot, index_source + 2] = (
-                                    annotation.secondary_name
-                                )
+                                annot_array[index_annot, index_source + 2] = annotation.secondary_name
                             else:
                                 annot_array[index_annot, index_source + 2] = "-"
                             index_annot += 1
                     index_source += 3
                 array_list.append(annot_array)
     out_df = pd.DataFrame(np.concatenate(array_list), columns=column_name)
-    out_df = out_df.sort_values(
-        by=["Pangenome", "families"] + list(column_name[range(3, len(column_name), 2)])
-    )
+    out_df = out_df.sort_values(by=["Pangenome", "families"] + list(column_name[range(3, len(column_name), 2)]))
     out_df.to_csv(
         output / pangenome.name / "families_annotations.tsv",
         sep="\t",
@@ -253,28 +232,20 @@ def write_pangenomes_families_annotations(
         disable_bar: Disable progress bar (default: False)
     """
 
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(
-            total=len(pangenomes), unit="pangenome", disable=disable_bar
-        ) as progress:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="pangenome", disable=disable_bar) as progress:
             futures = []
             for pangenome in pangenomes:
                 if Path(output / pangenome.name / "families_annotations.tsv").exists():
                     if force:
                         logging.getLogger("PANORAMA").warning(
-                            "Family annotations files already exist "
-                            "and will be overwritten"
+                            "Family annotations files already exist and will be overwritten"
                         )
                     else:
                         raise FileExistsError(
-                            "Family annotations files already exist. "
-                            "Please use --force to overwrite them."
+                            "Family annotations files already exist. Please use --force to overwrite them."
                         )
-                logging.getLogger("PANORAMA").debug(
-                    f"Write annotation for pangenome {pangenome.name}"
-                )
+                logging.getLogger("PANORAMA").debug(f"Write annotation for pangenome {pangenome.name}")
                 future = executor.submit(
                     write_pangenome_families_annotations,
                     pangenome,
@@ -307,8 +278,7 @@ def write_hmm(
     if family.HMM is None:
         if msa_file_path is None:
             raise AssertionError(
-                "Your gene family is not associated to a HMM "
-                "and it could not be computed without a MSA file."
+                "Your gene family is not associated to a HMM and it could not be computed without a MSA file."
             )
         profile_gf(family, msa_file_path, msa_format=msa_format)
     with open(output / f"{family.name}.hmm", "wb") as hmm_file:
@@ -344,12 +314,8 @@ def write_hmm_profile(
         names=["path"],
         index_col=0,
     )
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        total_families = sum(
-            pangenome.number_of_gene_families for pangenome in pangenomes
-        )
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        total_families = sum(pangenome.number_of_gene_families for pangenome in pangenomes)
         with tqdm(
             total=total_families,
             unit="gene families",
@@ -363,13 +329,9 @@ def write_hmm_profile(
                 for family in pangenome.gene_families:
                     msa_file_path = msa_dir_path / f"{family.name}.aln"
                     if msa_file_path.exists():
-                        future = executor.submit(
-                            write_hmm, family, output_path, msa_file_path, msa_format
-                        )
+                        future = executor.submit(write_hmm, family, output_path, msa_file_path, msa_format)
                     else:
-                        future = executor.submit(
-                            write_hmm, family, output_path, None, msa_format
-                        )
+                        future = executor.submit(write_hmm, family, output_path, None, msa_format)
                     future.add_done_callback(lambda p: progress.update())
                     futures.append(future)
 
@@ -405,12 +367,8 @@ def write_flat_files(
     for pangenome in pangenomes:
         mkdir(output / pangenome.name, force=force)
     if annotation:
-        assert "sources" in kwargs, (
-            "No sources were given to write families annotations."
-        )
-        write_pangenomes_families_annotations(
-            pangenomes, output, kwargs["sources"], threads, lock, force, disable_bar
-        )
+        assert "sources" in kwargs, "No sources were given to write families annotations."
+        write_pangenomes_families_annotations(pangenomes, output, kwargs["sources"], threads, lock, force, disable_bar)
     if hmm:
         write_hmm_profile(
             pangenomes,
@@ -494,13 +452,10 @@ def parser_write(parser):
         nargs="?",
         help="A list of pangenome .h5 files in .tsv file",
     )
-    required.add_argument(
-        "-o", "--output", required=True, type=Path, nargs="?", help="Output directory"
-    )
+    required.add_argument("-o", "--output", required=True, type=Path, nargs="?", help="Output directory")
     annotation = parser.add_argument_group(
         title="Write annotation",
-        description="Arguments for writing annotation/metadata "
-        "assigned to gene families in pangenomes",
+        description="Arguments for writing annotation/metadata assigned to gene families in pangenomes",
     )
     annotation.add_argument(
         "--annotations",
@@ -516,9 +471,7 @@ def parser_write(parser):
         default=None,
         help="Name of the annotation source where panorama as to select in pangenomes",
     )
-    hmm = parser.add_argument_group(
-        title="Write HMM", description="Arguments for writing gene families HMM"
-    )
+    hmm = parser.add_argument_group(title="Write HMM", description="Arguments for writing gene families HMM")
     hmm.add_argument(
         "--hmm",
         required=False,

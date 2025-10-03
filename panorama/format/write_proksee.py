@@ -2,19 +2,21 @@
 # coding:utf-8
 
 # default libraries
-from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime
 import json
 import logging
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from pathlib import Path
 from random import randint
-from tqdm import tqdm
 from typing import Dict, List, Tuple
 from uuid import uuid4
 
-# installed libraries
+# Third-party imports
 from bokeh.palettes import Category20
-from ppanggolin.genome import Organism, Contig, Gene
+from tqdm import tqdm
+
+# PPanGGOLiN format imports
+from ppanggolin.genome import Contig, Gene, Organism
 from ppanggolin.region import Spot
 
 # local libraries
@@ -24,9 +26,7 @@ from panorama.pangenomes import Pangenome
 def palette() -> List[Tuple[int]]:
     palette = []
     for hex_color in list(Category20[20]):
-        palette.append(
-            tuple(int(hex_color.strip("#")[i : i + 2], 16) for i in (0, 2, 4))
-        )
+        palette.append(tuple(int(hex_color.strip("#")[i : i + 2], 16) for i in (0, 2, 4)))
     return palette
 
 
@@ -83,9 +83,7 @@ def write_legend_items(legend_data: dict, features: List[str], sources: List[str
     if "systems" in features or "all" in features:
         for source in sources:
             color = ",".join(map(str, colors.pop(randint(0, len(colors) - 1))))
-            legend_data["items"].append(
-                {"name": source, "decoration": "arc", "swatchColor": f"rgba({color},1)"}
-            )
+            legend_data["items"].append({"name": source, "decoration": "arc", "swatchColor": f"rgba({color},1)"})
 
 
 def write_tracks(features: List[str]):
@@ -169,9 +167,7 @@ def read_data(template: Path, features: List[str], sources: List[str] = None) ->
     if "created" in proksee_data["cgview"]:
         proksee_data["cgview"]["updated"] = now.strftime("%Y-%m-%d %H:%M:%S")
         last_version = proksee_data["cgview"]["version"].split(".")
-        proksee_data["cgview"]["version"] = ".".join(
-            last_version[:-1] + last_version[-1] + 1
-        )
+        proksee_data["cgview"]["version"] = ".".join(last_version[:-1] + last_version[-1] + 1)
     else:
         proksee_data["cgview"]["created"] = now.strftime("%Y-%m-%d %H:%M:%S")
         proksee_data["cgview"]["version"] = "1.0"
@@ -204,18 +200,14 @@ def write_contig(organism: Organism):
 def write_genes(organism: Organism, sources: List[str]):
     genes_data_list = []
     gf2gene = {}
-    for gene in tqdm(
-        organism.genes, total=organism.number_of_genes(), unit="genes", disable=True
-    ):
+    for gene in tqdm(organism.genes, total=organism.number_of_genes(), unit="genes", disable=True):
         gf = gene.family
         if gf.name in gf2gene:
             gf2gene[gf.name].append(gene)
         else:
             gf2gene[gf.name] = [gene]
         annotations = {
-            source: "|".join(list(map(str, gf.get_source(source))))
-            for source in gf.sources
-            if source in sources
+            source: "|".join(list(map(str, gf.get_source(source)))) for source in gf.sources if source in sources
         }
         genes_data_list.append(
             {
@@ -236,9 +228,7 @@ def write_genes(organism: Organism, sources: List[str]):
 
 def write_partition(organism: Organism):
     partition_data_list = []
-    for gene in tqdm(
-        organism.genes, total=organism.number_of_genes(), unit="genes", disable=True
-    ):
+    for gene in tqdm(organism.genes, total=organism.number_of_genes(), unit="genes", disable=True):
         partition_data_list.append(
             {
                 "name": gene.family.name,
@@ -271,9 +261,7 @@ def write_rgp(pangenome: Pangenome, organism: Organism):
     return rgp_data_list
 
 
-def write_spots(
-    pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, List[Gene]]
-):
+def write_spots(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, List[Gene]]):
     spots_data_list = []
     for spot in tqdm(pangenome.spots, unit="Spot", disable=True):
         spot: Spot
@@ -300,9 +288,7 @@ def write_spots(
     return spots_data_list
 
 
-def write_modules(
-    pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, List[Gene]]
-):
+def write_modules(pangenome: Pangenome, organism: Organism, gf2genes: Dict[str, List[Gene]]):
     modules_data_list = []
     for module in tqdm(pangenome.modules, unit="Module", disable=True):
         mod_orgs = set()
@@ -384,9 +370,7 @@ def write_systems(
         return systems_source_data_list
 
     for source in sources:
-        systems_data_list += write_systems_by_source(
-            pangenome, organism, gf2genes, source
-        )
+        systems_data_list += write_systems_by_source(pangenome, organism, gf2genes, source)
     return systems_data_list
 
 
@@ -400,9 +384,7 @@ def write_proksee_organism(
 ):
     proksee_data = read_data(template=template, features=features, sources=sources)
     if "name" not in proksee_data["cgview"]["captions"]:
-        proksee_data["cgview"]["captions"][0]["name"] = (
-            f"{organism.name} annotated with PANORAMA"
-        )
+        proksee_data["cgview"]["captions"][0]["name"] = f"{organism.name} annotated with PANORAMA"
     proksee_data["cgview"]["sequence"]["contigs"] = write_contig(organism)
     if "features" not in proksee_data["cgview"]:
         proksee_data["cgview"]["features"] = []
@@ -410,17 +392,11 @@ def write_proksee_organism(
     proksee_data["cgview"]["features"] += genes_features
     proksee_data["cgview"]["features"] += write_partition(organism)
     if "rgp" in features or "all" in features:
-        proksee_data["cgview"]["features"] += write_rgp(
-            pangenome=pangenome, organism=organism
-        )
+        proksee_data["cgview"]["features"] += write_rgp(pangenome=pangenome, organism=organism)
     if "spots" in features or "all" in features:
-        proksee_data["cgview"]["features"] += write_spots(
-            pangenome=pangenome, organism=organism, gf2genes=gf2genes
-        )
+        proksee_data["cgview"]["features"] += write_spots(pangenome=pangenome, organism=organism, gf2genes=gf2genes)
     if "modules" in features or "all" in features:
-        proksee_data["cgview"]["features"] += write_modules(
-            pangenome=pangenome, organism=organism, gf2genes=gf2genes
-        )
+        proksee_data["cgview"]["features"] += write_modules(pangenome=pangenome, organism=organism, gf2genes=gf2genes)
     if "systems" in features or "all" in features:
         proksee_data["cgview"]["features"] += write_systems(
             pangenome=pangenome, organism=organism, gf2genes=gf2genes, sources=sources
@@ -442,21 +418,13 @@ def write_proksee(
 ):
     assert features is not None
     if template is None:
-        template = (
-            Path(__file__).parent.joinpath("proksee_template").with_suffix(".json")
-        )
+        template = Path(__file__).parent.joinpath("proksee_template").with_suffix(".json")
     if organisms_list is not None:
-        organisms = [
-            organism
-            for organism in pangenome.organisms
-            if organism.name in organisms_list
-        ]
+        organisms = [organism for organism in pangenome.organisms if organism.name in organisms_list]
     else:
         organisms = pangenome.organisms
     with ThreadPoolExecutor(max_workers=threads) as executor:
-        with tqdm(
-            total=len(organisms), unit="organism", disable=disable_bar
-        ) as progress:
+        with tqdm(total=len(organisms), unit="organism", disable=disable_bar) as progress:
             futures = []
             for organism in organisms:
                 future = executor.submit(
