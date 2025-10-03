@@ -10,39 +10,41 @@ pangenomes, compute similarity metrics, and generate visualizations.
 
 # Standard library imports
 from __future__ import annotations
+
 import argparse
 import logging
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-from shutil import rmtree
-from itertools import combinations
-from concurrent.futures import ThreadPoolExecutor
-from multiprocessing import Lock
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
+from itertools import combinations
+from multiprocessing import Lock
+from pathlib import Path
+from shutil import rmtree
+from typing import Dict, List, Optional, Tuple
+
+import networkx as nx
+import pandas as pd
+from bokeh.io import export_png, output_file, save
+from bokeh.models import ColorBar, ColumnDataSource
+from bokeh.palettes import Reds256
+from bokeh.plotting import figure
+from bokeh.transform import linear_cmap
 
 # Third-party imports
 from tqdm import tqdm
-import networkx as nx
-import pandas as pd
-from bokeh.io import output_file, save, export_png
-from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, ColorBar
-from bokeh.transform import linear_cmap
-from bokeh.palettes import Reds256
+
+from panorama.compare.utils import (
+    cluster_on_gfrr,
+    common_launch,
+    compute_gfrr,
+    parser_comparison,
+)
 
 # Local imports
 from panorama.pangenomes import Pangenomes
-from panorama.utils import mkdir, init_lock
-from panorama.utility.utility import check_models
-from panorama.systems.system import System, ClusterSystems
+from panorama.systems.system import ClusterSystems, System
 from panorama.systems.write_systems import check_pangenome_write_systems
-from panorama.compare.utils import (
-    parser_comparison,
-    common_launch,
-    cluster_on_gfrr,
-    compute_gfrr,
-)
-
+from panorama.utility.utility import check_models
+from panorama.utils import init_lock, mkdir
 
 logger = logging.getLogger("PANORAMA")
 
@@ -178,9 +180,7 @@ def create_systems_graph(
             - Dictionary mapping system hash to a system object
     """
 
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(total=len(pangenomes), unit="Pangenome", disable=disable_bar) as pbar:
             # Submit tasks for each pangenome
             futures = []
@@ -256,14 +256,9 @@ def compute_gfrr_edges(
             )
 
             # Only proceed if model families meet cutoff
-            if (
-                min_gfrr_models > gfrr_models_cutoff[0]
-                and max_gfrr_models > gfrr_models_cutoff[1]
-            ):
+            if min_gfrr_models > gfrr_models_cutoff[0] and max_gfrr_models > gfrr_models_cutoff[1]:
                 # Check all families FRR
-                min_gfrr, max_gfrr, shared_families = compute_gfrr(
-                    set(sys1.families), set(sys2.families)
-                )
+                min_gfrr, max_gfrr, shared_families = compute_gfrr(set(sys1.families), set(sys2.families))
 
                 # Add edge if both cutoffs are met
                 if min_gfrr > gfrr_cutoff[0] and max_gfrr > gfrr_cutoff[1]:
@@ -309,9 +304,7 @@ def write_conserved_systems(
     # Write in GraphML format if requested
     if "graphml" in graph_formats:
         graphml_file = output / "conserved_systems.graphml"
-        logger.info(
-            f"Writing conserved systems graph in GraphML format: {graphml_file}"
-        )
+        logger.info(f"Writing conserved systems graph in GraphML format: {graphml_file}")
         nx.readwrite.graphml.write_graphml(conserved_systems_graph, graphml_file)
 
     # Write a summary TSV file
@@ -375,8 +368,8 @@ def compare_systems(
 
     try:
         # Create a comprehensive systems graph
-        systems_graph, system_to_pangenome, system_hash_to_system = (
-            create_systems_graph(pangenomes, threads, lock, disable_bar)
+        systems_graph, system_to_pangenome, system_hash_to_system = create_systems_graph(
+            pangenomes, threads, lock, disable_bar
         )
 
         logger.info(f"Created systems graph with {len(systems_graph.nodes)} nodes")
@@ -426,9 +419,7 @@ def compare_systems(
                     cluster_system_objects.add(system_obj)
 
                 # Add a cluster to a pangenomes collection
-                pangenomes.add_cluster_systems(
-                    ClusterSystems(cluster_id, *cluster_system_objects)
-                )
+                pangenomes.add_cluster_systems(ClusterSystems(cluster_id, *cluster_system_objects))
             else:
                 # Remove single-system "clusters" from the graph
                 systems_graph.remove_nodes_from(cluster_systems)
@@ -464,9 +455,7 @@ def generate_heatmap(
     """
 
     # Prepare a data source for Bokeh
-    melted_data = data.reset_index().melt(
-        id_vars="index", var_name="columns", value_name="value"
-    )
+    melted_data = data.reset_index().melt(id_vars="index", var_name="columns", value_name="value")
     source = ColumnDataSource(melted_data)
 
     # Create a figure with appropriate dimensions
@@ -502,9 +491,7 @@ def generate_heatmap(
     )
 
     # Add color bar legend
-    color_bar = ColorBar(
-        color_mapper=color_mapper["transform"], width=8, location=(0, 0)
-    )
+    color_bar = ColorBar(color_mapper=color_mapper["transform"], width=8, location=(0, 0))
     heatmap.add_layout(color_bar, "right")
 
     # Configure styling
@@ -615,9 +602,7 @@ def launch(args: argparse.Namespace) -> None:
 
         # Perform systems comparison if GFRR metrics specified
         if args.gfrr_metrics:
-            logger.info(
-                f"Performing systems comparison using {args.gfrr_metrics} metric"
-            )
+            logger.info(f"Performing systems comparison using {args.gfrr_metrics} metric")
             conserved_systems_graph = compare_systems(
                 pangenomes,
                 gfrr_metrics=args.gfrr_metrics,
@@ -630,17 +615,13 @@ def launch(args: argparse.Namespace) -> None:
             )
 
             # Write results to files
-            write_conserved_systems(
-                pangenomes, output_dir, conserved_systems_graph, args.graph_formats
-            )
+            write_conserved_systems(pangenomes, output_dir, conserved_systems_graph, args.graph_formats)
 
         logger.info("Systems comparison analysis completed successfully")
 
     except Exception as e:
         logger.error(f"Analysis failed: {str(e)}")
-        raise SystemsComparisonError(
-            f"Systems comparison analysis failed: {str(e)}"
-        ) from e
+        raise SystemsComparisonError(f"Systems comparison analysis failed: {str(e)}") from e
 
     finally:
         # Clean up temporary files
@@ -696,8 +677,7 @@ def parser_comparison_systems(parser: argparse.ArgumentParser) -> None:
         required=True,
         type=str,
         nargs="+",
-        help="Name(s) of the systems sources. Multiple sources can be specified. "
-        "Order must match --models argument.",
+        help="Name(s) of the systems sources. Multiple sources can be specified. Order must match --models argument.",
     )
 
     # Optional comparison-specific arguments

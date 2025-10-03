@@ -11,30 +11,30 @@ includes utilities for building argument parsers related to these workflows.
 
 # default libraries
 from __future__ import annotations
+
 import logging
 import tempfile
+from multiprocessing import Lock, Manager
 from pathlib import Path
-from typing import Any, Dict, Callable, List, Set, Tuple
-from multiprocessing import Manager, Lock
+from typing import Any, Callable, Dict, List, Set, Tuple
 
 # installed libraries
 import networkx as nx
 
-# local libraries
-from panorama.pangenomes import Pangenomes
-from panorama.geneFamily import GeneFamily
-from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.cluster import (
     _prepare_mmseqs2_options,
     cluster_gene_families,
-    write_clustering,
     parser_mmseqs2_cluster,
+    write_clustering,
 )
+from panorama.format.read_binaries import load_pangenomes
+from panorama.geneFamily import GeneFamily
+
+# local libraries
+from panorama.pangenomes import Pangenomes
 
 
-def compute_gfrr(
-    queries: Set[GeneFamily], targets: Set[GeneFamily]
-) -> Tuple[float, float, int]:
+def compute_gfrr(queries: Set[GeneFamily], targets: Set[GeneFamily]) -> Tuple[float, float, int]:
     """
     Compute Gene Family Repertoire Relatedness (GFRR) metrics between query and target gene families.
 
@@ -81,9 +81,7 @@ def compute_gfrr(
     return min_frr, max_frr, len(shared_akins)
 
 
-def cluster_on_gfrr(
-    graph: nx.Graph, gfrr_metric: str, seed: int = 42
-) -> List[Set[Any]]:
+def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str, seed: int = 42) -> List[Set[Any]]:
     """
     Cluster graph nodes using Louvain community detection based on GFRR metrics.
 
@@ -185,13 +183,9 @@ def common_launch(
     # If no clustering is provided, we need sequences to perform clustering
     if args.cluster is None:
         need_info["need_families_sequences"] = True
-        logging.getLogger("PANORAMA").info(
-            "No clustering provided - will perform gene family clustering"
-        )
+        logging.getLogger("PANORAMA").info("No clustering provided - will perform gene family clustering")
     else:
-        logging.getLogger("PANORAMA").info(
-            f"Using existing clustering from: {args.cluster}"
-        )
+        logging.getLogger("PANORAMA").info(f"Using existing clustering from: {args.cluster}")
 
     # Load pangenomes with specified requirements and validation
     logging.getLogger("PANORAMA").info("Loading pangenomes...")
@@ -214,9 +208,7 @@ def common_launch(
         # Configure MMSeqs2 clustering parameters from command-line arguments
         mmseqs2_options = _prepare_mmseqs2_options(args)
 
-        logging.getLogger("PANORAMA").info(
-            f"Starting gene family clustering with method: {args.method}"
-        )
+        logging.getLogger("PANORAMA").info(f"Starting gene family clustering with method: {args.method}")
         # Perform gene family clustering using MMSeqs2
         clustering_results = cluster_gene_families(
             pangenomes=pangenomes,
@@ -231,9 +223,7 @@ def common_launch(
         # Write clustering results to a file for future use
         cluster_file = tmpdir / "pangenome_gf_clustering.tsv"
         write_clustering(clustering_results, cluster_file)
-        logging.getLogger("PANORAMA").info(
-            f"Clustering results written to: {cluster_file}"
-        )
+        logging.getLogger("PANORAMA").info(f"Clustering results written to: {cluster_file}")
 
     else:
         # Use existing clustering file
@@ -320,9 +310,7 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
     # Configure MMSeqs2 clustering arguments
     # This adds a comprehensive set of clustering parameters
     cluster_group = parser_mmseqs2_cluster(parser)
-    cluster_group.description = (
-        "MMSeqs2 clustering arguments (used only if --cluster is not provided)"
-    )
+    cluster_group.description = "MMSeqs2 clustering arguments (used only if --cluster is not provided)"
 
     cluster_group.add_argument(
         "--method",
