@@ -1,3 +1,5 @@
+import shutil
+
 import pytest
 from tests.utils.run_command import run_command
 from pathlib import Path
@@ -45,3 +47,11 @@ def test_model_list(utils_model_list: Path):
     assert utils_model_list.exists(), f"Expected output file {utils_model_list} not found."
     # assert file not empty
     assert utils_model_list.stat().st_size > 0, f"File {utils_model_list} is empty."
+
+
+@pytest.fixture(scope="session")
+def utils_clustering(test_data_path: Path, tmp_path_factory):
+    clustering_file = test_data_path / "clustering.tsv"
+    outdir = tmp_path_factory.mktemp("utils")
+    shutil.copy(clustering_file, outdir)
+    return outdir / "clustering.tsv"

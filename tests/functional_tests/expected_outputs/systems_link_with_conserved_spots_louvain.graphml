@@ -1,0 +1,146 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d11" for="edge" attr.name="num_shared_spots" attr.type="long"/>
+<key id="d10" for="edge" attr.name="weight" attr.type="long"/>
+<key id="d9" for="edge" attr.name="cluster_spots" attr.type="string"/>
+<key id="d8" for="node" attr.name="cluster_id" attr.type="long"/>
+<key id="d7" for="node" attr.name="system_ID" attr.type="string"/>
+<key id="d6" for="node" attr.name="spots" attr.type="string"/>
+<key id="d5" for="node" attr.name="percent_org" attr.type="double"/>
+<key id="d4" for="node" attr.name="num_model_families" attr.type="long"/>
+<key id="d3" for="node" attr.name="system_id" attr.type="string"/>
+<key id="d2" for="node" attr.name="spot" attr.type="long"/>
+<key id="d1" for="node" attr.name="pangenome" attr.type="string"/>
+<key id="d0" for="node" attr.name="system_name" attr.type="string"/>
+<graph edgedefault="undirected"><node id="-3600707537349004965">
+  <data key="d0">RM_Type_I</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">4</data>
+  <data key="d3">3</data>
+  <data key="d4">3</data>
+  <data key="d5">46.666666666666664</data>
+  <data key="d6">4</data>
+  <data key="d7">3</data>
+  <data key="d8">2</data>
+</node>
+<node id="-816916881493938896">
+  <data key="d0">RM_Type_I</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">2</data>
+  <data key="d3">6</data>
+  <data key="d4">3</data>
+  <data key="d5">100.0</data>
+  <data key="d6">2</data>
+  <data key="d7">6</data>
+  <data key="d8">1</data>
+</node>
+<node id="8720492533285701588">
+  <data key="d0">PsyrTA</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">0</data>
+  <data key="d3">7</data>
+  <data key="d4">3</data>
+  <data key="d5">100.0</data>
+  <data key="d6">0</data>
+  <data key="d7">7</data>
+  <data key="d8">1</data>
+</node>
+<node id="-8315836031454517711">
+  <data key="d0">RM_Type_I</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">0</data>
+  <data key="d3">1</data>
+  <data key="d4">4</data>
+  <data key="d5">23.52941176470588</data>
+  <data key="d6">0</data>
+  <data key="d7">1</data>
+  <data key="d8">1</data>
+</node>
+<node id="-8080675477285266163">
+  <data key="d0">RM_Type_IV</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">0</data>
+  <data key="d3">31</data>
+  <data key="d4">1</data>
+  <data key="d5">82.35294117647058</data>
+  <data key="d6">0</data>
+  <data key="d7">31</data>
+  <data key="d8">1</data>
+</node>
+<node id="-8138658966610286925">
+  <data key="d0">ShosTA</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">32</data>
+  <data key="d3">27</data>
+  <data key="d4">2</data>
+  <data key="d5">23.52941176470588</data>
+  <data key="d6">32</data>
+  <data key="d7">27</data>
+  <data key="d8">2</data>
+</node>
+<node id="3092748816170192662">
+  <data key="d0">SanaTA</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">0</data>
+  <data key="d3">25</data>
+  <data key="d4">2</data>
+  <data key="d5">58.82352941176471</data>
+  <data key="d6">0</data>
+  <data key="d7">25</data>
+  <data key="d8">1</data>
+</node>
+<edge source="-3600707537349004965" target="-8138658966610286925">
+  <data key="d9">60</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-816916881493938896" target="8720492533285701588">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-816916881493938896" target="-8315836031454517711">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-816916881493938896" target="-8080675477285266163">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-816916881493938896" target="3092748816170192662">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="8720492533285701588" target="-8315836031454517711">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="8720492533285701588" target="-8080675477285266163">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="8720492533285701588" target="3092748816170192662">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-8315836031454517711" target="-8080675477285266163">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-8315836031454517711" target="3092748816170192662">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+<edge source="-8080675477285266163" target="3092748816170192662">
+  <data key="d9">3</data>
+  <data key="d10">1</data>
+  <data key="d11">1</data>
+</edge>
+</graph></graphml>

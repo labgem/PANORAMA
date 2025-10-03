@@ -966,9 +966,15 @@ def launch(args):
         lock=lock,
         disable_bar=args.disable_prog_bar,
     )
-    write_systems_to_pangenomes(
-        pangenomes, args.source, args.threads, lock, disable_bar=args.disable_prog_bar
-    )
+    try:
+        write_systems_to_pangenomes(
+            pangenomes, args.source, args.threads, lock, disable_bar=args.disable_prog_bar
+        )
+    except Exception as e:
+        for pangenome in pangenomes:
+            erase_pangenome(pangenome, systems=True, source=args.source)
+            logging.getLogger("PANORAMA").debug(f"erase system from {args.source} in {pangenome.name}")
+        raise Exception(f"Error while writing systems from {e}") from e
 
 
 def subparser(sub_parser) -> argparse.ArgumentParser:

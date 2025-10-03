@@ -403,7 +403,10 @@ class Pangenomes:
             clustering: Clustering result
             disable_bar: Flag to disable progress bar (default: False)
         """
-        from panorama.alignment.cluster import clust_col_names
+        from panorama.alignment.cluster import ClusteringConfig
+
+        clustering_config = ClusteringConfig()
+        clust_col_names = clustering_config.CLUSTER_COLUMN_NAMES
 
         logging.getLogger("PANORAMA").info("Reading clustering...")
         if isinstance(clustering, Path):

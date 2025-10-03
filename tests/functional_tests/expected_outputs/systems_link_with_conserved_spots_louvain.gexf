@@ -1,0 +1,184 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gexf xmlns="http://www.gexf.net/1.2draft" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.gexf.net/1.2draft http://www.gexf.net/1.2draft/gexf.xsd" version="1.2">
+  <meta lastmodifieddate="2025-10-03">
+    <creator>NetworkX 3.5</creator>
+  </meta>
+  <graph defaultedgetype="undirected" mode="static" name="">
+    <attributes mode="static" class="edge">
+      <attribute id="9" title="cluster_spots" type="string" />
+      <attribute id="10" title="num_shared_spots" type="long" />
+    </attributes>
+    <attributes mode="static" class="node">
+      <attribute id="0" title="system_name" type="string" />
+      <attribute id="1" title="pangenome" type="string" />
+      <attribute id="2" title="spot" type="long" />
+      <attribute id="3" title="system_id" type="string" />
+      <attribute id="4" title="num_model_families" type="long" />
+      <attribute id="5" title="percent_org" type="double" />
+      <attribute id="6" title="spots" type="string" />
+      <attribute id="7" title="system_ID" type="string" />
+      <attribute id="8" title="cluster_id" type="long" />
+    </attributes>
+    <nodes>
+      <node id="-3600707537349004965" label="-3600707537349004965">
+        <attvalues>
+          <attvalue for="0" value="RM_Type_I" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="4" />
+          <attvalue for="3" value="3" />
+          <attvalue for="4" value="3" />
+          <attvalue for="5" value="46.666666666666664" />
+          <attvalue for="6" value="4" />
+          <attvalue for="7" value="3" />
+          <attvalue for="8" value="2" />
+        </attvalues>
+      </node>
+      <node id="-816916881493938896" label="-816916881493938896">
+        <attvalues>
+          <attvalue for="0" value="RM_Type_I" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="2" />
+          <attvalue for="3" value="6" />
+          <attvalue for="4" value="3" />
+          <attvalue for="5" value="100.0" />
+          <attvalue for="6" value="2" />
+          <attvalue for="7" value="6" />
+          <attvalue for="8" value="1" />
+        </attvalues>
+      </node>
+      <node id="8720492533285701588" label="8720492533285701588">
+        <attvalues>
+          <attvalue for="0" value="PsyrTA" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="0" />
+          <attvalue for="3" value="7" />
+          <attvalue for="4" value="3" />
+          <attvalue for="5" value="100.0" />
+          <attvalue for="6" value="0" />
+          <attvalue for="7" value="7" />
+          <attvalue for="8" value="1" />
+        </attvalues>
+      </node>
+      <node id="-8315836031454517711" label="-8315836031454517711">
+        <attvalues>
+          <attvalue for="0" value="RM_Type_I" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="0" />
+          <attvalue for="3" value="1" />
+          <attvalue for="4" value="4" />
+          <attvalue for="5" value="23.52941176470588" />
+          <attvalue for="6" value="0" />
+          <attvalue for="7" value="1" />
+          <attvalue for="8" value="1" />
+        </attvalues>
+      </node>
+      <node id="-8080675477285266163" label="-8080675477285266163">
+        <attvalues>
+          <attvalue for="0" value="RM_Type_IV" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="0" />
+          <attvalue for="3" value="31" />
+          <attvalue for="4" value="1" />
+          <attvalue for="5" value="82.35294117647058" />
+          <attvalue for="6" value="0" />
+          <attvalue for="7" value="31" />
+          <attvalue for="8" value="1" />
+        </attvalues>
+      </node>
+      <node id="-8138658966610286925" label="-8138658966610286925">
+        <attvalues>
+          <attvalue for="0" value="ShosTA" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="32" />
+          <attvalue for="3" value="27" />
+          <attvalue for="4" value="2" />
+          <attvalue for="5" value="23.52941176470588" />
+          <attvalue for="6" value="32" />
+          <attvalue for="7" value="27" />
+          <attvalue for="8" value="2" />
+        </attvalues>
+      </node>
+      <node id="3092748816170192662" label="3092748816170192662">
+        <attvalues>
+          <attvalue for="0" value="SanaTA" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="0" />
+          <attvalue for="3" value="25" />
+          <attvalue for="4" value="2" />
+          <attvalue for="5" value="58.82352941176471" />
+          <attvalue for="6" value="0" />
+          <attvalue for="7" value="25" />
+          <attvalue for="8" value="1" />
+        </attvalues>
+      </node>
+    </nodes>
+    <edges>
+      <edge source="-3600707537349004965" target="-8138658966610286925" id="0" weight="1">
+        <attvalues>
+          <attvalue for="9" value="60" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-816916881493938896" target="8720492533285701588" id="1" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-816916881493938896" target="-8315836031454517711" id="2" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-816916881493938896" target="-8080675477285266163" id="3" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-816916881493938896" target="3092748816170192662" id="4" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="8720492533285701588" target="-8315836031454517711" id="5" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="8720492533285701588" target="-8080675477285266163" id="6" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="8720492533285701588" target="3092748816170192662" id="7" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-8315836031454517711" target="-8080675477285266163" id="8" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-8315836031454517711" target="3092748816170192662" id="9" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+      <edge source="-8080675477285266163" target="3092748816170192662" id="10" weight="1">
+        <attvalues>
+          <attvalue for="9" value="3" />
+          <attvalue for="10" value="1" />
+        </attvalues>
+      </edge>
+    </edges>
+  </graph>
+</gexf>

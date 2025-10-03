@@ -1,4 +1,5 @@
 (clustering)=
+
 # Gene Family Clustering Across Pangenomes
 
 The cluster command groups related gene families from multiple pangenomes into homologous clusters based on sequence
@@ -94,15 +95,15 @@ The gene family clustering process runs as follows:
 | --cluster_align_mode     | Int  | Alignment mode: 0=auto, 1=score only, 2=extended, 3=both, 4=fast                        |
 | --cluster_max_seq_len    | Int  | Maximum sequence length                                                                 |
 | --cluster_max_reject     | Int  | Maximum number of rejected sequences                                                    |
-| --cluster_clust_mode     | Int  | Clustering algorithm: 0=Set Cover, 1=Connected Component, 2=Greedy, 3=Greedy Low Memory |
+| --cluster_mode           | Int  | Clustering algorithm: 0=Set Cover, 1=Connected Component, 2=Greedy, 3=Greedy Low Memory |
 
 ### Advanced Configuration Arguments
 
-| Shortcut | Argument           | Type                 | Optional | Description                                                    |
-|----------|--------------------|----------------------|----------|----------------------------------------------------------------|
-| —        | --tmpdir           | str (directory path) | True     | Directory for temporary files (default: system temp directory) |
-| —        | --keep_tmp         | bool (flag)          | True     | Keep temporary files after completion (useful for debugging)   |
-| —        | --threads          | int                  | True     | Number of CPU threads for parallel processing (default: 1)     |
+| Shortcut | Argument   | Type                 | Optional | Description                                                    |
+|----------|------------|----------------------|----------|----------------------------------------------------------------|
+| —        | --tmpdir   | str (directory path) | True     | Directory for temporary files (default: system temp directory) |
+| —        | --keep_tmp | bool (flag)          | True     | Keep temporary files after completion (useful for debugging)   |
+| —        | --threads  | int                  | True     | Number of CPU threads for parallel processing (default: 1)     |
 
 ## Clustering Methods Comparison
 
@@ -160,7 +161,7 @@ PANORAMA generates clustering results with detailed cluster membership informati
 
 ```
 output_directory/
-└── clustering_results.tsv
+└── clustering.tsv
 ```
 
 ### Clustering Results Format

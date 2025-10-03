@@ -25,6 +25,7 @@ from panorama.pangenomes import Pangenomes
 from panorama.geneFamily import GeneFamily
 from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.cluster import (
+    _prepare_mmseqs2_options,
     cluster_gene_families,
     write_clustering,
     parser_mmseqs2_cluster,
@@ -80,7 +81,7 @@ def compute_gfrr(
     return min_frr, max_frr, len(shared_akins)
 
 
-def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
+def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str, seed: int = 42) -> List[Set[Any]]:
     """
     Cluster graph nodes using Louvain community detection based on GFRR metrics.
 
@@ -94,6 +95,7 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
         gfrr_metric (str):
             Name of the edge weight attribute to use for clustering
             (e.g., 'min_frr', 'max_frr').
+        seed (int): Optional random seed for reproducibility. Default: 42.
 
     Returns:
         List[Set[Any]]:
@@ -109,7 +111,7 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str) -> List[Set[Any]]:
     # Apply Louvain community detection algorithm
     # This algorithm optimizes modularity to find densely connected communities
     partitions = nx.algorithms.community.louvain_communities(
-        graph, weight=gfrr_metric, resolution=1.0  # Default resolution for modularity
+        graph, weight=gfrr_metric, resolution=1.0, seed=seed,  # Default resolution for modularity
     )
 
     # Assign cluster labels to each node as graph attributes
@@ -205,22 +207,7 @@ def common_launch(
     # Handle gene family clustering workflow
     if args.cluster is None:
         # Configure MMSeqs2 clustering parameters from command-line arguments
-        mmseqs2_options = {
-            "max_seqs": args.max_seqs,  # Maximum sequences per query
-            "min_ungapped": args.min_ungapped,  # Minimum ungapped alignment score
-            "comp_bias_corr": args.comp_bias_corr,  # Composition bias correction
-            "sensitivity": args.sensitivity,  # Search sensitivity level
-            "kmer_per_seq": args.kmer_per_seq,  # K-mers per sequence
-            "identity": args.clust_identity,  # Sequence identity threshold
-            "coverage": args.clust_coverage,  # Coverage threshold
-            "cov_mode": args.clust_cov_mode,  # Coverage calculation mode
-            "eval": args.eval,  # E-value threshold
-            "max_seq_len": args.max_seq_len,  # Maximum sequence length
-            "max_reject": args.max_reject,  # Maximum rejections per query
-            "align_mode": args.align_mode,  # Alignment mode
-            "clust_mode": args.clust_mode,  # Clustering mode
-            "reassign": args.reassign,  # Whether to reassign sequences
-        }
+        mmseqs2_options = _prepare_mmseqs2_options(args)
 
         logging.getLogger("PANORAMA").info(
             f"Starting gene family clustering with method: {args.method}"
@@ -347,6 +334,13 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
     # General optional arguments for workflow control
     optional = parser.add_argument_group(title="Optional arguments")
 
+    optional.add_argument(
+        '--seed',
+        required=False,
+        type=int,
+        default=42,
+        help="Random seed for reproducibility. Default: 42"
+    )
     optional.add_argument(
         "--graph_formats",
         required=False,
