@@ -197,6 +197,7 @@ def pytest_collection_modifyitems(config, items):
             "test_system_cmds.py",
             "test_pansystems.py",
             "test_compare_spots.py",
+            "test_compare_systems.py",
         ]
     ]
     test_order = [f"tests/{test}" for test in unit_test_order + functional_test_order]
