@@ -123,9 +123,7 @@ def test_dict_families_context_many_to_many_case(simple_gfs, single_unit_model):
         set, {simple_gfs[i]: {family_lookup[f"protein{i}"]} for i in range(1, 6)}
     ) | defaultdict(
         set, {simple_gfs[i + 10]: {family_lookup[f"protein{i}"]} for i in range(6)}
-    ) | {
-        simple_gfs[0]: {family_lookup["protein0"], new_family}
-    } | {
+    ) | {simple_gfs[0]: {family_lookup["protein0"], new_family}} | {
         simple_gfs[8]: {new_family}
     }
     assert fam2source == {f"protein{i}": "source2" for i in range(6)} | {

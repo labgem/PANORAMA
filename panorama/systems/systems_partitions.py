@@ -50,7 +50,9 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         mapper: Categorical color mapper for partitions
     """
 
-    def __init__(self, name: str, output_dir: Path, formats: Optional[List[str]] = None):
+    def __init__(
+        self, name: str, output_dir: Path, formats: Optional[List[str]] = None
+    ):
         """
         Initialize the SystemsPartitionVisualizer.
 
@@ -62,15 +64,19 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         super().__init__(name, output_dir, formats)
 
         # Partition configuration
-        self.partitions = ["persistent|accessory", "persistent", "accessory", "shell", "cloud"]
+        self.partitions = [
+            "persistent|accessory",
+            "persistent",
+            "accessory",
+            "shell",
+            "cloud",
+        ]
         self.color_palette = ["#FF2828", "#F7A507", "#EB37ED", "#00D860", "#79DEFF"]
         self.partition2color = dict(zip(self.partitions, self.color_palette))
 
         # Color mapper for categorical partitions
         self.mapper = CategoricalColorMapper(
-            palette=self.color_palette,
-            factors=self.partitions,
-            nan_color="white"
+            palette=self.color_palette, factors=self.partitions, nan_color="white"
         )
 
     def create_left_bar(self, source: ColumnDataSource) -> None:
@@ -99,18 +105,17 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
 
         # Configure appearance
         self._configure_bar_plot_style(
-            self.left_bar,
-            x_label="Count",
-            flip_x=True,
-            hide_y_axis=True
+            self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True
         )
 
         # Add interactive hover tool
-        hover = HoverTool(tooltips=[
-            ("System", "@systems"),
-            ("Partition", "$name"),
-            ("Count", "@$name{0}"),
-        ])
+        hover = HoverTool(
+            tooltips=[
+                ("System", "@systems"),
+                ("Partition", "$name"),
+                ("Count", "@$name{0}"),
+            ]
+        )
         self.left_bar.add_tools(hover)
 
     def create_color_bar(self, title: str) -> None:
@@ -153,10 +158,10 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         self.color_bar.title.text_font_size = "14pt"
 
     def create_main_figure(
-            self,
-            partition_matrix: pd.DataFrame,
-            x_range: FactorRange,
-            y_range: FactorRange,
+        self,
+        partition_matrix: pd.DataFrame,
+        x_range: FactorRange,
+        y_range: FactorRange,
     ) -> None:
         """
         Create the main partition matrix heatmap figure.
@@ -205,9 +210,7 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
             partition_matrix: DataFrame with partition information
         """
         # Filter out 'Not_found' entries for cleaner visualization
-        filtered_matrix = partition_matrix[
-            partition_matrix["partition"] != "Not_found"
-            ]
+        filtered_matrix = partition_matrix[partition_matrix["partition"] != "Not_found"]
 
         # Left bar plot: Partition distribution by system (stacked bars)
         pivot_df = (
@@ -237,13 +240,12 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         top_bar_source = ColumnDataSource(organism_counts)
 
         # Sort organisms by count for better visualization
-        x_order = organism_counts.sort_values("count", ascending=False)["organism"].tolist()
+        x_order = organism_counts.sort_values("count", ascending=False)[
+            "organism"
+        ].tolist()
 
         self.create_top_bar_plot(
-            top_bar_source,
-            "organism",
-            x_order=x_order,
-            color="green"
+            top_bar_source, "organism", x_order=x_order, color="green"
         )
 
     def plot(self) -> None:

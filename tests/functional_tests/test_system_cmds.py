@@ -9,7 +9,6 @@ from tests.utils.file_compare import assert_or_update_file
 def annotation_and_systems_cmds(
     pangenome_list_file, utils_hmm_list, utils_model_list, num_cpus
 ):
-
     annotation_command = (
         f"panorama annotation "
         f"--pangenomes {pangenome_list_file} "
@@ -41,7 +40,6 @@ def test_write_systems(
     num_cpus,
     update_golden,
 ):
-
     outdir = pangenome_list_file.parent / "write_systems_outdir"
 
     command = (
@@ -80,9 +78,9 @@ def test_write_systems(
     # Check each pangenome directory
     for pangenome_name in pangenome_names:
         pangenome_dir = outdir / pangenome_name
-        assert (
-            pangenome_dir.exists()
-        ), f"Pangenome directory {pangenome_dir} was not created"
+        assert pangenome_dir.exists(), (
+            f"Pangenome directory {pangenome_dir} was not created"
+        )
 
         # Check source directory
         source_dir = pangenome_dir / "defensefinder"
@@ -101,15 +99,15 @@ def test_write_systems(
 
         # Check the projection directory exists (since --projection flag is used)
         projection_dir = source_dir / "projection"
-        assert (
-            projection_dir.exists()
-        ), f"Projection directory {projection_dir} was not created"
+        assert projection_dir.exists(), (
+            f"Projection directory {projection_dir} was not created"
+        )
 
         # Check that the projection directory contains TSV files
         projection_files = list(projection_dir.glob("*.tsv"))
-        assert (
-            len(projection_files) > 0
-        ), f"No projection TSV files found in {projection_dir}"
+        assert len(projection_files) > 0, (
+            f"No projection TSV files found in {projection_dir}"
+        )
 
         # Verify all projection files are non-empty
         for proj_file in projection_files:

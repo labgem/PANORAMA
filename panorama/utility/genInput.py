@@ -231,7 +231,7 @@ def parse_hmm_info(
     else:
         hmm_dict.update(
             {
-                "protein_name":  hmm_dict["name"],
+                "protein_name": hmm_dict["name"],
                 "secondary_name": "",
                 "score_threshold": nan,
                 "eval_threshold": nan,
@@ -304,7 +304,9 @@ def create_hmm_list_file(
         if path.is_file():
             hmm_path_list.append(path)
         elif path.is_dir():
-            for hmm_file in path.rglob("*.h[3m]m") if recursive else path.glob("*.h[3m]m"):
+            for hmm_file in (
+                path.rglob("*.h[3m]m") if recursive else path.glob("*.h[3m]m")
+            ):
                 hmm_path_list.append(hmm_file)
         else:
             if not path.exists():
@@ -325,7 +327,7 @@ def create_hmm_list_file(
         hmm_df["hmm_cov_threshold"] = hmm_coverage
     if target_coverage is not None:
         hmm_df["target_cov_threshold"] = target_coverage
-    
+
     # Define the desired column order
     desired_columns = [
         "name",
@@ -341,7 +343,7 @@ def create_hmm_list_file(
         "target_cov_threshold",
         "description",
     ]
-    
+
     # Reindex to desired order, filling missing columns with None/NaN
     hmm_df = hmm_df.reindex(columns=desired_columns)
     hmm_df.to_csv(output / "hmm_list.tsv", sep="\t", index=False)

@@ -81,7 +81,9 @@ def compute_gfrr(
     return min_frr, max_frr, len(shared_akins)
 
 
-def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str, seed: int = 42) -> List[Set[Any]]:
+def cluster_on_gfrr(
+    graph: nx.Graph, gfrr_metric: str, seed: int = 42
+) -> List[Set[Any]]:
     """
     Cluster graph nodes using Louvain community detection based on GFRR metrics.
 
@@ -111,7 +113,10 @@ def cluster_on_gfrr(graph: nx.Graph, gfrr_metric: str, seed: int = 42) -> List[S
     # Apply Louvain community detection algorithm
     # This algorithm optimizes modularity to find densely connected communities
     partitions = nx.algorithms.community.louvain_communities(
-        graph, weight=gfrr_metric, resolution=1.0, seed=seed,  # Default resolution for modularity
+        graph,
+        weight=gfrr_metric,
+        resolution=1.0,
+        seed=seed,  # Default resolution for modularity
     )
 
     # Assign cluster labels to each node as graph attributes
@@ -335,11 +340,11 @@ def parser_comparison(parser: Any) -> Tuple[Any, Any, Any]:
     optional = parser.add_argument_group(title="Optional arguments")
 
     optional.add_argument(
-        '--seed',
+        "--seed",
         required=False,
         type=int,
         default=42,
-        help="Random seed for reproducibility. Default: 42"
+        help="Random seed for reproducibility. Default: 42",
     )
     optional.add_argument(
         "--graph_formats",

@@ -788,7 +788,7 @@ def search_systems(
                 len(x.model.canonical),
                 -len(x),
                 -x.number_of_model_gene_families,
-                hash(x)
+                hash(x),
             ),
         ),
         start=1,
@@ -968,12 +968,18 @@ def launch(args):
     )
     try:
         write_systems_to_pangenomes(
-            pangenomes, args.source, args.threads, lock, disable_bar=args.disable_prog_bar
+            pangenomes,
+            args.source,
+            args.threads,
+            lock,
+            disable_bar=args.disable_prog_bar,
         )
     except Exception as e:
         for pangenome in pangenomes:
             erase_pangenome(pangenome, systems=True, source=args.source)
-            logging.getLogger("PANORAMA").debug(f"erase system from {args.source} in {pangenome.name}")
+            logging.getLogger("PANORAMA").debug(
+                f"erase system from {args.source} in {pangenome.name}"
+            )
         raise Exception(f"Error while writing systems from {e}") from e
 
 

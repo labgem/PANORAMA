@@ -3,7 +3,7 @@ import shutil
 
 
 TESTS_DIR = Path(__file__).parent.parent
-GOLDEN_DIR = TESTS_DIR/"functional_tests/expected_outputs"
+GOLDEN_DIR = TESTS_DIR / "functional_tests/expected_outputs"
 
 
 def assert_or_update_file(
@@ -18,9 +18,9 @@ def assert_or_update_file(
         print(f"[update-golden] Updated golden file for {file_path.name}")
     else:
         print(f"[compare] Comparing {file_path} with golden file {golden_file}")
-        assert (
-            golden_file.exists()
-        ), f"No golden file for '{expected_file_name}' found in {GOLDEN_DIR}. Run pytest with --update-golden first."
+        assert golden_file.exists(), (
+            f"No golden file for '{expected_file_name}' found in {GOLDEN_DIR}. Run pytest with --update-golden first."
+        )
         content_actual = file_path.read_text()
         content_expected = golden_file.read_text()
         print(content_actual)

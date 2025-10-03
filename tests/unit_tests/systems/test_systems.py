@@ -10,6 +10,7 @@ This test suite covers all major functionality including:
 - ClusterSystems functionality for grouping homologous systems
 - Integration with gene families, organisms, modules, spots, and regions
 """
+
 from random import randint, choice
 from typing import Set
 
@@ -282,16 +283,19 @@ class TestSystemUnit(TestFixture):
 
         gf3_prime = GeneFamily(3, "new_family")
         gf4_prime = GeneFamily(4, "context_family")
-        fam2meta_info_prime = {gf4_prime: ("test_source", 2), gf3_prime: ("test_source", 1), }
+        fam2meta_info_prime = {
+            gf4_prime: ("test_source", 2),
+            gf3_prime: ("test_source", 1),
+        }
 
         fu = FuncUnit(name="test_unit", presence="mandatory", min_total=2)
         fu_prime = FuncUnit(name="test_unit", presence="mandatory", min_total=2)
-        
+
         su = SystemUnit(fu, "test_source", {gf3}, fam2meta_info)
         su_prime = SystemUnit(fu_prime, "test_source", {gf3_prime}, fam2meta_info_prime)
 
         assert hash(su) == hash(su_prime)
-        
+
         expected_hash = 589505881
         assert hash(su) == expected_hash
         assert su.ID != su_prime.ID
@@ -569,7 +573,7 @@ class TestSystem(TestFixture):
             fu = FuncUnit(name=f"test_unit_{i}", presence="mandatory", min_total=1)
             fu.model = model
             gene_families = {
-                GeneFamily(counter_fam + j, f"test_family_{counter_fam+j}")
+                GeneFamily(counter_fam + j, f"test_family_{counter_fam + j}")
                 for j in range(randint(1, 5))
             }
             for j, gf in enumerate(gene_families):
@@ -819,7 +823,9 @@ class TestSystem(TestFixture):
                 choices.add(choice)
                 if choice:
                     # Create a new unit with additional gene family
-                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    new_gene_family = GeneFamily(
+                        family_id_counter, f"new_family_{family_id_counter}"
+                    )
                     family_id_counter += 1
 
                     # Copy the original families and metadata
@@ -863,7 +869,9 @@ class TestSystem(TestFixture):
 
             for i, unit in enumerate(units):
                 if i == 0:  # Force the first unit to be augmented
-                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
+                    new_gene_family = GeneFamily(
+                        family_id_counter, f"new_family_{family_id_counter}"
+                    )
                     new_families = set(unit.families).union({new_gene_family})
                     fam2metainfo = unit._families2metainfo.copy()
                     fam2metainfo[new_gene_family] = ("test_source", 1)
@@ -1092,7 +1100,7 @@ class TestSystem(TestFixture):
         new_fu = FuncUnit(name=f"new_test_unit", presence="mandatory", min_total=1)
         new_fu.model = model
         gene_families = {
-            GeneFamily(100 + j, f"test_family_{100+j}") for j in range(randint(1, 5))
+            GeneFamily(100 + j, f"test_family_{100 + j}") for j in range(randint(1, 5))
         }
         fam2metainfo = {gf: ("new_test_source", randint(1, 5)) for gf in gene_families}
         new_unit = SystemUnit(
@@ -1215,9 +1223,9 @@ class TestSystem(TestFixture):
             assigned_count = 0
             for i, rgp in enumerate(regions):
                 # Last region must get a spot if none assigned yet
-                should_assign = (i == len(regions) - 1 and assigned_count == 0) or randint(
-                    0, 2
-                ) > 0  # 66% chance
+                should_assign = (
+                    i == len(regions) - 1 and assigned_count == 0
+                ) or randint(0, 2) > 0  # 66% chance
                 if should_assign:
                     spot = choice(tuple(spots))
                     rgp.spot = spot

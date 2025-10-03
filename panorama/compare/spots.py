@@ -348,7 +348,6 @@ def create_spots_graph(
     with ThreadPoolExecutor(
         max_workers=threads, initializer=init_lock, initargs=(lock,)
     ) as executor:
-
         # Set up progress tracking
         with tqdm(
             total=len(pangenomes),
@@ -356,7 +355,6 @@ def create_spots_graph(
             desc="Creating spots graphs",
             disable=disable_bar,
         ) as pbar:
-
             # Submit tasks for each pangenome
             futures = []
             for pangenome in pangenomes:
@@ -455,7 +453,6 @@ def compute_gfrr_edges(
         desc="Computing GFRR edges",
         disable=disable_bar,
     ) as pbar:
-
         for spot1, spot2 in spots_pairs:
             # Skip if the edge already exists (shouldn't happen in normal flow)
             if graph.has_edge(spot1, spot2):
@@ -506,7 +503,7 @@ def compute_gfrr_edges(
 
     logger.info(
         f"Added {edges_added} edges out of {total_comparisons} comparisons "
-        f"({edges_added/total_comparisons*100:.1f}% pass thresholds)"
+        f"({edges_added / total_comparisons * 100:.1f}% pass thresholds)"
     )
 
 
@@ -701,14 +698,12 @@ def create_systems_graph(
     with ThreadPoolExecutor(
         max_workers=threads, initializer=init_lock, initargs=(lock,)
     ) as executor:
-
         with tqdm(
             total=len(pangenomes),
             unit="Pangenome",
             desc="Creating systems graphs",
             disable=disable_bar,
         ) as pbar:
-
             # Submit processing tasks for each pangenome
             futures = []
             for pangenome in pangenomes:
@@ -818,7 +813,6 @@ def graph_systems_link_with_conserved_spots(
         desc="Computing system linkages",
         disable=disable_bar,
     ) as pbar:
-
         for sys_hash1, sys_hash2 in pbar:
             # Find conserved spots shared between these two systems
             common_conserved_spots = (
@@ -1081,7 +1075,6 @@ def write_conserved_spots(
         desc="Processing conserved spots",
         disable=disable_bar,
     ) as pbar:
-
         for conserved_spot in pbar:
             # Data for an individual conserved spot file
             individual_spot_data = []

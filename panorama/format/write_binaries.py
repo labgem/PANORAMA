@@ -382,7 +382,6 @@ def write_systems_to_hdf5(
         disable=disable_bar,
         desc=f"Writing systems from {source}",
     ) as progress:
-
         for system in pangenome.systems:
             # Write regular system data
             write_system_data_to_tables(
@@ -570,7 +569,6 @@ def write_pangenome(
     # Handle systems data if present and computed
     with tables.open_file(file_path, "a") as h5f:
         if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
-
             if source is None:
                 raise ValueError("Source must be specified when writing systems data")
 

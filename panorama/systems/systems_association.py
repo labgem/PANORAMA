@@ -63,11 +63,11 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
     """
 
     def __init__(
-            self,
-            association: str,
-            name: str,
-            output_dir: Path,
-            formats: Optional[List[str]] = None
+        self,
+        association: str,
+        name: str,
+        output_dir: Path,
+        formats: Optional[List[str]] = None,
     ):
         """
         Initialize the association visualization builder.
@@ -164,10 +164,10 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         self.color_bar.title.text_font_size = "14pt"
 
     def create_main_figure(
-            self,
-            correlation_matrix: pd.DataFrame,
-            x_range: FactorRange,
-            y_range: FactorRange,
+        self,
+        correlation_matrix: pd.DataFrame,
+        x_range: FactorRange,
+        y_range: FactorRange,
     ) -> None:
         """
         Create the main correlation matrix heatmap figure.
@@ -205,14 +205,13 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             source=source,
             line_color="white",
             fill_color=linear_cmap(
-                "corr",
-                palette=color_palette,
-                low=0,
-                high=max_correlation + 1
+                "corr", palette=color_palette, low=0, high=max_correlation + 1
             ),
         )
 
-    def create_coverage_plot(self, coverage_df: pd.DataFrame, x_range: FactorRange) -> None:
+    def create_coverage_plot(
+        self, coverage_df: pd.DataFrame, x_range: FactorRange
+    ) -> None:
         """
         Create a coverage visualization plot.
 
@@ -227,7 +226,9 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             coverage_df, x_range, "coverage", Reds256, "Coverage"
         )
 
-    def create_frequency_plot(self, frequency_df: pd.DataFrame, x_range: FactorRange) -> None:
+    def create_frequency_plot(
+        self, frequency_df: pd.DataFrame, x_range: FactorRange
+    ) -> None:
         """
         Create a frequency visualization plot.
 
@@ -243,12 +244,12 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         )
 
     def _create_metric_plot(
-            self,
-            data_df: pd.DataFrame,
-            x_range: FactorRange,
-            metric_name: str,
-            color_palette: List[str],
-            title: str,
+        self,
+        data_df: pd.DataFrame,
+        x_range: FactorRange,
+        metric_name: str,
+        color_palette: List[str],
+        title: str,
     ) -> Tuple[figure, figure]:
         """
         Create a generic metric visualization plot (coverage or frequency).
@@ -293,10 +294,12 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         color_bar_plot.title.text_font_size = "12pt"
 
         # Prepare data source aligned with x_range
-        aligned_data = pd.DataFrame({
-            self.association: x_range.factors,
-            metric_name: data_df.loc[x_range.factors][metric_name],
-        })
+        aligned_data = pd.DataFrame(
+            {
+                self.association: x_range.factors,
+                metric_name: data_df.loc[x_range.factors][metric_name],
+            }
+        )
         data_source = ColumnDataSource(aligned_data)
 
         # Create main metric plot
@@ -317,8 +320,8 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         metric_plot.rect(
             self.association,
             0.5,  # y-position (centered)
-            1,    # width
-            1,    # height
+            1,  # width
+            1,  # height
             source=data_source,
             fill_color={"field": metric_name, "transform": mapper},
         )
@@ -337,10 +340,12 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
         """
         # Left bar plot: System counts (sum across rows)
         system_counts = correlation_matrix.sum(axis=1)
-        left_bar_data = pd.DataFrame({
-            "system_name": list(correlation_matrix.index),
-            "count": system_counts.to_list(),
-        })
+        left_bar_data = pd.DataFrame(
+            {
+                "system_name": list(correlation_matrix.index),
+                "count": system_counts.to_list(),
+            }
+        )
         left_bar_source = ColumnDataSource(left_bar_data)
         self.create_left_bar_plot(left_bar_source, correlation_matrix)
 
@@ -354,16 +359,15 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             reverse=True,
         )
 
-        top_bar_data = pd.DataFrame({
-            self.association: list(correlation_matrix.columns),
-            "count": element_counts.to_list(),
-        })
+        top_bar_data = pd.DataFrame(
+            {
+                self.association: list(correlation_matrix.columns),
+                "count": element_counts.to_list(),
+            }
+        )
         top_bar_source = ColumnDataSource(top_bar_data)
         self.create_top_bar_plot(
-            top_bar_source,
-            self.association,
-            x_order=x_order,
-            color="green"
+            top_bar_source, self.association, x_order=x_order, color="green"
         )
 
     def plot(self) -> None:

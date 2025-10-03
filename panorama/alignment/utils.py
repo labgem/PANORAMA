@@ -263,7 +263,6 @@ def write_pangenomes_families_sequences(
         with ThreadPoolExecutor(
             max_workers=threads, initializer=init_lock, initargs=(lock,)
         ) as executor:
-
             # Submit all tasks
             future_to_pangenome = {}
             for pangenome in pangenomes:
@@ -283,7 +282,6 @@ def write_pangenomes_families_sequences(
                 disable=disable_bar,
                 desc="Processing pangenomes",
             ) as progress_bar:
-
                 # Use as_completed for better error handling and progress tracking
                 for future in as_completed(future_to_pangenome):
                     pangenome_name = future_to_pangenome[future]

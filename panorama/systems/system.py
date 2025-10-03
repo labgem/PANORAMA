@@ -41,6 +41,7 @@ def check_instance_of_system_unit(method):
         TypeError: If the `other` argument passed to the wrapped method is not an
             instance of SystemUnit.
     """
+
     @wraps(method)
     def wrapper(self, other):
         if not isinstance(other, SystemUnit):
@@ -67,6 +68,7 @@ def check_instance_of_system(method):
         TypeError: If the `other` argument passed to the wrapped method is not an
             instance of SystemUnit.
     """
+
     @wraps(method)
     def wrapper(self, other):
         if not isinstance(other, System):
@@ -132,7 +134,7 @@ class SystemUnit(MetaFeatures):
     def __hash__(self) -> int:
         """
         Compute a hash value for the SystemUnit based on its gene families and annotation sources.
-        
+
         The hash includes gene family names and their annotation sources but excludes the ID
         to ensure consistent hashing across different launches.
 
@@ -142,12 +144,12 @@ class SystemUnit(MetaFeatures):
         content = self.hash_content()
         # Use CRC32 for fast, deterministic hashing across Python sessions
         # CRC32 returns a 32-bit value, convert to signed integer for consistency
-        return zlib.crc32(content.encode('utf-8')) & 0x7fffffff
-    
+        return zlib.crc32(content.encode("utf-8")) & 0x7FFFFFFF
+
     def hash_content(self) -> str:
         """
         Generate string content for hashing based on gene families and annotation sources.
-        
+
         Returns:
             str: String representation of the content to be hashed.
         """
@@ -155,7 +157,7 @@ class SystemUnit(MetaFeatures):
         for family_obj, (annotation_source, _) in self._families2metainfo.items():
             family_items.append(f"{family_obj.name}:{annotation_source}")
 
-        return ';'.join(sorted(family_items))
+        return ";".join(sorted(family_items))
 
     def __repr__(self):
         """
@@ -676,7 +678,6 @@ class SystemUnit(MetaFeatures):
         else:
             self._spots_getter[spot.ID] = spot
 
-
     @property
     def regions(self) -> Generator[Region, None, None]:
         """
@@ -787,7 +788,7 @@ class System(MetaFeatures):
     def __hash__(self) -> int:
         """
         Computes a hash based on the set of system units.
-        
+
         The hash includes unit names and their content but excludes the system ID
         to ensure consistent hashing across different launches.
 
@@ -799,10 +800,10 @@ class System(MetaFeatures):
         for unit_name, unit in self._unit_getter.items():
             # Use the unit's hash method which is now deterministic
             unit_items.append(f"{unit_name}:{hash(unit)}")
-        
-        content = ';'.join(sorted(unit_items)) + self.source + self.model.name
+
+        content = ";".join(sorted(unit_items)) + self.source + self.model.name
         # Use CRC32 for fast, deterministic hashing across Python sessions
-        return zlib.crc32(content.encode('utf-8')) & 0x7fffffff
+        return zlib.crc32(content.encode("utf-8")) & 0x7FFFFFFF
 
     def __repr__(self) -> str:
         """
@@ -1347,9 +1348,9 @@ class ClusterSystems:
             AssertionError: If the input is not a System instance.
             KeyError: If a system with the same key already exists in the cluster.
         """
-        assert isinstance(
-            system, System
-        ), f"System object is expected, got {type(system)}"
+        assert isinstance(system, System), (
+            f"System object is expected, got {type(system)}"
+        )
         self[(system.pangenome.name, system.ID)] = system
         system.cluster_id = self.ID
 
@@ -1368,9 +1369,9 @@ class ClusterSystems:
             AssertionError: If system_id is not a string.
             KeyError: If the system is not found in the cluster.
         """
-        assert isinstance(
-            system_id, str
-        ), f"System id should be a string, got {type(system_id)}"
+        assert isinstance(system_id, str), (
+            f"System id should be a string, got {type(system_id)}"
+        )
         return self[(pangenome_name, system_id)]
 
     @property

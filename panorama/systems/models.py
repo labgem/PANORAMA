@@ -179,7 +179,9 @@ class Models:
         Args:
             models (Set[Model], optional): A set of models to be used. Defaults to None.
         """
-        self._model_getter = {model.name: model for model in models} if models is not None else {}
+        self._model_getter = (
+            {model.name: model for model in models} if models is not None else {}
+        )
 
     def __iter__(self) -> Generator[Model, None, None]:
         """
@@ -373,6 +375,7 @@ class Models:
                 raise Exception(f"Unexpected problem to read JSON {model_path}")
             else:
                 self.add_model(model)
+
 
 class _BasicFeatures:
     """
@@ -768,7 +771,9 @@ class _ModFuFeatures:
         try:
             child = self._child_getter[name]
         except KeyError:
-            raise KeyError(f"No such {self._child_type} with name {name} in {type(self)}")
+            raise KeyError(
+                f"No such {self._child_type} with name {name} in {type(self)}"
+            )
         else:
             return child
 
@@ -1209,7 +1214,9 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             param_keys=fu_params,
         )
         self.window = (
-            data_fu["parameters"]["window"] if "window" in data_fu["parameters"] else self.transitivity + 1
+            data_fu["parameters"]["window"]
+            if "window" in data_fu["parameters"]
+            else self.transitivity + 1
         )
         for fam_dict in data_fu["families"]:
             family = Family()

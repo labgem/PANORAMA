@@ -197,7 +197,9 @@ def launch_translate(
             disable_bar=disable_bar,
         )
     elif source in ["defense-finder", "CONJScan", "TXSScan", "TFFscan"]:
-        from panorama.utility.translate.macsymodel_translator import translate_macsyfinder
+        from panorama.utility.translate.macsymodel_translator import (
+            translate_macsyfinder,
+        )
 
         list_data = translate_macsyfinder(
             macsy_db=database_path,

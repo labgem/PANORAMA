@@ -84,7 +84,7 @@ def process_attributes(
 
 def process_exchangeable(
     elem: lxml.etree.Element,
-    data:  Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     exchangeable_set: Set[str],
 ) -> Set[str]:
@@ -144,7 +144,7 @@ def process_exchangeable(
 
 def translate_gene(
     elem: lxml.etree.Element,
-    data: Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     transitivity_mut: Callable[[int], int],
 ) -> Dict[str, Union[str, Dict[str, int]]]:
@@ -228,10 +228,10 @@ def translate_gene(
 
 def translate_functional_unit(
     elem: lxml.etree.Element,
-    data:  Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     transitivity_mut: Callable[[int], int],
-) -> Dict[str,  Union[str, List, Dict[str, int]]]:
+) -> Dict[str, Union[str, List, Dict[str, int]]]:
     """
     Translate a functional unit from MacSyFinder models (or like) into PANORAMA format.
 
@@ -284,7 +284,7 @@ def translate_macsyfinder_model(
     hmm_df: pd.DataFrame,
     canonical: List[str],
     transitivity_mut: Callable[[int], int],
-) -> Dict[str,  Union[str, List, Dict[str, int]]]:
+) -> Dict[str, Union[str, List, Dict[str, int]]]:
     """
     Translate a complete MacSyFinder model (or like) into PANORAMA format.
 
@@ -698,7 +698,7 @@ def translate_macsyfinder(
     source: str = "",
     force: bool = False,
     disable_bar: bool = False,
-) -> List[Dict[str,  Union[str, List, Dict[str, int]]]]:
+) -> List[Dict[str, Union[str, List, Dict[str, int]]]]:
     """
     Translate MacSyFinder models into PANORAMA format with comprehensive error handling.
 

@@ -315,24 +315,24 @@ def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome)
     # Expected organisms projection DataFrame
     expected_organisms = pd.DataFrame(
         {
-            'unit_name': ["fu"] * 18,
-            'unit_ID': ["1"] * 18,
-            'organism_name': ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
-            'gf_name': ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
-            'partition': ["persistent"] * 18,
-            'annotation': ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,
-            'secondary_annotation': [""] * 18,
-            'gene_ID': [f"gene_{i}_{org}" for org in range(3) for i in range(6)],
-            'local_ID': [""] * 18,
-            'contig': [f"contig_{org}" for org in range(3) for i in range(6)],
-            'start': ["100", "200", "300", "400", "500", "600"] * 3,
-            'stop': ["200", "300", "400", "500", "600", "700"] * 3,
-            'strand': ["+"] * 18,
-            'fragment': ["False"] * 18,
-            'category': ["model", "model", "model", "model", "context", "context"] * 3,
-            'genomic_organization': ["strict"] * 18,
-            'completeness': ["1.0"] * 18,
-            'product': [""] * 18,
+            "unit_name": ["fu"] * 18,
+            "unit_ID": ["1"] * 18,
+            "organism_name": ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
+            "gf_name": ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
+            "partition": ["persistent"] * 18,
+            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,
+            "secondary_annotation": [""] * 18,
+            "gene_ID": [f"gene_{i}_{org}" for org in range(3) for i in range(6)],
+            "local_ID": [""] * 18,
+            "contig": [f"contig_{org}" for org in range(3) for i in range(6)],
+            "start": ["100", "200", "300", "400", "500", "600"] * 3,
+            "stop": ["200", "300", "400", "500", "600", "700"] * 3,
+            "strand": ["+"] * 18,
+            "fragment": ["False"] * 18,
+            "category": ["model", "model", "model", "model", "context", "context"] * 3,
+            "genomic_organization": ["strict"] * 18,
+            "completeness": ["1.0"] * 18,
+            "product": [""] * 18,
         }
     )
 
@@ -642,9 +642,9 @@ def test_write_projection_systems(simple_orgs):
             org_file = pd.read_csv(org_file_path, sep="\t").fillna("")
 
             # Each organism file should have 6 rows (one per GF)
-            assert (
-                len(org_file) == 6
-            ), f"Expected 6 rows for {org_name}, got {len(org_file)}"
+            assert len(org_file) == 6, (
+                f"Expected 6 rows for {org_name}, got {len(org_file)}"
+            )
 
             # Check basic structure
             assert all(org_file["system number"] == 1)

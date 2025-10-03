@@ -722,11 +722,15 @@ def check_info_args(args: argparse.Namespace):
     """
     if args.output.is_dir():
         if not args.force:
-            raise IOError(f"Output directory: {args.output} is not empty."
-                          f"Use --force to overwrite.")
+            raise IOError(
+                f"Output directory: {args.output} is not empty."
+                f"Use --force to overwrite."
+            )
         else:
-            logger.warning(f"Output directory: {args.output} is not empty."
-                           f"Files could be overwritten.")
+            logger.warning(
+                f"Output directory: {args.output} is not empty."
+                f"Files could be overwritten."
+            )
     else:
         mkdir(args.output)
 

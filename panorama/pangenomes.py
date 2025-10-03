@@ -34,8 +34,7 @@ class Pangenome(Pan):
     """
 
     def __init__(self, name, taxid: int = None):
-        """Constructor method.
-        """
+        """Constructor method."""
         super().__init__()
         self._system_getter = {}
         self._name2system = {}
@@ -43,7 +42,7 @@ class Pangenome(Pan):
         self._systems_sources2metada_sources = None
         self.name = name
         self.taxid = taxid
-        self.status.update({"systems": 'No', "systems_sources": set()})
+        self.status.update({"systems": "No", "systems_sources": set()})
 
     def __str__(self):
         return self.name
@@ -67,10 +66,13 @@ class Pangenome(Pan):
             TypeError:
                 If the `pangenome_file` is not a HDF5 format file
         """
-        assert isinstance(pangenome_file, Path), "pangenome file should be a Path object type"
+        assert isinstance(pangenome_file, Path), (
+            "pangenome file should be a Path object type"
+        )
         from tables import is_hdf5_file
         from ppanggolin.utils import check_version_compatibility
         from panorama.format.read_binaries import get_status
+
         # importing on call instead of importing on top to avoid cross-reference problems.
         if not is_hdf5_file(pangenome_file):
             raise TypeError("Pangenome file should be an HDF5 file type")
@@ -109,7 +111,9 @@ class Pangenome(Pan):
         Args:
             family (Union[GeneFamily, Fam]): GeneFamily object to add
         """
-        assert isinstance(family, (GeneFamily, Fam)), "Family must be a GeneFamily from PANORAMA or PPanGGOLiN"
+        assert isinstance(family, (GeneFamily, Fam)), (
+            "Family must be a GeneFamily from PANORAMA or PPanGGOLiN"
+        )
         if not isinstance(family, GeneFamily):
             family = GeneFamily.recast(family)
         super().add_gene_family(family)
@@ -188,7 +192,7 @@ class Pangenome(Pan):
         try:
             system = self._system_getter[system_id]
         except KeyError:
-            uncanonical_id = system_id.split('.')[0]
+            uncanonical_id = system_id.split(".")[0]
             find_in_canonical = False
             if len(uncanonical_id) > 0:
                 uncanonical_system = self.get_system(uncanonical_id)
@@ -196,10 +200,14 @@ class Pangenome(Pan):
                     if canonical.ID == system_id:
                         return canonical
                 if not find_in_canonical:
-                    raise KeyError(f"There is no system with ID = {system_id} in pangenome")
+                    raise KeyError(
+                        f"There is no system with ID = {system_id} in pangenome"
+                    )
                 else:
                     # You should not arrive here because if `find_in_canonical` is True the function return a value
-                    raise Exception("Something unexpected happened here. Please report an issue on our GitHub")
+                    raise Exception(
+                        "Something unexpected happened here. Please report an issue on our GitHub"
+                    )
             else:
                 raise KeyError(f"There is no system with ID = {system_id} in pangenome")
         else:
@@ -252,7 +260,11 @@ class Pangenome(Pan):
             system.pangenome = self
             for canonical_system in canonical_systems:
                 system.add_canonical(canonical_system)
-        self._system_getter = {sys_id: sys for sys_id, sys in self._system_getter.items() if sys_id not in drop_sys_key}
+        self._system_getter = {
+            sys_id: sys
+            for sys_id, sys in self._system_getter.items()
+            if sys_id not in drop_sys_key
+        }
 
     def number_of_systems(self, source: str = None, with_canonical: bool = True) -> int:
         """Get the number of systems in the pangenome.
@@ -351,15 +363,23 @@ class Pangenomes:
                     self._families2pangenome[family.name] = pangenome.name
                 else:
                     if check_duplicate_names:
-                        logging.getLogger("PANORAMA").error(f"Duplicate family name is {family.name} between "
-                                                            f"{pangenome.name} and {duplicate_pangenome}")
-                        raise KeyError("There is duplicate names of gene families between your pangenomes."
-                                       "In your command it could affect the results. Look at the documentation or "
-                                       "post an issue in our GitHub to manage this situation.")
+                        logging.getLogger("PANORAMA").error(
+                            f"Duplicate family name is {family.name} between "
+                            f"{pangenome.name} and {duplicate_pangenome}"
+                        )
+                        raise KeyError(
+                            "There is duplicate names of gene families between your pangenomes."
+                            "In your command it could affect the results. Look at the documentation or "
+                            "post an issue in our GitHub to manage this situation."
+                        )
                     else:
-                        logging.getLogger("PANORAMA").debug("Duplicate family names between pangenomes")
+                        logging.getLogger("PANORAMA").debug(
+                            "Duplicate family names between pangenomes"
+                        )
                         # "Be really careful with what you do"
-                        duplicate_family = self.get(duplicate_pangenome).get_gene_family(family.name)
+                        duplicate_family = self.get(
+                            duplicate_pangenome
+                        ).get_gene_family(family.name)
                         duplicate_family.name = f"{duplicate_pangenome}_{family.name}"
                         family.name = f"{pangenome.name}_{family.name}"
 
@@ -395,7 +415,9 @@ class Pangenomes:
         else:
             raise KeyError(f"Cluster with ID {cluster.ID} already exist in pangenomes")
 
-    def read_clustering(self, clustering: Union[Path, pd.DataFrame], disable_bar: bool = False):
+    def read_clustering(
+        self, clustering: Union[Path, pd.DataFrame], disable_bar: bool = False
+    ):
         """
         Read clustering result from panorama
 
@@ -411,9 +433,16 @@ class Pangenomes:
         logging.getLogger("PANORAMA").info("Reading clustering...")
         if isinstance(clustering, Path):
             logging.getLogger("PANORAMA").debug(f"Reading clustering from {clustering}")
-            clustering = pd.read_csv(clustering, sep="\t", names=clust_col_names, header=0)
-        if clustering.shape[1] != len(clust_col_names) or clustering.columns.tolist() != clust_col_names:
-            raise pd.errors.ParserError("given Clustering has inconsistent number of columns or names")
+            clustering = pd.read_csv(
+                clustering, sep="\t", names=clust_col_names, header=0
+            )
+        if (
+            clustering.shape[1] != len(clust_col_names)
+            or clustering.columns.tolist() != clust_col_names
+        ):
+            raise pd.errors.ParserError(
+                "given Clustering has inconsistent number of columns or names"
+            )
         clustering = clustering.sort_values(by=clust_col_names[0])
         lines = clustering.iterrows()
         line = next(lines)[1]
@@ -468,7 +497,9 @@ class Pangenomes:
         except KeyError:
             self._conserved_spots_getter[conserved_spots.ID] = conserved_spots
         else:
-            raise KeyError(f"Conserved spots {conserved_spots.ID} already exists between pangenomes")
+            raise KeyError(
+                f"Conserved spots {conserved_spots.ID} already exists between pangenomes"
+            )
 
     def get_conserved_spots(self, cs_id: int):
         """
@@ -521,7 +552,9 @@ class Pangenomes:
         except KeyError:
             self._cluster_systems_getter[cluster_systems.ID] = cluster_systems
         else:
-            raise KeyError(f"Conserved spots {cluster_systems.ID} already exists between pangenomes")
+            raise KeyError(
+                f"Conserved spots {cluster_systems.ID} already exists between pangenomes"
+            )
 
     def get_cluster_systems(self, cs_id: str):
         """

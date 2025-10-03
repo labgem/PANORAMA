@@ -7,7 +7,12 @@ from typing import Generator, List, Set, Tuple
 
 # installed libraries
 from ppanggolin.genome import Organism
-from ppanggolin.region import Region as RGP, Spot as Hotspot, Module as Mod, GeneContext as GeneCont
+from ppanggolin.region import (
+    Region as RGP,
+    Spot as Hotspot,
+    Module as Mod,
+    GeneContext as GeneCont,
+)
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -112,7 +117,9 @@ class ConservedSpots:
         except KeyError:
             self._spots_getter[key] = value
         else:
-            raise KeyError(f"Spot {key} already exists in conserved spots with ID {self.ID}")
+            raise KeyError(
+                f"Spot {key} already exists in conserved spots with ID {self.ID}"
+            )
 
     def __getitem__(self, key: Tuple[str, int]) -> Spot:
         try:
@@ -131,7 +138,9 @@ class ConservedSpots:
             AssertionError: If the spot is not an instance of the Spot class.
             KeyError: If the spot already exists in the conserved spots with the same ID.
         """
-        assert isinstance(spot, Spot), f"Spot object is expected, given type is {type(spot)}"
+        assert isinstance(spot, Spot), (
+            f"Spot object is expected, given type is {type(spot)}"
+        )
         self[(spot.pangenome.name, spot.ID)] = spot
         spot.conserved_id = self.ID
 
@@ -150,7 +159,9 @@ class ConservedSpots:
             AssertionError: If the spot id is not an integer.
             KeyError: If the spot is not in the conserved set of spots.
         """
-        assert isinstance(spot_id, int), f"Spot id should be an integer, given type is {type(spot_id)}"
+        assert isinstance(spot_id, int), (
+            f"Spot id should be an integer, given type is {type(spot_id)}"
+        )
         return self[(pangenome_name, spot_id)]
 
     @property
@@ -274,12 +285,16 @@ class Module(Mod):
             self._unit_getter[unit.ID] = unit
         else:
             if unit.name != unit_in.name:
-                raise Exception("Two system with same ID but with different name are trying to be added to module."
-                                "This error is unexpected. Please report on our GitHub")
+                raise Exception(
+                    "Two system with same ID but with different name are trying to be added to module."
+                    "This error is unexpected. Please report on our GitHub"
+                )
             else:
                 if unit.families != unit_in.families:
-                    raise Exception("Two system with same ID and name but with different gene families are trying to be"
-                                    " added to module. This error is unexpected. Please report on our GitHub")
+                    raise Exception(
+                        "Two system with same ID and name but with different gene families are trying to be"
+                        " added to module. This error is unexpected. Please report on our GitHub"
+                    )
 
     @property
     def systems(self):
@@ -296,19 +311,28 @@ class Module(Mod):
 
 
 class GeneContext(GeneCont):
-
     """
     A class used to represent a gene context
 
     """
 
-    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], families_of_interest: Set[GeneFamily]):
+    def __init__(
+        self,
+        pangenome,
+        gc_id: int,
+        families: Set[GeneFamily],
+        families_of_interest: Set[GeneFamily],
+    ):
         """
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
         """
 
-        super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families, families_of_interest=families_of_interest)
+        super().__init__(
+            gc_id=f"{pangenome.name}_{gc_id}",
+            families=families,
+            families_of_interest=families_of_interest,
+        )
 
         self.pangenome = pangenome.name
 
@@ -316,15 +340,16 @@ class GeneContext(GeneCont):
         """
         Summarize gene context information in a dict
 
-        :return: dict with gene context info. 
+        :return: dict with gene context info.
         """
 
-        return {"GeneContext ID": self.ID,
-                "pangenome": self.pangenome,
-                "Gene Family count": len(self.families),
-                "Partitions": ";".join({f.named_partition for f in self.families})
-                }
-    
+        return {
+            "GeneContext ID": self.ID,
+            "pangenome": self.pangenome,
+            "Gene Family count": len(self.families),
+            "Partitions": ";".join({f.named_partition for f in self.families}),
+        }
+
     def __gt__(self, other):
         return self.ID > other.ID
 

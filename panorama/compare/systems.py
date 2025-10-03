@@ -594,9 +594,7 @@ def launch(args: argparse.Namespace) -> None:
     # Process and validate model files
     models_list = []
     for model_path in args.models:
-        validated_models = check_models(
-            model_path, disable_bar=args.disable_prog_bar
-        )
+        validated_models = check_models(model_path, disable_bar=args.disable_prog_bar)
         models_list.append(validated_models)
     need_info["models"] = models_list
 

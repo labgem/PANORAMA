@@ -127,25 +127,25 @@ def project_unit_on_organisms(
                 2,
             )  # proportion of unit families in the organism
             org_proj_name = [
-                    "unit_name",
-                    "unit_ID",
-                    "organism_name",
-                    "gf_name",
-                    "partition",
-                    "annotation",
-                    "secondary_annotation",
-                    "gene_ID",
-                    "local_ID",
-                    "contig",
-                    "start",
-                    "stop",
-                    "strand",
-                    "fragment",
-                    "category",
-                    "genomic_organization",
-                    "completeness",
-                    "product",
-                ]
+                "unit_name",
+                "unit_ID",
+                "organism_name",
+                "gf_name",
+                "partition",
+                "annotation",
+                "secondary_annotation",
+                "gene_ID",
+                "local_ID",
+                "contig",
+                "start",
+                "stop",
+                "strand",
+                "fragment",
+                "category",
+                "genomic_organization",
+                "completeness",
+                "product",
+            ]
             line_projection = [
                 unit.name,
                 sub_id,
@@ -276,7 +276,9 @@ def unit_projection(
             org_proj = project_unit_on_organisms(
                 components, unit, model_genes, association
             )
-            partition = conciliate_partition({line.partition for line in org_proj if line.category == "model"})
+            partition = conciliate_partition(
+                {line.partition for line in org_proj if line.category == "model"}
+            )
             strict_count = sum(
                 1 for line in org_proj if line[-3] == "strict"
             )  # line[-3] -> sys_state_in_org
@@ -702,9 +704,7 @@ def get_org_df_one_unit_per_fam(
         ""
     )
 
-    if (
-        eliminate_filtered_systems
-    ):  # removes all systems with any of their model families filtered out due to lower completeness
+    if eliminate_filtered_systems:  # removes all systems with any of their model families filtered out due to lower completeness
         org_df_filtered = eliminate_systems(org_df, org_df_filtered)
     elif (
         eliminate_empty_systems

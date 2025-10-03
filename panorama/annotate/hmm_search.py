@@ -635,9 +635,9 @@ def get_metadata_df(
     metadata_df = metadata_df.where(metadata_df != "-", nan)
     metadata_df = metadata_df.where(metadata_df != "", nan)
     if mode == "sensitive":
-        assert (
-            gene2family is not None
-        ), "Gene and families must be linked in a dictionary"
+        assert gene2family is not None, (
+            "Gene and families must be linked in a dictionary"
+        )
         gene2family_df = pd.DataFrame.from_dict(
             gene2family, orient="index"
         ).reset_index()

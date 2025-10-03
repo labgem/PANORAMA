@@ -28,7 +28,9 @@ from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.pangenomes import Pangenome, Pangenomes
 
 
-def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def check_annotate_args(
+    args: argparse.Namespace, silence_warning: bool = False
+) -> Tuple[Dict[str, Any], Dict[str, Any]]:
     """
     Checks the provided arguments to ensure that they are valid.
 
@@ -78,7 +80,9 @@ def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False)
                 message="--table is Incompatible option with '--only_best_hit'.",
             )
         if args.output and not silence_warning:
-            logging.getLogger("PANORAMA").warning("--output option is incompatible with --table.")
+            logging.getLogger("PANORAMA").warning(
+                "--output option is incompatible with --table."
+            )
 
     else:  # args.hmm is not None
         # todo: See to make this the default value in argparse
@@ -98,7 +102,9 @@ def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False)
             need_info["need_gene_sequences"] = True
 
         if args.mode == "fast" and args.keep_tmp:
-            logging.getLogger("PANORAMA").warning("--keep_tmp is not working with --mode fast")
+            logging.getLogger("PANORAMA").warning(
+                "--keep_tmp is not working with --mode fast"
+            )
         hmm_kwgs["tmp"] = Path(tempfile.mkdtemp(prefix="panorama_tmp", dir=args.tmp))
 
         if args.msa is not None and args.mode != "profile":
@@ -149,7 +155,9 @@ def check_annotate_args(args: argparse.Namespace, silence_warning: bool = False)
                 hmm_kwgs["pfamtblout"] = True
         else:
             if args.output and not silence_warning:
-                logging.getLogger("PANORAMA").warning("--output option is compatible only with --save_hits.")
+                logging.getLogger("PANORAMA").warning(
+                    "--output option is compatible only with --save_hits."
+                )
     return need_info, hmm_kwgs
 
 
@@ -298,13 +306,16 @@ def keep_best_hit(metadata: pd.DataFrame, k_best_hit: int) -> pd.DataFrame:
     """
     logging.getLogger("PANORAMA").debug(f"keep the {k_best_hit} best hits")
     # Sort by the priority criteria
-    metadata_sorted = metadata.sort_values([
-        'score',      # Highest score first (descending)
-        'bias',       # Lowest bias first (ascending)
-        'e_value',    # Lowest e_value first (ascending)
-        'i_e_value'   # Lowest i_e_value first (ascending)
-    ], ascending=[False, True, True, True])
-    return metadata_sorted.groupby('families').head(k_best_hit).reset_index(drop=True)
+    metadata_sorted = metadata.sort_values(
+        [
+            "score",  # Highest score first (descending)
+            "bias",  # Lowest bias first (ascending)
+            "e_value",  # Lowest e_value first (ascending)
+            "i_e_value",  # Lowest i_e_value first (ascending)
+        ],
+        ascending=[False, True, True, True],
+    )
+    return metadata_sorted.groupby("families").head(k_best_hit).reset_index(drop=True)
 
 
 def write_annotations_to_pangenome(
@@ -510,7 +521,9 @@ def annot_pangenomes(
     except Exception as e:
         for pangenome in pangenomes:
             erase_pangenome(pangenome, metadata=True, source=source)
-            logging.getLogger("PANORAMA").debug(f"erase annotation from {source} in {pangenome.name}")
+            logging.getLogger("PANORAMA").debug(
+                f"erase annotation from {source} in {pangenome.name}"
+            )
         raise Exception(f"Annotation failed from : {e}") from e
 
 

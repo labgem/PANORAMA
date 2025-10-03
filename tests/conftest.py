@@ -268,7 +268,7 @@ def simple_pangenome(simple_gfs, simple_orgs):
 def simple_fu():
     mandatory_gfs = {Family(name=f"protein{i}", presence="mandatory") for i in range(3)}
     accessory_gfs = {
-        Family(name=f"protein{i+3}", presence="accessory") for i in range(3)
+        Family(name=f"protein{i + 3}", presence="accessory") for i in range(3)
     }
     fu = FuncUnit(
         name="fu",
@@ -296,7 +296,7 @@ def multi_unit_model():
         Family(name=f"protein{i}", presence="mandatory") for i in range(3)
     }  # fu1_mandatory: GF0, GF1, GF2
     accessory_gfs = {
-        Family(name=f"protein{i+3}", presence="accessory") for i in range(3)
+        Family(name=f"protein{i + 3}", presence="accessory") for i in range(3)
     }  # fu1_accessory: GF3, GF4, GF5
     neutral_gfs = {Family(name="protein9", presence="neutral")}  # fu1_neutral: GF9
     fu1 = FuncUnit(
@@ -310,7 +310,7 @@ def multi_unit_model():
     )
     # Functional Unit 2
     extra_gfs = {
-        Family(name=f"protein{i+6}", presence="accessory") for i in range(3)
+        Family(name=f"protein{i + 6}", presence="accessory") for i in range(3)
     }  # fu2_accessory: GF6, GF7, GF8
     fu2 = FuncUnit(
         name="fu2",

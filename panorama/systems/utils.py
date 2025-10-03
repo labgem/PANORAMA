@@ -396,7 +396,6 @@ def dict_families_context(
         for exchangeable in exchangeable:
             for source, annotation2families in annot2fam.items():
                 if exchangeable in annotation2families:
-
                     if (
                         fam_model.name in fam2source
                         and fam2source[fam_model.name] != source

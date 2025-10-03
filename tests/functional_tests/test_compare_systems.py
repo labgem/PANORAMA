@@ -31,8 +31,7 @@ def test_compare_systems_command(
     assert outdir.exists(), f"Output directory {outdir} was not created"
 
     # Expected files in each source directory
-    assert_or_update_files = [
-    ]
+    assert_or_update_files = []
     expected_files = map(
         Path,
         assert_or_update_files
