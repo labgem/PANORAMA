@@ -10,25 +10,22 @@ pangenome families sequences using multithreading for improved performance.
 
 # default libraries
 from __future__ import annotations
-import logging
-import tempfile
-import subprocess
 
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
+import logging
+import subprocess
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from multiprocessing import Lock
 from dataclasses import dataclass
-from contextlib import contextmanager
+from multiprocessing import Lock
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 # installed libraries
-from tqdm import tqdm
 from ppanggolin.formats.writeSequences import write_fasta_prot_fam_from_pangenome_file
+from tqdm import tqdm
 
 # local libraries
-from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.utils import init_lock, mkdir
-
 
 logger = logging.getLogger("PANORAMA")
 
@@ -109,9 +106,7 @@ def createdb(
     mkdir(output, force=True)
 
     if not isinstance(db_type, int) or db_type < 0:
-        raise PangenomeProcessingError(
-            f"Invalid db_type: {db_type}. Must be non-negative integer."
-        )
+        raise PangenomeProcessingError(f"Invalid db_type: {db_type}. Must be non-negative integer.")
 
     logger.debug(
         f"Creating MMseqs2 database from {len(seq_files)} sequence files",
@@ -153,16 +148,12 @@ def createdb(
         return db_path
 
     except subprocess.SubprocessError as e:
-        raise MMSeqsError(f"Failed to execute MMseqs2 command: {e}")
+        raise MMSeqsError("Failed to execute MMseqs2 command") from e
     except Exception as e:
-        raise PangenomeProcessingError(
-            f"Unexpected error during database creation: {e}"
-        )
+        raise PangenomeProcessingError("Unexpected error during database creation") from e
 
 
-def write_protein_families_sequences(
-    pangenome: Pangenome, output_dir: Path
-) -> Tuple[str, Path]:
+def write_protein_families_sequences(pangenome: Pangenome, output_dir: Path) -> Tuple[str, Path]:
     """
     Write protein families sequences for a single pangenome.
 
@@ -198,16 +189,12 @@ def write_protein_families_sequences(
         sequences_path = output_dir / MMSeqsConfig.PROTEIN_FAMILIES_FILENAME
 
         if not sequences_path.exists():
-            raise PangenomeProcessingError(
-                f"Expected output file not created: {sequences_path}"
-            )
+            raise PangenomeProcessingError(f"Expected output file not created: {sequences_path}")
 
         return pangenome.name, sequences_path
 
     except Exception as e:
-        raise PangenomeProcessingError(
-            f"Failed to write sequences for pangenome {pangenome.name}: {e}"
-        )
+        raise PangenomeProcessingError("Failed to write sequences for pangenome {pangenome.name}") from e
 
 
 def write_pangenomes_families_sequences(
@@ -251,18 +238,14 @@ def write_pangenomes_families_sequences(
     # Input validation
     mkdir(output, force=True, erase=True)
 
-    logger.info(
-        f"Writing families sequences for {len(pangenomes)} pangenomes using {threads} threads..."
-    )
+    logger.info(f"Writing families sequences for {len(pangenomes)} pangenomes using {threads} threads...")
 
     # Initialize results dictionary
     pangenomes2families_sequences: Dict[str, Path] = {}
 
     try:
         # Use ThreadPoolExecutor with proper initialization
-        with ThreadPoolExecutor(
-            max_workers=threads, initializer=init_lock, initargs=(lock,)
-        ) as executor:
+        with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
             # Submit all tasks
             future_to_pangenome = {}
             for pangenome in pangenomes:
@@ -270,9 +253,7 @@ def write_pangenomes_families_sequences(
                 output_dir = mkdir(output / f"{pangenome.name}")
 
                 # Submit task to executor
-                future = executor.submit(
-                    write_protein_families_sequences, pangenome, output_dir
-                )
+                future = executor.submit(write_protein_families_sequences, pangenome, output_dir)
                 future_to_pangenome[future] = pangenome.name
 
             # Process completed tasks with progress tracking
@@ -293,18 +274,12 @@ def write_pangenomes_families_sequences(
 
                         logger.debug(f"Completed processing pangenome: {name}")
                     except Exception as e:
-                        raise PangenomeProcessingError(
-                            f"Error processing pangenome {pangenome_name}: {e}"
-                        )
+                        raise PangenomeProcessingError(f"Error processing pangenome {pangenome_name}") from e
                     finally:
                         # Update the progress bar regardless of success/failure
                         progress_bar.update(1)
-        logger.info(
-            f"Successfully processed {len(pangenomes2families_sequences)} pangenomes"
-        )
+        logger.info(f"Successfully processed {len(pangenomes2families_sequences)} pangenomes")
         return pangenomes2families_sequences
 
     except Exception as e:
-        raise PangenomeProcessingError(
-            f"Failed to write pangenomes families sequences: {e}"
-        )
+        raise PangenomeProcessingError("Failed to write pangenomes families sequences") from e
