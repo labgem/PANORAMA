@@ -90,7 +90,7 @@ Set up your editor to run Ruff on save:
 Ruff is configured in pyproject.toml:
 ```toml
 [tool.ruff]
-line-length = 88
+line-length = 120
 
 [tool.ruff.lint]
 select = [

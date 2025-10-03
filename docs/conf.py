@@ -103,7 +103,7 @@ html_static_path = ["_static"]
 html_context = {
     "github_user": "labgem",
     "github_repo": "PANORAMA",
-    "github_version": "doc",  # Automatically go to the doc branch for tiny modification.
+    "github_version": "doc",  # Automatically go to the doc branch for tiny modification
     "doc_path": "docs",
 }
 
