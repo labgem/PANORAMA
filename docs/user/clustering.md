@@ -161,7 +161,7 @@ PANORAMA generates clustering results with detailed cluster membership informati
 
 ```
 output_directory/
-└── clustering_results.tsv
+└── clustering.tsv
 ```
 
 ### Clustering Results Format

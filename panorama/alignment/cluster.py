@@ -89,7 +89,7 @@ class ClusteringConfig:
     )
 
     # Output filename
-    CLUSTERING_OUTPUT: str = "clustering_results.tsv"
+    CLUSTERING_OUTPUT: str = "clustering.tsv"
 
 
 # Global configuration instance
