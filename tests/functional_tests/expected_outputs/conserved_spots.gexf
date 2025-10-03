@@ -1,0 +1,187 @@
+<?xml version='1.0' encoding='utf-8'?>
+<gexf xmlns="http://www.gexf.net/1.2draft" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.gexf.net/1.2draft http://www.gexf.net/1.2draft/gexf.xsd" version="1.2">
+  <meta lastmodifieddate="2025-10-03">
+    <creator>NetworkX 3.5</creator>
+  </meta>
+  <graph defaultedgetype="undirected" mode="static" name="">
+    <attributes mode="static" class="edge">
+      <attribute id="12" title="min_gfrr" type="double" />
+      <attribute id="13" title="max_gfrr" type="double" />
+      <attribute id="14" title="shared_families" type="long" />
+    </attributes>
+    <attributes mode="static" class="node">
+      <attribute id="0" title="spot_id" type="long" />
+      <attribute id="1" title="pangenome" type="string" />
+      <attribute id="2" title="num_regions" type="long" />
+      <attribute id="3" title="num_families" type="long" />
+      <attribute id="4" title="conserved_spot_id" type="long" />
+      <attribute id="5" title="RM_Type_IV" type="boolean" />
+      <attribute id="6" title="SanaTA" type="boolean" />
+      <attribute id="7" title="PsyrTA" type="boolean" />
+      <attribute id="8" title="RM_Type_III" type="boolean" />
+      <attribute id="9" title="RM_Type_I" type="boolean" />
+      <attribute id="10" title="ShosTA" type="boolean" />
+      <attribute id="11" title="#systems" type="long" />
+    </attributes>
+    <nodes>
+      <node id="-7084901114785701160" label="-7084901114785701160">
+        <attvalues>
+          <attvalue for="0" value="2" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="4" />
+          <attvalue for="3" value="73" />
+          <attvalue for="4" value="3" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="9" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="0" />
+        </attvalues>
+      </node>
+      <node id="328189690438441199" label="328189690438441199">
+        <attvalues>
+          <attvalue for="0" value="4" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="3" />
+          <attvalue for="3" value="30" />
+          <attvalue for="4" value="60" />
+          <attvalue for="9" value="true" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="1" />
+        </attvalues>
+      </node>
+      <node id="-5628978604626525134" label="-5628978604626525134">
+        <attvalues>
+          <attvalue for="0" value="16" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="5" />
+          <attvalue for="3" value="30" />
+          <attvalue for="4" value="33" />
+          <attvalue for="9" value="true" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="1" />
+        </attvalues>
+      </node>
+      <node id="-3846010982273659219" label="-3846010982273659219">
+        <attvalues>
+          <attvalue for="0" value="25" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_tarriae_id1717" />
+          <attvalue for="2" value="1" />
+          <attvalue for="3" value="9" />
+          <attvalue for="4" value="24" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="9" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="0" />
+        </attvalues>
+      </node>
+      <node id="7791121219332275458" label="7791121219332275458">
+        <attvalues>
+          <attvalue for="0" value="0" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="10" />
+          <attvalue for="3" value="115" />
+          <attvalue for="4" value="3" />
+          <attvalue for="9" value="true" />
+          <attvalue for="6" value="true" />
+          <attvalue for="5" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="2" />
+        </attvalues>
+      </node>
+      <node id="-5252092768763143345" label="-5252092768763143345">
+        <attvalues>
+          <attvalue for="0" value="5" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="2" />
+          <attvalue for="3" value="11" />
+          <attvalue for="4" value="33" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="9" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="0" />
+        </attvalues>
+      </node>
+      <node id="-7792039017424811217" label="-7792039017424811217">
+        <attvalues>
+          <attvalue for="0" value="32" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_cincinnatiensis_id1690" />
+          <attvalue for="2" value="2" />
+          <attvalue for="3" value="24" />
+          <attvalue for="4" value="60" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="9" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="0" />
+        </attvalues>
+      </node>
+      <node id="3672680021440793006" label="3672680021440793006">
+        <attvalues>
+          <attvalue for="0" value="18" />
+          <attvalue for="1" value="GTDB_refseq_s__Vibrio_neptunius_id1710" />
+          <attvalue for="2" value="1" />
+          <attvalue for="3" value="19" />
+          <attvalue for="4" value="24" />
+          <attvalue for="5" value="false" />
+          <attvalue for="6" value="false" />
+          <attvalue for="7" value="false" />
+          <attvalue for="8" value="false" />
+          <attvalue for="9" value="false" />
+          <attvalue for="10" value="false" />
+          <attvalue for="11" value="0" />
+        </attvalues>
+      </node>
+    </nodes>
+    <edges>
+      <edge source="-7084901114785701160" target="7791121219332275458" id="0" weight="0.8333333333333334">
+        <attvalues>
+          <attvalue for="12" value="0.8333333333333334" />
+          <attvalue for="13" value="0.8333333333333334" />
+          <attvalue for="14" value="5" />
+        </attvalues>
+      </edge>
+      <edge source="328189690438441199" target="-7792039017424811217" id="1" weight="0.8333333333333334">
+        <attvalues>
+          <attvalue for="12" value="0.8333333333333334" />
+          <attvalue for="13" value="0.8333333333333334" />
+          <attvalue for="14" value="5" />
+        </attvalues>
+      </edge>
+      <edge source="-5628978604626525134" target="-5252092768763143345" id="2" weight="0.8333333333333334">
+        <attvalues>
+          <attvalue for="12" value="0.8333333333333334" />
+          <attvalue for="13" value="0.8333333333333334" />
+          <attvalue for="14" value="5" />
+        </attvalues>
+      </edge>
+      <edge source="-3846010982273659219" target="3672680021440793006" id="3" weight="1.0">
+        <attvalues>
+          <attvalue for="12" value="1.0" />
+          <attvalue for="13" value="1.0" />
+          <attvalue for="14" value="6" />
+        </attvalues>
+      </edge>
+    </edges>
+  </graph>
+</gexf>

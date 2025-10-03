@@ -1,42 +1,50 @@
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
-py_modules=["panorama"]
 
 [project]
 name = "PANORAMA"
 
 authors = [
-    {name = "Jérôme Arnoux", email = "jarnoux@genoscope.cns.fr"},
+    { name = "Jérôme Arnoux", email = "arnoux.jeromepj@gmail.com"},
+    { name = "Jean Mainguy", email = "jmainguy@genoscope.cns.fr"},
+
 ]
 #maintainers
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
 description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
-requires-python = ">=3.8"
-license = {file="LICENCE.txt"}
-classifiers=["Development Status :: Open alpha",
-             "Environment :: Console",
-             "Intended Audience :: Science/Research",
-             "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
-             "Natural Language :: English",
-             "Operating System :: POSIX :: Linux",
-             "Programming Language :: Python :: 3",
-             "Topic :: Scientific/Engineering :: Bio-Informatics"]
-##dependencies = [
-##    "requests",
-##    'importlib-metadata; python_version<"3.8"',
-##]
+requires-python = ">=3.10"
+license = { file = "LICENCE" }
+classifiers = ["Development Status :: Open alpha",
+    "Environment :: Console",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
+    "Natural Language :: English",
+    "Operating System :: POSIX :: Linux",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Bio-Informatics"]
 dynamic = ["version"]
+dependencies = [
+    "ppanggolin>=2.1.0",
+    "pyhmmer>=0.6",
+    "lxml>=4.9.2",
+    "selenium>=4.35.0",
+]
+
 
 [project.optional-dependencies]
 doc = [
-    "sphinx==6.2.1",
-    "sphinx_rtd_theme==1.2.2",
-    "readthedocs-sphinx-search==0.3.1",
-    "sphinx-autobuild==2021.3.14",
-    "myst-parser==1.0.0",
-    "docutils==0.18.1"
+    "sphinx>=8.2.3",
+    "sphinx_rtd_theme>=3.0.2",
+    "readthedocs-sphinx-search>=0.3.2",
+    "sphinx-autobuild>=2025.8.25",
+    "myst-parser>=4.0.1",
+    "docutils>=0.21.2",
+    "sphinxcontrib.mermaid>=1.0.0",
+    "sphinx_design>=0.6.1",
+    "pydata-sphinx-theme>=0.16.1",
+    "sphinx-autodoc-napoleon-typehints>=2.1.6"
 ]
 dev = [
     "matplotlib>=3.8",
@@ -44,6 +52,8 @@ dev = [
     "seaborn>=0.13",
     "vitables>=3.0.0",
     "viztracer>=0.16.2",
+    "black>=24.10.0",
+    "flake8>=7.3.0"
 ]
 notebook = [
     "jupyter-book>=1.0.0",
@@ -51,7 +61,11 @@ notebook = [
     "jupyter>=1.0.0",
 ]
 #
-
+test = [
+    "pytest==7",
+    "natsort>=8",
+    "pytest-cov>=6.0.0",
+    ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"
@@ -71,4 +85,13 @@ panorama = "panorama.main:main"
 [tool.setuptools]
 packages = ["panorama"]
 [tool.setuptools.dynamic]
-version = {file = "VERSION"}
+version = { file = "VERSION" }
+
+[tool.pytest.ini_options]
+markers = [
+    "requires_test_data: marks tests that require test dataset path to be provided",
+]
+log_cli = true
+log_cli_level = "WARNING"
+log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
+log_cli_date_format = "%Y-%m-%d %H:%M:%S"

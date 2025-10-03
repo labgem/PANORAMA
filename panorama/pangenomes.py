@@ -56,12 +56,16 @@ class Pangenome(Pan):
         :func:`ppanggolin.formats.writeBinaries.writePangenome` is called.
 
         Args:
-            pangenome_file: A string representing the filepath to the hdf5 pan file
-                to be either used or created
-            check_version: Check ppanggolin version of the pangenome file to be compatible with the current version of ppanggolin being used.
+            pangenome_file:
+                A string representing the filepath to the hdf5 pan file to be either used or created
+            check_version:
+                Check ppanggolin version of the pangenome file to be compatible with the current version of ppanggolin being used.
+
         Raises:
-            AssertionError: If the `pangenome_file` is not an instance of the Path class
-            TypeError: If the `pangenome_file` is not a HDF5 format file
+            AssertionError:
+                If the `pangenome_file` is not an instance of the Path class
+            TypeError:
+                If the `pangenome_file` is not a HDF5 format file
         """
         assert isinstance(pangenome_file, Path), "pangenome file should be a Path object type"
         from tables import is_hdf5_file
@@ -399,7 +403,10 @@ class Pangenomes:
             clustering: Clustering result
             disable_bar: Flag to disable progress bar (default: False)
         """
-        from panorama.alignment.cluster import clust_col_names
+        from panorama.alignment.cluster import ClusteringConfig
+
+        clustering_config = ClusteringConfig()
+        clust_col_names = clustering_config.CLUSTER_COLUMN_NAMES
 
         logging.getLogger("PANORAMA").info("Reading clustering...")
         if isinstance(clustering, Path):
@@ -439,6 +446,7 @@ class Pangenomes:
     @property
     def conserved_spots(self) -> Generator[ConservedSpots, None, None]:
         """Generator of conserved spots between pangenomes
+
         Yields:
             ConservedSpots: a set of spots conserved between pangenomes
         """
@@ -491,6 +499,7 @@ class Pangenomes:
     @property
     def cluster_systems(self) -> Generator[ClusterSystems, None, None]:
         """Generator of conserved spots between pangenomes
+
         Yields:
             ConservedSpots: a set of spots conserved between pangenomes
         """

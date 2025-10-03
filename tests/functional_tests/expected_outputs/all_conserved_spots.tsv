@@ -1,0 +1,9 @@
+Conserved_Spot_ID	Spot_ID	Pangenome	Num_RGPs	Num_Gene_Families
+3	0	GTDB_refseq_s__Vibrio_cincinnatiensis_id1690	10	115
+3	2	GTDB_refseq_s__Vibrio_tarriae_id1717	4	73
+24	18	GTDB_refseq_s__Vibrio_neptunius_id1710	1	19
+24	25	GTDB_refseq_s__Vibrio_tarriae_id1717	1	9
+33	5	GTDB_refseq_s__Vibrio_cincinnatiensis_id1690	2	11
+33	16	GTDB_refseq_s__Vibrio_tarriae_id1717	5	30
+60	4	GTDB_refseq_s__Vibrio_tarriae_id1717	3	30
+60	32	GTDB_refseq_s__Vibrio_cincinnatiensis_id1690	2	24

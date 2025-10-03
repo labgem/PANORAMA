@@ -25,11 +25,11 @@ import pandas as pd
 from panorama.pangenomes import Pangenomes, Pangenome
 from panorama.format.write_binaries import erase_pangenome
 from panorama.annotate.annotate import (check_annotate_args, check_pangenome_annotation, read_families_metadata,
-                                        write_annotations_to_pangenome)
+                                        write_annotations_to_pangenomes, parser_annot_hmm)
 from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
 from panorama.systems.models import Models
-from panorama.systems.detection import check_detection_args, search_systems, write_systems_to_pangenome
-from panorama.systems.write_systems import write_flat_systems_to_pangenome
+from panorama.systems.detection import check_detection_args, search_systems_in_pangenomes, write_systems_to_pangenomes
+from panorama.systems.write_systems import write_pangenomes_systems
 from panorama.utility.utility import check_models, mkdir
 
 
@@ -46,7 +46,7 @@ def check_pansystems_parameters(args: argparse.Namespace) -> Tuple[Dict[str, Any
     Raises:
         argparse.ArgumentError: If no type of systems writing is chosen.
     """
-    need_info, hmm_kwgs = check_annotate_args(args)
+    need_info, hmm_kwgs = check_annotate_args(args, silence_warning=True)
     if 'output' not in hmm_kwgs:
         hmm_kwgs["output"] = mkdir(args.output, force=args.force, erase=False)
     args.annotation_sources = None
@@ -91,46 +91,6 @@ def check_pangenome_pansystems(pangenome: Pangenome, source: str, force: bool = 
                              f"Use the --force option to erase the already computed systems.")
 
 
-def pansystems_pangenome(pangenome: Pangenome, source: str, models: Models, table: Path = None,
-                         hmms: Dict[str, List[HMM]] = None, k_best_hit: int = None, jaccard_threshold: float = 0.8,
-                         sensitivity: int = 1, projection: bool = False, association: List[str] = None,
-                         partition: bool = False, proksee: str = None, threads: int = 1, force: bool = False,
-                         disable_bar: bool = False, **hmm_kwgs: Any) -> None:
-    """
-    Detects systems in a single pangenome.
-
-    Args:
-        pangenome (Pangenome): The pangenome to analyze.
-        source (str): The source of the annotation.
-        models (Models): The models to use for systems detection.
-        table (Path, optional): The path to a table with annotation information. Defaults to None.
-        hmms (Dict[str, List[HMM]], optional): The HMMs to use for annotation. Defaults to None.
-        k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
-        jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
-        association (List[str], optional): The type of association to write between systems and other pangenome elements. Defaults to None.
-        partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
-        proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
-        threads (int, optional): The number of available threads. Defaults to 1.
-        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
-        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
-        **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
-    """
-    if table is not None:
-        metadata_df, _ = read_families_metadata(pangenome, table)
-    else:
-        t0 = time.time()
-        metadata_df = annot_with_hmm(pangenome, hmms, source=source, threads=threads,
-                                     disable_bar=disable_bar, **hmm_kwgs)
-        logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
-    write_annotations_to_pangenome(pangenome, metadata_df, source, k_best_hit, force, disable_bar)
-    search_systems(models, pangenome, source, [source], jaccard_threshold, sensitivity,
-                   threads=threads, disable_bar=disable_bar)
-    write_systems_to_pangenome(pangenome, source, disable_bar=disable_bar)
-    write_flat_systems_to_pangenome(pangenome, hmm_kwgs["output"], projection, association, partition, proksee,
-                                    threads=threads, force=force, disable_bar=disable_bar)
-
-
 def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[str, List[HMM]] = None,
                table: pd.DataFrame = None, k_best_hit: int = None, jaccard_threshold: float = 0.8, sensitivity: int = 1,
                projection: bool = False, association: List[str] = None, partition: bool = False, proksee: str = None,
@@ -139,33 +99,85 @@ def pansystems(pangenomes: Pangenomes, source: str, models: Models, hmm: Dict[st
     Detects systems in multiple pangenomes.
 
     Args:
-        pangenomes (Pangenomes): The pangenomes to analyze.
-        source (str): The source of the annotation.
-        models (Models): The models to detect systems.
-        table (pd.Dataframe, optional): Dataframe containing for each pangenome a path to a table with annotation information. Defaults to None.
-        hmm (Dict[str, List[HMM]], optional): A dictionary to identify which cutoff use to align HMM . Defaults to None.
-        k_best_hit (int, optional): The number of best annotation hits to keep per gene family. Defaults to None.
-        jaccard_threshold (float, optional): The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        projection (bool, optional): Whether to project the systems on organisms. Defaults to False.
-        association (List[str], optional): The type of association to write between systems and other pangenome elements. Defaults to None.
-        partition (bool, optional): Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
-        proksee (str, optional): Whether to write a proksee file with systems. Defaults to None.
-        threads (int, optional): The number of available threads. Defaults to 1.
-        force (bool, optional): Whether to force the erased of already computed systems. Defaults to False.
-        disable_bar (bool, optional): Whether to disable the progress bar. Defaults to False.
-        **hmm_kwgs (Any): Additional keyword arguments for HMM annotation.
+        pangenomes (Pangenomes):
+            The pangenomes to analyze.
+        source (str):
+            The source of the annotation.
+        models (Models):
+            The models to detect systems.
+        table (pd.Dataframe, optional):
+            Dataframe containing for each pangenome a path to a table with annotation information. Defaults to None.
+        hmm (Dict[str, List[HMM]], optional):
+            A dictionary to identify which cutoff use to align HMM . Defaults to None.
+        k_best_hit (int, optional):
+            The number of best annotation hits to keep per gene family. Defaults to None.
+        jaccard_threshold (float, optional):
+            The minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        sensitivity (int, optional):
+            Sensitivity level for detection. Defaults to 1.
+            - 1. corresponds to a global Jaccard filtering on the context without looking at all the combinations.
+            - 2.  corresponds to a global Jaccard filtering on the specific context of each combination.
+            - 3. corresponds to a local Jaccard filtering on the specific context of each combination.
+        projection (bool, optional):
+            Whether to project the systems on organisms. Defaults to False.
+        association (List[str], optional):
+            The type of association to write between systems and other pangenome elements. Defaults to None.
+        partition (bool, optional):
+            Whether to write a heatmap file with for each organism, partition of the systems. Defaults to False.
+        proksee (str, optional):
+            Whether to write a proksee file with systems. Defaults to None.
+        threads (int, optional):
+            The number of available threads. Defaults to 1.
+        force (bool, optional):
+            Whether to force erasing already computed systems. Defaults to False.
+        disable_bar (bool, optional):
+            Whether to disable the progress bar. Defaults to False.
+        **hmm_kwgs (Any):
+            Additional keyword arguments for HMM annotation.
 
     Raises:
-        AssertionError: If neither table nor hmm is provided.
+        AssertionError:
+            If neither table nor hmm is provided.
     """
     assert table is not None or hmm is not None, 'Must provide either table or hmm'
+    pangenome2metadata_df = {}
+    t0 = time.time()
     for pangenome in tqdm(pangenomes, total=len(pangenomes), unit='pangenome', disable=disable_bar):
         if table is not None:
             metadata_file = table.loc[table["Pangenome"] == pangenome.name]["path"].squeeze()
+            metadata_df, _ = read_families_metadata(pangenome, metadata_file)
         else:
-            metadata_file = None
-        pansystems_pangenome(pangenome, source, models, metadata_file, hmm, k_best_hit, jaccard_threshold, sensitivity,
-                             projection, association, partition, proksee, threads, force, disable_bar, **hmm_kwgs)
+            metadata_df = annot_with_hmm(pangenome, hmm, source=source, threads=threads,
+                                         disable_bar=disable_bar, **hmm_kwgs)
+        pangenome2metadata_df[pangenome.name] = metadata_df
+        logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
+
+    write_annotations_to_pangenomes(pangenomes, pangenome2metadata_df, source, k_best_hit, threads, force=force, disable_bar=disable_bar)
+    search_systems_in_pangenomes(
+        models=models,
+        pangenomes=pangenomes,
+        source=source,
+        metadata_sources=[source],
+        jaccard_threshold=jaccard_threshold,
+        sensitivity=sensitivity,
+        threads=threads,
+        disable_bar=disable_bar,
+    )
+    write_systems_to_pangenomes(
+        pangenomes, source, threads, disable_bar=disable_bar
+    )
+    write_pangenomes_systems(pangenomes,
+                             hmm_kwgs["output"],
+                             projection=projection,
+                             proksee=proksee,
+                             association=association,
+                             partition=partition,
+                             # organisms=organisms,
+                             # canonical=canonical,
+                             threads=threads,
+                             force=force,
+                             disable_bar=disable_bar,
+                             )
 
 
 def check_input_files(models_path: Path, table: Path = None, hmm: Path = None,
@@ -256,42 +268,14 @@ def parser_pansystems(parser):
     annotate = parser.add_argument_group(title="Annotation arguments",
                                          description="All of the following arguments are used for annotation step:")
     exclusive_mode = annotate.add_mutually_exclusive_group(required=True)
-    exclusive_mode.add_argument('--table', type=Path, default=None,  # nargs='+',
+    exclusive_mode.add_argument('--table', type=Path, default=None,
                                 help='A list of tab-separated file, containing annotation of gene families.'
                                      'Expected format is pangenome name in first column '
                                      'and path to the TSV with annotation in second column.')
     exclusive_mode.add_argument('--hmm', type=Path, nargs='?', default=None,
                                 help="A tab-separated file with HMM information and path."
-                                     "Note: Use panorama utils --hmm to create the HMM list file")
-    hmm_param = parser.add_argument_group(title="HMM arguments",
-                                          description="All of the following arguments are required,"
-                                                      " if you're using HMM mode :")
-    hmm_param.add_argument("--mode", required=False, type=str, default=None, choices=['fast', 'profile', 'sensitive'],
-                           help="Choose the mode use to align HMM database and gene families. "
-                                "Fast will align the reference sequence of gene family against HMM."
-                                "Profile will create an HMM profile for each gene family and "
-                                "this profile will be aligned."
-                                "Sensitive will align HMM to all genes in families.")
-    hmm_param.add_argument("--k_best_hit", required=False, type=int, default=None,
-                           help="Keep the k best annotation hit per gene family."
-                                "If not specified, all hit will be kept.")
-    hmm_param.add_argument("-b", "--only_best_hit", required=False, action="store_true",
-                           help="alias to keep only the best hit for each gene family.")
-    hmm_param.add_argument("--msa", required=False, type=Path, default=None,
-                           help="To create a HMM profile for families, you can give a msa of each gene in families."
-                                "This msa could be gotten from ppanggolin (See ppanggolin msa). "
-                                "If no msa provide Panorama will launch one.")
-    hmm_param.add_argument("--msa-format", required=False, type=str, default="afa",
-                           choices=["stockholm", "pfam", "a2m", "psiblast", "selex", "afa",
-                                    "clustal", "clustallike", "phylip", "phylips"],
-                           help=argparse.SUPPRESS)
-    hmm_param.add_argument("--save_hits", required=False, type=str, default=None, nargs='*',
-                           choices=['tblout', 'domtblout', 'pfamtblout'],
-                           help='Save HMM alignment results in tabular format. Option are the same than in HMMSearch.')
-    hmm_param.add_argument("-Z", "--Z", required=False, type=int, nargs='?', default=4000,
-                           help="From HMMER: Assert that the total number of targets in your searches is <x>, "
-                                "for the purposes of per-sequence E-value calculations, "
-                                "rather than the actual number of targets seen.")
+                                 "Note: Use panorama utils --hmm to create the HMM list file")
+    parser_annot_hmm(annotate)
     detection = parser.add_argument_group(title="Systems detection arguments",
                                           description="All of the following arguments are used "
                                                       "for systems detection step:")

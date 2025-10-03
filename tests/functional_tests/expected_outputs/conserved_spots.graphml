@@ -1,0 +1,154 @@
+<?xml version='1.0' encoding='utf-8'?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://graphml.graphdrawing.org/xmlns/1.0/graphml.xsd"><key id="d15" for="edge" attr.name="weight" attr.type="double"/>
+<key id="d14" for="edge" attr.name="shared_families" attr.type="long"/>
+<key id="d13" for="edge" attr.name="max_gfrr" attr.type="double"/>
+<key id="d12" for="edge" attr.name="min_gfrr" attr.type="double"/>
+<key id="d11" for="node" attr.name="#systems" attr.type="long"/>
+<key id="d10" for="node" attr.name="ShosTA" attr.type="boolean"/>
+<key id="d9" for="node" attr.name="RM_Type_I" attr.type="boolean"/>
+<key id="d8" for="node" attr.name="RM_Type_III" attr.type="boolean"/>
+<key id="d7" for="node" attr.name="PsyrTA" attr.type="boolean"/>
+<key id="d6" for="node" attr.name="SanaTA" attr.type="boolean"/>
+<key id="d5" for="node" attr.name="RM_Type_IV" attr.type="boolean"/>
+<key id="d4" for="node" attr.name="conserved_spot_id" attr.type="long"/>
+<key id="d3" for="node" attr.name="num_families" attr.type="long"/>
+<key id="d2" for="node" attr.name="num_regions" attr.type="long"/>
+<key id="d1" for="node" attr.name="pangenome" attr.type="string"/>
+<key id="d0" for="node" attr.name="spot_id" attr.type="long"/>
+<graph edgedefault="undirected"><node id="-7084901114785701160">
+  <data key="d0">2</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">4</data>
+  <data key="d3">73</data>
+  <data key="d4">3</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d9">False</data>
+  <data key="d10">False</data>
+  <data key="d11">0</data>
+</node>
+<node id="328189690438441199">
+  <data key="d0">4</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">3</data>
+  <data key="d3">30</data>
+  <data key="d4">60</data>
+  <data key="d9">True</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d10">False</data>
+  <data key="d11">1</data>
+</node>
+<node id="-5628978604626525134">
+  <data key="d0">16</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">5</data>
+  <data key="d3">30</data>
+  <data key="d4">33</data>
+  <data key="d9">True</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d10">False</data>
+  <data key="d11">1</data>
+</node>
+<node id="-3846010982273659219">
+  <data key="d0">25</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_tarriae_id1717</data>
+  <data key="d2">1</data>
+  <data key="d3">9</data>
+  <data key="d4">24</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d9">False</data>
+  <data key="d10">False</data>
+  <data key="d11">0</data>
+</node>
+<node id="7791121219332275458">
+  <data key="d0">0</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">10</data>
+  <data key="d3">115</data>
+  <data key="d4">3</data>
+  <data key="d9">True</data>
+  <data key="d6">True</data>
+  <data key="d5">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d10">False</data>
+  <data key="d11">2</data>
+</node>
+<node id="-5252092768763143345">
+  <data key="d0">5</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">2</data>
+  <data key="d3">11</data>
+  <data key="d4">33</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d9">False</data>
+  <data key="d10">False</data>
+  <data key="d11">0</data>
+</node>
+<node id="-7792039017424811217">
+  <data key="d0">32</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_cincinnatiensis_id1690</data>
+  <data key="d2">2</data>
+  <data key="d3">24</data>
+  <data key="d4">60</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d9">False</data>
+  <data key="d10">False</data>
+  <data key="d11">0</data>
+</node>
+<node id="3672680021440793006">
+  <data key="d0">18</data>
+  <data key="d1">GTDB_refseq_s__Vibrio_neptunius_id1710</data>
+  <data key="d2">1</data>
+  <data key="d3">19</data>
+  <data key="d4">24</data>
+  <data key="d5">False</data>
+  <data key="d6">False</data>
+  <data key="d7">False</data>
+  <data key="d8">False</data>
+  <data key="d9">False</data>
+  <data key="d10">False</data>
+  <data key="d11">0</data>
+</node>
+<edge source="-7084901114785701160" target="7791121219332275458">
+  <data key="d12">0.8333333333333334</data>
+  <data key="d13">0.8333333333333334</data>
+  <data key="d14">5</data>
+  <data key="d15">0.8333333333333334</data>
+</edge>
+<edge source="328189690438441199" target="-7792039017424811217">
+  <data key="d12">0.8333333333333334</data>
+  <data key="d13">0.8333333333333334</data>
+  <data key="d14">5</data>
+  <data key="d15">0.8333333333333334</data>
+</edge>
+<edge source="-5628978604626525134" target="-5252092768763143345">
+  <data key="d12">0.8333333333333334</data>
+  <data key="d13">0.8333333333333334</data>
+  <data key="d14">5</data>
+  <data key="d15">0.8333333333333334</data>
+</edge>
+<edge source="-3846010982273659219" target="3672680021440793006">
+  <data key="d12">1.0</data>
+  <data key="d13">1.0</data>
+  <data key="d14">6</data>
+  <data key="d15">1.0</data>
+</edge>
+</graph></graphml>

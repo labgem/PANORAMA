@@ -9,10 +9,10 @@ This module provides functions to project systems onto genomes.
 from __future__ import annotations
 
 import itertools
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 import logging
-from typing import Dict, List, Set, Tuple
+from typing import Dict, List, Set, Tuple, NamedTuple
 from multiprocessing import Lock, get_context
 from pathlib import Path
 import time
@@ -21,26 +21,35 @@ import time
 from tqdm import tqdm
 import pandas as pd
 import networkx as nx
-from ppanggolin.genome import Organism, Gene
+from ppanggolin.genome import Gene
+from ppanggolin.utils import extract_contig_window
+
 
 # local libraries
-from panorama.utils import mkdir, init_lock, conciliate_partition
+from panorama.utils import mkdir, init_lock
 from panorama.pangenomes import Pangenome
 from panorama.geneFamily import GeneFamily
-from panorama.systems.utils import (get_metadata_to_families, dict_families_context,
-                                    get_gfs_matrix_combination, check_needed_families)
+from panorama.systems.utils import (
+    get_metadata_to_families,
+    dict_families_context,
+    get_gfs_matrix_combination,
+    check_needed_families,
+    conciliate_partition,
+)
 from panorama.systems.system import System, SystemUnit
 from panorama.systems.models import Family
 
 
-def has_short_path(graph: nx.Graph, node_list, n):
+# TODO: if genes are within one connected component => by definition, these requirements are met
+# -> this function seems unnecessary
+def has_short_path(graph: nx.Graph, node_list: List[GeneFamily], n: int) -> bool:
     """
     Checks if there exists at least one path of length less than `n`
     connecting any two nodes in the given list of nodes in the graph.
 
     Args:
         graph (nx.Graph): the graph to search paths
-        node_list (list): List of nodes to check for paths.
+        node_list (List[GeneFamily]): List of gene families to check for paths.
         n (int): The maximum length of the path to consider.
 
     Returns:
@@ -50,10 +59,12 @@ def has_short_path(graph: nx.Graph, node_list, n):
     path_length = defaultdict(dict)
     has_path = {node: False for node in node_list}
     for i, node1 in enumerate(node_list):
-        for node2 in node_list[i + 1:]:
+        for node2 in node_list[i + 1 :]:
             if not has_path[node2]:
                 try:
-                    path_length[node1][node2] = nx.shortest_path_length(graph, source=node1, target=node2)
+                    path_length[node1][node2] = nx.shortest_path_length(
+                        graph, source=node1, target=node2
+                    )
                     if path_length[node1][node2] <= n:
                         has_path[node1] = True
                         has_path[node2] = True
@@ -63,210 +74,257 @@ def has_short_path(graph: nx.Graph, node_list, n):
     return all(has_path.values())
 
 
-def project_unit_on_organisms(graph: nx.Graph, unit: SystemUnit, organism: Organism,
-                              model_genes: Set[Gene], gene_fam2mod_fam: Dict[GeneFamily, Set[Family]],
-                              association: List[str] = None) -> Tuple[List[List[str]], List[int], str]:
+def project_unit_on_organisms(
+    components: List[List[Gene]],
+    unit: SystemUnit,
+    model_genes: Set[Gene],
+    association: List[str] = None,
+) -> List[NamedTuple[str]]:
     """
-    Project a system onto an organism's pangenome.
+    Projects a system unit onto a given organism's pangenome.
 
     Args:
-        graph (nx.Graph): Genomic context graph of the system for the given organism.
+        components (List[List[Gene]]): List of gene components to project.
         unit (SystemUnit): The unit to be projected.
-        organism (Organism): The organism on which the system is to be projected.
-        gene_fam2mod_fam (Dict[str, Set[Family]]): A dictionary mapping gene families to model families.
+        model_genes (Set[Gene]): Set of genes in one organism corresponding to model gene families.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
-        Tuple[List[List[str]], List[int], str]: A tuple containing:
-            - A list of projected system information for the organism.
-            - A list with counts of each system organization type (strict, extended, split).
-            - The reconciled system partition.
+        A list of projected system information for the organism.
     """
-
-    def write_projection_line(gene: Gene) -> List[str]:
-        """
-        Write the projection information for a single gene.
-
-        Args:
-            gene (Gene): Gene to write projection for.
-
-        Returns:
-            List[str]: List of elements representing the projection for the gene.
-        """
-        line_projection = [gene.family.name, gene.family.named_partition, fam_annot, fam_sec, gene.ID,
-                           gene.local_identifier, gene.contig.name, gene.start, gene.stop, gene.strand, gene.is_fragment,
-                           sys_state_in_org, gene.product]
-
-        if 'RGPs' in association:
-            rgp = gene.RGP
-            if rgp is not None:
-                unit.add_region(rgp)
-                line_projection.append(str(rgp))
-            else:
-                line_projection.append('')
-
-        if 'spots' in association:
-            spot = gene.spot
-            if spot is not None:
-                unit.add_spot(gene.spot)
-                line_projection.append(str(spot))
-            else:
-                line_projection.append('')
-
-        return list(map(str, [unit.name, sub_id, organism.name] + line_projection))
-
+    association = [] if not association else association
     projection = []
-    partitions = set()
-    counter = [0, 0, 0]  # count strict, extended, and split CC
 
-    sub_id = 1
-    for cc in nx.connected_components(graph):
-        model_cc = cc.intersection(model_genes)
-        if len(model_cc) > 0:
-            if model_cc == model_genes:
-                if len(model_cc) == 1 or has_short_path(graph, list(model_cc), unit.functional_unit.transitivity):
-                    counter[0] += 1
-                    sys_state_in_org = "strict"
-                else:
-                    counter[1] += 1
-                    sys_state_in_org = "extended"
+    sub_id = 1  # to keep track of genes that are part of the same component
+    for cc in components:
+        sys_genomic_organization = "strict" if model_genes <= set(cc) else "split"
+        for gene in cc:
+            if gene.family in unit.model_families:
+                metasource, metaid = unit.get_metainfo(gene.family)
+                metadata = gene.family.get_metadata(metasource, metaid)
+                avail_name = {fam.name for fam in unit.functional_unit.families}
+                for fam in unit.functional_unit.families:
+                    avail_name |= fam.exchangeable
+                fam_annot = metadata.protein_name
+                fam_sec = (
+                    [
+                        name
+                        for name in metadata.secondary_names.split(",")
+                        if name in avail_name
+                    ]
+                    if "secondary_name" in metadata.fields
+                    else ""
+                )
+                category = "model"
             else:
-                counter[2] += 1
-                sys_state_in_org = "split"
-            for cc_gene in cc:
-                fam_annot = ""
-                fam_sec = []
-                if cc_gene.family in gene_fam2mod_fam:
-                    metasource, metaid = unit.get_metainfo(cc_gene.family)
-                    if metaid != 0:
-                        for mod_family in gene_fam2mod_fam[cc_gene.family]:
-                            avail_name = {mod_family.name}.union(mod_family.exchangeable)
-                            metadata = cc_gene.family.get_metadata(metasource, metaid)
-                            if metadata.protein_name in avail_name:
-                                fam_annot = metadata.protein_name
-                            elif "secondary_name" in metadata.fields:
-                                for name in metadata.secondary_name.split(","):
-                                    if name in avail_name:
-                                        fam_sec.append(name)
-                        partitions.add(cc_gene.family.named_partition)
-                fam_sec = ",".join(fam_sec)
-                projection.append(write_projection_line(cc_gene))
-            sub_id += 1
-    return projection, counter, conciliate_partition(partitions)
+                # separate genes filtered locally at family level; could be alternatively excluded
+                category = "context" if gene.family in unit.families else "filtered"
+                fam_annot = fam_sec = ""
+
+            completeness = round(
+                len({g.family.name for g in model_genes})
+                / len(set(unit.model_families)),
+                2,
+            )  # proportion of unit families in the organism
+            org_proj_name = [
+                    "unit_name",
+                    "unit_ID",
+                    "organism_name",
+                    "gf_name",
+                    "partition",
+                    "annotation",
+                    "secondary_annotation",
+                    "gene_ID",
+                    "local_ID",
+                    "contig",
+                    "start",
+                    "stop",
+                    "strand",
+                    "fragment",
+                    "category",
+                    "genomic_organization",
+                    "completeness",
+                    "product",
+                ]
+            line_projection = [
+                unit.name,
+                sub_id,
+                gene.organism.name,
+                gene.family.name,
+                gene.family.named_partition,
+                fam_annot,
+                fam_sec,
+                gene.ID,
+                gene.local_identifier,
+                gene.contig.name,
+                gene.start,
+                gene.stop,
+                gene.strand,
+                gene.is_fragment,
+                category,
+                sys_genomic_organization,
+                completeness,
+                gene.product,
+            ]
+
+            if "RGPs" in association:
+                rgp = gene.RGP
+                unit.add_region(rgp) if rgp else None
+                line_projection.append(str(rgp) if rgp else "")
+                org_proj_name.append("rgp")
+            if "spots" in association:
+                spot = gene.spot
+                unit.add_spot(spot) if spot else None
+                line_projection.append(str(spot) if spot else "")
+                org_proj_name.append("spot")
+            org_proj_line = namedtuple("OrgLine", org_proj_name)
+            projection.append(org_proj_line(*map(str, line_projection)))
+        sub_id += 1
+
+    return projection
 
 
-def compute_genes_graph(families: Set[GeneFamily], organism: Organism,
-                        unit: SystemUnit) -> Tuple[nx.Graph, Set[Gene]]:
+# This function replaced `compute_genes_graph`
+def compute_gene_components(
+    model_genes: Set[Gene], window_size: int
+) -> List[List[Gene]]:
     """
-    Compute the genes graph for a given genomic context in an organism.
+    Compute gene components within a specified window size in the contigs of an organism.
 
     Args:
-        families (Set[GeneFamily]): Set of gene families.
-        organism (Organism): The organism of interest.
-        unit (SystemUnit): The unit of interest.
+        model_genes (Set[Gene]): Set of genes in one organism corresponding to model gene families.
+        window_size (int): The size of the window to consider for grouping genes.
 
     Returns:
-        nx.Graph: A genomic context graph for the given organism.
+        List[List[Gene]]: A list of components, each containing genes that are within the specified window.
     """
-    genes_graph = nx.Graph()
-    for family in families:
-        genes_graph.add_nodes_from({gene for gene in family.genes if gene.organism == organism})
-    mod_fam = set(unit.models_families)
-    model_genes = set()
-    for gene in sorted(genes_graph.nodes, key=lambda x: x.position):
-        if gene.family in mod_fam:
-            model_genes.add(gene)
-        if gene.position < gene.contig.number_of_genes:
-            right_genes = gene.contig.get_genes(begin=gene.position,
-                                                end=gene.position + unit.functional_unit.window + 1,
-                                                outrange_ok=True)
-        else:
-            right_genes = [gene]
+    contig_to_genes_of_interest = defaultdict(set)
+    components = []
 
-        left_genes = gene.contig.get_genes(begin=gene.position - unit.functional_unit.window, end=gene.position + 1,
-                                           outrange_ok=True)
-        for l_idx, l_gene in enumerate(left_genes, start=1):
-            # if l_gene in genes_graph.nodes:
-            for t_gene in left_genes[l_idx:unit.functional_unit.window]:
-                # if t_gene in genes_graph.nodes:
-                if unit.functional_unit.same_strand:
-                    if t_gene.strand == l_gene.strand:
-                        genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
-                else:
-                    genes_graph.add_edge(t_gene, l_gene, transitivity=l_idx)
+    for gene in model_genes:
+        contig = gene.contig
+        contig_to_genes_of_interest[contig].add(gene)
 
-        for r_idx, r_gene in enumerate(right_genes, start=1):
-            # if r_gene in genes_graph.nodes:
-            for t_gene in right_genes[r_idx:unit.functional_unit.window]:
-                # if t_gene in genes_graph.nodes:
-                if unit.functional_unit.same_strand:
-                    if t_gene.strand == r_gene.strand:
-                        genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
-                else:
-                    genes_graph.add_edge(t_gene, r_gene, transitivity=r_idx)
-    return genes_graph, model_genes
+    for contig, genes_of_interest in contig_to_genes_of_interest.items():
+        genes_count = contig.number_of_genes
+        genes_of_interest_positions = [g.position for g in genes_of_interest]
+        contig_windows = extract_contig_window(
+            genes_count,
+            genes_of_interest_positions,
+            window_size=window_size,
+            is_circular=contig.is_circular,
+        )
+        for window in contig_windows:
+            comp = contig.get_genes(
+                begin=window[0], end=window[1] + 1, outrange_ok=True
+            )
+            components.append(comp)
+
+    return components
 
 
-def unit_projection(unit: SystemUnit, gf2fam: Dict[GeneFamily, set[Family]], fam2source: Dict[str, str],
-                    fam_index: Dict[GeneFamily, int], association: List[str] = None
-                    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def unit_projection(
+    unit: SystemUnit,
+    gf2fam: Dict[GeneFamily, set[Family]],
+    fam_index: Dict[GeneFamily, int],
+    association: List[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project a system unit onto all organisms in a pangenome.
 
     Args:
         unit (SystemUnit): The system unit to project.
         gf2fam (Dict[str, set[Family]]): Dictionary linking a pangenome gene family to a model family.
-        fam2source (Dict[str, str]): Dictionary linking a model family to his source.
         fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projected system for the pangenome and organisms.
     """
+    association = [] if not association else association
     pangenome_projection, organisms_projection = [], []
-    matrix, _, _ = get_gfs_matrix_combination(set(unit.models_families), gf2fam, fam2source)
-    for organism in unit.models_organisms:
-        org_fam = {fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1}
-        org_mod_fam = org_fam & set(unit.models_families)
-        filtered_matrix = matrix[list({gf.name for gf in org_mod_fam})]
+    matrix = get_gfs_matrix_combination(set(unit.model_families), gf2fam)
+    mdr_acc_gfs = {gf for gf in unit.model_families if gf.name in matrix.columns.values}
+
+    for organism in unit.model_organisms:
+        # Note that `unit.model_organisms` is the set of organisms which have unit GFs >= `min_total` requirement of the unit, but not necessarily satisfying other unit requirements
+        org_fam = {
+            fam for fam in unit.families if organism.bitarray[fam_index[fam]] == 1
+        }
+        org_mod_fam = org_fam & mdr_acc_gfs
+
+        filtered_matrix = matrix[[gf.name for gf in org_mod_fam]]
+
         if check_needed_families(filtered_matrix, unit.functional_unit):
-            pan_proj = [unit.name, organism.name, ",".join(sorted([x.name for x in org_mod_fam])),
-                        ",".join(sorted([x.name for x in org_fam - org_mod_fam]))]
-            genes_graph, model_genes = compute_genes_graph(org_mod_fam, organism, unit)
-            org_proj, counter, partition = project_unit_on_organisms(genes_graph, unit, organism, model_genes,
-                                                                     gf2fam, association)
-            pangenome_projection.append(pan_proj + [partition, len(org_fam) / len(unit)] + counter)
-            if 'RGPs' in association:
+            pan_proj = [
+                unit.name,
+                organism.name,
+                ",".join(sorted([x.name for x in org_mod_fam])),  # model families
+                ",".join(
+                    sorted([x.name for x in org_fam - org_mod_fam])
+                ),  # context families
+            ]
+            model_genes = {
+                gene
+                for family in org_mod_fam
+                for gene in family.genes
+                if gene.organism == organism
+            }
+            components = compute_gene_components(
+                model_genes, unit.functional_unit.window
+            )
+            org_proj = project_unit_on_organisms(
+                components, unit, model_genes, association
+            )
+            partition = conciliate_partition({line.partition for line in org_proj if line.category == "model"})
+            strict_count = sum(
+                1 for line in org_proj if line[-3] == "strict"
+            )  # line[-3] -> sys_state_in_org
+            split_count = sum(1 for line in org_proj if line[-3] == "split")
+            extended_count = len(org_proj) - strict_count - split_count
+            # TODO completeness model
+            completeness = len(org_fam) / len(unit)
+            pangenome_projection.append(
+                pan_proj
+                + [partition, completeness]
+                + [strict_count, split_count, extended_count]
+            )
+            if "RGPs" in association:
                 rgps = {rgp.name for rgp in unit.regions if rgp.organism == organism}
                 if len(rgps) == 1:
                     pangenome_projection[-1].extend(rgps)
                 elif len(rgps) > 1:
-                    join_rgps = [','.join(rgps)]
+                    join_rgps = [",".join(rgps)]
                     pangenome_projection[-1].extend(join_rgps)
-            if 'spots' in association:
+            if "spots" in association:
                 spots = {str(spot) for spot in unit.spots if organism in spot.organisms}
                 if len(spots) == 1:
                     pangenome_projection[-1].extend(spots)
                 elif len(spots) > 1:
-                    join_spots = [','.join(spots)]
+                    join_spots = [",".join(spots)]
                     pangenome_projection[-1].extend(join_spots)
+
             organisms_projection += org_proj
-    return pd.DataFrame(pangenome_projection).drop_duplicates(), pd.DataFrame(organisms_projection).drop_duplicates()
+
+    return (
+        pd.DataFrame(pangenome_projection).drop_duplicates(),
+        pd.DataFrame(organisms_projection).drop_duplicates(),
+    )
 
 
-def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_families: Set[GeneFamily],
-                      gene_family2family: Dict[GeneFamily, Set[Family]], fam2source: Dict[str, str],
-                      association: List[str] = None
-                      ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def system_projection(
+    system: System,
+    fam_index: Dict[GeneFamily, int],
+    gene_family2family: Dict[GeneFamily, Set[Family]],
+    association: List[str] = None,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project a system onto all organisms in a pangenome.
 
     Args:
         system (System): The system to project.
         fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
-        gene_families (Set[GeneFamily]): The set of gene families that code for the model corresponding to system.
         gene_family2family (Dict[GeneFamily, Set[Family]]): Dictionary linking a gene family to model families.
-        fam2source (Dict[str, str]): Dictionary linking a model family to his source.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
 
     Returns:
@@ -274,38 +332,77 @@ def system_projection(system: System, fam_index: Dict[GeneFamily, int], gene_fam
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for systems: {system.name}")
     begin = time.time()
+    association = [] if not association else association
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    gfs = gene_families & set(system.families)
-    gf2fam = {gf: fam for gf, fam in gene_family2family.items() if gf in gfs}
+    gf2fam = {
+        gf: fam for gf, fam in gene_family2family.items() if gf in set(system.families)
+    }
 
     for unit in system.units:
-        unit_pan_proj, unit_org_proj = unit_projection(unit, gf2fam, fam2source, fam_index, association)
-        pangenome_projection = pd.concat([pangenome_projection, unit_pan_proj], ignore_index=True)
-        organisms_projection = pd.concat([organisms_projection, unit_org_proj], ignore_index=True)
+        unit_pan_proj, unit_org_proj = unit_projection(
+            unit, gf2fam, fam_index, association
+        )
+        pangenome_projection = pd.concat(
+            [pangenome_projection, unit_pan_proj], ignore_index=True
+        )
+        organisms_projection = pd.concat(
+            [organisms_projection, unit_org_proj], ignore_index=True
+        )
 
     if len(system) == 1:
-        pangenome_projection = pd.concat([pd.DataFrame([[system.ID] * pangenome_projection.shape[0],
-                                                        [system.name] * pangenome_projection.shape[0]]).T,
-                                          pangenome_projection], axis=1, ignore_index=True)
-        organisms_projection = pd.concat([pd.DataFrame([[system.ID] * organisms_projection.shape[0],
-                                                        [system.name] * organisms_projection.shape[0]]).T,
-                                          organisms_projection], axis=1, ignore_index=True)
-    logging.getLogger("PANORAMA").debug(f"System projection done for {system.name} in {time.time() - begin} seconds")
-    return pangenome_projection.drop_duplicates(), organisms_projection.drop_duplicates()
+        pangenome_projection = pd.concat(
+            [
+                pd.DataFrame(
+                    [
+                        [system.ID] * pangenome_projection.shape[0],
+                        [system.name] * pangenome_projection.shape[0],
+                    ]
+                ).T,
+                pangenome_projection,
+            ],
+            axis=1,
+            ignore_index=True,
+        )
+        organisms_projection = pd.concat(
+            [
+                pd.DataFrame(
+                    [
+                        [system.ID] * organisms_projection.shape[0],
+                        [system.name] * organisms_projection.shape[0],
+                    ]
+                ).T,
+                organisms_projection,
+            ],
+            axis=1,
+            ignore_index=True,
+        )
+    logging.getLogger("PANORAMA").debug(
+        f"System projection done for {system.name} in {time.time() - begin} seconds"
+    )
+    return (
+        pangenome_projection.drop_duplicates(),
+        organisms_projection.drop_duplicates(),
+    )
 
 
-def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_index: Dict[GeneFamily, int],
-                              association: List[str] = None, canonical: bool = False, threads: int = 1,
-                              lock: Lock = None, disable_bar: bool = False) -> Tuple[pd.DataFrame, pd.DataFrame]:
+def project_pangenome_systems(
+    pangenome: Pangenome,
+    system_source: str,
+    association: List[str] = None,
+    canonical: bool = False,
+    threads: int = 1,
+    lock: Lock = None,
+    disable_bar: bool = False,
+) -> Tuple[pd.DataFrame, pd.DataFrame]:
     """
     Project systems onto all organisms in a pangenome.
 
     Args:
         pangenome (Pangenome): The pangenome to project.
         system_source (str): Source of the systems to project.
-        fam_index (Dict[GeneFamily, int]): Index mapping gene families to their positions.
         association (List[str], optional): List of associations to include (e.g., 'RGPs', 'spots').
+        canonical (bool, optional): If True, write the canonical version of systems too. Defaults to False.
         threads (int, optional): Number of threads available (default is 1).
         lock (Lock, optional): Global lock for multiprocessing execution (default is None).
         disable_bar (bool, optional): Disable progress bar (default is False).
@@ -313,70 +410,492 @@ def project_pangenome_systems(pangenome: Pangenome, system_source: str, fam_inde
     Returns:
         Tuple[pd.DataFrame, pd.DataFrame]: Two DataFrames containing the projections for each organism and the pangenome.
     """
+    association = [] if not association else association
     pangenome_projection = pd.DataFrame()
     organisms_projection = pd.DataFrame()
-    meta2fam = get_metadata_to_families(pangenome, pangenome.systems_sources_to_metadata_source()[system_source])
+
+    fam_index = pangenome.compute_org_bitarrays()
+    meta2fam = get_metadata_to_families(
+        pangenome, pangenome.systems_sources_to_metadata_source()[system_source]
+    )
     sys2fam_context = {}
 
-    for system in pangenome.systems:  # Search association now to don't repeat for same model and different system
+    for system in pangenome.systems:
+        # Search association now to don't repeat for the same model and different system
         if system.model.name not in sys2fam_context:
-            gene_families, gf2fam, fam2source = dict_families_context(system.model, meta2fam)
-            sys2fam_context[system.model.name] = (gene_families, gf2fam, fam2source)
+            gf2fam, _ = dict_families_context(system.model, meta2fam)
+            sys2fam_context[system.model.name] = gf2fam
         if canonical:
             for canonic in system.canonical:
                 if canonic.model.name not in sys2fam_context:
-                    gene_families, gf2fam, fam2source = dict_families_context(canonic.model, meta2fam)
-                    sys2fam_context[canonic.model.name] = (gene_families, gf2fam, fam2source)
+                    gf2fam, _ = dict_families_context(canonic.model, meta2fam)
+                    sys2fam_context[canonic.model.name] = gf2fam
 
-    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
-        logging.getLogger("PANORAMA").info(f'Begin system projection for source : {system_source}')
-        with tqdm(total=pangenome.number_of_systems(system_source, with_canonical=canonical), unit='system',
-                  disable=disable_bar) as progress:
+    with ThreadPoolExecutor(
+        max_workers=threads, initializer=init_lock, initargs=(lock,)
+    ) as executor:
+        logging.getLogger("PANORAMA").info(
+            f"Begin system projection for source : {system_source}"
+        )
+        with tqdm(
+            total=pangenome.number_of_systems(system_source, with_canonical=canonical),
+            unit="system",
+            disable=disable_bar,
+        ) as progress:
             futures = []
             for system in pangenome.get_system_by_source(system_source):
-                gene_families, gf2fam, fam2source = sys2fam_context[system.model.name]
-                future = executor.submit(system_projection, system, fam_index, gene_families,
-                                         gf2fam, fam2source, association)
+                gf2fam = sys2fam_context[system.model.name]
+                future = executor.submit(
+                    system_projection,
+                    system,
+                    fam_index,
+                    gf2fam,
+                    association,
+                )
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
                 if canonical:
                     for canonic in system.canonical:
-                        gene_families, gf2fam, fam2source = sys2fam_context[canonic.model.name]
-                        future = executor.submit(system_projection, system, fam_index, gene_families,
-                                                 gf2fam, fam2source, association)
+                        gf2fam = sys2fam_context[canonic.model.name]
+                        future = executor.submit(
+                            system_projection,
+                            system,
+                            fam_index,
+                            gf2fam,
+                            association,
+                        )
                         future.add_done_callback(lambda p: progress.update())
                         futures.append(future)
 
             for future in futures:
                 result = future.result()
-                pangenome_projection = pd.concat([pangenome_projection, result[0]], ignore_index=True)
-                organisms_projection = pd.concat([organisms_projection, result[1]], ignore_index=True)
-    pan_cols_name = ["system number", "system name", "functional unit name", "organism", "model_GF", "context_GF",
-                     "partition", "completeness", "strict", "extended", "split"]
-    org_cols_name = ["system number", "system name", "functional unit name", "subsystem number", "organism",
-                     "gene family", "partition", "annotation", "secondary_names", "gene.ID", "gene.name", "contig",
-                     "start", "stop", "strand", "is_fragment", "genomic organization", "product"]
-    if 'RGPs' in association:
-        pan_cols_name += ['RGPs']
-        org_cols_name += ['RGPs']
-    if 'spots' in association:
-        pan_cols_name += ['spots']
-        org_cols_name += ['spots']
+                pangenome_projection = pd.concat(
+                    [pangenome_projection, result[0]], ignore_index=True
+                )
+                organisms_projection = pd.concat(
+                    [organisms_projection, result[1]], ignore_index=True
+                )
+
+    pan_cols_name = [
+        "system number",
+        "system name",
+        "functional unit name",
+        "organism",
+        "model_GF",
+        "context_GF",
+        "partition",
+        "completeness",
+        "strict",
+        "split",
+        "extended",
+    ]
+    org_cols_name = [
+        "system number",
+        "system name",
+        "functional unit name",
+        "subsystem number",
+        "organism",
+        "gene family",
+        "partition",
+        "annotation",
+        "secondary_names",
+        "gene.ID",
+        "gene.name",
+        "contig",
+        "start",
+        "stop",
+        "strand",
+        "is_fragment",
+        "category",
+        "genomic organization",
+        "completeness",
+        "product",
+    ]
+    if "RGPs" in association:
+        pan_cols_name += ["RGPs"]
+        org_cols_name += ["RGPs"]
+    if "spots" in association:
+        pan_cols_name += ["spots"]
+        org_cols_name += ["spots"]
     pangenome_projection.columns = pan_cols_name
     pangenome_projection.sort_values(
-        by=["system number", "system name", "functional unit name", "organism", "completeness"],
+        by=[
+            "system number",
+            "system name",
+            "functional unit name",
+            "organism",
+            "completeness",
+        ],
+        key=lambda col: (
+            col.apply(extract_numeric_for_sorting)
+            if col.name == "system number"
+            else col
+        ),
         ascending=[True, True, True, True, True],
-        inplace=True)  # TODO Try to order system number numerically
+        inplace=True,
+    )
     organisms_projection.columns = org_cols_name
     organisms_projection.sort_values(
-        by=["system name", "system number", "subsystem number", "functional unit name",
-            "organism", "contig", "start", "stop"],
+        by=[
+            "system name",
+            "system number",
+            "subsystem number",
+            "functional unit name",
+            "organism",
+            "contig",
+            "start",
+            "stop",
+        ],
+        key=lambda col: (
+            col.apply(extract_numeric_for_sorting)
+            if col.name in ["system number", "subsystem number"]
+            else col
+        ),
         ascending=[True, True, False, True, True, True, True, True],
-        inplace=True)
-    logging.getLogger("PANORAMA").debug('System projection done')
+        inplace=True,
+    )
+    logging.getLogger("PANORAMA").debug("System projection done")
     return pangenome_projection, organisms_projection
 
 
+def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+    """
+    Get the reformated projection dataframe for an organism
+
+    Args:
+        org_df: Dataframe for the corresponding organism
+
+    Returns:
+        pd.DataFrame: Dataframe reformated for an organism
+    TODO: This function is not used anymore, should we remove it?
+    """
+    org_name = str(org_df["organism"].unique()[0])
+    org_df = org_df.drop(columns=["organism"])
+    org_df_cols = org_df.columns.tolist()
+
+    org_df_grouped = org_df.groupby(
+        ["gene family", "system name", "functional unit name", "gene.ID", "start"],
+        as_index=False,
+    )
+    agg_dict = {
+        "system number": custom_agg_unique,
+        "subsystem number": custom_agg,
+        "partition": custom_agg_unique,
+        "annotation": custom_agg,
+        "secondary_names": custom_agg,
+        "contig": custom_agg_unique,
+        "gene.name": custom_agg_unique,
+        "stop": custom_agg_unique,
+        "strand": custom_agg_unique,
+        "is_fragment": custom_agg_unique,
+        "category": custom_agg,
+        "genomic organization": custom_agg,
+        "product": "first",
+        "completeness": custom_agg,
+    }
+    if "RGPs" in org_df_cols:
+        agg_dict["RGPs"] = custom_agg_unique
+    if "spots" in org_df_cols:
+        agg_dict["spots"] = custom_agg_unique
+    org_df_grouped = org_df_grouped.agg(agg_dict)
+    org_df_grouped = org_df_grouped[org_df_cols]
+
+    # sort columns considering "system number" numerically
+    org_df_grouped_sorted = org_df_grouped.sort_values(
+        by=["system number", "system name", "start", "stop"],
+        key=lambda col: (
+            col.apply(extract_numeric_for_sorting)
+            if col.name == "system number"
+            else col
+        ),
+        ascending=[True, True, True, True],
+    )
+    return org_df_grouped_sorted, org_name
+
+
+# This function is an alternative for `get_org_df` to only keep one unit per family
+# it is also much faster since it avoids aggregation across all columns
+def get_org_df_one_unit_per_fam(
+    org_df, eliminate_filtered_systems=False, eliminate_empty_systems=False
+) -> Tuple[pd.DataFrame, str]:
+    """
+    Filters and processes a DataFrame to retain only one representative unit
+    per gene family based on completeness, and optionally eliminates certain
+    systems based on filtering criteria. Also calculates overlapping information.
+
+    Args:
+        org_df: The input DataFrame containing organism data with details such as
+            "gene family", "system name", "functional unit name", "completeness",
+            and other related columns.
+        eliminate_filtered_systems: Flag indicating whether to remove systems
+            where any of their model families were filtered out due to lower
+            completeness.
+        eliminate_empty_systems: Flag indicating whether to remove systems with
+            no model families left after filtering.
+
+    Returns:
+        Tuple containing:
+            - A processed and filtered DataFrame with one row per unit per gene
+              family, with overlapping information added and optional system
+              elimination applied.
+            - The unique organism name derived from the input DataFrame.
+    """
+    org_name = str(org_df["organism"].unique()[0])
+    org_df = org_df.drop(columns=["organism"])
+    # Keep only the row with the highest completeness for each group
+    group_cols = [
+        "gene family",
+        "system name",
+        "functional unit name",
+        "gene.ID",
+        "start",
+    ]
+
+    # Create an overlapping_units column before filtering
+    overlapping_data = []
+    for group_key, group in org_df.groupby(group_cols):
+        if len(group) > 1:
+            # Sort by completeness (descending) to keep the highest first
+            group_sorted = group.sort_values("completeness", ascending=False)
+
+            # Get the filtered out rows (all except the first)
+            filtered_rows = group_sorted.iloc[1:]
+
+            if not filtered_rows.empty:
+                # Create overlapping info with the format `unit_number:completeness`
+                overlapping_info = []
+                for _, row in filtered_rows.iterrows():
+                    overlapping_info.append(
+                        f"{row['system number']}:{row['completeness']}"
+                    )
+                overlapping_str = "|".join(overlapping_info)
+            else:
+                overlapping_str = ""
+        else:
+            overlapping_str = ""
+
+        overlapping_data.append(
+            {
+                "gene family": group_key[0],
+                "system name": group_key[1],
+                "functional unit name": group_key[2],
+                "gene.ID": group_key[3],
+                "start": group_key[4],
+                "overlapping_units": overlapping_str,
+            }
+        )
+
+    # Create overlapping DataFrame
+    overlapping_df = pd.DataFrame(overlapping_data)
+
+    idx_max_completeness = org_df.groupby(group_cols)["completeness"].idxmax()
+    org_df_filtered = org_df.loc[idx_max_completeness]
+
+    # Reset index to avoid issues with duplicate indices
+    org_df_filtered = org_df_filtered.reset_index(drop=True)
+
+    # Add the overlapping_units column to the end
+    org_df_filtered = org_df_filtered.merge(overlapping_df, on=group_cols, how="left")
+
+    # Fill NaN values in overlapping column with empty string
+    org_df_filtered["overlapping_units"] = org_df_filtered["overlapping_units"].fillna(
+        ""
+    )
+
+    if (
+        eliminate_filtered_systems
+    ):  # removes all systems with any of their model families filtered out due to lower completeness
+        org_df_filtered = eliminate_systems(org_df, org_df_filtered)
+    elif (
+        eliminate_empty_systems
+    ):  # To remove systems with no model families left after filtering
+        org_df_filtered = eliminate_empty(org_df_filtered)
+
+    # sort columns considering "system number" numerically
+    org_df_grouped_sorted = org_df_filtered.sort_values(
+        by=["system number", "system name", "start", "stop"],
+        key=lambda col: (
+            col.apply(extract_numeric_for_sorting)
+            if col.name == "system number"
+            else col
+        ),
+        ascending=[True, True, True, True],
+    )
+    return org_df_grouped_sorted, org_name
+
+
+def eliminate_systems(org_df, org_df_filtered):
+    """
+    Eliminates systems from a filtered DataFrame based on model family changes. This function ensures that systems
+    with any eliminated model families in the filtered dataset are removed entirely.
+
+    Args:
+        org_df:
+            pandas.DataFrame containing the original dataset with all systems and associated gene families.
+        org_df_filtered:
+            pandas.DataFrame containing the already filtered dataset, which may have excluded some
+            gene families or systems.
+
+    Returns:
+        pandas.DataFrame filtered to exclude entire systems where any model families were missing after the
+        initial filtering step.
+    """
+    # Track which systems to eliminate
+    systems_to_eliminate = set()
+
+    # For each system, check if any model families were eliminated during filtering
+    for system_number, system_group in org_df.groupby(
+        ["system number", "system name", "functional unit name"]
+    ):
+        # Get original model families for this system
+        original_model_families = set(
+            system_group[system_group["category"] == "model"]["gene family"].unique()
+        )
+
+        # Get model families that survived filtering
+        filtered_system_data = org_df_filtered[
+            (org_df_filtered["system number"] == system_number[0])
+            & (org_df_filtered["system name"] == system_number[1])
+            & (org_df_filtered["functional unit name"] == system_number[2])
+        ]
+        surviving_model_families = set(
+            filtered_system_data[filtered_system_data["category"] == "model"][
+                "gene family"
+            ].unique()
+        )
+
+        # If any model family was eliminated, mark the entire system for elimination
+        if original_model_families != surviving_model_families:
+            systems_to_eliminate.add(system_number)
+
+    # Remove eliminated systems from the filtered dataframe
+    for system_number in systems_to_eliminate:
+        org_df_filtered = org_df_filtered[
+            ~(
+                (org_df_filtered["system number"] == system_number[0])
+                & (org_df_filtered["system name"] == system_number[1])
+                & (org_df_filtered["functional unit name"] == system_number[2])
+            )
+        ]
+    return org_df_filtered
+
+
+def eliminate_empty(org_df):
+    """
+    Removes systems with no model genes left.
+
+    Args:
+        org_df (pd.DataFrame): A DataFrame with at least the columns
+            "system number" and "category". The "category" column is used to
+            identify "model" genes, and the "system number" column groups rows
+            into systems.
+
+    Returns:
+        pd.DataFrame: A DataFrame containing only the systems that have at least
+            one "model" gene. The rows are concatenated and re-indexed.
+    """
+    # Removes systems with no model genes left
+    valid_systems = []
+    for _, system_group in org_df.groupby("system number"):
+        model_genes_in_system = system_group[system_group["category"] == "model"]
+        if not model_genes_in_system.empty:
+            valid_systems.append(system_group)
+    return pd.concat(valid_systems, ignore_index=True)
+
+
+def write_projection_systems(
+    output: Path,
+    pangenome_projection: pd.DataFrame,
+    organisms_projection: pd.DataFrame,
+    organisms: List[str] = None,
+    threads: int = 1,
+    force: bool = False,
+    disable_bar: bool = False,
+):
+    """
+    Write the projected systems to output files.
+
+    Args:
+        output (Path): Path to the output directory.
+        pangenome_projection (pd.DataFrame): DataFrame containing the pangenome projection.
+        organisms_projection (pd.DataFrame): DataFrame containing the organism projections.
+        organisms (List[str], optional): List of organisms to project (default is all organisms).
+        threads (int, optional): Number of threads to use for parallel processing. Defaults to 1.
+        force (bool, optional): Force write to the output directory (default is False).
+        disable_bar (bool, optional): If True, disable the progress bar. Defaults to False.
+
+    Returns:
+        None
+    """
+
+    proj_dir = mkdir(output / "projection", force=force)
+    if organisms is not None:
+        pangenome_projection = pangenome_projection[
+            ~pangenome_projection["organism"].isin(organisms)
+        ]
+        organisms_projection = organisms_projection[
+            ~organisms_projection["organism"].isin(organisms)
+        ]
+    with ProcessPoolExecutor(
+        max_workers=threads, mp_context=get_context("fork")
+    ) as executor:
+        futures = []
+        for organism_name in pangenome_projection["organism"].unique():
+            org_df = organisms_projection.loc[
+                organisms_projection["organism"] == organism_name
+            ]
+            future = executor.submit(get_org_df_one_unit_per_fam, org_df)
+            futures.append(future)
+
+        for future in tqdm(
+            as_completed(futures),
+            total=len(pangenome_projection["organism"].unique()),
+            unit="organisms",
+            disable=disable_bar,
+            desc="System projection on organisms",
+        ):
+            organism_df, organism_name = future.result()
+            organism_df.to_csv(proj_dir / f"{organism_name}.tsv", sep="\t", index=False)
+
+    pan_df_col = pangenome_projection.columns.tolist()
+    pangenome_grouped = pangenome_projection.groupby(
+        by=["system number", "system name"], as_index=False
+    )
+    agg_dict = {
+        "functional unit name": custom_agg_unique,
+        "organism": custom_agg_unique,
+        "model_GF": custom_agg_unique,
+        "context_GF": custom_agg_unique,
+        "partition": get_partition,
+        "completeness": "mean",
+        "strict": "sum",
+        "split": "sum",
+        "extended": "sum",
+    }
+    if "RGPs" in pan_df_col:
+        agg_dict["RGPs"] = custom_agg_unique
+    if "spots" in pan_df_col:
+        agg_dict["spots"] = custom_agg_unique
+
+    pangenome_grouped = pangenome_grouped.agg(agg_dict)
+    pangenome_grouped = pangenome_grouped[pan_df_col]
+
+    # Create a temporary column for sorting based on the numeric values extracted
+    pangenome_grouped["sort_key"] = pangenome_grouped["system number"].apply(
+        extract_numeric_for_sorting
+    )
+
+    # Sort the DataFrame using the temporary column but keep the original values
+    pangenome_sorted = pangenome_grouped.sort_values(
+        by=["sort_key", "system name", "organism"], ascending=[True, True, True]
+    ).drop(columns=["sort_key"])
+
+    pangenome_sorted.to_csv(output / "systems.tsv", sep="\t", index=False)
+
+
+# These functions could be moved to utils
+# TODO Note that since _custom_agg uses sorting, the values at the same position in different columns will not correspond to same case
+# TODO The product column sometimes has commas within one product name; it must be exchanged with another seperator to avoid issues
 def _custom_agg(series: pd.Series, unique: bool = False):
     """
     Aggregate a column
@@ -388,18 +907,16 @@ def _custom_agg(series: pd.Series, unique: bool = False):
     Returns:
         The aggregated series
     """
+    values = list(
+        itertools.chain(*list(series.replace("", pd.NA).dropna().str.split(",")))
+    )
+    if not values:
+        return ""
+
     if unique:
-        values = [set(x) for x in series.replace('', pd.NA).dropna().str.split(',')]
-        if len(values) == 0:
-            return ''
-        else:  # len(values) >1
-            return ', '.join(sorted(set().union(*values)))
-    else:
-        values = list(itertools.chain(*[x for x in series.replace('', pd.NA).dropna().str.split(',')]))
-        if len(values) == 0:
-            return ''
-        else:  # len(values) >=1
-            return ', '.join(sorted(values))
+        values = set(values)
+
+    return ", ".join(sorted(values, key=lambda x: int(x) if x.isdigit() else x))
 
 
 def custom_agg(series: pd.Series):
@@ -492,107 +1009,61 @@ def extract_numeric_for_sorting(val) -> float:
         return float(val)
     except ValueError:
         # If it's a list of numbers separated by commas, return the smallest number for sorting
-        if ',' in val:
-            parts = [float(x) for x in val.replace('"', '').split(',')]
-            return min(parts)  # Take the minimum for sorting
-        return float('inf')  # If it cannot be converted, place it at the end
+        if "," in val:
+            parts = [float(x) for x in val.replace('"', "").split(",")]
+            return (
+                min(parts) + len(parts) * 0.0001
+            )  # Sort by minimum, then by number of parts (by adding a small penalty for more parts)
+        return float("inf")  # If it cannot be converted, place it at the end
 
 
-def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
+# Replaced by `compute_gene_components`; preserved for further review if needed
+def compute_genes_graph(model_genes: Set[Gene], unit: SystemUnit) -> nx.Graph:
     """
-    Get the reformated projection dataframe for an organism
+    Compute the genes graph for a given genomic context in an organism.
 
     Args:
-        org_df: Dataframe for the corresponding organism
+        model_genes (Set[Gene]): Set of genes in one organism corresponding to model gene families.
+        unit (SystemUnit): The unit of interest.
 
     Returns:
-        pd.DataFrame: Dataframe reformated for an organism
+        nx.Graph: A genomic context graph for the given organism.
     """
-    org_name = org_df["organism"].unique()[0]
-    org_df = org_df.drop(columns=["organism"])
-    org_df_cols = org_df.columns.tolist()
+    genes_graph = nx.Graph()
+    for gene in sorted(model_genes, key=lambda x: x.position):
+        if gene.position < gene.contig.number_of_genes:
+            right_genes = gene.contig.get_genes(
+                begin=gene.position,
+                end=gene.position + unit.functional_unit.window + 1,
+                outrange_ok=True,
+            )
+        else:
+            right_genes = [gene]
 
-    # Create a temporary column for sorting based on the numeric values extracted
-    org_df["sort_key"] = org_df["system number"].apply(extract_numeric_for_sorting)
+        left_genes = gene.contig.get_genes(
+            begin=gene.position - unit.functional_unit.window,
+            end=gene.position + 1,
+            outrange_ok=True,
+        )
+        for l_idx, l_gene in enumerate(left_genes, start=1):
+            # if l_gene in genes_graph.nodes:
+            for t, t_gene in enumerate(left_genes[l_idx:]):
+                # if t_gene in genes_graph.nodes:
+                if unit.functional_unit.same_strand:
+                    # checking for functional unit same_strand at this point does not make sense
+                    # as the unit is already detected at both pangenome and genome levels regardless of strand
+                    if t_gene.strand == l_gene.strand:
+                        genes_graph.add_edge(t_gene, l_gene, transitivity=t)
+                else:
+                    genes_graph.add_edge(t_gene, l_gene, transitivity=t)
 
-    # Sort the DataFrame using the temporary column, but keep the original values
-    org_df_sorted = org_df.sort_values(by=["sort_key", "system name", "start", "stop"],
-                                       ascending=[True, True, True, True]).drop(columns=["sort_key"])
-
-    org_df_grouped = org_df_sorted.groupby(["gene family", "system name", "functional unit name", "gene.ID", "start"],
-                                           as_index=False)
-    agg_dict = {"system number": custom_agg_unique, "subsystem number": custom_agg, "partition": custom_agg_unique,
-                "annotation": custom_agg, "secondary_names": custom_agg, "contig": custom_agg_unique,
-                "gene.name": custom_agg_unique, "stop": custom_agg_unique, "strand": custom_agg_unique,
-                "is_fragment": custom_agg_unique, "genomic organization": custom_agg, "product": custom_agg}
-    if "RGPs" in org_df_cols:
-        agg_dict["RGPs"] = custom_agg_unique
-    if "spots" in org_df_cols:
-        agg_dict["spots"] = custom_agg_unique
-    org_df_grouped = org_df_grouped.agg(agg_dict)
-    org_df_grouped = org_df_grouped[org_df_cols]
-    # Create a temporary column for sorting based on the numeric values extracted
-    org_df_grouped["sort_key"] = org_df_grouped["system number"].apply(extract_numeric_for_sorting)
-
-    # Sort the DataFrame using the temporary column, but keep the original values
-    org_df_grouped_sorted = org_df_grouped.sort_values(by=["sort_key", "system name", "start", "stop"],
-                                                       ascending=[True, True, True, True]).drop(columns=["sort_key"])
-
-    return org_df_grouped_sorted, org_name
-
-
-def write_projection_systems(output: Path, pangenome_projection: pd.DataFrame, organisms_projection: pd.DataFrame,
-                             organisms: List[str] = None, threads: int = 1, force: bool = False, disable_bar: bool = False):
-    """
-    Write the projected systems to output files.
-
-    Args:
-        output (Path): Path to the output directory.
-        pangenome_projection (pd.DataFrame): DataFrame containing the pangenome projection.
-        organisms_projection (pd.DataFrame): DataFrame containing the organism projections.
-        organisms (List[str], optional): List of organisms to project (default is all organisms).
-        force (bool, optional): Force write to the output directory (default is False).
-
-    Returns:
-        None
-    """
-
-    proj_dir = mkdir(output / "projection", force=force)
-    if organisms is not None:
-        pangenome_projection = pangenome_projection[~pangenome_projection["organism"].isin(organisms)]
-        organisms_projection = organisms_projection[~organisms_projection["organism"].isin(organisms)]
-
-    with ProcessPoolExecutor(max_workers=threads, mp_context=get_context("fork")) as executor:
-        futures = []
-        for organism_name in pangenome_projection["organism"].unique():
-            org_df = organisms_projection.loc[organisms_projection["organism"] == organism_name]
-            future = executor.submit(get_org_df, org_df)
-            futures.append(future)
-
-        for future in tqdm(as_completed(futures), total=len(pangenome_projection["organism"].unique()),
-                           unit='organisms', disable=disable_bar, desc="System projection on organisms"):
-            organism_df, organim_name = future.result()
-            organism_df.to_csv(proj_dir / f"{organim_name}.tsv", sep="\t", index=False)
-
-    pan_df_col = pangenome_projection.columns.tolist()
-    pangenome_grouped = pangenome_projection.groupby(by=["system number", "system name"], as_index=False)
-    agg_dict = {"functional unit name": custom_agg_unique, "organism": custom_agg_unique,
-                "model_GF": custom_agg_unique, "context_GF": custom_agg_unique,
-                "partition": get_partition, "completeness": 'mean',
-                "strict": 'sum', "extended": 'sum', "split": 'sum'}
-    if "RGPs" in pan_df_col:
-        agg_dict["RGPs"] = custom_agg_unique
-    if "spots" in pan_df_col:
-        agg_dict["spots"] = custom_agg_unique
-
-    pangenome_grouped = pangenome_grouped.agg(agg_dict)
-    pangenome_grouped = pangenome_grouped[pan_df_col]
-
-    # Create a temporary column for sorting based on the numeric values extracted
-    pangenome_grouped["sort_key"] = pangenome_grouped["system number"].apply(extract_numeric_for_sorting)
-
-    # Sort the DataFrame using the temporary column, but keep the original values
-    pangenome_sorted = pangenome_grouped.sort_values(by=["sort_key", "system name", "organism"],
-                                                     ascending=[True, True, True]).drop(columns=["sort_key"])
-
-    pangenome_sorted.to_csv(output / 'systems.tsv', sep="\t", index=False)
+        for r_idx, r_gene in enumerate(right_genes, start=1):
+            # if r_gene in genes_graph.nodes:
+            for t, t_gene in enumerate(right_genes[r_idx:]):
+                # if t_gene in genes_graph.nodes:
+                if unit.functional_unit.same_strand:
+                    if t_gene.strand == r_gene.strand:
+                        genes_graph.add_edge(t_gene, r_gene, transitivity=t)
+                else:
+                    genes_graph.add_edge(t_gene, r_gene, transitivity=t)
+    return genes_graph

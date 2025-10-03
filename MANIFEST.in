@@ -1,0 +1,6 @@
+include README.md
+include VERSION
+include LICENSE.txt
+recursive-exclude .docs *
+recursive-exclude testingDataset *
+recursive-include panorama *

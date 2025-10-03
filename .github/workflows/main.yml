@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - '*'
+    paths:
+      # if any of these files or directory changed, trigger the CI
+      # The only case where it is not triggerd is when docs/ is modified
+      - 'tests/**'
+      - '.github/**'
+      - 'panorama/**'
+      - 'MANIFEST.in'
+      - 'VERSION'
+      - 'panorama.yml'
+      - 'pyproject.toml'
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NUM_CPUS: 1
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  test:
+    name: test PANORAMA on ${{ matrix.os }} with python ${{ matrix.python-version }}
+    # The type of runner that the job will run on
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest', 'macos-latest']
+        python-version: ['3.10', '3.12']
+    steps:
+
+      # Get number of cpu available on the current runner
+      - name: Get core number on linux
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          nb_cpu_linux=`nproc`
+          echo "Number of cores available on the current linux runner $nb_cpu_linux"
+          echo "NUM_CPUS=$nb_cpu_linux" >> "$GITHUB_ENV"
+
+      - name: Get core number on macos
+        if: matrix.os == 'macos-latest'
+        run: |
+          nb_cpu_macos=`sysctl -n hw.ncpu`
+          echo "Number of cores avalaible on the current macos runner $nb_cpu_macos"
+          echo "NUM_CPUS=$nb_cpu_macos" >> "$GITHUB_ENV"
+
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      # Install requirements with miniconda
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          channels: conda-forge,bioconda,defaults
+          environment-file: panorama.yml
+          activate-environment: panorama
+
+      - name: Install panorama
+        shell: bash -l {0}
+        run: |
+          pip install .[test]
+
+      # Check that it is installed and displays help without error
+      - name: Check that PANORAMA is installed
+        shell: bash -l {0}
+        run: |
+          panorama --version
+          panorama --help
+      - name: Download test data
+        uses: actions/checkout@v3
+        with:
+          repository: labgem/PANORAMA_test
+          path: test_data
+      - name: Run pytest with coverage
+        shell: bash -l {0}
+        run: |
+          pytest --cov=panorama  --test-data-path=test_data

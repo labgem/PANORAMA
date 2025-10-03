@@ -7,6 +7,7 @@ This module contains functions for managing files and directories, and checking 
 
 # default libraries
 import sys
+import os
 import argparse
 import logging
 from typing import Dict, TextIO, Set, Union
@@ -14,6 +15,7 @@ import shutil
 from pathlib import Path
 from multiprocessing import Manager, Lock
 from importlib.metadata import distribution
+from pathlib import Path
 
 # installed libraries
 import numpy as np
@@ -37,7 +39,10 @@ def check_log(name: str) -> TextIO:
     elif name == "stderr":
         return sys.stderr
     else:
-        return open(name, "w")
+        log_file = Path(name)
+        if log_file.exists():
+            logging.getLogger("PANORAMA").warning(f"{log_file} exists, and will be overwriting")
+        return log_file
 
 
 def pop_specific_action_grp(sub: argparse.ArgumentParser, title: str) -> argparse._SubParsersAction:
@@ -59,8 +64,10 @@ def add_common_arguments(subparser: argparse.ArgumentParser) -> None:
 
     :param subparser: A subparser object from any subcommand.
     """
-    common = pop_specific_action_grp(subparser, "Optional arguments")  # get the 'optional arguments' action group
-    common.title = "Common arguments"
+    try:
+        common = pop_specific_action_grp(subparser, "Optional arguments")  # get the 'optional arguments' action group
+    except KeyError:
+        common = subparser.add_argument_group(title="Optional arguments")
     common.add_argument("--verbose", required=False, type=int, default=1, choices=[0, 1, 2],
                         help="Indicate verbose level (0 for warning and errors only, 1 for info, 2 for debug)")
     common.add_argument("--log", required=False, type=check_log, default="stdout", help="log output file")
@@ -118,6 +125,8 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         FileExistsError: If the directory already exists and force is False.
         Exception: If an unexpected error occurs.
     """
+    if not isinstance(output, Path):
+        raise Exception(f"Invalid directory type: {type(output)}")
     try:
         output.mkdir(parents=True, exist_ok=False)
     except OSError:
@@ -126,7 +135,8 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
                                   f"Use --force if you want to overwrite the files in the directory")
         else:
             if erase:
-                logging.getLogger("PANORAMA").warning(f"Erasing the directory: {output}")
+                if any(output.iterdir()):
+                    logging.getLogger("PANORAMA").warning(f"Erasing the non empty directory: {output}")
                 try:
                     shutil.rmtree(output)
                 except Exception:
@@ -141,6 +151,19 @@ def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
         raise Exception("An unexpected error happened. Please report on our GitHub")
     else:
         return Path(output)
+
+
+def is_empty(filepath):
+    """
+    Checks if a file is empty.
+
+    Args:
+        filepath (str): The path to the file to check.
+
+    Returns:
+        bool: True if the file is empty, False otherwise.
+    """
+    return os.path.getsize(filepath) == 0
 
 
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
@@ -208,20 +231,16 @@ def init_lock(lock: Lock = None):
         return manager.Lock()
 
 
-def conciliate_partition(partition: Set[str]) -> str:
+def is_true_value(value: Union[str, int, bool]) -> bool:
     """
-    Conciliate  a set of partition
+    Check if a value represents a true condition.
+
+    True conditions are: 1, "True" or True
 
     Args:
-        partition (Set[str]): All partitions.
+        value: Value to check
 
     Returns:
-        str: The reconciled partition.
+        True if value represents a true condition
     """
-    if len(partition) == 1:
-        return partition.pop()
-    else:
-        if "persistent" in partition:
-            return "persistent|accessory"
-        else:
-            return 'accessory'
+    return value == 1 or value == "True" or value is True
