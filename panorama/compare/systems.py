@@ -347,6 +347,7 @@ def compare_systems(
     gfrr_metrics: str = "min_gfrr_models",
     gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
     gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+    seed: int = 42,
     threads: int = 1,
     lock: Optional[Lock] = None,
     disable_bar: bool = False,
@@ -359,6 +360,7 @@ def compare_systems(
         gfrr_metrics: Metric to use for clustering ('min_gfrr_models', 'max_gfrr_models', etc.).
         gfrr_cutoff: GFRR cutoff thresholds for all gene families.
         gfrr_models_cutoff: GFRR cutoff thresholds for model gene families.
+        seed (int): Random seed for reproducibility. Default: 42.
         threads: Number of threads for parallel processing.
         lock: Thread lock for synchronization.
         disable_bar: Whether to disable progress bars.
@@ -392,7 +394,7 @@ def compare_systems(
         logger.info(f"Added {len(systems_graph.edges)} similarity edges")
 
         # Cluster systems based on similarity
-        partitions = cluster_on_gfrr(systems_graph, gfrr_metrics)
+        partitions = cluster_on_gfrr(systems_graph, gfrr_metrics, seed)
         logger.info(f"Found {len(partitions)} system clusters")
 
         # Process clusters and add to pangenomes
@@ -620,6 +622,7 @@ def launch(args: argparse.Namespace) -> None:
                 gfrr_metrics=args.gfrr_metrics,
                 gfrr_cutoff=args.gfrr_cutoff,
                 gfrr_models_cutoff=args.gfrr_models_cutoff,
+                seed=args.seed,
                 threads=args.cpus,
                 lock=lock,
                 disable_bar=args.disable_prog_bar,
