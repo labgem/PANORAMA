@@ -74,14 +74,14 @@ exclude_patterns = [
     "developer/draw.md",
     "developer/system_asso_script.md",
     "developer/write_flat_script.md",
-    "developer/conserved_spot_script.md"
+    "developer/conserved_spot_script.md",
 ]
 
 suppress_warnings = [
     "myst.header",
     # "autosectionlabel.*",
     "toc.not_included",
-    "myst.xref_missing"
+    "myst.xref_missing",
 ]
 
 # The name of the default role for inline references
@@ -200,4 +200,4 @@ napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = True
 napoleon_use_rtype = False
-napoleon_custom_sections = [('Returns', 'params_style'), ('Raises', 'params_style')]
+napoleon_custom_sections = [("Returns", "params_style"), ("Raises", "params_style")]

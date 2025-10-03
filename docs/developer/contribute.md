@@ -85,7 +85,7 @@ git checkout -b feature/your-feature-name
 We follow consistent standards to keep the codebase maintainable:
 
 - **Follow PEP 8** - Python's official style guide
-- **Use Black** for formatting - Runs automatically, no debates!
+- **Use Ruff** for formatting - Runs automatically, no debates!
 - **Write docstrings** - Document your functions and classes with the Google style
 - **Use type hints** - Helps catch bugs and improves readability
 
