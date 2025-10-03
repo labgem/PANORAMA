@@ -1,4 +1,5 @@
 import pytest
+
 from tests.utils.run_command import run_command
 from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list
 

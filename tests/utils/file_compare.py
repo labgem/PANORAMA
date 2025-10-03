@@ -1,6 +1,5 @@
-from pathlib import Path
 import shutil
-
+from pathlib import Path
 
 TESTS_DIR = Path(__file__).parent.parent
 GOLDEN_DIR = TESTS_DIR / "functional_tests/expected_outputs"

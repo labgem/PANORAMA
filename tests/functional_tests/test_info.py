@@ -1,6 +1,8 @@
-import pytest
-from tests.utils.run_command import run_command
 from pathlib import Path
+
+import pytest
+
+from tests.utils.run_command import run_command
 
 
 @pytest.mark.requires_test_data

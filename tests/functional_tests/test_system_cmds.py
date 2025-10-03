@@ -1,8 +1,10 @@
-import pytest
-from tests.utils.run_command import run_command
 from pathlib import Path
-from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list
+
+import pytest
+
 from tests.utils.file_compare import assert_or_update_file
+from tests.utils.run_command import run_command
+from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list
 
 
 @pytest.fixture(scope="session")

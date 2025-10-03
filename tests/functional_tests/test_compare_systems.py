@@ -1,9 +1,9 @@
+from pathlib import Path
+
 import pytest
 
-from pathlib import Path
 from tests.utils.run_command import run_command
 from tests.functional_tests.test_utils_cmd import utils_model_list, utils_clustering
-from tests.utils.file_compare import assert_or_update_file
 
 
 @pytest.mark.requires_test_data

@@ -1,20 +1,20 @@
 from collections import defaultdict
 
-import pandas as pd
 import networkx as nx
+import pandas as pd
 from natsort import natsorted
 from ppanggolin.meta.meta import assign_metadata
 
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Family
 from panorama.systems.utils import (
-    get_metadata_to_families,
-    dict_families_context,
-    get_gfs_matrix_combination,
-    filter_global_context,
-    filter_local_context,
     check_for_families,
     check_needed_families,
+    dict_families_context,
+    filter_global_context,
+    filter_local_context,
+    get_gfs_matrix_combination,
+    get_metadata_to_families,
 )
 from tests.conftest import DummyGeneFamily
 
@@ -71,7 +71,10 @@ def test_get_metadata_to_families_multiple_annotations_case(simple_pangenome):
 
 
 def test_dict_families_context_simple_case(simple_gfs, single_unit_model):
-    """Tests that the function returns the correct set of model GFs, mapping to protein annotations, and source per annotation."""
+    """
+    Tests that the function returns the correct set of model GFs,
+    mapping to protein annotations, and source per annotation.
+    """
     annot2fam = {
         "source1": defaultdict(
             set, {f"protein{i}": {simple_gfs[i]} for i in range(len(simple_gfs))}
@@ -229,7 +232,8 @@ def test_get_gfs_matrix_combination_many_to_many_case(simple_gfs):
 
 
 def test_check_needed_families(single_unit_model, simple_matrix):
-    """Tests that the function correctly checks if the model is satisfied given the matrix of GFs to annotations matrix."""
+    """Tests that the function correctly checks if the model is satisfied given the matrix of GFs to annotations matrix
+    """
     fu = next(single_unit_model.func_units)  # the first functional unit of the model
     # min_total = 4, min_mandatory = 2
     # 3 mandatory and 3 accessory families covered => model satisfied
@@ -259,7 +263,7 @@ def test_check_for_families(
     check, gf2meta_info = check_for_families(
         gfs_in_cc, simple_gf2fam, simple_fam2source, fu
     )
-    assert check == True
+    assert check
     assert gf2meta_info == {
         gf: ("source1", 1) for gf in gfs_in_cc
     }  # mapping from GFs to (source, best metadata ID)

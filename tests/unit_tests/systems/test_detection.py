@@ -3,26 +3,28 @@ from collections import defaultdict
 import networkx as nx
 
 from panorama.geneFamily import GeneFamily
-from panorama.systems.system import SystemUnit
-from panorama.systems.models import Models
 from panorama.systems.detection import (
-    get_functional_unit_gene_families,
-    search_unit_in_cc,
-    search_unit_in_context,
-    search_unit_in_combination,
-    search_system_units,
-    search_system,
-    search_systems,
-    search_for_system,
-    search_system_units,
     check_for_needed_units,
+    get_functional_unit_gene_families,
     get_system_unit_combinations,
+    search_system,
+    search_system_units,
+    search_systems,
+    search_unit_in_cc,
+    search_unit_in_combination,
+    search_unit_in_context,
 )
+from panorama.systems.models import Models
+from panorama.systems.system import SystemUnit
 
 
 def test_get_functional_unit_gene_families_simple_case(multi_unit_model, simple_gf2fam):
-    """Tests that the function correctly retrieves the (mandatory | accessory) and neutral families within a functional unit."""
-    # Get the (mandatory | accessory) and neutral family sets per functional unit with at least one occurence in the pangenome
+    """
+    Tests that the function correctly retrieves the (mandatory | accessory) and
+    neutral families within a functional unit.
+    """
+    # Get the (mandatory | accessory) and neutral family sets per functional unit
+    # with at least one occurrence in the pangenome
     gfs = list(simple_gf2fam.keys())
     fu1 = multi_unit_model.get("fu1")  # fu1 = {GF0, GF1, GF2, GF3, GF4, GF5} | {GF9}
     assert get_functional_unit_gene_families(fu1, gfs, simple_gf2fam) == (
@@ -34,7 +36,8 @@ def test_get_functional_unit_gene_families_simple_case(multi_unit_model, simple_
 def test_get_functional_unit_gene_families_exclude_non_pangenome_fams(
     multi_unit_model, simple_gf2fam
 ):
-    """Tests that the function excludes families in the functional unit with no association to any GF in the pangenome."""
+    """Tests that the function excludes families in the functional unit with no association to any GF in the pangenome.
+    """
     gfs = list(simple_gf2fam.keys())
     fu2 = multi_unit_model.get("fu2")  # fu2 = {GF6, GF7, GF8, GF10} | {GF11}
     assert get_functional_unit_gene_families(fu2, gfs, simple_gf2fam) == (
@@ -50,9 +53,11 @@ def test_search_unit_in_cc(
     # simple_pangenome argument needed to assign metadata to GFs
     detected_units = set()
     gfs = list(simple_gf2fam.keys())
+    # a combination that is subset of (mandatory | accessory) families of fu1 AND
+    # found in a connected component of the context graph
     comb_families = set(
         gfs[:6]
-    )  # a combination that is subset of (mandatory | accessory) families of fu1 AND found in a connected component of the context graph
+    )
     fu = multi_unit_model.get("fu1")
 
     filtered_cc = nx.Graph()  # a filtered connected component of the context graph
@@ -89,7 +94,10 @@ def test_search_unit_in_cc(
 def test_search_unit_in_combination(
     multi_unit_model, simple_gf2fam, simple_fam2source, simple_matrix, simple_pangenome
 ):
-    """Tests that the function correctly identifies units in a connected component of the context graph starting a set of potential combinations."""
+    """
+    Tests that the function correctly identifies units in a connected component of the context graph
+    starting a set of potential combinations.
+    """
     fu = multi_unit_model.get("fu1")
     gfs = list(simple_gf2fam.keys())
     families_in_cc = set(
@@ -200,13 +208,17 @@ def test_search_unit_in_context(
 def test_search_system_units(
     multi_unit_model, simple_gf2fam, simple_fam2source, simple_pangenome
 ):
-    """Tests that the context graph is properly constructed, the potential combinations are identified, and the units are detected."""
+    """
+    Tests that the context graph is properly constructed, the potential combinations are identified,
+    and the units are detected.
+    """
     gfs = list(simple_gf2fam.keys())
     detected_systems = search_system_units(
         multi_unit_model, simple_gf2fam, simple_fam2source, source="source1"
     )
-    # This method executes ppanggolin context graph construction -> context_graph = GF0 -- GF1 -- GF2 -- GF3 -- GF4 -- GF5 -- GF6 -- GF7 -- GF8
-    # since all GFs correspond to sequential genes of the same contig of the same organism as defined in simple_gfs fixture
+    # This method executes ppanggolin context graph construction
+    # since all GFs correspond to sequential genes from the same contig of the same organism
+    # as defined in simple_gfs fixture
 
     assert detected_systems.keys() == {"fu1"}  # only fu1 should be detected
     assert set(next(iter(detected_systems["fu1"])).families) == set(
@@ -255,7 +267,9 @@ def test_check_for_needed_units_satisfied(simple_gfs, multi_unit_model):
 
 
 def test_check_for_needed_units_not_satisfied(simple_gfs, multi_unit_model):
-    """Tests that the function correctly identifies when detected functional units do not satisfy the model requirements."""
+    """
+    Tests that the function correctly identifies when detected functional units do not satisfy the model requirements.
+    """
     gf2meta_info = {
         gf: ("source1", 1) for gf in simple_gfs[:6]
     }  # dict of GFs-to-metadata for the GFs of one detected unit
@@ -343,7 +357,8 @@ def test_search_system(
         families_to_metainfo={gf: ("source1", 1) for gf in gfs[:6]},
     )
 
-    # the first detected unit of the detected system corresponds to the expected unit (__eq__ based on model_families attribute only)
+    # the first detected unit of the detected system corresponds to the expected unit
+    # (__eq__ based on model_families attribute only)
     assert next(iter((set(detected_system.units)))) == expected_unit
     assert set(expected_unit.model_families) == set(
         gfs[:6]

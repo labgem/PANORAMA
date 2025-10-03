@@ -1,23 +1,26 @@
-from collections import defaultdict
-import os
-import warnings
+# default libraries
 import logging
-from pathlib import Path
+import os
 import shutil
+import warnings
+from collections import defaultdict
+from pathlib import Path
+from typing import Union
 
-import pytest
+# install libraries
 import pandas as pd
+import pytest
+from ppanggolin.genome import Contig, Gene, Organism
 from ppanggolin.meta.meta import assign_metadata
-from ppanggolin.genome import Gene, Organism, Contig
 
+# local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.systems.models import Model, FuncUnit, Family
-from panorama.systems.system import System
+from panorama.systems.models import Family, FuncUnit, Model
 
 logger = logging.getLogger(__name__)
 
 
-def validate_test_data_path(path_str: str = None) -> Path:
+def validate_test_data_path(path_str: str = None) -> Union[Path, None]:
     """
     Validate and return the test data path.
 
@@ -36,8 +39,10 @@ def validate_test_data_path(path_str: str = None) -> Path:
     # If still not provided, issue a warning
     if path_str is None:
         warnings.warn(
-            "Test data path not provided. Functional tests requiring datasets will be skipped. "
-            "Clone https://github.com/labgem/PANORAMA_test and set via --test-data-path argument or PANORAMA_TEST_DATA_PATH environment variable.",
+            "Test data path not provided. "
+            "Functional tests requiring datasets will be skipped. "
+            "Clone https://github.com/labgem/PANORAMA_test and set via --test-data-path"
+            " argument or PANORAMA_TEST_DATA_PATH environment variable.",
             UserWarning,
             stacklevel=3,
         )
@@ -74,8 +79,9 @@ def pytest_addoption(parser):
         "--test-data-path",
         action="store",
         default=None,
-        help="Path to test dataset repository. Can also be set via PANORAMA_TEST_DATA_PATH environment variable. "
-        "To get test data: git clone https://github.com/labgem/PANORAMA_test",
+        help="Path to test dataset repository. Can also be set via "
+             "PANORAMA_TEST_DATA_PATH environment variable. "
+             "To get test data: git clone https://github.com/labgem/PANORAMA_test",
     )
 
 
@@ -144,7 +150,10 @@ def pangenome_list_file(test_data_path, tmp_path_factory):
 
 
 def pytest_collection_modifyitems(config, items):
-    """Handle test collection: skip functional tests when no test data is available and reorder tests."""
+    """
+    Handle test collection:
+    skip functional tests when no test data is available and reorder tests.
+    """
 
     def get_test_priority(test_function):
         """Determines the priority of a test based on the test file name."""
@@ -167,7 +176,9 @@ def pytest_collection_modifyitems(config, items):
             "No valid test data path available. Functional tests will be skipped."
         )
         skip_functional = pytest.mark.skip(
-            reason="Test data not available. Clone https://github.com/labgem/PANORAMA_test and set --test-data-path or PANORAMA_TEST_DATA_PATH environment variable."
+            reason="Test data not available."
+                   " Clone https://github.com/labgem/PANORAMA_test and set "
+                   "--test-data-path or PANORAMA_TEST_DATA_PATH environment variable."
         )
 
         for item in items:

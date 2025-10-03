@@ -10,24 +10,25 @@ Models, FuncUnit, Family classes and their interactions.
 """
 
 import re
-from typing import Generator, List
-import pytest
 from pathlib import Path
+from typing import Generator, List
 from unittest.mock import mock_open, patch
+
+import pytest
 
 # Import the module under test
 # Assuming the module is named 'bio_systems' - adjust import as needed
 from panorama.systems.models import (
-    check_key,
-    check_parameters,
-    check_dict,
-    Models,
-    Model,
-    FuncUnit,
     Family,
+    FuncUnit,
+    Model,
+    Models,
     _BasicFeatures,
     _FuFamFeatures,
     _ModFuFeatures,
+    check_dict,
+    check_key,
+    check_parameters,
 )
 
 
@@ -436,7 +437,8 @@ class TestModFuFeatures:
         dumb_type = type(dumb_child).__name__
 
         # Pattern that matches either order
-        pattern = f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+        pattern = (f"The child type is inconsistent\\. It contains ({child_type} and"
+                   f" {dumb_type}|{dumb_type} and {child_type})")
 
         with pytest.raises(TypeError, match=pattern):
             _ = mff.child_type
@@ -588,7 +590,8 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory={child})
         with pytest.raises(
             TypeError,
-            match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
+            match=f"The child type is inconsistent. Expected {type(child).__name__} but "
+                  f"found {type(dumb_child).__name__}",
         ):
             mff.add(dumb_child)
 

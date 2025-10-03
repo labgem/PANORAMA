@@ -1,18 +1,19 @@
-import pandas as pd
-import pandas.testing as pdt
-import networkx as nx
 from collections import namedtuple
 
-from panorama.systems.system import SystemUnit, System
+import networkx as nx
+import pandas as pd
+import pandas.testing as pdt
+
+from panorama.systems.system import System, SystemUnit
 from panorama.systems.systems_projection import (
-    unit_projection,
-    has_short_path,
-    compute_genes_graph,
     compute_gene_components,
+    compute_genes_graph,
+    get_org_df,
+    has_short_path,
+    project_pangenome_systems,
     project_unit_on_organisms,
     system_projection,
-    project_pangenome_systems,
-    get_org_df,
+    unit_projection,
     write_projection_systems,
 )
 
@@ -24,8 +25,8 @@ def test_has_short_path():
     """
     G = nx.Graph()
     G.add_edges_from([(1, 2), (2, 3), (3, 4)])  # simple graph: 1-2-3-4
-    assert has_short_path(G, [1, 2, 3, 4], 1) == True
-    assert has_short_path(G, [1, 2, 4, 3], 1) == False  # function is order-dependent
+    assert has_short_path(G, [1, 2, 3, 4], 1)
+    assert not has_short_path(G, [1, 2, 4, 3], 1)   # function is order-dependent
 
 
 def test_compute_genes_graph(simple_gfs, simple_fu, simple_orgs, simple_pangenome):
@@ -58,48 +59,48 @@ def test_compute_genes_graph(simple_gfs, simple_fu, simple_orgs, simple_pangenom
     G = nx.Graph()
     expected_edges = [
         (
-            simple_gfs[0][f"gene_0_0"],
-            simple_gfs[1][f"gene_1_0"],
+            simple_gfs[0]["gene_0_0"],
+            simple_gfs[1]["gene_1_0"],
             {"transitivity": 0},
         ),  # 0 -> 1
         (
-            simple_gfs[0][f"gene_0_0"],
-            simple_gfs[2][f"gene_2_0"],
+            simple_gfs[0]["gene_0_0"],
+            simple_gfs[2]["gene_2_0"],
             {"transitivity": 1},
         ),  # 0 -> 2
         (
-            simple_gfs[1][f"gene_1_0"],
-            simple_gfs[2][f"gene_2_0"],
+            simple_gfs[1]["gene_1_0"],
+            simple_gfs[2]["gene_2_0"],
             {"transitivity": 0},
         ),  # 1 -> 2
         (
-            simple_gfs[1][f"gene_1_0"],
-            simple_gfs[3][f"gene_3_0"],
+            simple_gfs[1]["gene_1_0"],
+            simple_gfs[3]["gene_3_0"],
             {"transitivity": 1},
         ),  # 1 -> 3
         (
-            simple_gfs[2][f"gene_2_0"],
-            simple_gfs[3][f"gene_3_0"],
+            simple_gfs[2]["gene_2_0"],
+            simple_gfs[3]["gene_3_0"],
             {"transitivity": 0},
         ),  # 2 -> 3
         (
-            simple_gfs[2][f"gene_2_0"],
-            simple_gfs[4][f"gene_4_0"],
+            simple_gfs[2]["gene_2_0"],
+            simple_gfs[4]["gene_4_0"],
             {"transitivity": 1},
         ),  # 2 -> 4
         (
-            simple_gfs[3][f"gene_3_0"],
-            simple_gfs[4][f"gene_4_0"],
+            simple_gfs[3]["gene_3_0"],
+            simple_gfs[4]["gene_4_0"],
             {"transitivity": 0},
         ),  # 3 -> 4
         (
-            simple_gfs[3][f"gene_3_0"],
-            simple_gfs[5][f"gene_5_0"],
+            simple_gfs[3]["gene_3_0"],
+            simple_gfs[5]["gene_5_0"],
             {"transitivity": 1},
         ),  # 3 -> 5
         (
-            simple_gfs[4][f"gene_4_0"],
-            simple_gfs[5][f"gene_5_0"],
+            simple_gfs[4]["gene_4_0"],
+            simple_gfs[5]["gene_5_0"],
             {"transitivity": 0},
         ),  # 4 -> 5
     ]
@@ -505,7 +506,7 @@ def test_get_org_df():
             "secondary_names": [""] * 7,
             "gene.ID": [f"gene_{i}_0" for i in range(6)] + ["gene_5_0"],
             "gene.name": [""] * 7,
-            "contig": [f"contig_0"] * 7,
+            "contig": ["contig_0"] * 7,
             "start": ["100", "200", "300", "400", "500", "600"] + ["600"],
             "stop": ["200", "300", "400", "500", "600", "700"] + ["700"],
             "strand": ["+"] * 6 + ["+"],
@@ -612,8 +613,8 @@ def test_write_projection_systems(simple_orgs):
         }
     )
 
-    from pathlib import Path
     import shutil
+    from pathlib import Path
 
     path = Path("pytest-projection-test/")
 

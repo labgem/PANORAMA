@@ -11,19 +11,18 @@ This test suite covers all major functionality including:
 - Integration with gene families, organisms, modules, spots, and regions
 """
 
-from random import randint, choice
+from random import choice, randint
 from typing import Set
 
 import pytest
-
+from ppanggolin.genome import Gene, Organism
 from ppanggolin.metadata import Metadata
-from ppanggolin.genome import Organism, Gene
 
 # Import the classes to test
 from panorama.geneFamily import GeneFamily
-from panorama.region import Region, Spot, Module
-from panorama.systems.system import SystemUnit, System, ClusterSystems
-from panorama.systems.models import Family, FuncUnit, Model
+from panorama.region import Module, Region, Spot
+from panorama.systems.models import FuncUnit, Model
+from panorama.systems.system import System, SystemUnit
 
 
 class TestFixture:
@@ -584,7 +583,7 @@ class TestSystem(TestFixture):
                 if randint(0, 1):  # Add a module or not randomly
                     gf.module = Module(counter_fam + j)
                 if randint(0, 1):
-                    for j in range(randint(1, 5)):
+                    for _ in range(randint(1, 5)):
                         new_id = randint(1, 100)
                         while new_id in spot_id:
                             new_id = randint(1, 100)
@@ -783,7 +782,6 @@ class TestSystem(TestFixture):
         """Test counting total families across units."""
         for unit in units:
             system.add_unit(unit)
-        families = set(system.families)
 
         assert system.number_of_families == len(
             {fam for unit in units for fam in unit.families}
@@ -1097,7 +1095,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
 
-        new_fu = FuncUnit(name=f"new_test_unit", presence="mandatory", min_total=1)
+        new_fu = FuncUnit(name="new_test_unit", presence="mandatory", min_total=1)
         new_fu.model = model
         gene_families = {
             GeneFamily(100 + j, f"test_family_{100 + j}") for j in range(randint(1, 5))

@@ -1,6 +1,7 @@
-from panorama.compare import context
-import pytest
 import networkx as nx
+import pytest
+
+from panorama.compare import context
 
 
 class MockGeneFamily:

@@ -1,8 +1,9 @@
 import shutil
+from pathlib import Path
 
 import pytest
+
 from tests.utils.run_command import run_command
-from pathlib import Path
 
 
 @pytest.fixture(scope="session")
