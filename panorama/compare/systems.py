@@ -238,7 +238,7 @@ def compute_gfrr_edges(
     with tqdm(
         total=len(system_pairs),
         unit="system pair",
-        desc="Computing FRR",
+        desc="Computing GFRR",
         disable=disable_bar,
     ) as pbar:
         for sys1_hash, sys2_hash in system_pairs:
@@ -347,6 +347,7 @@ def compare_systems(
     gfrr_metrics: str = "min_gfrr_models",
     gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
     gfrr_models_cutoff: Tuple[float, float] = (0.8, 0.8),
+    seed: int = 42,
     threads: int = 1,
     lock: Optional[Lock] = None,
     disable_bar: bool = False,
@@ -359,6 +360,7 @@ def compare_systems(
         gfrr_metrics: Metric to use for clustering ('min_gfrr_models', 'max_gfrr_models', etc.).
         gfrr_cutoff: GFRR cutoff thresholds for all gene families.
         gfrr_models_cutoff: GFRR cutoff thresholds for model gene families.
+        seed (int): Random seed for reproducibility. Default: 42.
         threads: Number of threads for parallel processing.
         lock: Thread lock for synchronization.
         disable_bar: Whether to disable progress bars.
@@ -392,7 +394,7 @@ def compare_systems(
         logger.info(f"Added {len(systems_graph.edges)} similarity edges")
 
         # Cluster systems based on similarity
-        partitions = cluster_on_gfrr(systems_graph, gfrr_metrics)
+        partitions = cluster_on_gfrr(systems_graph, gfrr_metrics, seed)
         logger.info(f"Found {len(partitions)} system clusters")
 
         # Process clusters and add to pangenomes
@@ -580,24 +582,27 @@ def launch(args: argparse.Namespace) -> None:
 
     Raises:
         SystemsComparisonError: If analysis fails at any stage.
+    todo:
+        Improve logic and efficiency. If only heatmap is requested, clustering should be skipped.
     """
     logger.info("Starting PANORAMA systems comparison analysis")
 
+    tmpdir = None  # Ensure tmpdir is always defined
+    # Validate arguments and prepare requirements
+    need_info = check_compare_systems_args(args)
+
+    # Process and validate model files
+    models_list = []
+    for model_path in args.models:
+        validated_models = check_models(
+            model_path, disable_bar=args.disable_prog_bar
+        )
+        models_list.append(validated_models)
+    need_info["models"] = models_list
+
     try:
-        # Validate arguments and prepare requirements
-        need_info = check_compare_systems_args(args)
-
-        # Process and validate model files
-        models_list = []
-        for model_path in args.models:
-            validated_models = check_models(
-                model_path, disable_bar=args.disable_prog_bar
-            )
-            models_list.append(validated_models)
-        need_info["models"] = models_list
-
         # Load pangenomes and set up a working environment
-        pangenomes, tmp_dir, _, lock = common_launch(
+        pangenomes, tmpdir, _, lock = common_launch(
             args, check_pangenome_write_systems, need_info, sources=args.sources
         )
 
@@ -620,6 +625,7 @@ def launch(args: argparse.Namespace) -> None:
                 gfrr_metrics=args.gfrr_metrics,
                 gfrr_cutoff=args.gfrr_cutoff,
                 gfrr_models_cutoff=args.gfrr_models_cutoff,
+                seed=args.seed,
                 threads=args.cpus,
                 lock=lock,
                 disable_bar=args.disable_prog_bar,
@@ -640,9 +646,9 @@ def launch(args: argparse.Namespace) -> None:
 
     finally:
         # Clean up temporary files
-        if not args.keep_tmp:
-            logger.debug(f"Cleaning up temporary directory: {tmp_dir}")
-            rmtree(tmp_dir, ignore_errors=True)
+        if not args.keep_tmp and tmpdir is not None:
+            logger.debug(f"Cleaning up temporary directory: {tmpdir}")
+            rmtree(tmpdir, ignore_errors=True)
 
 
 def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:

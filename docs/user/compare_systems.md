@@ -81,6 +81,7 @@ panorama compare_systems \
 | -s       | --sources            | List[str]              | False    | Name(s) of systems sources (must match --models order)                                              |
 | -o       | --output             | str (directory path)   | False    | Output directory for comparison results                                                             |
 | —        | --gfrr_cutoff        | List[float] (2 values) | True     | Two thresholds for min_gfrr and max_gfrr values (default: 0.5 0.8)                                  |
+| —        | --seed               | Int                    | Optional | Random seed to guarantee reproductibility (default 42)                                              |
 | —        | --heatmap            | bool (flag)            | True     | Generate heatmaps showing system distribution across pangenomes                                     |
 | —        | --gfrr_metrics       | str (choice)           | True     | GFRR metric for clustering conserved systems (min_gfrr_models, max_gfrr_models, min_gfrr, max_gfrr) |
 | —        | --gfrr_models_cutoff | List[float] (2 values) | True     | GFRR thresholds for model gene families (default: 0.4 0.6)                                          |
@@ -144,8 +145,7 @@ output_directory/
 ├── heatmap_number_systems.html
 ├── heatmap_normalized_systems.html
 ├── conserved_systems.gexf (optional)
-├── conserved_systems.graphml (optional)
-└── conserved_systems.tsv (optional)
+└── conserved_systems.graphml (optional)
 ```
 
 ### Files description
@@ -169,13 +169,10 @@ Interactive HTML heatmaps showing system distribution patterns:
 #### Conserved System Clustering
 
 ##### Network Graphs
+
 When `--gfrr_metrics` and `--graph_formats` are specified, generate `conserved_systems.gexf/graphml` Network graphs of
 conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
 Edge attributes contain GFRR similarity scores and the number of shared gene families.
 
 [PLACEHOLDER: Network graph of conserved systems clusters with different colors]
-
-##### Summary Tables
-When conserved systems clustering is performed:
-conserved_systems.tsv: Tabular summary of identified conserved system clusters

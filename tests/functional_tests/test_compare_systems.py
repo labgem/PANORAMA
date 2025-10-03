@@ -7,44 +7,40 @@ from tests.utils.file_compare import assert_or_update_file
 
 
 @pytest.mark.requires_test_data
-def test_compare_spots_command(
+def test_compare_systems_command(
     pangenome_list_file, utils_model_list, utils_clustering, num_cpus, update_golden
 ):
     # TODO Manage the problem with reproducibility for better testing
 
-    outdir = pangenome_list_file.parent / "compare_spots_outdir"
-    compare_spots_command = (
-        "panorama compare_spots "
+    outdir = pangenome_list_file.parent / "compare_systems_outdir"
+    compare_systems_command = (
+        "panorama compare_systems "
         f"--pangenomes {pangenome_list_file} "
         f"-o {outdir} "
-        "--graph_formats gexf graphml "
-        f"--cpus {num_cpus} "
-        f"--cluster {utils_clustering} "
-        "--systems "
         f"-s defensefinder "
         f"-m {utils_model_list} "
+        "--graph_formats gexf graphml "
+        "--gfrr_metrics min_gfrr_models "
+        "--heatmap "
+        f"--cpus {num_cpus} "
+        f"--cluster {utils_clustering} "
     )
-    run_command(compare_spots_command)
+    run_command(compare_systems_command)
 
     # Validate output structure and files
     assert outdir.exists(), f"Output directory {outdir} was not created"
 
     # Expected files in each source directory
     assert_or_update_files = [
-        "all_conserved_spots.tsv",
-        # "conserved_spots/conserved_spot_3.tsv",
-        # "conserved_spots/conserved_spot_24.tsv",
-        # "conserved_spots/conserved_spot_33.tsv",
-        # "conserved_spots/conserved_spot_60.tsv",
     ]
     expected_files = map(
         Path,
         assert_or_update_files
         + [
-            "conserved_spots.gexf",
-            "conserved_spots.graphml",
-            "systems_link_with_conserved_spots_louvain.gexf",
-            "systems_link_with_conserved_spots_louvain.graphml",
+            "heatmap_number_systems.html",
+            "heatmap_normalized_systems.html",
+            "conserved_systems.gexf",
+            "conserved_systems.graphml",
         ],
     )
     # Check all expected files exist
