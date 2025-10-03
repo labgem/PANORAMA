@@ -68,6 +68,7 @@ panorama compare_spots \
 | -o       | --output        | Directory path | Required                | Output directory for conserved spots results                                  |
 | —        | --gfrr_metrics  | String         | Optional                | GFRR metric for clustering: 'min_gfrr' (conservative) or 'max_gfrr' (liberal) |
 | —        | --gfrr_cutoff   | Float Float    | Optional                | Two thresholds for min_gfrr and max_gfrr values (default: 0.8 0.8)            |
+| —        | --seed          | Int            | Optional                | Random seed to guarantee reproductibility (default 42)                        |
 | —        | --dup_margin    | Float          | Optional                | Minimum ratio for multigenic family detection (default: 0.05)                 |
 | —        | --systems       | Flag           | Optional                | Enable systems analysis within conserved spots                                |
 | -m       | --models        | File path(s)   | Required with --systems | Path(s) to system model files (required with --systems)                       |

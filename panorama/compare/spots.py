@@ -1199,6 +1199,7 @@ def compare_spots(
     dup_margin: float = 0.05,
     gfrr_metrics: str = "min_gfrr",
     gfrr_cutoff: Tuple[float, float] = (0.8, 0.8),
+    seed: int = 42,
     threads: int = 1,
     lock: Optional[Lock] = None,
     disable_bar: bool = False,
@@ -1216,6 +1217,7 @@ def compare_spots(
         dup_margin (float): Minimum ratio for multigenic family detection. Default: 0.05.
         gfrr_metrics (str): GFRR metric for clustering ('min_gfrr' or 'max_gfrr'). Default: 'min_gfrr'.
         gfrr_cutoff (Tuple[float, float]): Thresholds for (min_gfrr, max_gfrr). Default: (0.8, 0.8).
+        seed (int): Random seed for reproducibility. Default: 42.
         threads (int): Number of threads for parallel processing. Default: 1.
         lock (Optional[Lock]): Thread synchronization lock. Default: None.
         disable_bar (bool): Whether to disable progress bars. Default: False.
@@ -1266,14 +1268,14 @@ def compare_spots(
 
     # Step 3: Perform clustering to identify conserved spots
     logger.info(f"Step 3: Clustering spots using {gfrr_metrics} metric")
-    partitions = cluster_on_gfrr(spots_graph, gfrr_metrics)
+    partitions = cluster_on_gfrr(spots_graph, gfrr_metrics, seed)
 
     # Step 4: Process clusters and create ConservedSpots objects
     logger.info("Step 4: Processing clusters and creating conserved spots")
     conserved_spots_created = 0
     nodes_in_clusters = 0
 
-    for cs_id, cluster_spots in enumerate(partitions, start=1):
+    for cs_id, cluster_spots in enumerate(sorted(partitions), start=1):
         if len(cluster_spots) > 1:  # Only process multi-spot clusters
             # Collect actual spot objects for this cluster
             conserved_spot_members = set()
@@ -1385,6 +1387,7 @@ def launch(args: argparse.Namespace) -> None:
         dup_margin=args.dup_margin,
         gfrr_metrics=args.gfrr_metrics,
         gfrr_cutoff=args.gfrr_cutoff,
+        seed=args.seed,
         threads=args.cpus,
         lock=lock,
         disable_bar=args.disable_prog_bar,
