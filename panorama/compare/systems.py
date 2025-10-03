@@ -238,7 +238,7 @@ def compute_gfrr_edges(
     with tqdm(
         total=len(system_pairs),
         unit="system pair",
-        desc="Computing FRR",
+        desc="Computing GFRR",
         disable=disable_bar,
     ) as pbar:
         for sys1_hash, sys2_hash in system_pairs:
@@ -582,24 +582,27 @@ def launch(args: argparse.Namespace) -> None:
 
     Raises:
         SystemsComparisonError: If analysis fails at any stage.
+    todo:
+        Improve logic and efficiency. If only heatmap is requested, clustering should be skipped.
     """
     logger.info("Starting PANORAMA systems comparison analysis")
 
+    tmpdir = None  # Ensure tmpdir is always defined
+    # Validate arguments and prepare requirements
+    need_info = check_compare_systems_args(args)
+
+    # Process and validate model files
+    models_list = []
+    for model_path in args.models:
+        validated_models = check_models(
+            model_path, disable_bar=args.disable_prog_bar
+        )
+        models_list.append(validated_models)
+    need_info["models"] = models_list
+
     try:
-        # Validate arguments and prepare requirements
-        need_info = check_compare_systems_args(args)
-
-        # Process and validate model files
-        models_list = []
-        for model_path in args.models:
-            validated_models = check_models(
-                model_path, disable_bar=args.disable_prog_bar
-            )
-            models_list.append(validated_models)
-        need_info["models"] = models_list
-
         # Load pangenomes and set up a working environment
-        pangenomes, tmp_dir, _, lock = common_launch(
+        pangenomes, tmpdir, _, lock = common_launch(
             args, check_pangenome_write_systems, need_info, sources=args.sources
         )
 
@@ -643,9 +646,9 @@ def launch(args: argparse.Namespace) -> None:
 
     finally:
         # Clean up temporary files
-        if not args.keep_tmp:
-            logger.debug(f"Cleaning up temporary directory: {tmp_dir}")
-            rmtree(tmp_dir, ignore_errors=True)
+        if not args.keep_tmp and tmpdir is not None:
+            logger.debug(f"Cleaning up temporary directory: {tmpdir}")
+            rmtree(tmpdir, ignore_errors=True)
 
 
 def subparser(sub_parser: argparse._SubParsersAction) -> argparse.ArgumentParser:

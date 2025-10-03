@@ -145,8 +145,7 @@ output_directory/
 ├── heatmap_number_systems.html
 ├── heatmap_normalized_systems.html
 ├── conserved_systems.gexf (optional)
-├── conserved_systems.graphml (optional)
-└── conserved_systems.tsv (optional)
+└── conserved_systems.graphml (optional)
 ```
 
 ### Files description
@@ -177,8 +176,3 @@ Node attributes include system metadata, pangenome information, and cluster assi
 Edge attributes contain GFRR similarity scores and the number of shared gene families.
 
 [PLACEHOLDER: Network graph of conserved systems clusters with different colors]
-
-##### Summary Tables
-
-When conserved systems clustering is performed:
-conserved_systems.tsv: Tabular summary of identified conserved system clusters
