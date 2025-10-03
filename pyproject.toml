@@ -14,7 +14,7 @@ authors = [
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
 description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.10"
 license = { file = "LICENCE" }
 classifiers = ["Development Status :: Open alpha",
     "Environment :: Console",

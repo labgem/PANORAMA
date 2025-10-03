@@ -51,6 +51,10 @@ panorama --version
 
 #### Manual Installation (without Conda) 🛠️
 
+```{important}
+PANOARMA requires Python 3.10 or higher.
+```
+
 ##### 1. Clone the Repository
 
 ```shell
