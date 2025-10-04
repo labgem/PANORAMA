@@ -1,7 +1,10 @@
 name: Ruff
 
-on: [ pull_request ]
-
+on:
+  pull_request:
+    paths:
+      - 'panorama/**'
+      - 'tests/**'
 jobs:
   ruff:
     runs-on: ubuntu-latest
@@ -10,13 +13,9 @@ jobs:
       - name: Check formatting with Ruff
         uses: astral-sh/ruff-action@v3
         with:
-          use_pyproject: true
           args: format --check
-          src: "panorama/ tests/"
 
       - name: Lint with Ruff
         uses: astral-sh/ruff-action@v3
         with:
-          use_pyproject: true
           args: check
-          src: "panorama/ tests/"
