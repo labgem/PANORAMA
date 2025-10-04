@@ -10,19 +10,18 @@ model structure conversion.
 """
 
 # default libraries
-import re
-from typing import Dict, List, Set, Union
 import logging
+import re
 from pathlib import Path
+from typing import Dict, List, Set, Union
 
 # installed libraries
-from tqdm import tqdm
 import pandas as pd
+from tqdm import tqdm
 
 # local libraries
 from panorama.utility.genInput import create_hmm_list_file
-from panorama.utility.translate import read_yaml, ModelTranslationError
-
+from panorama.utility.translate import ModelTranslationError, read_yaml
 
 PADLOC_MODEL_KEYS = [
     "maximum_separation",
@@ -158,9 +157,7 @@ def _add_families_to_functional_unit(
 
                     # Add exchangeable proteins if available
                     if protein_name in secondary_names:
-                        exchangeable_proteins = (
-                            filtered_df["protein_name"].dropna().unique().tolist()
-                        )
+                        exchangeable_proteins = filtered_df["protein_name"].dropna().unique().tolist()
                         if len(exchangeable_proteins) > 1:
                             family_dict["exchangeable"] = exchangeable_proteins
 
@@ -172,12 +169,8 @@ def _add_families_to_functional_unit(
 
             # Add exchangeable proteins if this family has secondary names
             if family_name in secondary_names:
-                filtered_df = metadata_df.loc[
-                    metadata_df["secondary_name"] == family_name
-                ]
-                exchangeable_proteins = (
-                    filtered_df["protein_name"].dropna().unique().tolist()
-                )
+                filtered_df = metadata_df.loc[metadata_df["secondary_name"] == family_name]
+                exchangeable_proteins = filtered_df["protein_name"].dropna().unique().tolist()
                 if exchangeable_proteins:
                     family_dict["exchangeable"] = exchangeable_proteins
 
@@ -216,12 +209,8 @@ def translate_model_padloc(
         AssertionError: If input parameters are invalid
         ModelTranslationError: For translation-specific errors
     """
-    assert canonical_models is not None and isinstance(canonical_models, list), (
-        "canonical_models must be a list"
-    )
-    assert isinstance(metadata_df, pd.DataFrame), (
-        "metadata_df must be a pandas DataFrame"
-    )
+    assert canonical_models is not None and isinstance(canonical_models, list), "canonical_models must be a list"
+    assert isinstance(metadata_df, pd.DataFrame), "metadata_df must be a pandas DataFrame"
 
     # Validate inputs
     if canonical_models is None:
@@ -231,14 +220,11 @@ def translate_model_padloc(
     unexpected_keys = set(data_yaml.keys()) - set(PADLOC_MODEL_KEYS)
     if unexpected_keys:
         raise KeyError(
-            f"Unexpected keys in PADLOC model '{model_name}': {unexpected_keys}. "
-            f"Expected keys: {PADLOC_MODEL_KEYS}"
+            f"Unexpected keys in PADLOC model '{model_name}': {unexpected_keys}. Expected keys: {PADLOC_MODEL_KEYS}"
         )
 
     if "core_genes" not in data_yaml:
-        raise KeyError(
-            f"Missing required 'core_genes' key in PADLOC model '{model_name}'"
-        )
+        raise KeyError(f"Missing required 'core_genes' key in PADLOC model '{model_name}'")
 
     # Initialize PANORAMA model structure
     panorama_model = {
@@ -394,9 +380,7 @@ def translate_padloc(
     required_files = ["hmm_meta.txt", "sys", "hmm"]
     for required_file in required_files:
         if not (padloc_db / required_file).exists():
-            raise FileNotFoundError(
-                f"Required PADLOC file/directory missing: {padloc_db / required_file}"
-            )
+            raise FileNotFoundError(f"Required PADLOC file/directory missing: {padloc_db / required_file}")
 
     # Parse metadata
     logging.getLogger("PANORAMA").info("Parsing PADLOC metadata...")
@@ -422,33 +406,21 @@ def translate_padloc(
 
     model_files = list(models_dir.rglob("*.yaml"))
 
-    for model_file in tqdm(
-        model_files, unit="file", desc="Translating models", disable=disable_bar
-    ):
+    for model_file in tqdm(model_files, unit="file", desc="Translating models", disable=disable_bar):
         try:
             # Find canonical models
             canonical_models = []
-            if re.search(
-                "_other", model_file.stem
-            ):  # Only process '_other' variant models
+            if re.search("_other", model_file.stem):  # Only process '_other' variant models
                 canonical_models = search_canonical_padloc(model_file.stem, models_dir)
 
             # Load and translate model
             model_data = read_yaml(model_file)
-            translated_model = translate_model_padloc(
-                model_data, model_file.stem, metadata_df, canonical_models
-            )
+            translated_model = translate_model_padloc(model_data, model_file.stem, metadata_df, canonical_models)
             translated_models.append(translated_model)
 
         except Exception as e:
-            logging.getLogger("PANORAMA").error(
-                f"Failed to translate PADLOC model {model_file.stem}: {e}"
-            )
-            raise ModelTranslationError(
-                f"Translation failed for {model_file.stem}"
-            ) from e
+            logging.getLogger("PANORAMA").error(f"Failed to translate PADLOC model {model_file.stem}: {e}")
+            raise ModelTranslationError(f"Translation failed for {model_file.stem}") from e
 
-    logging.getLogger("PANORAMA").info(
-        f"Successfully translated {len(translated_models)} PADLOC models"
-    )
+    logging.getLogger("PANORAMA").info(f"Successfully translated {len(translated_models)} PADLOC models")
     return translated_models

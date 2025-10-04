@@ -20,20 +20,19 @@ Supported Sources:
 """
 
 # default libraries
-from typing import Dict, List, Union
+import json
 import logging
 from pathlib import Path
-from lxml import etree as et
-import yaml
-import json
+from typing import Dict, List, Union
 
 # installed libraries
-from tqdm import tqdm
 import pandas as pd
+import yaml
+from lxml import etree as et
+from tqdm import tqdm
 
 # local libraries
 from panorama.utils import mkdir
-
 
 # Constants
 KNOWN_SOURCES = ["padloc", "defense-finder", "CONJScan", "TXSScan", "TFFscan"]
@@ -74,13 +73,11 @@ def read_yaml(model_path: Path) -> Dict[str, Union[List[str], int, bool]]:
                 return {}
             return data
     except IOError as e:
-        raise IOError(f"Problem opening {model_path}: {e}") from e
+        raise IOError(f"Problem opening {model_path}") from e
     except yaml.YAMLError as e:
-        raise yaml.YAMLError(f"Problem parsing YAML file {model_path}: {e}") from e
+        raise yaml.YAMLError(f"Problem parsing YAML file {model_path}") from e
     except Exception as e:
-        raise ModelTranslationError(
-            f"Unexpected error reading {model_path}: {e}"
-        ) from e
+        raise ModelTranslationError(f"Unexpected error reading {model_path}") from e
 
 
 def read_xml(model_path: Path) -> et.Element:
@@ -109,13 +106,11 @@ def read_xml(model_path: Path) -> et.Element:
         tree = et.parse(str(model_path.absolute()), parser=parser)
         return tree.getroot()
     except IOError as e:
-        raise IOError(f"Problem opening {model_path}: {e}") from e
+        raise IOError(f"Problem opening {model_path}") from e
     except et.XMLSyntaxError as e:
-        raise et.XMLSyntaxError(f"Problem parsing XML file {model_path}: {e}") from e
+        raise et.XMLSyntaxError(f"Problem parsing XML file {model_path}") from e
     except Exception as e:
-        raise ModelTranslationError(
-            f"Unexpected error reading {model_path}: {e}"
-        ) from e
+        raise ModelTranslationError(f"Unexpected error reading {model_path}") from e
 
 
 def write_model(
@@ -146,9 +141,7 @@ def write_model(
             json.dump(model_data, file, indent=2, ensure_ascii=False)
         return output_file
     except IOError as e:
-        raise IOError(
-            f"Problem writing model {model_data['name']} to {output_file}: {e}"
-        ) from e
+        raise IOError(f"Problem writing model {model_data['name']} to {output_file}") from e
 
 
 def launch_translate(
@@ -213,8 +206,7 @@ def launch_translate(
         )
     else:
         raise ValueError(
-            f"The given source: {source} is not recognize. "
-            f"Please choose between padloc, defense-finder or macsy-finder"
+            f"The given source: {source} is not recognize. Please choose between padloc, defense-finder or macsy-finder"
         )
     logging.getLogger("PANORAMA").info("Write models for PANORAMA...")
     model_list = []
@@ -227,10 +219,6 @@ def launch_translate(
     if source == "CONJScan":
         plasmid_mask = model_df["name"].str.contains("Plasmids_")
         chromosome_mask = model_df["name"].str.contains("Chromosome_")
-        model_df[plasmid_mask].to_csv(
-            output / "models_plasmids_list.tsv", sep="\t", header=False, index=False
-        )
-        model_df[chromosome_mask].to_csv(
-            output / "models_chromosome_list.tsv", sep="\t", header=False, index=False
-        )
+        model_df[plasmid_mask].to_csv(output / "models_plasmids_list.tsv", sep="\t", header=False, index=False)
+        model_df[chromosome_mask].to_csv(output / "models_chromosome_list.tsv", sep="\t", header=False, index=False)
     model_df.to_csv(output / "models_list.tsv", sep="\t", header=False, index=False)
