@@ -7,37 +7,37 @@ This module provides functions to detect biological systems in pangenomes all in
 
 # default libraries
 from __future__ import annotations
-import logging
+
 import argparse
-from typing import List
-from pathlib import Path
-from multiprocessing import Manager
+import logging
 import tempfile
-from typing import Any, Dict, Tuple
 import time
+from multiprocessing import Manager
+from pathlib import Path
+from typing import Any, Dict, List, Tuple
 
 # installed libraries
-from tqdm import tqdm
-from pyhmmer.plan7 import HMM
 import pandas as pd
+from pyhmmer.plan7 import HMM
+from tqdm import tqdm
 
 # local libraries
-from panorama.pangenomes import Pangenomes, Pangenome
-from panorama.format.write_binaries import erase_pangenome
 from panorama.annotate.annotate import (
     check_annotate_args,
     check_pangenome_annotation,
+    parser_annot_hmm,
     read_families_metadata,
     write_annotations_to_pangenomes,
-    parser_annot_hmm,
 )
-from panorama.annotate.hmm_search import read_hmms, annot_with_hmm
-from panorama.systems.models import Models
+from panorama.annotate.hmm_search import annot_with_hmm, read_hmms
+from panorama.format.write_binaries import erase_pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.systems.detection import (
     check_detection_args,
     search_systems_in_pangenomes,
     write_systems_to_pangenomes,
 )
+from panorama.systems.models import Models
 from panorama.systems.write_systems import write_pangenomes_systems
 from panorama.utility.utility import check_models, mkdir
 
@@ -64,9 +64,7 @@ def check_pansystems_parameters(
     need_info.update(check_detection_args(args))
     need_info["need_metadata"] = False
     need_info["need_families_info"] = True
-    if not any(
-        arg for arg in [args.projection, args.partition, args.association, args.proksee]
-    ):
+    if not any(arg for arg in [args.projection, args.partition, args.association, args.proksee]):
         raise argparse.ArgumentError(
             argument=None,
             message="You should at least choose one type of systems writing "
@@ -86,9 +84,7 @@ def check_pansystems_parameters(
     return need_info, hmm_kwgs
 
 
-def check_pangenome_pansystems(
-    pangenome: Pangenome, source: str, force: bool = False
-) -> None:
+def check_pangenome_pansystems(pangenome: Pangenome, source: str, force: bool = False) -> None:
     """
     Checks the annotation of a pangenome and its systems.
 
@@ -101,10 +97,7 @@ def check_pangenome_pansystems(
         ValueError: If systems are already detected based on the source and force is False.
     """
     check_pangenome_annotation(pangenome, source, force=force)
-    if (
-        pangenome.status["systems"] == "inFile"
-        and source in pangenome.status["systems_sources"]
-    ):
+    if pangenome.status["systems"] == "inFile" and source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=source)
         else:
@@ -179,13 +172,9 @@ def pansystems(
     assert table is not None or hmm is not None, "Must provide either table or hmm"
     pangenome2metadata_df = {}
     t0 = time.time()
-    for pangenome in tqdm(
-        pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar
-    ):
+    for pangenome in tqdm(pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar):
         if table is not None:
-            metadata_file = table.loc[table["Pangenome"] == pangenome.name][
-                "path"
-            ].squeeze()
+            metadata_file = table.loc[table["Pangenome"] == pangenome.name]["path"].squeeze()
             metadata_df, _ = read_families_metadata(pangenome, metadata_file)
         else:
             metadata_df = annot_with_hmm(
@@ -197,9 +186,7 @@ def pansystems(
                 **hmm_kwgs,
             )
         pangenome2metadata_df[pangenome.name] = metadata_df
-        logging.getLogger("PANORAMA").info(
-            f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds"
-        )
+        logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
 
     write_annotations_to_pangenomes(
         pangenomes,
@@ -259,9 +246,7 @@ def check_input_files(
     """
     assert table is not None or hmm is not None, "Must provide either table or hmm"
     if table is not None:
-        path_to_metadata = pd.read_csv(
-            table, delimiter="\t", names=["Pangenome", "path"]
-        )
+        path_to_metadata = pd.read_csv(table, delimiter="\t", names=["Pangenome", "path"])
         hmms, hmm_info = None, None
     else:
         hmms, hmm_info = read_hmms(hmm, disable_bar=disable_bar)
@@ -282,9 +267,7 @@ def launch(args):
     need_info, hmm_kwgs = check_pansystems_parameters(args)
     manager = Manager()
     lock = manager.Lock()
-    table, hmms, hmm_kwgs["meta"], models = check_input_files(
-        args.models, args.table, args.hmm, args.disable_prog_bar
-    )
+    table, hmms, hmm_kwgs["meta"], models = check_input_files(args.models, args.table, args.hmm, args.disable_prog_bar)
     pangenomes = load_pangenomes(
         pangenome_list=args.pangenomes,
         need_info=need_info,
@@ -360,9 +343,7 @@ def parser_pansystems(parser):
         nargs="?",
         help="Name of the annotation source where panorama as to select in pangenomes",
     )
-    required.add_argument(
-        "-o", "--output", required=True, type=Path, nargs="?", help="Output directory"
-    )
+    required.add_argument("-o", "--output", required=True, type=Path, nargs="?", help="Output directory")
     annotate = parser.add_argument_group(
         title="Annotation arguments",
         description="All of the following arguments are used for annotation step:",
@@ -387,8 +368,7 @@ def parser_pansystems(parser):
     parser_annot_hmm(annotate)
     detection = parser.add_argument_group(
         title="Systems detection arguments",
-        description="All of the following arguments are used "
-        "for systems detection step:",
+        description="All of the following arguments are used for systems detection step:",
     )
     detection.add_argument(
         "-m",
@@ -396,8 +376,7 @@ def parser_pansystems(parser):
         required=True,
         type=Path,
         nargs="?",
-        help="Path to model list file."
-        "Note: Use panorama utils --models to create the models list file",
+        help="Path to model list file.Note: Use panorama utils --models to create the models list file",
     )
     detection.add_argument(
         "--jaccard",
@@ -420,8 +399,7 @@ def parser_pansystems(parser):
         "--projection",
         required=False,
         action="store_true",
-        help="Project the systems on organisms. If organisms are specified, "
-        "projection will be done only for them.",
+        help="Project the systems on organisms. If organisms are specified, projection will be done only for them.",
     )
     write.add_argument(
         "--partition",
