@@ -13,11 +13,9 @@ from uuid import uuid4
 
 # Third-party imports
 from bokeh.palettes import Category20
-from tqdm import tqdm
-
-# PPanGGOLiN format imports
 from ppanggolin.genome import Contig, Gene, Organism
 from ppanggolin.region import Spot
+from tqdm import tqdm
 
 # local libraries
 from panorama.pangenomes import Pangenome

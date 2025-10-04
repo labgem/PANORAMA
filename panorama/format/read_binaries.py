@@ -22,9 +22,6 @@ from typing import Callable, Dict, List, Optional, Set
 
 # Third-party imports
 import tables
-from tqdm import tqdm
-
-# PPanGGOLiN format imports
 from ppanggolin.formats import (
     get_need_info,
     read_annotation,
@@ -36,6 +33,7 @@ from ppanggolin.formats import (
 )
 from ppanggolin.formats import get_status as super_get_status
 from ppanggolin.geneFamily import Gene
+from tqdm import tqdm
 
 # Local imports
 from panorama.geneFamily import GeneFamily

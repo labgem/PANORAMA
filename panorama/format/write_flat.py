@@ -12,13 +12,10 @@ from pathlib import Path
 from typing import Any, Dict, List, Tuple, Union
 
 # Third-party imports
-import tables
-from tqdm import tqdm
 import numpy as np
 import pandas as pd
-
-# PPanGGOLiN format imports
 import ppanggolin.metadata
+from tqdm import tqdm
 
 # local libraries
 from panorama.annotate.hmm_search import profile_gf
