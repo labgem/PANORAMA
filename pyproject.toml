@@ -116,6 +116,10 @@ ignore = [
     "E203",
     "W291"
 ]
+exclude = [
+    "docs/",
+    ".github/"
+]
 
 # Allow fix for all enabled rules (when `--fix`) is provided.
 #fixable = ["ALL"]

@@ -107,9 +107,7 @@ html_context = {
     "doc_path": "docs",
 }
 
-html_logo = (
-    "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
-)
+html_logo = "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
 
 # These are options specifically for the Wagtail Theme.
 html_theme_options = {
