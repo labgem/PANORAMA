@@ -5,39 +5,40 @@
 
 # Default libraries
 from __future__ import annotations
+
 import argparse
 import itertools
-import time
-from pathlib import Path
 import logging
+import time
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, Iterable, List, Set, Tuple, FrozenSet, Union
-from multiprocessing import Manager, Lock
+from multiprocessing import Lock, Manager
+from pathlib import Path
+from typing import Dict, FrozenSet, Iterable, List, Set, Tuple, Union
 
 # Installed libraries
-import pandas as pd
 import networkx as nx
-from tqdm import tqdm
+import pandas as pd
+from ppanggolin.context.searchGeneContext import compute_gene_context_graph
 from ppanggolin.genome import Organism
 from ppanggolin.utils import restricted_float
-from ppanggolin.context.searchGeneContext import compute_gene_context_graph
+from tqdm import tqdm
 
 # Local libraries
+from panorama.format.write_binaries import erase_pangenome, write_pangenome
 from panorama.geneFamily import GeneFamily
-from panorama.systems.utils import (
-    filter_local_context,
-    filter_global_context,
-    check_for_families,
-    get_metadata_to_families,
-    get_gfs_matrix_combination,
-    dict_families_context,
-    check_needed_families,
-)
-from panorama.systems.models import Models, Model, FuncUnit, Family
-from panorama.systems.system import System, SystemUnit
 from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.systems.models import Family, FuncUnit, Model, Models
+from panorama.systems.system import System, SystemUnit
+from panorama.systems.utils import (
+    check_for_families,
+    check_needed_families,
+    dict_families_context,
+    filter_global_context,
+    filter_local_context,
+    get_gfs_matrix_combination,
+    get_metadata_to_families,
+)
 from panorama.utils import init_lock
-from panorama.format.write_binaries import write_pangenome, erase_pangenome
 
 
 def check_detection_args(
@@ -58,9 +59,7 @@ def check_detection_args(
             If 'jaccard' is not a restricted float.
     """
     args.jaccard = restricted_float(args.jaccard)
-    args.annotation_sources = (
-        [args.source] if args.annotation_sources is None else args.annotation_sources
-    )
+    args.annotation_sources = [args.source] if args.annotation_sources is None else args.annotation_sources
     return {
         "need_annotations": True,
         "need_families": True,
@@ -96,10 +95,7 @@ def check_pangenome_detection(
         AttributeError:
             If there is no metadata associated with families.
     """
-    if (
-        pangenome.status["systems"] == "inFile"
-        and systems_source in pangenome.status["systems_sources"]
-    ):
+    if pangenome.status["systems"] == "inFile" and systems_source in pangenome.status["systems_sources"]:
         if force:
             erase_pangenome(pangenome, systems=True, source=systems_source)
         else:
@@ -183,9 +179,7 @@ def search_unit_in_cc(
         if not gfs_in_cc:
             continue
 
-        is_valid, gf2meta_info = check_for_families(
-            gfs_in_cc, gf2fam, fam2source, func_unit
-        )
+        is_valid, gf2meta_info = check_for_families(gfs_in_cc, gf2fam, fam2source, func_unit)
         if not is_valid:
             continue
 
@@ -233,34 +227,24 @@ def search_unit_in_combination(
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
         combinations (List[FrozenSet[GeneFamily]]): Existing combination of gene families in organisms.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]): The combination of gene families corresponding to the context that exists in at least one genome.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]]):
+            The combination of gene families corresponding to the context that exists in at least one genome.
         local: (bool, optional): Whether to filter the context with a local Jaccard index or not. Defaults to False.
 
     Returns:
         Set[SystemUnit]: Set of all detected functional units in the graph.
     """
     detected_su: Set[SystemUnit] = set()
-    mandatory_gfs = {
-        gf
-        for gf in families
-        for fam in gene_fam2mod_fam[gf]
-        if fam.presence == "mandatory"
-    }
-    accessory_gfs = {
-        gf
-        for gf in families
-        for fam in gene_fam2mod_fam[gf]
-        if fam.presence == "accessory"
-    }
+    mandatory_gfs = {gf for gf in families for fam in gene_fam2mod_fam[gf] if fam.presence == "mandatory"}
+    accessory_gfs = {gf for gf in families for fam in gene_fam2mod_fam[gf] if fam.presence == "accessory"}
     while len(combinations) > 0:
         logging.getLogger("PANORAMA").debug(f"Search in {len(combinations)}")
         context_combination = combinations.pop(0)
         organisms_of_interest = combinations2orgs[context_combination]
         context_combination = set(context_combination)
-        context_gfs_name = {gf.name for gf in context_combination} & {
-            gf.name for gf in mandatory_gfs | accessory_gfs
-        }
+        context_gfs_name = {gf.name for gf in context_combination} & {gf.name for gf in mandatory_gfs | accessory_gfs}
 
         if len(context_gfs_name) >= func_unit.min_total:
             filtered_matrix = matrix[list(context_gfs_name)]
@@ -269,9 +253,7 @@ def search_unit_in_combination(
                 local_graph = graph.copy()
                 node2remove = families.difference(context_combination)
                 local_graph.remove_nodes_from(node2remove)
-                logging.getLogger("PANORAMA").debug(
-                    f"filter context with jaccard {jaccard_threshold}"
-                )
+                logging.getLogger("PANORAMA").debug(f"filter context with jaccard {jaccard_threshold}")
                 if local:
                     local_graph = filter_local_context(
                         local_graph,
@@ -320,8 +302,11 @@ def search_unit_in_context(
         func_unit (FuncUnit): One functional unit corresponding to the model.
         source (str): Name of the source.
         matrix (pd.DataFrame): Dataframe containing association between gene families and unit families.
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
-        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]], optional): The combination of gene families corresponding to the context that exists in at least one genome. Defaults to None.
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Defaults to 0.8.
+        combinations2orgs (Dict[FrozenSet[GeneFamily], Set[Organism]], optional):
+            The combination of gene families corresponding to the context that exists in at least one genome.
+            Defaults to None.
         local: (bool, optional): Whether to filter the context with a local Jaccard index or not. Defaults to False.
 
     Returns:
@@ -329,19 +314,14 @@ def search_unit_in_context(
     """
 
     detected_su: Set[SystemUnit] = set()
-    families_in_context, neutral_families_in_context = (
-        get_functional_unit_gene_families(func_unit, families, gene_fam2mod_fam)
+    families_in_context, neutral_families_in_context = get_functional_unit_gene_families(
+        func_unit, families, gene_fam2mod_fam
     )
-    combinations = sorted(
-        combinations2orgs.keys(), key=lambda fs: (len(fs), sorted(fs)), reverse=True
-    )
+    combinations = sorted(combinations2orgs.keys(), key=lambda fs: (len(fs), sorted(fs)), reverse=True)
     if not local:
         graph = filter_global_context(graph, jaccard_threshold)
 
-    for cc_graph in [
-        graph.subgraph(cc).copy()
-        for cc in sorted(nx.connected_components(graph), key=len, reverse=True)
-    ]:
+    for cc_graph in [graph.subgraph(cc).copy() for cc in sorted(nx.connected_components(graph), key=len, reverse=True)]:
         families_in_cc = families_in_context.copy()
         neutral_families = neutral_families_in_context.copy()
         families_in_cc &= cc_graph.nodes
@@ -456,9 +436,7 @@ def search_system_units(
     for func_unit in model.func_units:
         fu_families = set()
         gene_families = set(gf2fam.keys())
-        fu_families.update(
-            *get_functional_unit_gene_families(func_unit, gene_families, gf2fam)
-        )
+        fu_families.update(*get_functional_unit_gene_families(func_unit, gene_families, gf2fam))
         if len(fu_families) >= func_unit.min_total:
             matrix = get_gfs_matrix_combination(fu_families, gf2fam)
             if check_needed_families(matrix, func_unit):
@@ -470,9 +448,7 @@ def search_system_units(
                     window_size=func_unit.window,
                     disable_bar=True,
                 )
-                logging.getLogger("PANORAMA").debug(
-                    f"Genomic context extracted in {time.time() - t0} seconds. "
-                )
+                logging.getLogger("PANORAMA").debug(f"Genomic context extracted in {time.time() - t0} seconds. ")
                 detected_su: Set[SystemUnit] = set()
                 if sensitivity == 1:
                     filtered_context = filter_global_context(context, jaccard_threshold)
@@ -487,13 +463,9 @@ def search_system_units(
                     )
                 elif sensitivity == 2 or sensitivity == 3:
                     combinations2orgs = {
-                        combs: org
-                        for combs, org in combinations2orgs.items()
-                        if len(combs) >= func_unit.min_total
+                        combs: org for combs, org in combinations2orgs.items() if len(combs) >= func_unit.min_total
                     }
-                    logging.getLogger("PANORAMA").debug(
-                        f"{len(combinations2orgs)} combinations found"
-                    )
+                    logging.getLogger("PANORAMA").debug(f"{len(combinations2orgs)} combinations found")
                     t1 = time.time()
                     logging.getLogger("PANORAMA").debug("Search unit in context")
                     detected_su = search_unit_in_context(
@@ -508,13 +480,9 @@ def search_system_units(
                         jaccard_threshold,
                         local=True if sensitivity == 3 else False,
                     )
-                    logging.getLogger("PANORAMA").debug(
-                        f"{len(detected_su)} unit found in {time.time() - t1} seconds."
-                    )
+                    logging.getLogger("PANORAMA").debug(f"{len(detected_su)} unit found in {time.time() - t1} seconds.")
                 else:
-                    raise ValueError(
-                        "Sensitivity is expected to be either 1 or 2 or 3."
-                    )
+                    raise ValueError("Sensitivity is expected to be either 1 or 2 or 3.")
                 if len(detected_su) > 0:
                     su_found[func_unit.name] = detected_su
     return su_found
@@ -547,9 +515,7 @@ def check_for_needed_units(su_found: Dict[str, Set[SystemUnit]], model: Model) -
     )
 
 
-def check_for_forbidden_unit(
-    su_found: Dict[str, Set[SystemUnit]], model: Model
-) -> bool:
+def check_for_forbidden_unit(su_found: Dict[str, Set[SystemUnit]], model: Model) -> bool:
     """Checks if there are forbidden system units.
 
     Args:
@@ -566,9 +532,7 @@ def check_for_forbidden_unit(
     return False
 
 
-def get_system_unit_combinations(
-    su_found: Dict[str, Set[SystemUnit]], model: Model
-) -> List[List[SystemUnit]]:
+def get_system_unit_combinations(su_found: Dict[str, Set[SystemUnit]], model: Model) -> List[List[SystemUnit]]:
     """Generates combinations of system units that could code for a system.
 
     The function generates combinations from mandatory, optional, and neutral categories,
@@ -577,7 +541,8 @@ def get_system_unit_combinations(
 
     Args:
         su_found (Dict[str, Set[SystemUnit]]):
-            A dictionary where keys are functional unit names and values are sets of elements belonging to each functional unit model.
+            A dictionary where keys are functional unit names and
+            values are sets of elements belonging to each functional unit model.
         model (Model):
             Model corresponding to the functional unit.
 
@@ -588,12 +553,8 @@ def get_system_unit_combinations(
     accessory_list = list(map(lambda x: x.name, model.accessory))
     neutral_list = list(map(lambda x: x.name, model.neutral))
 
-    mandatory_unit = {
-        name: su_found[name] for name in mandatory_list if name in su_found
-    }
-    accessory_unit = {
-        name: su_found[name] for name in accessory_list if name in su_found
-    }
+    mandatory_unit = {name: su_found[name] for name in mandatory_list if name in su_found}
+    accessory_unit = {name: su_found[name] for name in accessory_list if name in su_found}
     neutral_unit = {name: su_found[name] for name in neutral_list if name in su_found}
 
     valid_combinations = []
@@ -601,9 +562,7 @@ def get_system_unit_combinations(
     for num_mandatory in range(model.min_mandatory, len(mandatory_unit) + 1):
         mandatory_combos = itertools.combinations(mandatory_unit, num_mandatory)
         for mandatory_combo in mandatory_combos:
-            for num_accessory in range(
-                max(0, model.min_total - num_mandatory), len(accessory_unit) + 1
-            ):
+            for num_accessory in range(max(0, model.min_total - num_mandatory), len(accessory_unit) + 1):
                 accessory_combos = itertools.combinations(accessory_unit, num_accessory)
                 for accessory_combo in accessory_combos:
                     combo_min_acc = list(mandatory_combo) + list(accessory_combo)
@@ -617,9 +576,7 @@ def get_system_unit_combinations(
                         final_combo_with_neutral = list(final_combo)
                         if neutral_unit:
                             for neutral_cat in neutral_unit:
-                                final_combo_with_neutral.append(
-                                    list(neutral_unit[neutral_cat])[0]
-                                )
+                                final_combo_with_neutral.append(list(neutral_unit[neutral_cat])[0])
                             valid_combinations.append(final_combo_with_neutral)
     return valid_combinations
 
@@ -646,9 +603,7 @@ def search_for_system(
     Returns:
         set of System: Systems detected.
     """
-    gene_families = {
-        fam for su_set in su_found.values() for su in su_set for fam in su.families
-    }
+    gene_families = {fam for su_set in su_found.values() for su in su_set for fam in su.families}
     context, _ = compute_gene_context_graph(
         families=gene_families,
         transitive=model.transitivity,
@@ -665,17 +620,11 @@ def search_for_system(
             u = fam_list.pop(0)
             for v in fam_list:
                 nx.contracted_nodes(contracted_graph, u, v, copy=False)
-                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(
-                    v.organisms
-                )
+                contracted_graph.nodes[u]["organisms"] = set(u.organisms) | set(v.organisms)
             fam2su[u] = su
             organisms |= set(su.organisms)
-        filtered_graph = filter_local_context(
-            contracted_graph, organisms, jaccard_threshold
-        )
-        for cc in sorted(
-            nx.connected_components(filtered_graph), key=len, reverse=True
-        ):
+        filtered_graph = filter_local_context(contracted_graph, organisms, jaccard_threshold)
+        for cc in sorted(nx.connected_components(filtered_graph), key=len, reverse=True):
             cc: Set[GeneFamily]
             su_in_cc = {fam2su[fam].name: fam2su[fam] for fam in cc if fam in fam2su}
             if check_for_needed_units(su_in_cc, model):
@@ -715,25 +664,17 @@ def search_system(
     """
     logging.getLogger("PANORAMA").debug(f"Begin search for model {model.name}")
     begin = time.time()
-    su_found = search_system_units(
-        model, gf2fam, fam2source, source, jaccard_threshold, sensitivity
-    )
+    su_found = search_system_units(model, gf2fam, fam2source, source, jaccard_threshold, sensitivity)
     detected_systems = set()
-    if check_for_needed_units(su_found, model) and not check_for_forbidden_unit(
-        su_found, model
-    ):
+    if check_for_needed_units(su_found, model) and not check_for_forbidden_unit(su_found, model):
         if len(su_found) == 1:
             for fu in next(iter(su_found.values())):
                 new_sys = System(model=model, source=source)
                 new_sys.add_unit(fu)
                 detected_systems.add(new_sys)
         else:
-            detected_systems = search_for_system(
-                model, su_found, source, jaccard_threshold
-            )
-    logging.getLogger("PANORAMA").debug(
-        f"Done search for model {model.name} in {time.time() - begin} seconds"
-    )
+            detected_systems = search_for_system(model, su_found, source, jaccard_threshold)
+    logging.getLogger("PANORAMA").debug(f"Done search for model {model.name} in {time.time() - begin} seconds")
     return detected_systems
 
 
@@ -795,9 +736,7 @@ def search_systems(
     ):
         system.ID = str(idx)
         pangenome.add_system(system)
-    logging.getLogger("PANORAMA").debug(
-        f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}"
-    )
+    logging.getLogger("PANORAMA").debug(f"{pangenome.number_of_systems(source)} systems detected in {pangenome.name}")
     logging.getLogger("PANORAMA").info(
         f"Systems prediction done for {pangenome.name} in {time.time() - begin:.2f} seconds"
     )
@@ -840,17 +779,11 @@ def search_systems_in_pangenomes(
             - Defaults to 1.
     """
     t0 = time.time()
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(
-            total=len(pangenomes), unit="pangenome", disable=disable_bar
-        ) as progress:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="pangenome", disable=disable_bar) as progress:
             futures = []
             for pangenome in tqdm(pangenomes, unit="pangenome", disable=disable_bar):
-                logging.getLogger("PANORAMA").debug(
-                    f"Begin systems searching for {pangenome.name}"
-                )
+                logging.getLogger("PANORAMA").debug(f"Begin systems searching for {pangenome.name}")
                 future = executor.submit(
                     search_systems,
                     models,
@@ -865,14 +798,10 @@ def search_systems_in_pangenomes(
                 futures.append(future)
             for future in futures:
                 future.result()
-    logging.getLogger("PANORAMA").info(
-        f"Systems prediction in all pangenomes done in {time.time() - t0:.2f} seconds"
-    )
+    logging.getLogger("PANORAMA").info(f"Systems prediction in all pangenomes done in {time.time() - t0:.2f} seconds")
 
 
-def write_systems_to_pangenome(
-    pangenome: Pangenome, source: str, disable_bar: bool = False
-):
+def write_systems_to_pangenome(pangenome: Pangenome, source: str, disable_bar: bool = False):
     """Writes detected systems to the pangenome.
 
     Args:
@@ -882,15 +811,9 @@ def write_systems_to_pangenome(
     """
     if pangenome.number_of_systems(source) > 0:
         pangenome.status["systems"] = "Computed"
-        logging.getLogger("PANORAMA").info(
-            f"Write systems in pangenome {pangenome.name}"
-        )
-        write_pangenome(
-            pangenome, pangenome.file, source=source, disable_bar=disable_bar
-        )
-        logging.getLogger("PANORAMA").info(
-            f"Systems written in pangenome {pangenome.name}"
-        )
+        logging.getLogger("PANORAMA").info(f"Write systems in pangenome {pangenome.name}")
+        write_pangenome(pangenome, pangenome.file, source=source, disable_bar=disable_bar)
+        logging.getLogger("PANORAMA").info(f"Systems written in pangenome {pangenome.name}")
     else:
         logging.getLogger("PANORAMA").info("No system detected")
 
@@ -911,20 +834,12 @@ def write_systems_to_pangenomes(
         lock (Lock, optional): Lock for multiprocessing execution. Defaults to None.
         disable_bar (bool, optional): If True, disables the progress bar. Defaults to False.
     """
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-        with tqdm(
-            total=len(pangenomes), unit="pangenome", disable=disable_bar
-        ) as progress:
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
+        with tqdm(total=len(pangenomes), unit="pangenome", disable=disable_bar) as progress:
             futures = []
             for pangenome in tqdm(pangenomes, unit="pangenome", disable=disable_bar):
-                logging.getLogger("PANORAMA").debug(
-                    f"Write systems for pangenome {pangenome.name}"
-                )
-                future = executor.submit(
-                    write_systems_to_pangenome, pangenome, source, disable_bar
-                )
+                logging.getLogger("PANORAMA").debug(f"Write systems for pangenome {pangenome.name}")
+                future = executor.submit(write_systems_to_pangenome, pangenome, source, disable_bar)
                 future.add_done_callback(lambda p: progress.update())
                 futures.append(future)
             for future in futures:
@@ -937,8 +852,8 @@ def launch(args):
     Args:
         args (argparse.Namespace): Argument given in CLI.
     """
-    from panorama.utility.utility import check_models
     from panorama.format.read_binaries import load_pangenomes
+    from panorama.utility.utility import check_models
 
     need_info = check_detection_args(args)
     models = check_models(args.models, disable_bar=args.disable_prog_bar)
@@ -977,9 +892,7 @@ def launch(args):
     except Exception as e:
         for pangenome in pangenomes:
             erase_pangenome(pangenome, systems=True, source=args.source)
-            logging.getLogger("PANORAMA").debug(
-                f"erase system from {args.source} in {pangenome.name}"
-            )
+            logging.getLogger("PANORAMA").debug(f"erase system from {args.source} in {pangenome.name}")
         raise Exception(f"Error while writing systems from {e}") from e
 
 
@@ -987,7 +900,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     """Creates a subparser to launch PANORAMA from the command line.
 
     Args:
-        sub_parser (argparse.ArgumentParser): Sub-parser for the 'systems' command.
+        sub_parser: Sub-parser for the 'systems' command.
 
     Returns:
         argparse.ArgumentParser: Parser with arguments for the 'systems' command.

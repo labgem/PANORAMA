@@ -11,33 +11,33 @@ between systems and various pangenome components.
 
 # default libraries
 from __future__ import annotations
+
 import logging
+import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Set, Tuple, Union, Optional
-import time
+from typing import Dict, List, Optional, Set, Tuple, Union
 
 # installed libraries
-from tqdm import tqdm
 import pandas as pd
 from bokeh.layouts import gridplot, row
-from bokeh.plotting import figure
-from bokeh.transform import linear_cmap
-from bokeh.palettes import Colorblind, Reds256, Blues256, linear_palette
 from bokeh.models import (
     BasicTicker,
-    ColumnDataSource,
-    LinearColorMapper,
     ColorBar,
+    ColumnDataSource,
     FactorRange,
-    HoverTool,
+    LinearColorMapper,
 )
+from bokeh.palettes import Blues256, Colorblind, Reds256, linear_palette
+from bokeh.plotting import figure
+from bokeh.transform import linear_cmap
 from ppanggolin.region import Region
+from tqdm import tqdm
 
 # local libraries
 from panorama.pangenomes import Pangenome
-from panorama.region import Spot, Module
+from panorama.region import Module, Spot
 from panorama.systems.system import System
 from panorama.systems.utils import VisualizationBuilder
 
@@ -204,14 +204,10 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             1,  # height
             source=source,
             line_color="white",
-            fill_color=linear_cmap(
-                "corr", palette=color_palette, low=0, high=max_correlation + 1
-            ),
+            fill_color=linear_cmap("corr", palette=color_palette, low=0, high=max_correlation + 1),
         )
 
-    def create_coverage_plot(
-        self, coverage_df: pd.DataFrame, x_range: FactorRange
-    ) -> None:
+    def create_coverage_plot(self, coverage_df: pd.DataFrame, x_range: FactorRange) -> None:
         """
         Create a coverage visualization plot.
 
@@ -226,9 +222,7 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             coverage_df, x_range, "coverage", Reds256, "Coverage"
         )
 
-    def create_frequency_plot(
-        self, frequency_df: pd.DataFrame, x_range: FactorRange
-    ) -> None:
+    def create_frequency_plot(self, frequency_df: pd.DataFrame, x_range: FactorRange) -> None:
         """
         Create a frequency visualization plot.
 
@@ -366,9 +360,7 @@ class AssociationVisualizationBuilder(VisualizationBuilder):
             }
         )
         top_bar_source = ColumnDataSource(top_bar_data)
-        self.create_top_bar_plot(
-            top_bar_source, self.association, x_order=x_order, color="green"
-        )
+        self.create_top_bar_plot(top_bar_source, self.association, x_order=x_order, color="green")
 
     def plot(self) -> None:
         """
@@ -425,9 +417,7 @@ def _get_region_frequency(region: Region, pangenome: Pangenome) -> float:
     return 1.0 / pangenome.number_of_organisms
 
 
-def _get_element_frequency(
-    element: Union[Spot, Module], system_organisms: Set, pangenome: Pangenome
-) -> float:
+def _get_element_frequency(element: Union[Spot, Module], system_organisms: Set, pangenome: Pangenome) -> float:
     """
     Calculate the frequency of a Spot or Module element across organisms.
 
@@ -491,9 +481,7 @@ def create_coverage_dataframe(
 
         # Calculate coverage as intersection over union
         coverage = (
-            len(element_families.intersection(system_families)) / len(element_families)
-            if element_families
-            else 0.0
+            len(element_families.intersection(system_families)) / len(element_families) if element_families else 0.0
         )
 
         record_data = [
@@ -633,38 +621,20 @@ def get_association_dataframes(
 
     # Create association DataFrame
     start_time = time.time()
-    association_df = pd.DataFrame.from_dict(
-        association_data, orient="index", columns=columns
-    )
+    association_df = pd.DataFrame.from_dict(association_data, orient="index", columns=columns)
     association_df.index.name = "system_number"
 
-    logging.getLogger("PANORAMA").debug(
-        f"Association DataFrame created in {time.time() - start_time:.2f} seconds"
-    )
+    logging.getLogger("PANORAMA").debug(f"Association DataFrame created in {time.time() - start_time:.2f} seconds")
 
     # Generate coverage DataFrames
-    rgp_coverage_df = (
-        create_coverage_dataframe(rgp_to_systems, pangenome)
-        if has_rgps
-        else pd.DataFrame()
-    )
-    spot_coverage_df = (
-        create_coverage_dataframe(spot_to_systems, pangenome)
-        if has_spots
-        else pd.DataFrame()
-    )
-    module_coverage_df = (
-        create_coverage_dataframe(module_to_systems, pangenome)
-        if has_modules
-        else pd.DataFrame()
-    )
+    rgp_coverage_df = create_coverage_dataframe(rgp_to_systems, pangenome) if has_rgps else pd.DataFrame()
+    spot_coverage_df = create_coverage_dataframe(spot_to_systems, pangenome) if has_spots else pd.DataFrame()
+    module_coverage_df = create_coverage_dataframe(module_to_systems, pangenome) if has_modules else pd.DataFrame()
 
     return association_df, rgp_coverage_df, spot_coverage_df, module_coverage_df
 
 
-def preprocess_association_data(
-    dataframe: pd.DataFrame, association: str
-) -> pd.DataFrame:
+def preprocess_association_data(dataframe: pd.DataFrame, association: str) -> pd.DataFrame:
     """
     Preprocess association data to create a correlation matrix.
 
@@ -676,16 +646,12 @@ def preprocess_association_data(
         Preprocessed correlation matrix DataFrame.
     """
     # Split comma-separated associations into dummy variables
-    processed_df = dataframe.drop(columns=["families"]).join(
-        dataframe[association].str.get_dummies(sep=",")
-    )
+    processed_df = dataframe.drop(columns=["families"]).join(dataframe[association].str.get_dummies(sep=","))
     processed_df = processed_df.drop(columns=[association])
 
     # Group by system name and sum associations
     correlation_matrix = processed_df.groupby("system_name").sum()
-    correlation_matrix.sort_index(
-        key=lambda x: x.str.lower(), ascending=False, inplace=True
-    )
+    correlation_matrix.sort_index(key=lambda x: x.str.lower(), ascending=False, inplace=True)
     correlation_matrix.columns.name = association
 
     return correlation_matrix
@@ -723,8 +689,7 @@ def write_correlation_matrix_visualization(
     for fmt in output_formats:
         if fmt not in VisualizationBuilder.OUTPUT_FORMATS:
             raise ValueError(
-                f"Unsupported output format: {fmt}. "
-                f"Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
+                f"Unsupported output format: {fmt}. Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
             )
 
     # Preprocess data for correlation matrix
@@ -736,9 +701,7 @@ def write_correlation_matrix_visualization(
     )
     viz_builder.create_bar_plots(correlation_matrix)
 
-    viz_builder.create_main_figure(
-        correlation_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range
-    )
+    viz_builder.create_main_figure(correlation_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range)
 
     viz_builder.create_color_bar("# Systems")
     viz_builder.create_coverage_plot(coverage_df, viz_builder.top_bar.x_range)
@@ -785,10 +748,7 @@ def create_pangenome_system_associations(
     # Validate associations
     for association in associations:
         if association not in VALID_ASSOCIATIONS:
-            raise ValueError(
-                f"Invalid association type: {association}. "
-                f"Valid options: {VALID_ASSOCIATIONS}"
-            )
+            raise ValueError(f"Invalid association type: {association}. Valid options: {VALID_ASSOCIATIONS}")
 
     # Ensure output directory exists
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -796,8 +756,8 @@ def create_pangenome_system_associations(
     logger = logging.getLogger("PANORAMA")
 
     # Generate association DataFrames
-    association_df, rgp_coverage_df, spot_coverage_df, module_coverage_df = (
-        get_association_dataframes(pangenome, associations, threads, disable_bar)
+    association_df, rgp_coverage_df, spot_coverage_df, module_coverage_df = get_association_dataframes(
+        pangenome, associations, threads, disable_bar
     )
 
     # Save main association DataFrame

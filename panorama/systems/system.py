@@ -2,29 +2,29 @@
 # coding: utf8
 
 """
-This module defines classes for representing biological systems detected in pangenomes, including System, SystemUnit, and ClusterSystems.
- It provides methods for managing system units, gene families, modules, spots, and regions, as well as utilities for comparing,
- merging, and clustering systems across multiple pangenomes.
+This module defines classes for representing biological systems detected in pangenomes,
+including System, SystemUnit, and ClusterSystems. It provides methods for managing system units,
+gene families, modules, spots, and regions, as well as utilities for comparing,
+merging, and clustering systems across multiple pangenomes.
 """
 
 # default libraries
 from __future__ import annotations
 
-from typing import Dict, List, Set, Tuple, Union, Generator
 import zlib
-
-import numpy as np
 from functools import wraps
+from typing import Dict, Generator, List, Set, Tuple, Union
 
 # installed libraries
-from ppanggolin.metadata import MetaFeatures
+import numpy as np
 from ppanggolin.genome import Organism
+from ppanggolin.metadata import MetaFeatures
 from ppanggolin.region import Region
 
 # local libraries
-from panorama.systems.models import Model, FuncUnit
 from panorama.geneFamily import GeneFamily
 from panorama.region import Module, Spot
+from panorama.systems.models import FuncUnit, Model
 
 
 def check_instance_of_system_unit(method):
@@ -46,8 +46,7 @@ def check_instance_of_system_unit(method):
     def wrapper(self, other):
         if not isinstance(other, SystemUnit):
             raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
+                f"Another system unit is expected to be compared to the first one. You gave a {type(other)}"
             )
         return method(self, other)
 
@@ -72,10 +71,7 @@ def check_instance_of_system(method):
     @wraps(method)
     def wrapper(self, other):
         if not isinstance(other, System):
-            raise TypeError(
-                f"Another system is expected to be compared to the first one. "
-                f"You gave a {type(other)}"
-            )
+            raise TypeError(f"Another system is expected to be compared to the first one. You gave a {type(other)}")
         return method(self, other)
 
     return wrapper
@@ -108,7 +104,8 @@ class SystemUnit(MetaFeatures):
             functional_unit (FuncUnit): The FuncUnit model associated with this system unit.
             source (str): Source of the functional unit.
             gene_families (Set[GeneFamily], optional): Set of gene families in the system unit.
-            families_to_metainfo (Dict[GeneFamily, Tuple[str, int]], optional): Mapping of gene families to their annotation source and metadata ID.
+            families_to_metainfo (Dict[GeneFamily, Tuple[str, int]], optional):
+                Mapping of gene families to their annotation source and metadata ID.
         """
         super().__init__()
         SystemUnit._id_counter += 1
@@ -124,11 +121,7 @@ class SystemUnit(MetaFeatures):
         self._system = None
         if gene_families:
             for family in gene_families:
-                annot_source, meta_id = (
-                    families_to_metainfo.get(family, ("", 0))
-                    if families_to_metainfo
-                    else ("", 0)
-                )
+                annot_source, meta_id = families_to_metainfo.get(family, ("", 0)) if families_to_metainfo else ("", 0)
                 self.add_family(family, annot_source, meta_id)
 
     def __hash__(self) -> int:
@@ -190,13 +183,9 @@ class SystemUnit(MetaFeatures):
             KeyError: If a different GeneFamily with the same name already exists.
         """
         if not isinstance(family, GeneFamily):
-            raise TypeError(
-                f"A GeneFamily object is expected. You provided a {type(family)}."
-            )
+            raise TypeError(f"A GeneFamily object is expected. You provided a {type(family)}.")
         if name in self._families_getter and self[name] != family:
-            raise KeyError(
-                "A different gene family with the same name already exist in the functional unit"
-            )
+            raise KeyError("A different gene family with the same name already exist in the functional unit")
         self._families_getter[name] = family
 
     def __getitem__(self, name: str) -> GeneFamily:
@@ -214,10 +203,8 @@ class SystemUnit(MetaFeatures):
         """
         try:
             return self._families_getter[name]
-        except KeyError:
-            raise KeyError(
-                f"There isn't gene family with the name {name} in the system"
-            )
+        except KeyError as error:
+            raise KeyError(f"There isn't gene family with the name {name} in the system") from error
 
     @property
     def system(self) -> Union[System, None]:
@@ -269,9 +256,7 @@ class SystemUnit(MetaFeatures):
             TypeError: If the functional unit is not an instance of FuncUnit.
         """
         if not isinstance(func_unit, FuncUnit):
-            raise TypeError(
-                f"A FuncUnit instance is expected. You provided a {type(func_unit)}."
-            )
+            raise TypeError(f"A FuncUnit instance is expected. You provided a {type(func_unit)}.")
         self._fu = func_unit
 
     @property
@@ -304,9 +289,7 @@ class SystemUnit(MetaFeatures):
         """
         yield from self._families_getter.values()
 
-    def add_family(
-        self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0
-    ):
+    def add_family(self, gene_family: GeneFamily, annotation_source: str = "", metadata_id: int = 0):
         """
         Adds a GeneFamily to the system and associates it with annotation source and metadata ID.
 
@@ -495,7 +478,8 @@ class SystemUnit(MetaFeatures):
     @property
     def model_organisms(self) -> Generator[Organism, None, None]:
         """
-        Return a generator yielding all unique Organism instances present in at least `min_total` model gene families within this SystemUnit.
+        Return a generator yielding all unique Organism instances present in at least
+        `min_total` model gene families within this SystemUnit.
 
         Yields:
             Organism: Each organism meeting the minimum model family presence threshold.
@@ -512,12 +496,7 @@ class SystemUnit(MetaFeatures):
                 matrix[org2idx[org], j] = 1
         idx2org = {i: org for org, i in org2idx.items()}
 
-        yield from {
-            idx2org[i]
-            for i in np.nonzero(
-                np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total
-            )[0]
-        }
+        yield from {idx2org[i] for i in np.nonzero(np.sum(matrix == 1, axis=1) >= self.functional_unit.min_total)[0]}
 
     def get_metainfo(self, gene_family: GeneFamily) -> Tuple[str, int]:
         """
@@ -538,11 +517,7 @@ class SystemUnit(MetaFeatures):
         Returns:
             Set[str]: A set containing all non-empty annotation source names.
         """
-        return {
-            metainfo[0]
-            for metainfo in self._families2metainfo.values()
-            if metainfo[0] != ""
-        }
+        return {metainfo[0] for metainfo in self._families2metainfo.values() if metainfo[0] != ""}
 
     @property
     def modules(self) -> Generator[Module, None, None]:
@@ -573,10 +548,8 @@ class SystemUnit(MetaFeatures):
             self._asso_modules()
         try:
             return self._modules_getter[identifier]
-        except KeyError:
-            raise KeyError(
-                f"Module with identifier {identifier} is not associated with unit {self.ID}"
-            )
+        except KeyError as error:
+            raise KeyError(f"Module with identifier {identifier} is not associated with unit {self.ID}") from error
 
     def add_module(self, module: Module):
         """
@@ -652,10 +625,8 @@ class SystemUnit(MetaFeatures):
             self._make_spot_getter()
         try:
             return self._spots_getter[identifier]
-        except KeyError:
-            raise KeyError(
-                f"Spot with identifier {identifier} is not associated with unit {self.ID}"
-            )
+        except KeyError as error:
+            raise KeyError(f"Spot with identifier {identifier} is not associated with unit {self.ID}") from error
 
     def add_spot(self, spot: Spot):
         """
@@ -703,10 +674,8 @@ class SystemUnit(MetaFeatures):
         """
         try:
             return self._regions_getter[name]
-        except KeyError:
-            raise KeyError(
-                f"Region with identifier {name} is not associated with unit {self.ID}"
-            )
+        except KeyError as error:
+            raise KeyError(f"Region with identifier {name} is not associated with unit {self.ID}") from error
 
     def add_region(self, region: Region):
         """
@@ -836,10 +805,7 @@ class System(MetaFeatures):
             KeyError: If another unit with the same name already exists and differs.
         """
         if not isinstance(unit, SystemUnit):
-            raise TypeError(
-                f"Another system unit is expected to be compared to the first one. "
-                f"You gave a {type(unit)}"
-            )
+            raise TypeError(f"Another system unit is expected to be compared to the first one. You gave a {type(unit)}")
         if name in self._unit_getter and self[name] != unit:
             raise KeyError("A different system unit with the same name already exists.")
         self._unit_getter[name] = unit
@@ -859,8 +825,8 @@ class System(MetaFeatures):
         """
         try:
             return self._unit_getter[name]
-        except KeyError:
-            raise KeyError(f"There isn't any unit with the name {name} in the system")
+        except KeyError as error:
+            raise KeyError(f"There isn't any unit with the name {name} in the system") from error
 
     def __delitem__(self, name: str):
         """
@@ -874,8 +840,8 @@ class System(MetaFeatures):
         """
         try:
             self._unit_getter.pop(name)
-        except KeyError:
-            raise KeyError(f"There isn't any unit with the name {name} in the system")
+        except KeyError as error:
+            raise KeyError(f"There isn't any unit with the name {name} in the system") from error
 
     @check_instance_of_system
     def __eq__(self, other: System) -> bool:
@@ -1005,10 +971,7 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        return all(
-            any(self_unit.is_superset(other_unit) for self_unit in self.units)
-            for other_unit in other.units
-        )
+        return all(any(self_unit.is_superset(other_unit) for self_unit in self.units) for other_unit in other.units)
 
     @check_instance_of_system
     def is_subset(self, other: System) -> bool:
@@ -1024,10 +987,7 @@ class System(MetaFeatures):
         Raises:
             TypeError: If `other` is not a System.
         """
-        return all(
-            any(other_unit.is_superset(self_unit) for other_unit in other.units)
-            for self_unit in self.units
-        )
+        return all(any(other_unit.is_superset(self_unit) for other_unit in other.units) for self_unit in self.units)
 
     @check_instance_of_system
     def intersection(self, other: System) -> Set[SystemUnit]:
@@ -1064,9 +1024,7 @@ class System(MetaFeatures):
             - Make the method create a new system. Maybe a static method ?
             - Make merge method take multiple systems as input.
         """
-        unit_names = {unit.name for unit in self.units}.union(
-            {unit.name for unit in other.units}
-        )
+        unit_names = {unit.name for unit in self.units}.union({unit.name for unit in other.units})
         for name in unit_names:
             if name in other._unit_getter:
                 other_unit = other.get_unit(name)
@@ -1201,9 +1159,7 @@ class System(MetaFeatures):
                 return unit.get_module(identifier)
             except KeyError:
                 continue
-        raise KeyError(
-            f"Module with ID {identifier} is not associated with system {self.ID}"
-        )
+        raise KeyError(f"Module with ID {identifier} is not associated with system {self.ID}")
 
     @property
     def spots(self) -> Generator[Spot, None, None]:
@@ -1236,9 +1192,7 @@ class System(MetaFeatures):
                 return unit.get_spot(identifier)
             except KeyError:
                 continue
-        raise KeyError(
-            f"Spot with ID {identifier} is not associated with system {self.ID}"
-        )
+        raise KeyError(f"Spot with ID {identifier} is not associated with system {self.ID}")
 
     @property
     def regions(self) -> Generator[Region, None, None]:
@@ -1271,9 +1225,7 @@ class System(MetaFeatures):
                 return unit.get_region(name)
             except KeyError:
                 continue
-        raise KeyError(
-            f"Region with name '{name}' is not associated with system {self.ID}"
-        )
+        raise KeyError(f"Region with name '{name}' is not associated with system {self.ID}")
 
 
 class ClusterSystems:
@@ -1314,9 +1266,7 @@ class ClusterSystems:
             KeyError: If the key already exists in the cluster.
         """
         if key in self._systems_getter:
-            raise KeyError(
-                f"System {key} already exists in conserved systems with ID {self.ID}"
-            )
+            raise KeyError(f"System {key} already exists in conserved systems with ID {self.ID}")
         self._systems_getter[key] = value
 
     def __getitem__(self, key: Tuple[str, str]) -> System:
@@ -1334,8 +1284,8 @@ class ClusterSystems:
         """
         try:
             return self._systems_getter[key]
-        except KeyError:
-            raise KeyError(f"System {key} is not in conserved system with ID {self.ID}")
+        except KeyError as error:
+            raise KeyError(f"System {key} is not in conserved system with ID {self.ID}") from error
 
     def add(self, system: System) -> None:
         """
@@ -1348,9 +1298,7 @@ class ClusterSystems:
             AssertionError: If the input is not a System instance.
             KeyError: If a system with the same key already exists in the cluster.
         """
-        assert isinstance(system, System), (
-            f"System object is expected, got {type(system)}"
-        )
+        assert isinstance(system, System), f"System object is expected, got {type(system)}"
         self[(system.pangenome.name, system.ID)] = system
         system.cluster_id = self.ID
 
@@ -1369,9 +1317,7 @@ class ClusterSystems:
             AssertionError: If system_id is not a string.
             KeyError: If the system is not found in the cluster.
         """
-        assert isinstance(system_id, str), (
-            f"System id should be a string, got {type(system_id)}"
-        )
+        assert isinstance(system_id, str), f"System id should be a string, got {type(system_id)}"
         return self[(pangenome_name, system_id)]
 
     @property
