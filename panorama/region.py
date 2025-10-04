@@ -8,10 +8,16 @@ from typing import Generator, List, Set, Tuple
 # installed libraries
 from ppanggolin.genome import Organism
 from ppanggolin.region import (
-    Region as RGP,
-    Spot as Hotspot,
-    Module as Mod,
     GeneContext as GeneCont,
+)
+from ppanggolin.region import (
+    Module as Mod,
+)
+from ppanggolin.region import (
+    Region as RGP,
+)
+from ppanggolin.region import (
+    Spot as Hotspot,
 )
 
 # local libraries
@@ -117,15 +123,13 @@ class ConservedSpots:
         except KeyError:
             self._spots_getter[key] = value
         else:
-            raise KeyError(
-                f"Spot {key} already exists in conserved spots with ID {self.ID}"
-            )
+            raise KeyError(f"Spot {key} already exists in conserved spots with ID {self.ID}")
 
     def __getitem__(self, key: Tuple[str, int]) -> Spot:
         try:
             return self._spots_getter[key]
-        except KeyError:
-            raise KeyError(f"Spot {key} is not in conserved spot with ID {self.ID}")
+        except KeyError as error:
+            raise KeyError(f"Spot {key} is not in conserved spot with ID {self.ID}") from error
 
     def add(self, spot: Spot) -> None:
         """
@@ -138,9 +142,7 @@ class ConservedSpots:
             AssertionError: If the spot is not an instance of the Spot class.
             KeyError: If the spot already exists in the conserved spots with the same ID.
         """
-        assert isinstance(spot, Spot), (
-            f"Spot object is expected, given type is {type(spot)}"
-        )
+        assert isinstance(spot, Spot), f"Spot object is expected, given type is {type(spot)}"
         self[(spot.pangenome.name, spot.ID)] = spot
         spot.conserved_id = self.ID
 
@@ -159,9 +161,7 @@ class ConservedSpots:
             AssertionError: If the spot id is not an integer.
             KeyError: If the spot is not in the conserved set of spots.
         """
-        assert isinstance(spot_id, int), (
-            f"Spot id should be an integer, given type is {type(spot_id)}"
-        )
+        assert isinstance(spot_id, int), f"Spot id should be an integer, given type is {type(spot_id)}"
         return self[(pangenome_name, spot_id)]
 
     @property
@@ -264,8 +264,8 @@ class Module(Mod):
         """
         try:
             unit = self._unit_getter[identifier]
-        except KeyError:
-            raise KeyError(f"System {identifier} is not associated to module {self.ID}")
+        except KeyError as error:
+            raise KeyError(f"System {identifier} is not associated to module {self.ID}") from error
         else:
             return unit
 
@@ -277,7 +277,8 @@ class Module(Mod):
             unit (System): The system to add to the module.
 
         Raises:
-            Exception: If a system with the same ID but different name or gene families is already associated with the module.
+            Exception: If a system with the same ID but different name or
+            gene families is already associated with the module.
         """
         try:
             unit_in = self.get_unit(unit.ID)

@@ -1,6 +1,18 @@
 #!/usr/bin/env python3
 # coding:utf-8
 
+"""
+The script serves as the entry point for the Panorama software, a bioinformatics tool for analyzing pangenomes.
+It provides a command-line interface for various functionalities such as annotation, system detection, alignment,
+comparison, formatting, and utility workflows.
+
+The script constructs a comprehensive command-line utility with subcommands and their corresponding options,
+encompassing bioinformatic tools ranging from annotations to workflows. A help system is embedded
+to guide users through the available subcommands and their usage.
+"""
+
+# ruff: noqa: E501
+
 # default libraries
 import sys
 
@@ -13,20 +25,21 @@ if sys.version_info < (3, 10):  # minimum is python3.9
 import argparse
 from importlib.metadata import distribution
 
+import panorama.alignment
+import panorama.annotate
+import panorama.compare
+import panorama.format.write_flat
+import panorama.info
+import panorama.systems
+import panorama.utility
+import panorama.workflow
+
 # local modules
 from panorama.utils import (
-    set_verbosity_level,
-    add_common_arguments,
     RawTextArgumentDefaultsHelpFormatter,
+    add_common_arguments,
+    set_verbosity_level,
 )
-import panorama.utility
-import panorama.info
-import panorama.annotate
-import panorama.systems
-import panorama.alignment
-import panorama.compare
-import panorama.workflow
-import panorama.format.write_flat
 
 version = distribution("panorama").version
 opening = r"""
@@ -56,7 +69,7 @@ opening_full = (
 """
 )
 epilog = f"""
-By Jérôme Arnoux <arnoux.jeromepj@gmail.com> 
+By Jérôme Arnoux <arnoux.jeromepj@gmail.com>
 PANORAMA ({version}) is an opensource bioinformatic tools under CeCILL FREE SOFTWARE LICENSE AGREEMENT
 LABGeM
 """
@@ -88,12 +101,8 @@ def cmd_line():
     desc += "         pansystems          A workflow to annotate gene families, detect systems and write flat files associated\n"
     desc += "\n"
     desc += "     Compare:\n"
-    desc += (
-        "         align               Align gene families from multiple pangenomes\n"
-    )
-    desc += (
-        "         cluster             Cluster gene families from multiple pangenomes\n"
-    )
+    desc += "         align               Align gene families from multiple pangenomes\n"
+    desc += "         cluster             Cluster gene families from multiple pangenomes\n"
     # desc += "         compare_context     Compare contexts among pangenomes\n"
     desc += "         compare_systems     Compare contexts among pangenomes\n"
     desc += "         compare_spots       Compare spots among pangenomes\n"
@@ -108,12 +117,8 @@ def cmd_line():
         formatter_class=argparse.RawTextHelpFormatter,
         epilog=epilog,
     )
-    parser.add_argument(
-        "-v", "--version", action="version", version="%(prog)s " + version
-    )
-    subparsers = parser.add_subparsers(
-        metavar="", dest="subcommand", title="subcommands", description=desc
-    )
+    parser.add_argument("-v", "--version", action="version", version="%(prog)s " + version)
+    subparsers = parser.add_subparsers(metavar="", dest="subcommand", title="subcommands", description=desc)
     subparsers.required = True  # because python3 sent subcommands to hell apparently
 
     # print help if no subcommand is specified
@@ -121,18 +126,18 @@ def cmd_line():
         parser.print_help()
         sys.exit(0)
     subs = [
-        panorama.info.subparser(subparsers),
-        panorama.annotate.subparser(subparsers),
-        panorama.systems.detection.subparser(subparsers),
-        panorama.alignment.align.subparser(subparsers),
-        panorama.alignment.cluster.subparser(subparsers),
-        panorama.compare.context.subparser(subparsers),
-        panorama.compare.systems.subparser(subparsers),
-        panorama.compare.spots.subparser(subparsers),
-        panorama.format.write_flat.subparser(subparsers),
-        panorama.systems.write_systems.subparser(subparsers),
-        panorama.workflow.subparser(subparsers),
-        panorama.utility.subparser(subparsers),
+        panorama.info.info_subparser(subparsers),
+        panorama.annotate.annotate_subparser(subparsers),
+        panorama.systems.detection_subparser(subparsers),
+        panorama.alignment.align_subparser(subparsers),
+        panorama.alignment.cluster_subparser(subparsers),
+        panorama.compare.context_subparser(subparsers),
+        panorama.compare.systems_subparser(subparsers),
+        panorama.compare.spots_subparser(subparsers),
+        panorama.format.write_flat_subparser(subparsers),
+        panorama.systems.write_systems_subparser(subparsers),
+        panorama.workflow.pansystems_subparser(subparsers),
+        panorama.utility.utility_subparser(subparsers),
     ]
 
     for sub in subs:  # add options common to all subcommands
@@ -141,9 +146,7 @@ def cmd_line():
             sub.print_help()
             exit(1)
         sub.formatter_class = RawTextArgumentDefaultsHelpFormatter
-        sub.description = (
-            opening + "\n\n" + sub.description if sub.description else opening
-        )
+        sub.description = opening + "\n\n" + sub.description if sub.description else opening
         sub.epilog = epilog
 
     args = parser.parse_args()
@@ -162,29 +165,29 @@ def main():
     set_verbosity_level(args)
 
     if args.subcommand == "info":
-        panorama.info.launch(args)
+        panorama.info.info_launcher(args)
     elif args.subcommand == "annotation":
-        panorama.annotate.launch(args)
+        panorama.annotate.annotate_launcher(args)
     elif args.subcommand == "systems":
-        panorama.systems.detection.launch(args)
+        panorama.systems.detection_launcher(args)
     elif args.subcommand == "align":
-        panorama.alignment.align.launch(args)
+        panorama.alignment.align_launcher(args)
     elif args.subcommand == "cluster":
-        panorama.alignment.cluster.launch(args)
+        panorama.alignment.cluster_launcher(args)
     elif args.subcommand == "compare_context":
-        panorama.compare.context.launch(args)
+        panorama.compare.context_launcher(args)
     elif args.subcommand == "compare_systems":
-        panorama.compare.systems.launch(args)
+        panorama.compare.systems_launcher(args)
     elif args.subcommand == "compare_spots":
-        panorama.compare.spots.launch(args)
+        panorama.compare.spots_launcher(args)
     elif args.subcommand == "write":
-        panorama.format.write_flat.launch(args)
+        panorama.format.write_flat_launcher(args)
     elif args.subcommand == "write_systems":
-        panorama.systems.write_systems.launch(args)
+        panorama.systems.write_systems_launcher(args)
     elif args.subcommand == "utils":
-        panorama.utility.launch(args)
+        panorama.utility.utility_launcher(args)
     elif args.subcommand == "pansystems":
-        panorama.workflow.launch(args)
+        panorama.workflow.pansystems_launcher(args)
 
 
 if __name__ == "__main__":
