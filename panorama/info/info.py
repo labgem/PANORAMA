@@ -22,7 +22,7 @@ import pandas as pd
 import tables
 from bokeh.embed import file_html
 from bokeh.io import curdoc
-from bokeh.layouts import column, row, Column
+from bokeh.layouts import Column, column, row
 from bokeh.models import (
     Button,
     CheckboxGroup,
@@ -34,7 +34,7 @@ from bokeh.models import (
     TableColumn,
 )
 from bokeh.models.callbacks import CustomJS
-from ppanggolin.formats import get_pangenome_parameters, read_info
+from ppanggolin.formats import read_info  # ,get_pangenome_parameters
 from ppanggolin.info.info import read_metadata_status, read_status
 from tqdm import tqdm
 
@@ -113,17 +113,11 @@ class PangenomeInfoExtractor:
                     if status:
                         info_dict["status"][pangenome_name] = self._extract_status(h5f)
                     if content:
-                        info_dict["content"][pangenome_name] = self._extract_content(
-                            h5f
-                        )
+                        info_dict["content"][pangenome_name] = self._extract_content(h5f)
                     if parameters:
-                        info_dict["parameters"][pangenome_name] = (
-                            self._extract_parameters(h5f)
-                        )
+                        info_dict["parameters"][pangenome_name] = self._extract_parameters(h5f)
                     if metadata:
-                        info_dict["metadata"][pangenome_name] = self._extract_metadata(
-                            h5f
-                        )
+                        info_dict["metadata"][pangenome_name] = self._extract_metadata(h5f)
 
             except Exception as e:
                 self.logger.error(f"Error processing {pangenome_name}: {str(e)}")
@@ -172,7 +166,7 @@ class PangenomeInfoExtractor:
             This method currently prints parameters for debugging but doesn't return them.
             Implementation needs to be completed.
         """
-        step_to_parameters = get_pangenome_parameters(h5f)
+        # step_to_parameters = get_pangenome_parameters(h5f)
         # TODO: Implement proper parameter extraction and return
         return {}
 
@@ -248,10 +242,7 @@ class HTMLExporter:
         source = ColumnDataSource(status_df)
 
         # Create table columns
-        columns = [
-            TableColumn(field=col_name, title=col_name)
-            for col_name in status_df.columns
-        ]
+        columns = [TableColumn(field=col_name, title=col_name) for col_name in status_df.columns]
 
         # Create a data table with appropriate sizing
         table_height = min(30 * status_df.shape[0], 800)  # Cap height for usability
@@ -302,9 +293,7 @@ class HTMLExporter:
         # Unpack nested dictionaries and create DataFrame
         unpacked_content = self._unpack_content_dict(content_dict)
         content_df = pd.DataFrame.from_dict(unpacked_content, orient="index")
-        content_df = content_df.reset_index().rename(
-            columns={"index": "Pangenome name"}
-        )
+        content_df = content_df.reset_index().rename(columns={"index": "Pangenome name"})
 
         # Rename columns for better readability
         content_df = self._rename_content_columns(content_df)
@@ -323,9 +312,7 @@ class HTMLExporter:
 
         # Create table columns with visibility settings
         columns = [
-            TableColumn(
-                field=col_name, title=col_name, visible=(idx in visible_indices)
-            )
+            TableColumn(field=col_name, title=col_name, visible=(idx in visible_indices))
             for idx, col_name in enumerate(content_df.columns)
         ]
 
@@ -340,16 +327,12 @@ class HTMLExporter:
         )
 
         # Create controls
-        checkbox_group = self._create_column_visibility_control(
-            source, columns, visible_indices
-        )
+        checkbox_group = self._create_column_visibility_control(source, columns, visible_indices)
         sliders = self._create_range_sliders(source)
         download_button = self._create_download_button(source, "pangenomes_content.tsv")
 
         # Layout components
-        layout = self._layout_content_components(
-            content_table, checkbox_group, sliders, download_button
-        )
+        layout = self._layout_content_components(content_table, checkbox_group, sliders, download_button)
 
         # Export to HTML
         self._save_html(layout, "content_info.html", "Pangenome Content Information")
@@ -379,12 +362,8 @@ class HTMLExporter:
                         if isinstance(nested_value, dict):
                             # Double-nested: use dot notation
                             for deep_key, deep_value in nested_value.items():
-                                unpacked_dict[pangenome_name][
-                                    f"{nested_key}.{deep_key}"
-                                ] = deep_value
-                        elif nested_key == "Number_of_modules" or nested_key.endswith(
-                            "_count"
-                        ):
+                                unpacked_dict[pangenome_name][f"{nested_key}.{deep_key}"] = deep_value
+                        elif nested_key == "Number_of_modules" or nested_key.endswith("_count"):
                             # Special handling for count fields
                             unpacked_dict[pangenome_name][key] = nested_value
                         else:
@@ -456,21 +435,12 @@ class HTMLExporter:
         radio_buttons = []
 
         for column_name in source.column_names:
-            if (
-                hasattr(source.data[column_name], "dtype")
-                and source.data[column_name].dtype == "bool"
-            ):
-                radio_buttons.append(
-                    RadioButtonGroup(
-                        labels=["all", "true", "false"], active=0, name=column_name
-                    )
-                )
+            if hasattr(source.data[column_name], "dtype") and source.data[column_name].dtype == "bool":
+                radio_buttons.append(RadioButtonGroup(labels=["all", "true", "false"], active=0, name=column_name))
 
         return radio_buttons
 
-    def _create_filter_button(
-        self, source: ColumnDataSource, radio_buttons: List[RadioButtonGroup]
-    ) -> Button:
+    def _create_filter_button(self, source: ColumnDataSource, radio_buttons: List[RadioButtonGroup]) -> Button:
         """
         Create a filter button with a JavaScript callback for boolean filtering.
 
@@ -483,10 +453,7 @@ class HTMLExporter:
         """
         filter_button = Button(label="Filter", button_type="primary")
 
-        js_code = (
-            self._load_js_file("filterData.js")
-            + "filterDataBool(source, radio_buttons);"
-        )
+        js_code = self._load_js_file("filterData.js") + "filterDataBool(source, radio_buttons);"
         filter_button.js_on_event(
             "button_click",
             CustomJS(
@@ -501,9 +468,7 @@ class HTMLExporter:
 
         return filter_button
 
-    def _create_download_button(
-        self, source: ColumnDataSource, filename: str
-    ) -> Button:
+    def _create_download_button(self, source: ColumnDataSource, filename: str) -> Button:
         """
         Create a download button with a JavaScript callback for data export.
 
@@ -609,9 +574,7 @@ class HTMLExporter:
 
         return sliders
 
-    def _setup_slider_callbacks(
-        self, sliders: List[RangeSlider], source: ColumnDataSource
-    ) -> None:
+    def _setup_slider_callbacks(self, sliders: List[RangeSlider], source: ColumnDataSource) -> None:
         """
         Set up JavaScript callbacks for slider interactions.
 
@@ -619,10 +582,7 @@ class HTMLExporter:
             sliders (List[RangeSlider]): List of range sliders.
             source (ColumnDataSource): Bokeh data source.
         """
-        js_code_base = (
-            self._load_js_file("filterData.js")
-            + "filterDataSliders(source, slider, other_sliders);"
-        )
+        js_code_base = self._load_js_file("filterData.js") + "filterDataSliders(source, slider, other_sliders);"
 
         for idx, slider in enumerate(sliders):
             other_sliders = sliders[:idx] + sliders[idx + 1 :]
@@ -688,9 +648,7 @@ class HTMLExporter:
         try:
             return js_path.read_text()
         except FileNotFoundError:
-            self.logger.warning(
-                f"JavaScript file {filename} not found, using empty string"
-            )
+            self.logger.warning(f"JavaScript file {filename} not found, using empty string")
             return ""
 
     def _save_html(self, layout: Column, filename: str, title: str) -> None:
@@ -722,15 +680,9 @@ def check_info_args(args: argparse.Namespace):
     """
     if args.output.is_dir():
         if not args.force:
-            raise IOError(
-                f"Output directory: {args.output} is not empty."
-                f"Use --force to overwrite."
-            )
+            raise IOError(f"Output directory: {args.output} is not empty.Use --force to overwrite.")
         else:
-            logger.warning(
-                f"Output directory: {args.output} is not empty."
-                f"Files could be overwritten."
-            )
+            logger.warning(f"Output directory: {args.output} is not empty.Files could be overwritten.")
     else:
         mkdir(args.output)
 
@@ -760,13 +712,11 @@ def export_info(info_dict: InfoDict, output: Path) -> None:
             exporter.export_content(data)
         elif info_type == "parameters":
             raise NotImplementedError(
-                "Parameter export is not yet implemented. "
-                "This feature is planned for a future release."
+                "Parameter export is not yet implemented. This feature is planned for a future release."
             )
         elif info_type == "metadata":
             raise NotImplementedError(
-                "Metadata export is not yet implemented. "
-                "This feature is planned for a future release."
+                "Metadata export is not yet implemented. This feature is planned for a future release."
             )
         else:
             raise KeyError(
