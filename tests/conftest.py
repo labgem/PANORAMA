@@ -52,8 +52,7 @@ def validate_test_data_path(path_str: str = None) -> Union[Path, None]:
     path = Path(path_str).expanduser().resolve()
     if not path.exists():
         warnings.warn(
-            f"Test data path '{path}' does not exist. "
-            "Functional tests requiring datasets will be skipped.",
+            f"Test data path '{path}' does not exist. Functional tests requiring datasets will be skipped.",
             UserWarning,
             stacklevel=3,
         )
@@ -80,8 +79,8 @@ def pytest_addoption(parser):
         action="store",
         default=None,
         help="Path to test dataset repository. Can also be set via "
-             "PANORAMA_TEST_DATA_PATH environment variable. "
-             "To get test data: git clone https://github.com/labgem/PANORAMA_test",
+        "PANORAMA_TEST_DATA_PATH environment variable. "
+        "To get test data: git clone https://github.com/labgem/PANORAMA_test",
     )
 
 
@@ -172,13 +171,11 @@ def pytest_collection_modifyitems(config, items):
 
     # Skip tests that require test data if no valid test data path is available
     if test_data_path_obj is None:
-        logger.warning(
-            "No valid test data path available. Functional tests will be skipped."
-        )
+        logger.warning("No valid test data path available. Functional tests will be skipped.")
         skip_functional = pytest.mark.skip(
             reason="Test data not available."
-                   " Clone https://github.com/labgem/PANORAMA_test and set "
-                   "--test-data-path or PANORAMA_TEST_DATA_PATH environment variable."
+            " Clone https://github.com/labgem/PANORAMA_test and set "
+            "--test-data-path or PANORAMA_TEST_DATA_PATH environment variable."
         )
 
         for item in items:
@@ -244,9 +241,7 @@ def simple_gfs(simple_contigs, simple_orgs):
             gf[gene.ID] = gene
             gene.family = gf
             gene.fill_parents(organism=simple_orgs[num], contig=contig)
-            gene.fill_annotations(
-                position=i, strand="+", start=(i + 1) * 100, stop=(i + 2) * 100
-            )
+            gene.fill_annotations(position=i, strand="+", start=(i + 1) * 100, stop=(i + 2) * 100)
             contig.add(gene)
     for gf in gfs:  # add partition to each GF
         gf.partition = "P"
@@ -278,9 +273,7 @@ def simple_pangenome(simple_gfs, simple_orgs):
 @pytest.fixture
 def simple_fu():
     mandatory_gfs = {Family(name=f"protein{i}", presence="mandatory") for i in range(3)}
-    accessory_gfs = {
-        Family(name=f"protein{i + 3}", presence="accessory") for i in range(3)
-    }
+    accessory_gfs = {Family(name=f"protein{i + 3}", presence="accessory") for i in range(3)}
     fu = FuncUnit(
         name="fu",
         mandatory=mandatory_gfs,
@@ -303,9 +296,7 @@ def single_unit_model(simple_fu):
 @pytest.fixture()
 def multi_unit_model():
     # Functional Unit 1
-    mandatory_gfs = {
-        Family(name=f"protein{i}", presence="mandatory") for i in range(3)
-    }  # fu1_mandatory: GF0, GF1, GF2
+    mandatory_gfs = {Family(name=f"protein{i}", presence="mandatory") for i in range(3)}  # fu1_mandatory: GF0, GF1, GF2
     accessory_gfs = {
         Family(name=f"protein{i + 3}", presence="accessory") for i in range(3)
     }  # fu1_accessory: GF3, GF4, GF5
@@ -320,9 +311,7 @@ def multi_unit_model():
         transitivity=1,
     )
     # Functional Unit 2
-    extra_gfs = {
-        Family(name=f"protein{i + 6}", presence="accessory") for i in range(3)
-    }  # fu2_accessory: GF6, GF7, GF8
+    extra_gfs = {Family(name=f"protein{i + 6}", presence="accessory") for i in range(3)}  # fu2_accessory: GF6, GF7, GF8
     fu2 = FuncUnit(
         name="fu2",
         mandatory={Family(name="protein10", presence="mandatory")},
@@ -341,9 +330,7 @@ def multi_unit_model():
 @pytest.fixture
 def simple_gf2fam(simple_gfs, multi_unit_model):
     family_lookup = {f.name: f for f in multi_unit_model.families}
-    gf2fam = defaultdict(
-        set, {simple_gfs[i]: {family_lookup[f"protein{i}"]} for i in range(10)}
-    )
+    gf2fam = defaultdict(set, {simple_gfs[i]: {family_lookup[f"protein{i}"]} for i in range(10)})
     return gf2fam
 
 

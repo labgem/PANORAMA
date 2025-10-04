@@ -437,8 +437,9 @@ class TestModFuFeatures:
         dumb_type = type(dumb_child).__name__
 
         # Pattern that matches either order
-        pattern = (f"The child type is inconsistent\\. It contains ({child_type} and"
-                   f" {dumb_type}|{dumb_type} and {child_type})")
+        pattern = (
+            f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+        )
 
         with pytest.raises(TypeError, match=pattern):
             _ = mff.child_type
@@ -449,9 +450,7 @@ class TestModFuFeatures:
         child1.presence = "mandatory"
         child2.presence = "accessory"
 
-        mff = _ModFuFeatures(
-            mandatory={child1}, accessory={child2}, min_mandatory=1, min_total=2
-        )
+        mff = _ModFuFeatures(mandatory={child1}, accessory={child2}, min_mandatory=1, min_total=2)
 
         # Should not raise any exception
         mff._check()
@@ -564,9 +563,7 @@ class TestModFuFeatures:
         ):
             mff._check()
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_add_child_success(self, child, presence):
         """Test adding a child with mandatory presence."""
 
@@ -591,7 +588,7 @@ class TestModFuFeatures:
         with pytest.raises(
             TypeError,
             match=f"The child type is inconsistent. Expected {type(child).__name__} but "
-                  f"found {type(dumb_child).__name__}",
+            f"found {type(dumb_child).__name__}",
         ):
             mff.add(dumb_child)
 
@@ -601,9 +598,7 @@ class TestModFuFeatures:
         child.presence = "unexpected"
         with pytest.raises(
             ValueError,
-            match=re.escape(
-                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
-            ),
+            match=re.escape(f"The child {child.name} does not have a valid presence attribute ({child.presence})."),
         ):
             mff.add(child)
 
@@ -625,9 +620,7 @@ class TestModFuFeatures:
     def test_get_child_failure(self, children):
         mff = _ModFuFeatures(mandatory=set(children))
         name = "notin_child"
-        with pytest.raises(
-            KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
-        ):
+        with pytest.raises(KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"):
             mff.get(name)
 
 
@@ -839,9 +832,7 @@ class TestFuncUnit:
 
         assert func_unit.get("test_family") == family
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_list_families_names(self, families, presence):
         """Test list_families method returns the list of child fus."""
         func_unit = FuncUnit()
@@ -859,9 +850,7 @@ class TestFuncUnit:
         else:
             assert func_unit.families_names(fam3.presence) == {fam3.name}
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_get_duplicate_families(self, families, presence):
         """Test get_duplicate_families method returns the list of child fus with duplicate data."""
         func_unit = FuncUnit()
@@ -1022,9 +1011,7 @@ class TestModel:
         func_units_set = set(model.func_units)
         assert func_units_set == set(func_units)
 
-    @pytest.mark.parametrize(
-        "presence", [None, "mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", [None, "mandatory", "accessory", "forbidden", "neutral"])
     def test_get_func_units_names(self, func_units, presence):
         """Test get_func_units_names method returns the list of functional unit names."""
         model = Model()
@@ -1037,9 +1024,7 @@ class TestModel:
         model.add(fu5)
 
         func_units_names = set(model.func_units_names(presence))
-        assert func_units_names == {
-            fu.name for fu in func_units if fu.presence == presence or presence is None
-        }
+        assert func_units_names == {fu.name for fu in func_units if fu.presence == presence or presence is None}
 
     def test_families_property(self, families, func_units):
         """Test families property returns all families from functional units."""
@@ -1359,9 +1344,7 @@ class TestModels:
 
         models.add_model(model1)
 
-        with pytest.raises(
-            Exception, match=f"Model {model2.name} already in set of value"
-        ):
+        with pytest.raises(Exception, match=f"Model {model2.name} already in set of value"):
             models.add_model(model2)
 
     @patch("builtins.open", new_callable=mock_open)

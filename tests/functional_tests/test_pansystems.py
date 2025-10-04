@@ -1,12 +1,15 @@
 import pytest
 
+from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list  # noqa: F401
 from tests.utils.run_command import run_command
-from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list
 
 
 @pytest.mark.requires_test_data
 def test_pansystems_command(
-    pangenome_list_file, utils_hmm_list, utils_model_list, num_cpus
+    pangenome_list_file,
+    utils_hmm_list,  # noqa: F811
+    utils_model_list,  # noqa: F811
+    num_cpus,
 ):
     outdir = pangenome_list_file.parent / "pansystems_outdir"
     annotation_command = (
@@ -47,9 +50,7 @@ def test_pansystems_command(
     # Check each pangenome directory
     for pangenome_name in pangenome_names:
         pangenome_dir = outdir / pangenome_name
-        assert pangenome_dir.exists(), (
-            f"Pangenome directory {pangenome_dir} was not created"
-        )
+        assert pangenome_dir.exists(), f"Pangenome directory {pangenome_dir} was not created"
 
         # Check source directory
         source_dir = pangenome_dir / "defensefinder_wf"

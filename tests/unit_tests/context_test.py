@@ -54,9 +54,7 @@ def test_create_metanodes_simple():
     # Family cluster 200 is found only in g2
     g2_node_2_family_cluster = {"R1": 1, "R2": 2, "R3": 3, "R5": 5, "R7": 4, "R4": 200}
 
-    meta_nodes_2_attr, _, _ = context.create_metanodes(
-        g1_node_2_family_cluster, g2_node_2_family_cluster
-    )
+    meta_nodes_2_attr, _, _ = context.create_metanodes(g1_node_2_family_cluster, g2_node_2_family_cluster)
 
     # family cluster 100 and 200 are only found in one graph
     # so it is not keep in the metanodes
@@ -69,9 +67,7 @@ def test_create_metanodes_cluster_found_twice():
 
     g2_node_2_family_cluster = {"R1": 1, "R2": 2, "R3": 3, "R5": 5, "R7": 4}
 
-    meta_nodes_2_attr, _, _ = context.create_metanodes(
-        g1_node_2_family_cluster, g2_node_2_family_cluster
-    )
+    meta_nodes_2_attr, _, _ = context.create_metanodes(g1_node_2_family_cluster, g2_node_2_family_cluster)
 
     # family cluster is represented twice in metanodes
     # because it includes two gene families in g1
@@ -214,9 +210,7 @@ def test_get_conserved_genomics_contexts(r_graph, g_graph):
     (https://doi.org/10.1093/bioinformatics/bti711).
     """
 
-    ccc_results, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=1
-    )
+    ccc_results, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=1)
 
     # Extract the gene family objects from the graphs for comparison
     r_families = set(r_graph.nodes())
@@ -227,9 +221,7 @@ def test_get_conserved_genomics_contexts(r_graph, g_graph):
     g = get_gene_families_by_names(g_families, ["G1", "G3", "G4", "G5", "G6"])
 
     # Convert results to tuples format for easier comparison
-    result_tuples = [
-        (info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results
-    ]
+    result_tuples = [(info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results]
     expected_results = [
         ({r["R1"], r["R2"], r["R3"]}, {g["G4"], g["G5"], g["G3"]}),
         ({r["R7"]}, {g["G6"]}),
@@ -251,9 +243,7 @@ def test_get_conserved_genomics_contexts_duplicated_clstr():
     r_graph = create_r_graph_with_akin_mapping(r_akin_mapping)
     g_graph = create_g_graph_with_akin_mapping(g_akin_mapping)
 
-    ccc_results, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=1
-    )
+    ccc_results, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=1)
 
     # Extract families for comparison
     r_families = set(r_graph.nodes())
@@ -264,9 +254,7 @@ def test_get_conserved_genomics_contexts_duplicated_clstr():
     g = get_gene_families_by_names(g_families, ["G1", "G3", "G4", "G6"])
 
     # Convert results to tuples format for easier comparison
-    result_tuples = [
-        (info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results
-    ]
+    result_tuples = [(info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results]
     # G5 is no more found in conserved connected components
     # as no R node belong to cluster 2
     expected_results = [
@@ -277,14 +265,10 @@ def test_get_conserved_genomics_contexts_duplicated_clstr():
 
     assert compare_ccc_results(result_tuples, expected_results)
 
-    ccc_results_min_size_3, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=3
-    )
+    ccc_results_min_size_3, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=3)
 
     # Convert results to tuples format for easier comparison
-    result_tuples_min_size_3 = [
-        (info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results_min_size_3
-    ]
+    result_tuples_min_size_3 = [(info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results_min_size_3]
     # Only large contexts are kept
     expected_results = [({r["R1"], r["R2"], r["R3"]}, {g["G4"], g["G3"]})]
 
@@ -303,25 +287,19 @@ def test_get_conserved_genomics_contexts_extreme_clstr():
     r_graph = create_r_graph_with_akin_mapping(r_akin_mapping)
     g_graph = create_g_graph_with_akin_mapping(g_akin_mapping)
 
-    ccc_results, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=1
-    )
+    ccc_results, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=1)
 
     # Extract families for comparison
     r_families = set(r_graph.nodes())
     g_families = set(g_graph.nodes())
 
     # Get gene families by names for expected results (get all R nodes that are in the graph)
-    r_names = [
-        f"R{i}" for i in [1, 2, 3, 4, 5, 6, 7]
-    ]  # All R nodes that should be in graph
+    r_names = [f"R{i}" for i in [1, 2, 3, 4, 5, 6, 7]]  # All R nodes that should be in graph
     r = get_gene_families_by_names(r_families, r_names)
     g = get_gene_families_by_names(g_families, ["G4"])
 
     # Convert results to tuples format for easier comparison
-    result_tuples = [
-        (info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results
-    ]
+    result_tuples = [(info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results]
     # All R belong to cluster 1. Only G4 belong to cluster 1
     # Include all R nodes that are actually in the graph
     expected_results = [
@@ -366,9 +344,7 @@ def test_get_conserved_genomics_with_min_cgc():
     r_graph = create_r_graph_with_akin_mapping(r_akin_mapping)
     g_graph = create_g_graph_with_akin_mapping(g_akin_mapping)
 
-    ccc_results_min_size_2, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=2
-    )
+    ccc_results_min_size_2, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=2)
 
     # Extract families for comparison
     r_families = set(r_graph.nodes())
@@ -379,15 +355,11 @@ def test_get_conserved_genomics_with_min_cgc():
     g = get_gene_families_by_names(g_families, ["G4", "G5"])
 
     # Convert results to tuples format for easier comparison
-    result_tuples_min_size_2 = [
-        (info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results_min_size_2
-    ]
+    result_tuples_min_size_2 = [(info["graphA_nodes"], info["graphB_nodes"]) for info in ccc_results_min_size_2]
     expected_results_min_size_2 = [({r["R1"], r["R2"]}, {g["G4"], g["G5"]})]
     assert compare_ccc_results(result_tuples_min_size_2, expected_results_min_size_2)
 
-    ccc_results_min_size_3, _ = context.get_conserved_genomics_contexts(
-        r_graph, g_graph, min_cgc_size=3
-    )
+    ccc_results_min_size_3, _ = context.get_conserved_genomics_contexts(r_graph, g_graph, min_cgc_size=3)
 
     assert ccc_results_min_size_3 == []
 

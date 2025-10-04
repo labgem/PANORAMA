@@ -26,7 +26,7 @@ def test_has_short_path():
     G = nx.Graph()
     G.add_edges_from([(1, 2), (2, 3), (3, 4)])  # simple graph: 1-2-3-4
     assert has_short_path(G, [1, 2, 3, 4], 1)
-    assert not has_short_path(G, [1, 2, 4, 3], 1)   # function is order-dependent
+    assert not has_short_path(G, [1, 2, 4, 3], 1)  # function is order-dependent
 
 
 def test_compute_genes_graph(simple_gfs, simple_fu, simple_orgs, simple_pangenome):
@@ -52,9 +52,7 @@ def test_compute_genes_graph(simple_gfs, simple_fu, simple_orgs, simple_pangenom
     assert org_unit_genes == {
         gf[f"gene_{i}_0"] for i, gf in enumerate(simple_gfs[:4])
     }  # ensure correct genes are included
-    assert set(genes_graph.nodes) == {
-        gf[f"gene_{i}_0"] for i, gf in enumerate(simple_gfs[:6])
-    }
+    assert set(genes_graph.nodes) == {gf[f"gene_{i}_0"] for i, gf in enumerate(simple_gfs[:6])}
 
     G = nx.Graph()
     expected_edges = [
@@ -108,9 +106,7 @@ def test_compute_genes_graph(simple_gfs, simple_fu, simple_orgs, simple_pangenom
 
     assert G.edges == genes_graph.edges
     assert G.nodes == genes_graph.nodes
-    assert all(
-        G[u][v] == genes_graph[u][v] for u, v in G.edges
-    )  # ensure the transitivity attributes match
+    assert all(G[u][v] == genes_graph[u][v] for u, v in G.edges)  # ensure the transitivity attributes match
 
 
 def test_compute_gene_components(simple_gfs):
@@ -337,9 +333,7 @@ def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome)
         }
     )
 
-    pangenome_proj = pangenome_proj.sort_values(by=[1]).reset_index(
-        drop=True
-    )  # Sort by organism
+    pangenome_proj = pangenome_proj.sort_values(by=[1]).reset_index(drop=True)  # Sort by organism
     org_proj = org_proj.sort_values(by=["organism_name", "gf_name"]).reset_index(
         drop=True
     )  # Sort by organism, then gene family
@@ -348,9 +342,7 @@ def test_unit_projection(simple_gfs, simple_fu, simple_gf2fam, simple_pangenome)
     pdt.assert_frame_equal(org_proj, expected_organisms)
 
 
-def test_system_projection(
-    simple_gfs, single_unit_model, simple_gf2fam, simple_pangenome
-):
+def test_system_projection(simple_gfs, single_unit_model, simple_gf2fam, simple_pangenome):
     """Tests that the function correctly projects a system onto the pangenome and organisms."""
     system = System(model=single_unit_model, source="source1", system_id=1)
     indexes = simple_pangenome.compute_org_bitarrays()
@@ -393,8 +385,7 @@ def test_system_projection(
             4: ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,  # Organism names
             5: ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,  # Gene families
             6: ["persistent"] * 18,  # Partition
-            7: ["protein0", "protein1", "protein2", "protein3", "", ""]
-            * 3,  # Protein names
+            7: ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,  # Protein names
             8: [""] * 18,  # Secondary names
             9: [f"gene_{i}_{org}" for org in range(3) for i in range(6)],  # Gene IDs
             10: [""] * 18,  # Gene names
@@ -403,19 +394,14 @@ def test_system_projection(
             13: ["200", "300", "400", "500", "600", "700"] * 3,  # Stop positions
             14: ["+"] * 18,  # Strand
             15: ["False"] * 18,  # Is fragment
-            16: ["model", "model", "model", "model", "context", "context"]
-            * 3,  # Category
+            16: ["model", "model", "model", "model", "context", "context"] * 3,  # Category
             17: ["strict"] * 18,  # Genomic organization
             18: ["1.0"] * 18,  # Completeness
             19: [""] * 18,  # Product
         }
     )
-    pangenome_proj_sorted = pangenome_proj.sort_values(by=[3]).reset_index(
-        drop=True
-    )  # Sort by organism
-    org_proj_sorted = org_proj.sort_values(by=[4, 5]).reset_index(
-        drop=True
-    )  # Sort by organism, then gene family
+    pangenome_proj_sorted = pangenome_proj.sort_values(by=[3]).reset_index(drop=True)  # Sort by organism
+    org_proj_sorted = org_proj.sort_values(by=[4, 5]).reset_index(drop=True)  # Sort by organism, then gene family
 
     pdt.assert_frame_equal(pangenome_proj_sorted, expected_pangenome)
     pdt.assert_frame_equal(org_proj_sorted, expected_organisms)
@@ -429,9 +415,7 @@ def test_project_pangenome_systems(simple_gfs, single_unit_model, simple_pangeno
         gene_families=set(simple_gfs[:6]),
         families_to_metainfo={gf: ("source1", 1) for gf in simple_gfs[:4]},
     )
-    system = System(
-        model=single_unit_model, source="source1", units={unit}, system_id=1
-    )
+    system = System(model=single_unit_model, source="source1", units={unit}, system_id=1)
     simple_pangenome.add_system(system)
     pangenome_proj, org_proj = project_pangenome_systems(simple_pangenome, "source1")
 
@@ -460,12 +444,9 @@ def test_project_pangenome_systems(simple_gfs, single_unit_model, simple_pangeno
             "organism": ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
             "gene family": ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
             "partition": ["persistent"] * 18,
-            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""]
-            * 3,  # Changed from 'protein'
+            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,  # Changed from 'protein'
             "secondary_names": [""] * 18,  # Changed from 'secondary_name'
-            "gene.ID": [
-                f"gene_{i}_{org}" for org in range(3) for i in range(6)
-            ],  # Changed from 'gene_name'
+            "gene.ID": [f"gene_{i}_{org}" for org in range(3) for i in range(6)],  # Changed from 'gene_name'
             "gene.name": [""] * 18,  # Changed from 'gene_id'
             "contig": [f"contig_{org}" for org in range(3) for i in range(6)],
             "start": ["100", "200", "300", "400", "500", "600"] * 3,
@@ -479,9 +460,7 @@ def test_project_pangenome_systems(simple_gfs, single_unit_model, simple_pangeno
         }
     )
 
-    pangenome_proj = pangenome_proj.sort_values(by=["organism"]).reset_index(
-        drop=True
-    )  # Sort by organism
+    pangenome_proj = pangenome_proj.sort_values(by=["organism"]).reset_index(drop=True)  # Sort by organism
     org_proj = org_proj.sort_values(by=["organism", "gene family"]).reset_index(
         drop=True
     )  # Sort by organism, then gene family
@@ -501,8 +480,7 @@ def test_get_org_df():
             "organism": ["org_0"] * 7,
             "gene family": ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] + ["GF5"],
             "partition": ["persistent"] * 6 + ["persistent"],
-            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""]
-            + [""],
+            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""] + [""],
             "secondary_names": [""] * 7,
             "gene.ID": [f"gene_{i}_0" for i in range(6)] + ["gene_5_0"],
             "gene.name": [""] * 7,
@@ -511,8 +489,7 @@ def test_get_org_df():
             "stop": ["200", "300", "400", "500", "600", "700"] + ["700"],
             "strand": ["+"] * 6 + ["+"],
             "is_fragment": ["False"] * 6 + ["False"],
-            "category": ["model", "model", "model", "model", "context", "context"]
-            + ["context"],
+            "category": ["model", "model", "model", "model", "context", "context"] + ["context"],
             "genomic organization": ["strict"] * 6 + ["strict"],
             "completeness": ["1.0"] * 6 + ["0.8"],
             "product": [""] * 7,
@@ -594,12 +571,9 @@ def test_write_projection_systems(simple_orgs):
             "organism": ["org_0"] * 6 + ["org_1"] * 6 + ["org_2"] * 6,
             "gene family": ["GF0", "GF1", "GF2", "GF3", "GF4", "GF5"] * 3,
             "partition": ["persistent"] * 18,
-            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""]
-            * 3,  # Changed from 'protein'
+            "annotation": ["protein0", "protein1", "protein2", "protein3", "", ""] * 3,  # Changed from 'protein'
             "secondary_names": [""] * 18,  # Changed from 'secondary_name'
-            "gene.ID": [
-                f"gene_{i}_{org}" for org in range(3) for i in range(6)
-            ],  # Changed from 'gene_name'
+            "gene.ID": [f"gene_{i}_{org}" for org in range(3) for i in range(6)],  # Changed from 'gene_name'
             "gene.name": [""] * 18,  # Changed from 'gene_id'
             "contig": [f"contig_{org}" for org in range(3) for i in range(6)],
             "start": ["100", "200", "300", "400", "500", "600"] * 3,
@@ -643,9 +617,7 @@ def test_write_projection_systems(simple_orgs):
             org_file = pd.read_csv(org_file_path, sep="\t").fillna("")
 
             # Each organism file should have 6 rows (one per GF)
-            assert len(org_file) == 6, (
-                f"Expected 6 rows for {org_name}, got {len(org_file)}"
-            )
+            assert len(org_file) == 6, f"Expected 6 rows for {org_name}, got {len(org_file)}"
 
             # Check basic structure
             assert all(org_file["system number"] == 1)

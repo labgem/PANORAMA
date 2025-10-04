@@ -125,9 +125,7 @@ class TestSystemUnit(TestFixture):
     @pytest.mark.parametrize("invalid", ["invalid", 1, 1.0, {1, 2}, [1, 2], (1, 2)])
     def test_system_setter_invalid_type(self, system_unit, invalid):
         """Test that setting invalid system types raises TypeError."""
-        with pytest.raises(
-            TypeError, match=f"System must be an instance of {System.__name__}."
-        ):
+        with pytest.raises(TypeError, match=f"System must be an instance of {System.__name__}."):
             system_unit.system = invalid
 
     def test_functional_unit_property(self, system_unit, functional_unit):
@@ -206,9 +204,7 @@ class TestSystemUnit(TestFixture):
         gf1, gf2 = gene_families
         families_to_metainfo = {gf1: ("test_source", 1), gf2: ("test_source", 2)}
 
-        unit = SystemUnit(
-            functional_unit, "test_source", gene_families, families_to_metainfo
-        )
+        unit = SystemUnit(functional_unit, "test_source", gene_families, families_to_metainfo)
 
         assert len(unit) == 2
         assert unit[gf1.name] == gf1
@@ -347,11 +343,7 @@ class TestSystemUnit(TestFixture):
         unit1 = SystemUnit(functional_unit, "test_source", gene_families, fam2meta_info)
         unit2 = SystemUnit(functional_unit, "test_source", {gf1}, fam2meta_info)
 
-        assert (
-            unit1.symmetric_difference(unit2)
-            == unit2.symmetric_difference(unit1)
-            == {gf2}
-        )
+        assert unit1.symmetric_difference(unit2) == unit2.symmetric_difference(unit1) == {gf2}
 
     def test_merge(self, functional_unit, gene_families):
         """Test merging two SystemUnits."""
@@ -388,10 +380,7 @@ class TestSystemUnit(TestFixture):
         system_unit.add_family(gf1, "test_source", 1)
         system_unit.add_family(gf2, "test_source", 2)
 
-        assert (
-            system_unit.nb_organisms
-            == gf1.number_of_organisms + gf2.number_of_organisms
-        )
+        assert system_unit.nb_organisms == gf1.number_of_organisms + gf2.number_of_organisms
 
     def test_model_organisms_property(self, system_unit, gene_families):
         """Test model organisms property."""
@@ -408,9 +397,9 @@ class TestSystemUnit(TestFixture):
         system_unit.add_family(gf3, "test_source", 1)
         system_unit.add_family(gf4)
 
-        assert set(system_unit.model_organisms) == set(gf1.organisms).union(
-            set(gf2.organisms)
-        ).union(set(gf3.organisms))
+        assert set(system_unit.model_organisms) == set(gf1.organisms).union(set(gf2.organisms)).union(
+            set(gf3.organisms)
+        )
         assert organism not in system_unit.model_organisms
 
     def test_annotation_sources(self, system_unit, gene_families):
@@ -572,14 +561,10 @@ class TestSystem(TestFixture):
             fu = FuncUnit(name=f"test_unit_{i}", presence="mandatory", min_total=1)
             fu.model = model
             gene_families = {
-                GeneFamily(counter_fam + j, f"test_family_{counter_fam + j}")
-                for j in range(randint(1, 5))
+                GeneFamily(counter_fam + j, f"test_family_{counter_fam + j}") for j in range(randint(1, 5))
             }
             for j, gf in enumerate(gene_families):
-                gf._genePerOrg = {
-                    Organism(name=f"test_organism_{i}"): set()
-                    for i in range(randint(4, 10))
-                }
+                gf._genePerOrg = {Organism(name=f"test_organism_{i}"): set() for i in range(randint(4, 10))}
                 if randint(0, 1):  # Add a module or not randomly
                     gf.module = Module(counter_fam + j)
                 if randint(0, 1):
@@ -783,9 +768,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
 
-        assert system.number_of_families == len(
-            {fam for unit in units for fam in unit.families}
-        )
+        assert system.number_of_families == len({fam for unit in units for fam in unit.families})
 
     def test_model_families_property(self, system, units):
         """Test families property aggregating from all units."""
@@ -821,9 +804,7 @@ class TestSystem(TestFixture):
                 choices.add(choice)
                 if choice:
                     # Create a new unit with additional gene family
-                    new_gene_family = GeneFamily(
-                        family_id_counter, f"new_family_{family_id_counter}"
-                    )
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
                     family_id_counter += 1
 
                     # Copy the original families and metadata
@@ -867,9 +848,7 @@ class TestSystem(TestFixture):
 
             for i, unit in enumerate(units):
                 if i == 0:  # Force the first unit to be augmented
-                    new_gene_family = GeneFamily(
-                        family_id_counter, f"new_family_{family_id_counter}"
-                    )
+                    new_gene_family = GeneFamily(family_id_counter, f"new_family_{family_id_counter}")
                     new_families = set(unit.families).union({new_gene_family})
                     fam2metainfo = unit._families2metainfo.copy()
                     fam2metainfo[new_gene_family] = ("test_source", 1)
@@ -1009,9 +988,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
         organisms = set(system.organisms)
-        expected_organisms = {
-            org for unit in units for fam in unit.families for org in fam.organisms
-        }
+        expected_organisms = {org for unit in units for fam in unit.families for org in fam.organisms}
 
         assert organisms == expected_organisms
 
@@ -1020,12 +997,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
         organisms = set(system.model_organisms)
-        expected_organisms = {
-            org
-            for unit in units
-            for fam in unit.model_families
-            for org in fam.organisms
-        }
+        expected_organisms = {org for unit in units for fam in unit.model_families for org in fam.organisms}
 
         assert organisms == expected_organisms
 
@@ -1051,9 +1023,7 @@ class TestSystem(TestFixture):
         system.add_canonical(canonical_system)
 
         assert canonical_system in system.canonical
-        sub_canonical_system = System(
-            canonical_model, "test_source", system_id="Canon_2"
-        )
+        sub_canonical_system = System(canonical_model, "test_source", system_id="Canon_2")
         for unit in list(units)[:-1]:
             sub_canonical_system.add_unit(unit)
 
@@ -1065,9 +1035,7 @@ class TestSystem(TestFixture):
         """Test adding canonical system that is already in the system."""
         canonical_model = Model(name=model.canonical[0], min_mandatory=1, min_total=1)
         canonical_system = System(canonical_model, "test_source", system_id="Canon_1")
-        super_canonical_system = System(
-            canonical_model, "test_source", system_id="Canon_2"
-        )
+        super_canonical_system = System(canonical_model, "test_source", system_id="Canon_2")
         for sys_unit in units:
             canonical_system.add_unit(sys_unit)
             super_canonical_system.add_unit(sys_unit)
@@ -1097,9 +1065,7 @@ class TestSystem(TestFixture):
 
         new_fu = FuncUnit(name="new_test_unit", presence="mandatory", min_total=1)
         new_fu.model = model
-        gene_families = {
-            GeneFamily(100 + j, f"test_family_{100 + j}") for j in range(randint(1, 5))
-        }
+        gene_families = {GeneFamily(100 + j, f"test_family_{100 + j}") for j in range(randint(1, 5))}
         fam2metainfo = {gf: ("new_test_source", randint(1, 5)) for gf in gene_families}
         new_unit = SystemUnit(
             functional_unit=new_fu,
@@ -1118,12 +1084,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
         modules = set(system.modules)
-        expected_modules = {
-            fam.module
-            for unit in units
-            for fam in unit.families
-            if fam.module is not None
-        }
+        expected_modules = {fam.module for unit in units for fam in unit.families if fam.module is not None}
         assert modules == expected_modules
 
     def test_get_module(self, system, units):
@@ -1160,9 +1121,7 @@ class TestSystem(TestFixture):
         for unit in units:
             system.add_unit(unit)
 
-        expected_spots = {
-            spot for unit in units for fam in unit.families for spot in fam.spots
-        }
+        expected_spots = {spot for unit in units for fam in unit.families for spot in fam.spots}
 
         assert expected_spots == set(system.spots)
 
@@ -1221,9 +1180,7 @@ class TestSystem(TestFixture):
             assigned_count = 0
             for i, rgp in enumerate(regions):
                 # Last region must get a spot if none assigned yet
-                should_assign = (
-                    i == len(regions) - 1 and assigned_count == 0
-                ) or randint(0, 2) > 0  # 66% chance
+                should_assign = (i == len(regions) - 1 and assigned_count == 0) or randint(0, 2) > 0  # 66% chance
                 if should_assign:
                     spot = choice(tuple(spots))
                     rgp.spot = spot

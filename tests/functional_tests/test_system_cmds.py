@@ -2,19 +2,22 @@ from pathlib import Path
 
 import pytest
 
+from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list  # noqa: F401
 from tests.utils.file_compare import assert_or_update_file
 from tests.utils.run_command import run_command
-from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list
 
 
 @pytest.fixture(scope="session")
 def annotation_and_systems_cmds(
-    pangenome_list_file, utils_hmm_list, utils_model_list, num_cpus
+    pangenome_list_file,
+    utils_hmm_list,  # noqa: F811
+    utils_model_list,  # noqa: F811
+    num_cpus,
 ):
     annotation_command = (
         f"panorama annotation "
         f"--pangenomes {pangenome_list_file} "
-        f"--source defensefinder "
+        "--source defensefinder "
         f"--hmm {utils_hmm_list} "  # "--mode sensitive " this produce an error
         "--k_best_hit 3 "
         f"--threads {num_cpus}"
@@ -38,7 +41,7 @@ def annotation_and_systems_cmds(
 def test_write_systems(
     annotation_and_systems_cmds,
     pangenome_list_file,
-    utils_model_list,
+    utils_model_list,  # noqa: F811
     num_cpus,
     update_golden,
 ):
@@ -47,7 +50,8 @@ def test_write_systems(
     command = (
         f"panorama write_systems  --pangenomes {pangenome_list_file} "
         f"--output {outdir} --models {utils_model_list} "
-        "--sources defensefinder --projection "
+        "--sources defensefinder "
+        "--projection "
         f"--threads {num_cpus} "
         "--association all"
     )
@@ -80,9 +84,7 @@ def test_write_systems(
     # Check each pangenome directory
     for pangenome_name in pangenome_names:
         pangenome_dir = outdir / pangenome_name
-        assert pangenome_dir.exists(), (
-            f"Pangenome directory {pangenome_dir} was not created"
-        )
+        assert pangenome_dir.exists(), f"Pangenome directory {pangenome_dir} was not created"
 
         # Check source directory
         source_dir = pangenome_dir / "defensefinder"
@@ -94,22 +96,16 @@ def test_write_systems(
             assert file_path.exists(), f"Expected file {file_path} was not created"
             assert file_path.stat().st_size > 0, f"Expected file {file_path} is empty"
             if expected_file == "systems.tsv":
-                golden_file_name = Path(
-                    f"test_write_systems.{pangenome_name}.systems.tsv"
-                )
+                golden_file_name = Path(f"test_write_systems.{pangenome_name}.systems.tsv")
                 assert_or_update_file(golden_file_name, file_path, update_golden)
 
         # Check the projection directory exists (since --projection flag is used)
         projection_dir = source_dir / "projection"
-        assert projection_dir.exists(), (
-            f"Projection directory {projection_dir} was not created"
-        )
+        assert projection_dir.exists(), f"Projection directory {projection_dir} was not created"
 
         # Check that the projection directory contains TSV files
         projection_files = list(projection_dir.glob("*.tsv"))
-        assert len(projection_files) > 0, (
-            f"No projection TSV files found in {projection_dir}"
-        )
+        assert len(projection_files) > 0, f"No projection TSV files found in {projection_dir}"
 
         # Verify all projection files are non-empty
         for proj_file in projection_files:

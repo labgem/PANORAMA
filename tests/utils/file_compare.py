@@ -5,9 +5,7 @@ TESTS_DIR = Path(__file__).parent.parent
 GOLDEN_DIR = TESTS_DIR / "functional_tests/expected_outputs"
 
 
-def assert_or_update_file(
-    expected_file_name: Path, file_path: Path, update_golden: bool
-):
+def assert_or_update_file(expected_file_name: Path, file_path: Path, update_golden: bool):
     """Compare file content with golden file or update it if --update-golden is set."""
     golden_file = GOLDEN_DIR / expected_file_name
 
@@ -24,6 +22,5 @@ def assert_or_update_file(
         content_expected = golden_file.read_text()
         print(content_actual)
         assert content_actual == content_expected, (
-            f"Content mismatch for {file_path.name}. "
-            f"Use --update-golden to update the reference."
+            f"Content mismatch for {file_path.name}. Use --update-golden to update the reference."
         )
