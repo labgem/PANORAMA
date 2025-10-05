@@ -1,5 +1,4 @@
 sphinx>=8.2.3
-sphinx_rtd_theme>=3.0.2
 readthedocs-sphinx-search>=0.3.2
 sphinx-autobuild>=2025.8.25
 myst-parser>=4.0.1
