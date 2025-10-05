@@ -7,14 +7,13 @@ This module provides classes to represent gene families and study them
 
 # default libraries
 from __future__ import annotations
+
 import logging
 
 # installed libraries
 from ppanggolin.geneFamily import GeneFamily as Fam
 from ppanggolin.genome import Organism
 from pyhmmer.plan7 import HMM
-
-# local libraries
 
 
 class GeneFamily(Fam):
@@ -82,9 +81,7 @@ class GeneFamily(Fam):
             TypeError: If the other object is not a GeneFamily instance.
         """
         if not isinstance(other, GeneFamily):
-            raise TypeError(
-                f"Expected another GeneFamily instance for comparison, but received {type(other)}"
-            )
+            raise TypeError(f"Expected another GeneFamily instance for comparison, but received {type(other)}")
         return hash(self) == hash(other)
 
     def __lt__(self, other: GeneFamily) -> bool:
@@ -278,9 +275,7 @@ class GeneFamily(Fam):
             KeyError: If no akin families are assigned.
         """
         if self._akin is None:
-            logging.getLogger("PANORAMA").debug(
-                f"No akin families assigned to {self.name}."
-            )
+            logging.getLogger("PANORAMA").debug(f"No akin families assigned to {self.name}.")
         return self._akin
 
     @akin.setter
@@ -298,7 +293,8 @@ class GeneFamily(Fam):
             raise TypeError(f"{akin} is not an instance of Akin.")
         if self._akin is not None and self._akin != akin:
             logging.getLogger("PANORAMA").debug(
-                f"Akin families are already set for {self.name}, and a different one was provided. This could be an error."
+                f"Akin families are already set for {self.name}, and a different one was provided. "
+                f"This could be an error."
             )
         self._akin = akin
 
@@ -313,9 +309,7 @@ class Akin:
         _families (dict): A dictionary of gene families in the Akin group.
     """
 
-    def __init__(
-        self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily
-    ) -> None:
+    def __init__(self, identifier: int, reference: GeneFamily, *gene_families: GeneFamily) -> None:
         """
         Initializes an Akin instance.
 

@@ -12,32 +12,33 @@ with comprehensive error handling and progress tracking.
 
 # default libraries
 from __future__ import annotations
+
 import argparse
 import logging
-import tempfile
 import subprocess
-from pathlib import Path
-from typing import Dict, List, Tuple, Optional
-from itertools import combinations
-from shutil import rmtree
-from multiprocessing import Manager, Lock
-from time import time
+import tempfile
 from dataclasses import dataclass
+from itertools import combinations
+from multiprocessing import Lock, Manager
+from pathlib import Path
+from shutil import rmtree
+from time import time
+from typing import Dict, List, Optional, Tuple
 
 # installed libraries
-from tqdm import tqdm
 import pandas as pd
+from tqdm import tqdm
 
 # local libraries
-from panorama.utils import mkdir, init_lock
-from panorama.pangenomes import Pangenomes, Pangenome
-from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.utils import (
+    MMSeqsError,
+    PangenomeProcessingError,
     createdb,
     write_pangenomes_families_sequences,
-    PangenomeProcessingError,
-    MMSeqsError,
 )
+from panorama.format.read_binaries import load_pangenomes
+from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.utils import init_lock, mkdir
 
 logger = logging.getLogger("PANORAMA")
 
@@ -111,9 +112,7 @@ class AlignmentValidationError(AlignmentError):
     pass
 
 
-def _validate_alignment_parameters(
-    identity: float, coverage: float, cov_mode: int, threads: int
-) -> None:
+def _validate_alignment_parameters(identity: float, coverage: float, cov_mode: int, threads: int) -> None:
     """
     Validate alignment parameters.
 
@@ -127,29 +126,19 @@ def _validate_alignment_parameters(
         AlignmentValidationError: If any parameter is invalid.
     """
     if not isinstance(identity, (int, float)) or not (0.0 <= identity <= 1.0):
-        raise AlignmentValidationError(
-            f"Identity must be between 0.0 and 1.0, got: {identity}"
-        )
+        raise AlignmentValidationError(f"Identity must be between 0.0 and 1.0, got: {identity}")
 
     if not isinstance(coverage, (int, float)) or not (0.0 <= coverage <= 1.0):
-        raise AlignmentValidationError(
-            f"Coverage must be between 0.0 and 1.0, got: {coverage}"
-        )
+        raise AlignmentValidationError(f"Coverage must be between 0.0 and 1.0, got: {coverage}")
 
     if not isinstance(cov_mode, int) or not (0 <= cov_mode <= 5):
-        raise AlignmentValidationError(
-            f"Coverage mode must be between 0 and 5, got: {cov_mode}"
-        )
+        raise AlignmentValidationError(f"Coverage mode must be between 0 and 5, got: {cov_mode}")
 
     if not isinstance(threads, int) or threads <= 0:
-        raise AlignmentValidationError(
-            f"Threads must be positive integer, got: {threads}"
-        )
+        raise AlignmentValidationError(f"Threads must be positive integer, got: {threads}")
 
 
-def _validate_directory_access(
-    directory: Path, create_if_missing: bool = False
-) -> None:
+def _validate_directory_access(directory: Path, create_if_missing: bool = False) -> None:
     """
     Validate directory exists and is accessible.
 
@@ -168,9 +157,7 @@ def _validate_directory_access(
             try:
                 directory.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                raise AlignmentValidationError(
-                    f"Cannot create directory {directory}: {e}"
-                )
+                raise AlignmentValidationError(f"Cannot create directory {directory}") from e
         else:
             raise AlignmentValidationError(f"Directory does not exist: {directory}")
 
@@ -203,18 +190,15 @@ def check_align_parameters(args: argparse.Namespace) -> None:
         _validate_directory_access(args.tmpdir, create_if_missing=True)
     except AlignmentValidationError as e:
         raise NotADirectoryError(
-            f"The given path for temporary directory is not valid: {args.tmpdir}. "
-            f"Error: {e}. Please check your path and try again."
-        )
+            f"The given path for temporary directory is not valid: {args.tmpdir}. Please check your path and try again."
+        ) from e
 
     # Validate alignment parameters
     identity = getattr(args, "align_identity", CONFIG.DEFAULT_IDENTITY)
     coverage = getattr(args, "align_coverage", CONFIG.DEFAULT_COVERAGE)
 
     if identity > 1 or coverage > 1:
-        raise AlignmentValidationError(
-            f"Identity ({identity}) and coverage ({coverage}) must be between 0 and 1"
-        )
+        raise AlignmentValidationError(f"Identity ({identity}) and coverage ({coverage}) must be between 0 and 1")
 
     logger.debug("Alignment parameters validated successfully")
 
@@ -308,9 +292,7 @@ def write_alignment(
         )
 
         if result.returncode != 0:
-            error_msg = (
-                f"MMseqs2 convertalis failed with return code {result.returncode}"
-            )
+            error_msg = f"MMseqs2 convertalis failed with return code {result.returncode}"
             if result.stderr:
                 error_msg += f": {result.stderr.strip()}"
             raise AlignmentError(error_msg)
@@ -318,9 +300,9 @@ def write_alignment(
         logger.debug("Alignment conversion completed successfully")
 
     except subprocess.SubprocessError as e:
-        raise AlignmentError(f"Failed to execute MMseqs2 convertalis: {e}")
+        raise AlignmentError("Failed to execute MMseqs2 convertalis") from e
     except Exception as e:
-        raise AlignmentError(f"Unexpected error during alignment conversion: {e}")
+        raise AlignmentError("Unexpected error during alignment conversion") from e
 
 
 def _execute_alignment(
@@ -395,7 +377,7 @@ def _execute_alignment(
         return aln_db
 
     except subprocess.SubprocessError as e:
-        raise AlignmentError(f"Failed to execute MMseqs2 search: {e}")
+        raise AlignmentError("Failed to execute MMseqs2 search") from e
 
 
 def align_db(
@@ -463,9 +445,7 @@ def align_db(
         # Create the alignment database if not provided
         if aln_db is None:
             temp_aln_db_name = "align_" + (
-                f"{query_name}_vs_{target_name}"
-                if query_name and target_name
-                else query_name or target_name or ""
+                f"{query_name}_vs_{target_name}" if query_name and target_name else query_name or target_name or ""
             ).rstrip("_")
             temp_aln_db = tmpdir / temp_aln_db_name
             return _execute_alignment(
@@ -531,9 +511,7 @@ def align_pangenomes_pair(
     _validate_alignment_parameters(identity, coverage, cov_mode, threads)
 
     if len(pangenomes_pair) != 2 or len(db_pair) != 2:
-        raise AlignmentValidationError(
-            "pangenomes_pair and db_pair must contain exactly 2 elements"
-        )
+        raise AlignmentValidationError("pangenomes_pair and db_pair must contain exactly 2 elements")
 
     pangenome1, pangenome2 = pangenomes_pair
     query_db, target_db = db_pair
@@ -563,9 +541,7 @@ def align_pangenomes_pair(
         return aln_results_file
 
     except Exception as e:
-        raise AlignmentError(
-            f"Pairwise alignment failed for {pangenome1} vs {pangenome2}: {e}"
-        ) from e
+        raise AlignmentError(f"Pairwise alignment failed for {pangenome1} vs {pangenome2}: {e}") from e
 
 
 def align_pangenomes(
@@ -601,9 +577,7 @@ def align_pangenomes(
     """
     # Validate input parameters
     if len(pangenome2db) < 2:
-        raise AlignmentValidationError(
-            "At least 2 pangenomes required for pairwise alignment"
-        )
+        raise AlignmentValidationError("At least 2 pangenomes required for pairwise alignment")
 
     _validate_alignment_parameters(identity, coverage, cov_mode, threads)
 
@@ -611,9 +585,7 @@ def align_pangenomes(
     pangenomes_pairs = list(combinations(pangenome2db.keys(), 2))
     total_pairs = len(pangenomes_pairs)
 
-    logger.info(
-        f"Aligning gene families between {total_pairs} pangenome pairs with {threads} threads..."
-    )
+    logger.info(f"Aligning gene families between {total_pairs} pangenome pairs with {threads} threads...")
 
     results = []
 
@@ -642,14 +614,10 @@ def align_pangenomes(
             )
 
             results.append(alignment_result)
-            logger.debug(
-                f"Completed alignment for pair: {pangenomes_pair[0]} vs {pangenomes_pair[1]}"
-            )
+            logger.debug(f"Completed alignment for pair: {pangenomes_pair[0]} vs {pangenomes_pair[1]}")
 
         except Exception as e:
-            error_msg = (
-                f"Failed alignment for {pangenomes_pair[0]} vs {pangenomes_pair[1]}"
-            )
+            error_msg = f"Failed alignment for {pangenomes_pair[0]} vs {pangenomes_pair[1]}"
             raise AlignmentError(error_msg) from e
 
     return results
@@ -680,9 +648,7 @@ def merge_aln_res(align_results: List[Path], outfile: Path) -> None:
     # Check all input files exist
     for i, result_file in enumerate(align_results):
         if not result_file.exists():
-            raise FileNotFoundError(
-                f"Alignment result file {i + 1} not found: {result_file}"
-            )
+            raise FileNotFoundError(f"Alignment result file {i + 1} not found: {result_file}")
 
     logger.debug(f"Merging {len(align_results)} alignment result files")
 
@@ -698,17 +664,11 @@ def merge_aln_res(align_results: List[Path], outfile: Path) -> None:
 
         # Append remaining files
         for i, result_file in enumerate(align_results[1:], 1):
-            logger.debug(
-                "Merging file %d/%d: %s", i + 1, len(align_results), result_file
-            )
+            logger.debug("Merging file %d/%d: %s", i + 1, len(align_results), result_file)
 
-            additional_results = pd.read_csv(
-                result_file, sep="\t", names=CONFIG.ALIGN_COLUMNS, dtype=str
-            )
+            additional_results = pd.read_csv(result_file, sep="\t", names=CONFIG.ALIGN_COLUMNS, dtype=str)
 
-            merged_results = pd.concat(
-                [merged_results, additional_results], ignore_index=True, copy=False
-            )
+            merged_results = pd.concat([merged_results, additional_results], ignore_index=True, copy=False)
 
         # Ensure output directory exists
         outfile.parent.mkdir(parents=True, exist_ok=True)
@@ -726,13 +686,13 @@ def merge_aln_res(align_results: List[Path], outfile: Path) -> None:
         logger.debug("Merge operation completed")
 
     except pd.errors.EmptyDataError as e:
-        raise AlignmentError(f"One or more alignment files are empty: {e}")
+        raise AlignmentError("One or more alignment files are empty") from e
     except pd.errors.ParserError as e:
-        raise AlignmentError(f"Error parsing alignment file format: {e}")
+        raise AlignmentError("Error parsing alignment file format") from e
     except OSError as e:
-        raise AlignmentError(f"File I/O error during merging: {e}")
+        raise AlignmentError("File I/O error during merging") from e
     except Exception as e:
-        raise AlignmentError(f"Unexpected error during alignment merging: {e}")
+        raise AlignmentError("Unexpected error during alignment merging") from e
 
 
 def inter_pangenome_align(
@@ -786,9 +746,7 @@ def inter_pangenome_align(
     """
     # Validate inputs
     if len(pangenome2families_seq) < 2:
-        raise AlignmentValidationError(
-            "At least 2 pangenomes required for inter-pangenome alignment"
-        )
+        raise AlignmentValidationError("At least 2 pangenomes required for inter-pangenome alignment")
 
     logger.info(f"Processing {len(pangenome2families_seq)} pangenomes")
 
@@ -800,20 +758,16 @@ def inter_pangenome_align(
 
         for name, sequences_file in pangenome2families_seq.items():
             if not sequences_file.exists():
-                raise FileNotFoundError(
-                    f"Sequence file not found for {name}: {sequences_file}"
-                )
+                raise FileNotFoundError(f"Sequence file not found for {name}: {sequences_file}")
 
             logger.debug(f"Creating database for pangenome: {name}")
             try:
                 # Create the database using the refactored createdb function
-                pangenome2db[name] = createdb(
-                    seq_files=[sequences_file], output=tmpdir, db_name=f"db_{name}"
-                )
+                pangenome2db[name] = createdb(seq_files=[sequences_file], output=tmpdir, db_name=f"db_{name}")
                 logger.debug(f"Database created for {name}: {pangenome2db[name]}")
 
             except (PangenomeProcessingError, MMSeqsError) as e:
-                raise AlignmentError(f"Failed to create database for {name}: {e}")
+                raise AlignmentError(f"Failed to create database for {name}") from e
 
         # Perform all pairwise alignments
         logger.info("Performing pairwise alignments between pangenomes...")
@@ -896,9 +850,7 @@ def all_against_all_align(
     # Validate all sequence files exist
     for i, seq_file in enumerate(families_seq):
         if not seq_file.exists():
-            raise FileNotFoundError(
-                f"Gene family sequence file {i + 1} not found: {seq_file}"
-            )
+            raise FileNotFoundError(f"Gene family sequence file {i + 1} not found: {seq_file}")
 
     logger.info("Starting all-against-all gene families alignment...")
     logger.info(f"Processing {len(families_seq)} sequence files")
@@ -1042,9 +994,7 @@ def launch_pangenomes_alignment(
         disable_bar=disable_bar,
     )
 
-    logger.info(
-        f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes"
-    )
+    logger.info(f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes")
 
     # Create output directory
     logger.debug(f"Creating output directory: {output}")

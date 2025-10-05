@@ -17,30 +17,28 @@ Supported Sources:
 """
 
 # default libraries
-import re
-from typing import Callable, Dict, List, Set, Union
 import logging
+import re
 from pathlib import Path
-from lxml import etree as et
-import lxml.etree
-
+from typing import Callable, Dict, List, Set, Union
 
 # installed libraries
-from tqdm import tqdm
+import lxml.etree
 import pandas as pd
+from lxml import etree as et
 from numpy import nan
 from pyhmmer.plan7 import HMM
+from tqdm import tqdm
 
 # local libraries
-from panorama.utils import mkdir, is_true_value
 from panorama.utility.genInput import (
+    process_hmm_accession,
+    process_hmm_name,
     read_hmm,
     write_hmm,
-    process_hmm_name,
-    process_hmm_accession,
 )
-from panorama.utility.translate import read_xml, ModelTranslationError
-
+from panorama.utility.translate import ModelTranslationError, read_xml
+from panorama.utils import is_true_value, mkdir
 
 DEFAULT_EVAL_THRESHOLD = 0.1
 DEFAULT_IEVAL_THRESHOLD = 0.001
@@ -84,7 +82,7 @@ def process_attributes(
 
 def process_exchangeable(
     elem: lxml.etree.Element,
-    data:  Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     exchangeable_set: Set[str],
 ) -> Set[str]:
@@ -105,16 +103,12 @@ def process_exchangeable(
             for gene in relation:
                 gene_name = gene.get("name")
                 if not gene_name:
-                    raise KeyError(
-                        f"In {data['name']}, one exchangeable gene doesn't have a name"
-                    )
+                    raise KeyError(f"In {data['name']}, one exchangeable gene doesn't have a name")
 
                 try:
                     exchangeable_info = hmm_df.loc[gene_name]
-                except KeyError:
-                    raise KeyError(
-                        f"Exchangeable gene '{gene_name}' not found in HMM dataframe"
-                    )
+                except KeyError as error:
+                    raise KeyError(f"Exchangeable gene '{gene_name}' not found in HMM dataframe") from error
 
                 # Add exchangeable gene information to set
                 if isinstance(exchangeable_info, pd.Series):
@@ -127,24 +121,18 @@ def process_exchangeable(
                     )
                 else:  # DataFrame case
                     prot_name_set = set(exchangeable_info["protein_name"].to_list())
-                    secondary_name_set = set(
-                        exchangeable_info["secondary_name"].to_list()
-                    )
+                    secondary_name_set = set(exchangeable_info["secondary_name"].to_list())
                     name_set = set(exchangeable_info.index.to_list())
-                    exchangeable_set.update(
-                        prot_name_set | name_set | secondary_name_set
-                    )
+                    exchangeable_set.update(prot_name_set | name_set | secondary_name_set)
         else:
-            logging.getLogger("PANORAMA").warning(
-                f"Unexpected relation tag: {relation.tag}"
-            )
+            logging.getLogger("PANORAMA").warning(f"Unexpected relation tag: {relation.tag}")
 
     return exchangeable_set
 
 
 def translate_gene(
     elem: lxml.etree.Element,
-    data: Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     transitivity_mut: Callable[[int], int],
 ) -> Dict[str, Union[str, Dict[str, int]]]:
@@ -173,16 +161,12 @@ def translate_gene(
     """
     gene_name = elem.get("name")
     if not gene_name:
-        raise KeyError(
-            f"In {data['name']} of MacSyFinder, one gene doesn't have a name"
-        )
+        raise KeyError(f"In {data['name']} of MacSyFinder, one gene doesn't have a name")
 
     try:
         hmm_info = hmm_df.loc[gene_name]
-    except KeyError:
-        raise KeyError(
-            f"Gene '{gene_name}' not found in HMM dataframe for model {data['name']}"
-        )
+    except KeyError as error:
+        raise KeyError(f"Gene '{gene_name}' not found in HMM dataframe for model {data['name']}") from error
 
     # Initialize a gene dictionary with default values
     dict_elem = {
@@ -192,9 +176,7 @@ def translate_gene(
     }
 
     if not elem.get("presence"):
-        raise KeyError(
-            f"In {data['name']} of MacSyFinder, one gene doesn't have a presence requirement"
-        )
+        raise KeyError(f"In {data['name']} of MacSyFinder, one gene doesn't have a presence requirement")
     # Handle both Series (single match) and DataFrame (multiple matches)
     if isinstance(hmm_info, pd.Series):
         dict_elem["name"] = hmm_info["protein_name"]
@@ -207,9 +189,7 @@ def translate_gene(
         exchangeable_set = set(prot_name_list) | {gene_name} | set(secondary_name_list)
 
     if not elem.get("presence"):
-        raise KeyError(
-            f"In {data['name']}, one gene doesn't have a presence requirement"
-        )
+        raise KeyError(f"In {data['name']}, one gene doesn't have a presence requirement")
     # Process gene attributes
     dict_elem = process_attributes(elem, dict_elem, transitivity_mut)
 
@@ -219,19 +199,17 @@ def translate_gene(
     # Set the exchangeable genes list (excluding self and empty strings)
     if exchangeable_set:
         primary_name = dict_elem["name"]
-        dict_elem["exchangeable"] = list(
-            exchangeable_set.difference({primary_name, ""})
-        )
+        dict_elem["exchangeable"] = list(exchangeable_set.difference({primary_name, ""}))
 
     return dict_elem
 
 
 def translate_functional_unit(
     elem: lxml.etree.Element,
-    data:  Dict[str,  Union[str, List, Dict[str, int]]],
+    data: Dict[str, Union[str, List, Dict[str, int]]],
     hmm_df: pd.DataFrame,
     transitivity_mut: Callable[[int], int],
-) -> Dict[str,  Union[str, List, Dict[str, int]]]:
+) -> Dict[str, Union[str, List, Dict[str, int]]]:
     """
     Translate a functional unit from MacSyFinder models (or like) into PANORAMA format.
 
@@ -255,25 +233,19 @@ def translate_functional_unit(
     """
     name = elem.get("name")
     if not name:
-        raise KeyError(
-            f"In {data['name']} of MacSyFinder, one functional unit doesn't have a name"
-        )
+        raise KeyError(f"In {data['name']} of MacSyFinder, one functional unit doesn't have a name")
 
     # Initialize functional unit dictionary
     dict_elem = {"name": name, "families": [], "parameters": {}}
 
     if not elem.get("presence"):
-        raise KeyError(
-            f"In {data['name']}, one functional unit doesn't have a presence requirement"
-        )
+        raise KeyError(f"In {data['name']}, one functional unit doesn't have a presence requirement")
     # Process functional unit attributes
     dict_elem = process_attributes(elem, dict_elem, transitivity_mut)
 
     # Translate all gene families within this functional unit
     for family in elem:
-        dict_elem["families"].append(
-            translate_gene(family, data, hmm_df, transitivity_mut)
-        )
+        dict_elem["families"].append(translate_gene(family, data, hmm_df, transitivity_mut))
 
     return dict_elem
 
@@ -284,7 +256,7 @@ def translate_macsyfinder_model(
     hmm_df: pd.DataFrame,
     canonical: List[str],
     transitivity_mut: Callable[[int], int],
-) -> Dict[str,  Union[str, List, Dict[str, int]]]:
+) -> Dict[str, Union[str, List, Dict[str, int]]]:
     """
     Translate a complete MacSyFinder model (or like) into PANORAMA format.
 
@@ -327,9 +299,7 @@ def translate_macsyfinder_model(
         if elem.tag == "gene":
             fam_list.append(translate_gene(elem, data_json, hmm_df, transitivity_mut))
         elif elem.tag == "functional_unit":
-            fu_list.append(
-                translate_functional_unit(elem, data_json, hmm_df, transitivity_mut)
-            )
+            fu_list.append(translate_functional_unit(elem, data_json, hmm_df, transitivity_mut))
         else:
             logging.getLogger("PANORAMA").warning(f"Unknown element tag: {elem.tag}")
 
@@ -358,9 +328,7 @@ def translate_macsyfinder_model(
     return data_json
 
 
-def parse_macsyfinder_hmm(
-    hmm: HMM, hmm_file: Path, panorama_acc: Set[str]
-) -> Dict[str, Union[str, int, float]]:
+def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> Dict[str, Union[str, int, float]]:
     """
     Parse a MacSyFinder HMM and extract information for PANORAMA annotation.
 
@@ -458,9 +426,7 @@ def create_macsyfinder_hmm_list(
     Raises:
         IOError: If HMM files cannot be read or processed
     """
-    logging.getLogger("PANORAMA").info(
-        "Starting HMM file translation from MacSyFinder..."
-    )
+    logging.getLogger("PANORAMA").info("Starting HMM file translation from MacSyFinder...")
 
     # Create HMM output directory
     hmm_dir = mkdir(output / "hmm", force, erase=True)
@@ -470,28 +436,20 @@ def create_macsyfinder_hmm_list(
 
     # Process all HMM files
     hmm_files = list(hmms_path.glob("*.hmm"))
-    for hmm_file in tqdm(
-        hmm_files, unit="HMM", desc="Translating HMMs", disable=disable_bar
-    ):
+    for hmm_file in tqdm(hmm_files, unit="HMM", desc="Translating HMMs", disable=disable_bar):
         try:
             hmm_list = read_hmm(hmm_file)
             for hmm in hmm_list:
                 hmm_dict = parse_macsyfinder_hmm(hmm, hmm_file, panorama_acc)
-                hmm_dict["path"] = (
-                    write_hmm(hmm, hmm_dir, binary_hmm).absolute().as_posix()
-                )
+                hmm_dict["path"] = write_hmm(hmm, hmm_dir, binary_hmm).absolute().as_posix()
                 hmm_info_list.append(hmm_dict)
         except Exception as e:
-            logging.getLogger("PANORAMA").error(
-                f"Error processing HMM file {hmm_file}: {e}"
-            )
+            logging.getLogger("PANORAMA").error(f"Error processing HMM file {hmm_file}: {e}")
             raise
 
     # Create and format DataFrame
     hmm_df = pd.DataFrame(hmm_info_list)
-    hmm_df = hmm_df.sort_values(
-        by=["name", "accession", "protein_name"], ascending=True
-    )
+    hmm_df = hmm_df.sort_values(by=["name", "accession", "protein_name"], ascending=True)
 
     # Reorder columns for consistency
     column_order = [
@@ -512,14 +470,10 @@ def create_macsyfinder_hmm_list(
 
     # Apply global coverage thresholds if specified
     if hmm_coverage is not None:
-        logging.getLogger("PANORAMA").warning(
-            "Overriding HMM coverage thresholds globally"
-        )
+        logging.getLogger("PANORAMA").warning("Overriding HMM coverage thresholds globally")
         hmm_df["hmm_cov_threshold"] = hmm_coverage
     if target_coverage is not None:
-        logging.getLogger("PANORAMA").warning(
-            "Overriding target coverage thresholds globally"
-        )
+        logging.getLogger("PANORAMA").warning("Overriding target coverage thresholds globally")
         hmm_df["target_cov_threshold"] = target_coverage
 
     # Write a HMM list file and prepare for return
@@ -551,10 +505,7 @@ def find_type_subtype_canonical(model_name: str, models: Path) -> List[str]:
         base_type = basename[-1]
         for canon_file in models.rglob(f"{base_class}*.xml"):
             name_canon = canon_file.stem
-            if (
-                re.search(f"{base_class}-Subtype-{base_type}-", name_canon)
-                and name_canon != model_name
-            ):
+            if re.search(f"{base_class}-Subtype-{base_type}-", name_canon) and name_canon != model_name:
                 logging.getLogger("PANORAMA").debug("")
                 canonical_systems.append(name_canon)
 
@@ -568,10 +519,7 @@ def find_type_subtype_canonical(model_name: str, models: Path) -> List[str]:
             subtype = ""
         for canon_file in models.rglob("*.xml"):
             name_canon = canon_file.stem
-            if (
-                re.search(f"{base_class}_Type_{base_type}_{subtype}", name_canon)
-                and name_canon != model_name
-            ):
+            if re.search(f"{base_class}_Type_{base_type}_{subtype}", name_canon) and name_canon != model_name:
                 logging.getLogger("PANORAMA").debug("")
                 canonical_systems.append(name_canon)
 
@@ -594,9 +542,7 @@ def find_cluster_canonical(model_name: str, models: Path) -> List[str]:
     for canon_file in models.rglob(f"{model_name}*.xml"):
         if canon_file.stem != model_name:
             canonical_systems.append(canon_file.stem)
-            logging.getLogger("PANORAMA").debug(
-                f"Found cluster canonical: {canon_file.stem}"
-            )
+            logging.getLogger("PANORAMA").debug(f"Found cluster canonical: {canon_file.stem}")
 
     return canonical_systems
 
@@ -667,9 +613,7 @@ def get_models_path(models: Path, source: str) -> Dict[str, Path]:
     }
 
     if source not in naming_strategies:
-        raise ValueError(
-            f"Unsupported source: {source}. Supported sources: {list(naming_strategies.keys())}"
-        )
+        raise ValueError(f"Unsupported source: {source}. Supported sources: {list(naming_strategies.keys())}")
 
     naming_func = naming_strategies[source]
 
@@ -679,13 +623,9 @@ def get_models_path(models: Path, source: str) -> Dict[str, Path]:
             model_name = naming_func(model_file)
             model2path[model_name] = model_file
         except Exception as e:
-            logging.getLogger("PANORAMA").warning(
-                f"Could not process model {model_file}: {e}"
-            )
+            logging.getLogger("PANORAMA").warning(f"Could not process model {model_file}: {e}")
 
-    logging.getLogger("PANORAMA").info(
-        f"Found {len(model2path)} models for source: {source}"
-    )
+    logging.getLogger("PANORAMA").info(f"Found {len(model2path)} models for source: {source}")
     return model2path
 
 
@@ -698,7 +638,7 @@ def translate_macsyfinder(
     source: str = "",
     force: bool = False,
     disable_bar: bool = False,
-) -> List[Dict[str,  Union[str, List, Dict[str, int]]]]:
+) -> List[Dict[str, Union[str, List, Dict[str, int]]]]:
     """
     Translate MacSyFinder models into PANORAMA format with comprehensive error handling.
 
@@ -751,9 +691,7 @@ def translate_macsyfinder(
     )
 
     # Select the appropriate transitivity mutation function
-    transitivity_mut = (
-        conjscan_transitivity_mut if source == "CONJScan" else default_transitivity_mut
-    )
+    transitivity_mut = conjscan_transitivity_mut if source == "CONJScan" else default_transitivity_mut
 
     # Translate all models
     list_data = []
@@ -774,18 +712,12 @@ def translate_macsyfinder(
 
             # Parse XML and translate model
             root = read_xml(path)
-            translated_model = translate_macsyfinder_model(
-                root, name, hmm_df, canonical_sys, transitivity_mut
-            )
+            translated_model = translate_macsyfinder_model(root, name, hmm_df, canonical_sys, transitivity_mut)
             list_data.append(translated_model)
 
         except Exception as error:
-            logging.getLogger("PANORAMA").error(
-                f"Failed to translate model {name} from {path.as_posix()}"
-            )
+            logging.getLogger("PANORAMA").error(f"Failed to translate model {name} from {path.as_posix()}")
             raise ModelTranslationError(f"Error translating {name}: {error}") from error
 
-    logging.getLogger("PANORAMA").info(
-        f"Successfully translated {len(list_data)} models"
-    )
+    logging.getLogger("PANORAMA").info(f"Successfully translated {len(list_data)} models")
     return list_data

@@ -12,31 +12,31 @@ comprehensive error handling and progress tracking.
 
 # default libraries
 from __future__ import annotations
+
 import argparse
 import logging
-import tempfile
 import subprocess
-from pathlib import Path
-from typing import Dict, Union, Optional, List
-from multiprocessing import Manager, Lock
-from time import time
-from shutil import rmtree
+import tempfile
 from dataclasses import dataclass, field
+from multiprocessing import Lock, Manager
+from pathlib import Path
+from shutil import rmtree
+from time import time
+from typing import Dict, List, Optional, Union
 
 # installed libraries
 import pandas as pd
 
 # local libraries
-from panorama.utils import mkdir
-from panorama.pangenomes import Pangenome, Pangenomes
-from panorama.format.read_binaries import load_pangenomes
 from panorama.alignment.utils import (
-    write_pangenomes_families_sequences,
-    createdb,
-    PangenomeProcessingError,
     MMSeqsError,
+    PangenomeProcessingError,
+    createdb,
+    write_pangenomes_families_sequences,
 )
-
+from panorama.format.read_binaries import load_pangenomes
+from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.utils import mkdir
 
 logger = logging.getLogger("PANORAMA")
 
@@ -57,9 +57,7 @@ class ClusteringConfig:
     """Configuration constants for clustering operations."""
 
     # Column names for clustering results
-    CLUSTER_COLUMN_NAMES: List[str] = field(
-        default_factory=lambda: ["cluster_id", "referent", "in_clust"]
-    )
+    CLUSTER_COLUMN_NAMES: List[str] = field(default_factory=lambda: ["cluster_id", "referent", "in_clust"])
 
     # Default clustering parameters
     DEFAULT_THREADS: int = 1
@@ -108,9 +106,7 @@ class ClusteringValidationError(ClusteringError):
     pass
 
 
-def _validate_clustering_parameters(
-    threads: int, mmseqs2_options: Dict[str, Union[int, float, str]]
-) -> None:
+def _validate_clustering_parameters(threads: int, mmseqs2_options: Dict[str, Union[int, float, str]]) -> None:
     """
     Validate clustering parameters.
 
@@ -122,9 +118,7 @@ def _validate_clustering_parameters(
         ClusteringValidationError: If any parameter is invalid.
     """
     if not isinstance(threads, int) or threads <= 0:
-        raise ClusteringValidationError(
-            f"Threads must be positive integer, got: {threads}"
-        )
+        raise ClusteringValidationError(f"Threads must be positive integer, got: {threads}")
 
     if not isinstance(mmseqs2_options, dict):
         raise ClusteringValidationError("MMseqs2 options must be a dictionary")
@@ -133,9 +127,7 @@ def _validate_clustering_parameters(
     required_params = ["identity", "coverage", "cov_mode"]
     for param in required_params:
         if param not in mmseqs2_options:
-            raise ClusteringValidationError(
-                f"Missing required MMseqs2 parameter: {param}"
-            )
+            raise ClusteringValidationError(f"Missing required MMseqs2 parameter: {param}")
 
     # Validate parameter ranges
     identity = mmseqs2_options.get("identity", 0)
@@ -143,24 +135,16 @@ def _validate_clustering_parameters(
     cov_mode = mmseqs2_options.get("cov_mode", 0)
 
     if not isinstance(identity, (int, float)) or not (0.0 <= identity <= 1.0):
-        raise ClusteringValidationError(
-            f"Identity must be between 0.0 and 1.0, got: {identity}"
-        )
+        raise ClusteringValidationError(f"Identity must be between 0.0 and 1.0, got: {identity}")
 
     if not isinstance(coverage, (int, float)) or not (0.0 <= coverage <= 1.0):
-        raise ClusteringValidationError(
-            f"Coverage must be between 0.0 and 1.0, got: {coverage}"
-        )
+        raise ClusteringValidationError(f"Coverage must be between 0.0 and 1.0, got: {coverage}")
 
     if not isinstance(cov_mode, int) or not (0 <= cov_mode <= 5):
-        raise ClusteringValidationError(
-            f"Coverage mode must be between 0 and 5, got: {cov_mode}"
-        )
+        raise ClusteringValidationError(f"Coverage mode must be between 0 and 5, got: {cov_mode}")
 
 
-def _validate_directory_access(
-    directory: Path, create_if_missing: bool = False
-) -> None:
+def _validate_directory_access(directory: Path, create_if_missing: bool = False) -> None:
     """
     Validate directory exists and is accessible.
 
@@ -179,9 +163,7 @@ def _validate_directory_access(
             try:
                 directory.mkdir(parents=True, exist_ok=True)
             except OSError as e:
-                raise ClusteringValidationError(
-                    f"Cannot create directory {directory}: {e}"
-                )
+                raise ClusteringValidationError(f"Cannot create directory {directory}") from e
         else:
             raise ClusteringValidationError(f"Directory does not exist: {directory}")
 
@@ -213,9 +195,8 @@ def check_cluster_parameters(args: argparse.Namespace) -> None:
         _validate_directory_access(args.tmpdir, create_if_missing=True)
     except ClusteringValidationError as e:
         raise NotADirectoryError(
-            f"The given path for temporary directory is not valid: {args.tmpdir}. "
-            f"Error: {e}. Please check your path and try again."
-        )
+            f"The given path for temporary directory is not valid: {args.tmpdir}. Please check your path and try again."
+        ) from e
 
     logger.debug("Clustering parameters validated successfully")
 
@@ -283,9 +264,7 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         clust_df = pd.read_csv(
             clust_res,
             sep="\t",
-            names=CONFIG.CLUSTER_COLUMN_NAMES[
-                1:
-            ],  # Skip the cluster_id column initially
+            names=CONFIG.CLUSTER_COLUMN_NAMES[1:],  # Skip the cluster_id column initially
             dtype=str,
         )
 
@@ -297,9 +276,7 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
         # Create cluster ID mapping
         # Each unique referent gets a unique cluster ID
         unique_referents = clust_df[CONFIG.CLUSTER_COLUMN_NAMES[1]].unique()
-        cluster_id_mapping = {
-            referent: cluster_id for cluster_id, referent in enumerate(unique_referents)
-        }
+        cluster_id_mapping = {referent: cluster_id for cluster_id, referent in enumerate(unique_referents)}
 
         logger.debug(
             f"Created {len(cluster_id_mapping)} unique clusters",
@@ -307,10 +284,7 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
 
         # Create cluster ID dataframe
         cluster_id_df = pd.DataFrame(
-            [
-                {"cluster_id": cluster_id, "referent": referent}
-                for referent, cluster_id in cluster_id_mapping.items()
-            ]
+            [{"cluster_id": cluster_id, "referent": referent} for referent, cluster_id in cluster_id_mapping.items()]
         )
 
         # Merge cluster IDs with clustering results
@@ -340,19 +314,17 @@ def write_clustering(clust_res: Path, outfile: Path) -> None:
             outfile.absolute(),
         )
 
-    except pd.errors.EmptyDataError:
-        raise ClusteringError("Clustering results file is empty or malformed")
+    except pd.errors.EmptyDataError as e:
+        raise ClusteringError("Clustering results file is empty or malformed") from e
     except pd.errors.ParserError as e:
-        raise ClusteringError(f"Error parsing clustering results file: {e}")
+        raise ClusteringError("Error parsing clustering results file") from e
     except OSError as e:
-        raise ClusteringError(f"File I/O error during clustering processing: {e}")
+        raise ClusteringError("File I/O error during clustering processing") from e
     except Exception as e:
-        raise ClusteringError(f"Unexpected error during clustering processing: {e}")
+        raise ClusteringError("Unexpected error during clustering processing") from e
 
 
-def create_tsv(
-    db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAULT_THREADS
-) -> None:
+def create_tsv(db: Path, clust: Path, output: Path, threads: int = CONFIG.DEFAULT_THREADS) -> None:
     """
     Convert MMseqs2 clustering database to TSV format.
 
@@ -405,9 +377,9 @@ def create_tsv(
         logger.debug("TSV conversion completed successfully")
 
     except subprocess.SubprocessError as e:
-        raise ClusteringError(f"Failed to execute MMseqs2 createtsv: {e}")
+        raise ClusteringError("Failed to execute MMseqs2 createtsv") from e
     except Exception as e:
-        raise ClusteringError(f"Unexpected error during TSV creation: {e}")
+        raise ClusteringError("Unexpected error during TSV creation") from e
 
 
 def _execute_clustering_command(
@@ -441,9 +413,7 @@ def _execute_clustering_command(
 
         if result.returncode != 0:
             logger.error(cmd)
-            error_msg = (
-                f"MMseqs2 {method_name} failed with return code {result.returncode}"
-            )
+            error_msg = f"MMseqs2 {method_name} failed with return code {result.returncode}"
             if result.stderr:
                 error_msg += f": {result.stderr.strip()}"
             raise ClusteringError(error_msg)
@@ -453,7 +423,7 @@ def _execute_clustering_command(
         return execution_time
 
     except subprocess.SubprocessError as e:
-        raise ClusteringError(f"Failed to execute MMseqs2 {method_name}: {e}")
+        raise ClusteringError(f"Failed to execute MMseqs2 {method_name}") from e
 
 
 def linclust_launcher(
@@ -644,9 +614,7 @@ def cluster_launcher(
     cluster_specific = ["max_seqs", "min_ungapped", "sensitivity"]
     for param in cluster_specific:
         if param not in mmseqs2_opt:
-            raise ClusteringValidationError(
-                f"Missing cluster-specific parameter: {param}"
-            )
+            raise ClusteringValidationError(f"Missing cluster-specific parameter: {param}")
 
     # Set the default temporary directory
     if tmpdir is None:
@@ -807,9 +775,7 @@ def cluster_gene_families(
             disable_bar=disable_bar,
         )
 
-        logger.info(
-            f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes"
-        )
+        logger.info(f"Successfully wrote sequences for {len(pangenome2families_seq)} pangenomes")
 
         # Create combined MMseqs2 database
         logger.info("Creating combined MMseqs2 database...")
@@ -820,7 +786,7 @@ def cluster_gene_families(
             logger.debug(f"Combined database created: {merged_db}")
 
         except (PangenomeProcessingError, MMSeqsError) as e:
-            raise ClusteringError(f"Failed to create sequence database: {e}")
+            raise ClusteringError("Failed to create sequence database") from e
 
         # Perform clustering based on the selected method
         logger.info("Beginning gene family clustering...")
@@ -846,9 +812,7 @@ def cluster_gene_families(
         # Convert clustering results to TSV format
         logger.debug("Converting clustering results to TSV format...")
         cluster_results_file = tmpdir / "cluster_results.tsv"
-        create_tsv(
-            db=merged_db, clust=cluster_db, output=cluster_results_file, threads=threads
-        )
+        create_tsv(db=merged_db, clust=cluster_db, output=cluster_results_file, threads=threads)
 
         logger.info("Gene family clustering completed successfully")
         return cluster_results_file
@@ -933,9 +897,7 @@ def launch(args: argparse.Namespace) -> None:
     except ClusteringError as e:
         raise ClusteringError(f"Clustering process failed: {e}") from e
     except Exception as e:
-        raise ClusteringError(
-            f"Clustering process failed with unexpected error: {e}"
-        ) from e
+        raise ClusteringError(f"Clustering process failed with unexpected error: {e}") from e
     finally:
         # Clean up the temporary directory unless requested to keep it
         if not args.keep_tmp:
@@ -1185,8 +1147,7 @@ def parser_cluster(parser: argparse.ArgumentParser) -> None:
         required=True,
         choices=ClusteringMethod.CHOICES,
         metavar="METHOD",
-        help=f"Clustering method: {ClusteringMethod.LINCLUST} (fast) or "
-        f"{ClusteringMethod.CLUSTER} (sensitive)",
+        help=f"Clustering method: {ClusteringMethod.LINCLUST} (fast) or {ClusteringMethod.CLUSTER} (sensitive)",
     )
 
     # Add MMseqs2 specific arguments
