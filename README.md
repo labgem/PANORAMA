@@ -1,6 +1,6 @@
 # PANORAMA: A robust pangenome-based method for predicting and comparing biological systems across species
 
-[![Actions](https://img.shields.io/github/actions/workflow/status/labgem/PANORAMA/main.yml?branch=dev&event=pull_request&label=build&logo=github)](https://github.com/labgem/PANORAMA/actions/workflows/main.yml)
+[![Actions](https://img.shields.io/github/actions/workflow/status/labgem/PANORAMA/main.yml?branch=main&event=pull_request&label=build&logo=github)](https://github.com/labgem/PANORAMA/actions/workflows/main.yml)
 [![License](https://anaconda.org/bioconda/ppanggolin/badges/license.svg)](http://www.cecill.info/licences.fr.html)
 [![Bioconda](https://img.shields.io/conda/vn/bioconda/panorama?style=flat-square&maxAge=3600&logo=anaconda)](https://anaconda.org/bioconda/panorama)
 [![Source](https://img.shields.io/badge/source-GitHub-303030.svg?maxAge=2678400&style=flat-square)](https://github.com/labgem/PANORAMA/)
@@ -113,7 +113,7 @@ panorama compare_systems \
 The info subcommand extracts summary information from PPanGGOLiN **.h5 pangenome files** and generates interactive HTML
 reports. These reports support quick content comparison of each pangenome.
 
-## Info command line usage ️️📋
+## Info command line usage
 
 ```shell
 panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--content]
