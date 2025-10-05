@@ -55,9 +55,9 @@ dev = [
 ]
 #
 test = [
-    "pytest==7",
-    "natsort>=8",
-    "pytest-cov>=6.0.0",
+    "pytest>=8.4.2",
+    "natsort>=8.4.0",
+    "pytest-cov>=7.0.0",
 ]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
