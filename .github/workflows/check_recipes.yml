@@ -1,0 +1,49 @@
+name: conda recipe
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on schedule but only for the default branch (which is master)
+  schedule:
+    - cron: '0 7 * * 1'  # every monday at 7am
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "check_recipe"
+  check_recipe:
+    name: test bioconda recipes on ${{ matrix.os }} with python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: ['ubuntu-latest','macos-13']
+        python-version: ['3.10','3.11', '3.12']
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      # Setting up miniconda
+      - uses: conda-incubator/setup-miniconda@v3
+        with:
+          python-version: ${{ matrix.python-version }}
+          channels: bioconda,conda-forge,anaconda,defaults
+          activate-environment: test
+      - name: Set up test environment
+        shell: bash -l {0}
+        run: |
+          conda install -y panorama
+      - name: check installation
+        shell: bash -l {0}
+        run: |
+          python --version
+          panorama --version
+      - name: Download test data
+        uses: actions/checkout@v3
+        with:
+          repository: labgem/PANORAMA_test
+          path: test_data
+      - name: Run pytest with coverage
+        shell: bash -l {0}
+        run: |
+          pytest --cov=panorama  --test-data-path=test_data
