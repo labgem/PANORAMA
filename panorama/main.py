@@ -25,14 +25,28 @@ if sys.version_info < (3, 10):  # minimum is python3.9
 import argparse
 from importlib.metadata import distribution
 
-import panorama.alignment
-import panorama.annotate
-import panorama.compare
-import panorama.format.write_flat
-import panorama.info
-import panorama.systems
-import panorama.utility
-import panorama.workflow
+from panorama.alignment.align import launch as align_launcher
+from panorama.alignment.align import subparser as align_subparser
+from panorama.alignment.cluster import launch as cluster_launcher
+from panorama.alignment.cluster import subparser as cluster_subparser
+from panorama.annotate.annotate import launch as annotate_launcher
+from panorama.annotate.annotate import subparser as annotate_subparser
+from panorama.compare.context import launch as context_launcher
+from panorama.compare.context import subparser as context_subparser
+from panorama.compare.spots import launch as spots_launcher
+from panorama.compare.spots import subparser as spots_subparser
+from panorama.compare.systems import launch as systems_launcher
+from panorama.compare.systems import subparser as systems_subparser
+from panorama.format.write_flat import launch as write_flat_launcher
+from panorama.format.write_flat import subparser as write_flat_subparser
+from panorama.info.info import launch as info_launcher
+from panorama.info.info import subparser as info_subparser
+from panorama.systems.detection import launch as detection_launcher
+from panorama.systems.detection import subparser as detection_subparser
+from panorama.systems.write_systems import launch as write_systems_launcher
+from panorama.systems.write_systems import subparser as write_systems_subparser
+from panorama.utility.utility import launch as utility_launcher
+from panorama.utility.utility import subparser as utility_subparser
 
 # local modules
 from panorama.utils import (
@@ -40,6 +54,8 @@ from panorama.utils import (
     add_common_arguments,
     set_verbosity_level,
 )
+from panorama.workflow.pansystems import launch as pansystems_launcher
+from panorama.workflow.pansystems import subparser as pansystems_subparser
 
 version = distribution("panorama").version
 opening = r"""
@@ -126,18 +142,18 @@ def cmd_line():
         parser.print_help()
         sys.exit(0)
     subs = [
-        panorama.info.info_subparser(subparsers),
-        panorama.annotate.annotate_subparser(subparsers),
-        panorama.systems.detection_subparser(subparsers),
-        panorama.alignment.align_subparser(subparsers),
-        panorama.alignment.cluster_subparser(subparsers),
-        panorama.compare.context_subparser(subparsers),
-        panorama.compare.systems_subparser(subparsers),
-        panorama.compare.spots_subparser(subparsers),
-        panorama.format.write_flat_subparser(subparsers),
-        panorama.systems.write_systems_subparser(subparsers),
-        panorama.workflow.pansystems_subparser(subparsers),
-        panorama.utility.utility_subparser(subparsers),
+        info_subparser(subparsers),
+        annotate_subparser(subparsers),
+        detection_subparser(subparsers),
+        align_subparser(subparsers),
+        cluster_subparser(subparsers),
+        context_subparser(subparsers),
+        systems_subparser(subparsers),
+        spots_subparser(subparsers),
+        write_flat_subparser(subparsers),
+        write_systems_subparser(subparsers),
+        pansystems_subparser(subparsers),
+        utility_subparser(subparsers),
     ]
 
     for sub in subs:  # add options common to all subcommands
@@ -165,29 +181,29 @@ def main():
     set_verbosity_level(args)
 
     if args.subcommand == "info":
-        panorama.info.info_launcher(args)
+        info_launcher(args)
     elif args.subcommand == "annotation":
-        panorama.annotate.annotate_launcher(args)
+        annotate_launcher(args)
     elif args.subcommand == "systems":
-        panorama.systems.detection_launcher(args)
+        detection_launcher(args)
     elif args.subcommand == "align":
-        panorama.alignment.align_launcher(args)
+        align_launcher(args)
     elif args.subcommand == "cluster":
-        panorama.alignment.cluster_launcher(args)
+        cluster_launcher(args)
     elif args.subcommand == "compare_context":
-        panorama.compare.context_launcher(args)
+        context_launcher(args)
     elif args.subcommand == "compare_systems":
-        panorama.compare.systems_launcher(args)
+        systems_launcher(args)
     elif args.subcommand == "compare_spots":
-        panorama.compare.spots_launcher(args)
+        spots_launcher(args)
     elif args.subcommand == "write":
-        panorama.format.write_flat_launcher(args)
+        write_flat_launcher(args)
     elif args.subcommand == "write_systems":
-        panorama.systems.write_systems_launcher(args)
+        write_systems_launcher(args)
     elif args.subcommand == "utils":
-        panorama.utility.utility_launcher(args)
+        utility_launcher(args)
     elif args.subcommand == "pansystems":
-        panorama.workflow.pansystems_launcher(args)
+        pansystems_launcher(args)
 
 
 if __name__ == "__main__":
