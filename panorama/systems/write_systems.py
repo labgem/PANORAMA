@@ -7,25 +7,26 @@ This module provides functions to write information into the pangenome file
 
 # default libraries
 from __future__ import annotations
+
 import argparse
 import logging
 import time
-from typing import Any, Dict, List
-from multiprocessing import Manager, Lock
+from multiprocessing import Lock, Manager
 from pathlib import Path
+from typing import Any, Dict, List
 
 # installed libraries
 from tqdm import tqdm
 
 # local libraries
-from panorama.utils import mkdir
-from panorama.pangenomes import Pangenomes, Pangenome
+from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.systems.systems_association import create_pangenome_system_associations
+from panorama.systems.systems_partitions import systems_partition
 from panorama.systems.systems_projection import (
     project_pangenome_systems,
     write_projection_systems,
 )
-from panorama.systems.systems_partitions import systems_partition
-from panorama.systems.systems_association import create_pangenome_system_associations
+from panorama.utils import mkdir
 
 
 def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
@@ -59,9 +60,7 @@ def check_write_systems_args(args: argparse.Namespace) -> Dict[str, Any]:
             "between: projection, partition, association or proksee.",
         )
     if len(args.sources) != len(args.models):
-        raise argparse.ArgumentError(
-            argument=None, message="Number of sources and models are different."
-        )
+        raise argparse.ArgumentError(argument=None, message="Number of sources and models are different.")
 
     if "all" in args.association:
         args.association = ["RGPs", "spots", "modules"]
@@ -91,15 +90,13 @@ def check_pangenome_write_systems(pangenome: Pangenome, sources: List[str]) -> N
     """
     if pangenome.status["systems"] != "inFile":
         raise AttributeError(
-            "Systems have not been detected."
-            "Use 'panorama systems' subcommand to detect systems in pangenomes."
+            "Systems have not been detected.Use 'panorama systems' subcommand to detect systems in pangenomes."
         )
     else:
         for systems_source in sources:
             if systems_source not in pangenome.status["systems_sources"]:
                 logging.getLogger("PANORAMA").error(
-                    f"Systems in pangenome {pangenome.name} are: "
-                    f"{pangenome.status['systems_sources']}"
+                    f"Systems in pangenome {pangenome.name} are: {pangenome.status['systems_sources']}"
                 )
                 raise KeyError(
                     f"There is no systems in pangenome {pangenome.name}, for the source: {systems_source}."
@@ -149,8 +146,7 @@ def write_flat_systems_to_pangenome(
     pangenome_res_output = mkdir(output / f"{pangenome.name}", force=force)
     for system_source in pangenome.systems_sources:
         logging.getLogger("PANORAMA").debug(
-            f"Begin write systems for {pangenome.name} "
-            f"on system source: {system_source}"
+            f"Begin write systems for {pangenome.name} on system source: {system_source}"
         )
         pangenome_proj, organisms_proj = project_pangenome_systems(
             pangenome,
@@ -161,13 +157,9 @@ def write_flat_systems_to_pangenome(
             lock=lock,
             disable_bar=disable_bar,
         )
-        source_res_output = mkdir(
-            pangenome_res_output / f"{system_source}", force=force
-        )
+        source_res_output = mkdir(pangenome_res_output / f"{system_source}", force=force)
         if projection:
-            logging.getLogger("PANORAMA").debug(
-                f"Write projection systems for {pangenome.name}"
-            )
+            logging.getLogger("PANORAMA").debug(f"Write projection systems for {pangenome.name}")
             write_projection_systems(
                 source_res_output,
                 pangenome_proj,
@@ -178,14 +170,10 @@ def write_flat_systems_to_pangenome(
                 disable_bar,
             )
         if partition:
-            logging.getLogger("PANORAMA").debug(
-                f"Write partition systems for {pangenome.name}"
-            )
+            logging.getLogger("PANORAMA").debug(f"Write partition systems for {pangenome.name}")
             systems_partition(pangenome.name, pangenome_proj, source_res_output)
         if association:
-            logging.getLogger("PANORAMA").debug(
-                f"Write systems association for {pangenome.name}"
-            )
+            logging.getLogger("PANORAMA").debug(f"Write systems association for {pangenome.name}")
             create_pangenome_system_associations(
                 pangenome,
                 association,
@@ -196,9 +184,7 @@ def write_flat_systems_to_pangenome(
             )
         if proksee:
             raise NotImplementedError("Proksee not implemented")
-    logging.getLogger("PANORAMA").info(
-        f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds"
-    )
+    logging.getLogger("PANORAMA").info(f"Done write system for {pangenome.name} in {time.time() - begin:2f} seconds")
 
 
 def write_pangenomes_systems(
@@ -235,9 +221,7 @@ def write_pangenomes_systems(
         disable_bar (bool, optional): Flag to disable the progress bar. Defaults to False.
     """
     t0 = time.time()
-    for pangenome in tqdm(
-        pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar
-    ):
+    for pangenome in tqdm(pangenomes, total=len(pangenomes), unit="pangenome", disable=disable_bar):
         write_flat_systems_to_pangenome(
             pangenome,
             output,
@@ -253,9 +237,7 @@ def write_pangenomes_systems(
             force,
             disable_bar,
         )
-    logging.getLogger("PANORAMA").info(
-        f"Done write system for all pangenomes in {time.time() - t0:2f} seconds"
-    )
+    logging.getLogger("PANORAMA").info(f"Done write system for all pangenomes in {time.time() - t0:2f} seconds")
 
 
 def launch(args):
@@ -311,7 +293,7 @@ def subparser(sub_parser) -> argparse.ArgumentParser:
     Subparser to launch PANORAMA in the Command line.
 
     Args:
-        sub_parser (argparse.ArgumentParser): Subparser for align command.
+        sub_parser: Subparser for align command.
 
     Returns:
         argparse.ArgumentParser: Parser arguments for align command.
@@ -340,9 +322,7 @@ def parser_write(parser):
         nargs="?",
         help="A list of pangenome .h5 files in .tsv file",
     )
-    required.add_argument(
-        "-o", "--output", required=True, type=Path, nargs="?", help="Output directory"
-    )
+    required.add_argument("-o", "--output", required=True, type=Path, nargs="?", help="Output directory")
     required.add_argument(
         "-m",
         "--models",
@@ -368,8 +348,7 @@ def parser_write(parser):
         "--projection",
         required=False,
         action="store_true",
-        help="Project the systems on organisms. If organisms are specified, "
-        "projection will be done only for them.",
+        help="Project the systems on organisms. If organisms are specified, projection will be done only for them.",
     )
     optional.add_argument(
         "--partition",

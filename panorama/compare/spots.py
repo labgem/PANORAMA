@@ -14,34 +14,37 @@ family relatedness relationships (GFRR), and generating various output formats f
 
 # Default libraries
 from __future__ import annotations
+
 import argparse
 import logging
 from collections import defaultdict
-from pathlib import Path
-from typing import Any, Dict, List, Set, Tuple, Optional
-from shutil import rmtree
-from itertools import combinations
 from concurrent.futures import ThreadPoolExecutor
+from itertools import combinations
 from multiprocessing import Lock
+from pathlib import Path
+from shutil import rmtree
+from typing import Any, Dict, List, Optional, Set, Tuple
 
-# Installed libraries
-from tqdm import tqdm
 import networkx as nx
 import numpy as np
 import pandas as pd
 
-# Local libraries
-from panorama.pangenomes import Pangenomes, Pangenome
-from panorama.geneFamily import GeneFamily
-from panorama.region import Spot, ConservedSpots
-from panorama.utils import mkdir, init_lock
+# Installed libraries
+from tqdm import tqdm
+
 from panorama.compare.utils import (
-    parser_comparison,
-    common_launch,
     cluster_on_gfrr,
+    common_launch,
     compute_gfrr,
+    parser_comparison,
 )
+from panorama.geneFamily import GeneFamily
+
+# Local libraries
+from panorama.pangenomes import Pangenome, Pangenomes
+from panorama.region import ConservedSpots, Spot
 from panorama.utility.utility import check_models
+from panorama.utils import init_lock, mkdir
 
 # Configure logger
 logger = logging.getLogger("PANORAMA")
@@ -106,15 +109,11 @@ def check_compare_spots_args(args: argparse.Namespace) -> Dict[str, Any]:
             validated_models = []
             for model_path in args.models:
                 try:
-                    validated_model = check_models(
-                        model_path, disable_bar=args.disable_prog_bar
-                    )
+                    validated_model = check_models(model_path, disable_bar=args.disable_prog_bar)
                     validated_models.append(validated_model)
                     logger.debug(f"Validated model file: {model_path}")
                 except Exception as e:
-                    raise argparse.ArgumentError(
-                        argument=None, message=f"Invalid model file {model_path}: {e}"
-                    )
+                    raise argparse.ArgumentError(argument=None, message=f"Invalid model file {model_path}") from e
 
             # Configure systems-specific requirements
             need_info.update(
@@ -149,9 +148,7 @@ def check_compare_spots_args(args: argparse.Namespace) -> Dict[str, Any]:
     return need_info
 
 
-def check_pangenome_cs(
-    pangenome: Pangenome, sources: Optional[List[str]] = None
-) -> None:
+def check_pangenome_cs(pangenome: Pangenome, sources: Optional[List[str]] = None) -> None:
     """
     Validate pangenome status for conserved spots analysis.
 
@@ -213,10 +210,7 @@ def check_pangenome_cs(
         missing_sources = set(sources) - set(available_sources)
 
         if missing_sources:
-            logger.error(
-                f"Available systems sources in pangenome '{pangenome_name}': "
-                f"{available_sources}"
-            )
+            logger.error(f"Available systems sources in pangenome '{pangenome_name}': {available_sources}")
             raise KeyError(
                 f"Missing system sources in pangenome '{pangenome_name}': "
                 f"{list(missing_sources)}. "
@@ -286,9 +280,7 @@ def create_pangenome_spots_graph(
     # This information is used for border detection
     multigenic = pangenome.get_multigenics(dup_margin=dup_margin)
 
-    logger.debug(
-        f"Processing {pangenome.number_of_spots} spots from pangenome '{pangenome.name}'"
-    )
+    logger.debug(f"Processing {pangenome.number_of_spots} spots from pangenome '{pangenome.name}'")
 
     # Process each spot in the pangenome
     for spot in pangenome.spots:
@@ -345,10 +337,7 @@ def create_spots_graph(
         RuntimeError: If parallel processing fails or produces inconsistent results.
     """
     # Use ThreadPoolExecutor for parallel processing of pangenomes
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         # Set up progress tracking
         with tqdm(
             total=len(pangenomes),
@@ -356,16 +345,11 @@ def create_spots_graph(
             desc="Creating spots graphs",
             disable=disable_bar,
         ) as pbar:
-
             # Submit tasks for each pangenome
             futures = []
             for pangenome in pangenomes:
-                logger.debug(
-                    f"Submitting spot processing for pangenome '{pangenome.name}'"
-                )
-                future = executor.submit(
-                    create_pangenome_spots_graph, pangenome, dup_margin
-                )
+                logger.debug(f"Submitting spot processing for pangenome '{pangenome.name}'")
+                future = executor.submit(create_pangenome_spots_graph, pangenome, dup_margin)
                 future.add_done_callback(lambda p: pbar.update())
                 futures.append(future)
 
@@ -389,14 +373,13 @@ def create_spots_graph(
                     spothash2spot.update(pan_spots)
 
                 except Exception as e:
-                    raise RuntimeError(f"Failed to process pangenome: {e}")
+                    raise RuntimeError("Failed to process pangenome") from e
 
     total_spots = len(spots_graph.nodes)
     unique_pangenomes = len(set(spots2pangenome.values()))
 
     logger.info(
-        f"Successfully created unified spots graph with {total_spots} spots "
-        f"from {unique_pangenomes} pangenomes"
+        f"Successfully created unified spots graph with {total_spots} spots from {unique_pangenomes} pangenomes"
     )
 
     return spots_graph, spots2borders, spots2pangenome, spothash2spot
@@ -440,9 +423,7 @@ def compute_gfrr_edges(
         if spots2pangenome[spot1] != spots2pangenome[spot2]
     ]
 
-    logger.info(
-        f"Computing GFRR edges for {len(spots_pairs)} inter-pangenome spot pairs"
-    )
+    logger.info(f"Computing GFRR edges for {len(spots_pairs)} inter-pangenome spot pairs")
 
     # Track statistics for reporting
     edges_added = 0
@@ -455,7 +436,6 @@ def compute_gfrr_edges(
         desc="Computing GFRR edges",
         disable=disable_bar,
     ) as pbar:
-
         for spot1, spot2 in spots_pairs:
             # Skip if the edge already exists (shouldn't happen in normal flow)
             if graph.has_edge(spot1, spot2):
@@ -474,13 +454,9 @@ def compute_gfrr_edges(
 
             # Compute GFRR metrics between the two spots
             try:
-                min_gfrr, max_gfrr, shared_count = compute_gfrr(
-                    border1_families, border2_families
-                )
+                min_gfrr, max_gfrr, shared_count = compute_gfrr(border1_families, border2_families)
             except ValueError as e:
-                logger.warning(
-                    f"GFRR computation failed for spots {spot1}, {spot2}: {e}"
-                )
+                logger.warning(f"GFRR computation failed for spots {spot1}, {spot2}: {e}")
                 pbar.update()
                 continue
 
@@ -506,7 +482,7 @@ def compute_gfrr_edges(
 
     logger.info(
         f"Added {edges_added} edges out of {total_comparisons} comparisons "
-        f"({edges_added/total_comparisons*100:.1f}% pass thresholds)"
+        f"({edges_added / total_comparisons * 100:.1f}% pass thresholds)"
     )
 
 
@@ -553,14 +529,11 @@ def add_systems_info(pangenomes: Pangenomes, cs_graph: nx.Graph) -> None:
                     node2system_count[spot_hash] += 1
 
                     logger.debug(
-                        f"Associated system '{system.name}' with spot {spot.ID} "
-                        f"from pangenome '{pangenome.name}'"
+                        f"Associated system '{system.name}' with spot {spot.ID} from pangenome '{pangenome.name}'"
                     )
 
     # Ensure all nodes have all system attributes (set False for missing systems)
-    logger.info(
-        f"Standardizing {len(all_system_names)} system attributes across all nodes"
-    )
+    logger.info(f"Standardizing {len(all_system_names)} system attributes across all nodes")
 
     for node_hash in cs_graph.nodes:
         node_attributes = cs_graph.nodes[node_hash]
@@ -633,9 +606,7 @@ def create_pangenome_system_graph(
                     spot=spot.ID,
                     system_id=system.ID if hasattr(system, "ID") else None,
                     num_model_families=(
-                        system.number_of_model_gene_families
-                        if hasattr(system, "model_families")
-                        else 0
+                        system.number_of_model_gene_families if hasattr(system, "model_families") else 0
                     ),
                 )
 
@@ -656,10 +627,7 @@ def create_pangenome_system_graph(
     # Set organism percentage as node attribute
     nx.set_node_attributes(graph, organism_percentages, "percent_org")
 
-    logger.debug(
-        f"Created system graph with {len(graph.nodes)} system-spot nodes "
-        f"from pangenome '{pangenome.name}'"
-    )
+    logger.debug(f"Created system graph with {len(graph.nodes)} system-spot nodes from pangenome '{pangenome.name}'")
 
     return graph, sys2pangenome, syshash2sys, systemhash2conserved_spots
 
@@ -698,26 +666,18 @@ def create_systems_graph(
         RuntimeError: If parallel processing fails for any pangenome.
     """
     # Use ThreadPoolExecutor for parallel processing
-    with ThreadPoolExecutor(
-        max_workers=threads, initializer=init_lock, initargs=(lock,)
-    ) as executor:
-
+    with ThreadPoolExecutor(max_workers=threads, initializer=init_lock, initargs=(lock,)) as executor:
         with tqdm(
             total=len(pangenomes),
             unit="Pangenome",
             desc="Creating systems graphs",
             disable=disable_bar,
         ) as pbar:
-
             # Submit processing tasks for each pangenome
             futures = []
             for pangenome in pangenomes:
-                logger.debug(
-                    f"Submitting system processing for pangenome '{pangenome.name}'"
-                )
-                future = executor.submit(
-                    create_pangenome_system_graph, pangenome, canonical
-                )
+                logger.debug(f"Submitting system processing for pangenome '{pangenome.name}'")
+                future = executor.submit(create_pangenome_system_graph, pangenome, canonical)
                 future.add_done_callback(lambda p: pbar.update())
                 futures.append(future)
 
@@ -730,9 +690,7 @@ def create_systems_graph(
             # Collect and merge results from all pangenomes
             for future in futures:
                 try:
-                    pan_graph, pan_sys_mapping, pan_sys_objects, pan_conserved = (
-                        future.result()
-                    )
+                    pan_graph, pan_sys_mapping, pan_sys_objects, pan_conserved = future.result()
 
                     # Merge graph nodes with their attributes
                     systems_graph.add_nodes_from(pan_graph.nodes(data=True))
@@ -743,14 +701,13 @@ def create_systems_graph(
                     systemhash2conserved_spots.update(pan_conserved)
 
                 except Exception as e:
-                    raise RuntimeError(f"Failed to process pangenome systems: {e}")
+                    raise RuntimeError("Failed to process pangenome systems") from e
 
     total_system_nodes = len(systems_graph.nodes)
     unique_pangenomes = len(set(systems2pangenome.values()))
 
     logger.info(
-        f"Created unified systems graph with {total_system_nodes} system-spot nodes "
-        f"from {unique_pangenomes} pangenomes"
+        f"Created unified systems graph with {total_system_nodes} system-spot nodes from {unique_pangenomes} pangenomes"
     )
 
     return (
@@ -792,23 +749,19 @@ def graph_systems_link_with_conserved_spots(
     logger.info("Starting systems linkage analysis with conserved spots")
 
     # Create a unified systems graph from all pangenomes
-    systems_graph, system2pangenome, systemhash2system, systemhash2conserved_spots = (
-        create_systems_graph(pangenomes, canonical, threads, lock, disable_bar)
+    systems_graph, system2pangenome, systemhash2system, systemhash2conserved_spots = create_systems_graph(
+        pangenomes, canonical, threads, lock, disable_bar
     )
 
     if len(systems_graph.nodes) == 0:
-        logger.warning(
-            "No systems found in pangenomes - skipping systems linkage analysis"
-        )
+        logger.warning("No systems found in pangenomes - skipping systems linkage analysis")
         return
 
     # Calculate total possible edges for progress tracking
     num_nodes = len(systems_graph.nodes)
     total_combinations = num_nodes * (num_nodes - 1) // 2
 
-    logger.info(
-        f"Computing edges between {num_nodes} system nodes ({total_combinations} combinations)"
-    )
+    logger.info(f"Computing edges between {num_nodes} system nodes ({total_combinations} combinations)")
 
     # Compute edges based on shared conserved spots
     edges_added = 0
@@ -818,13 +771,9 @@ def graph_systems_link_with_conserved_spots(
         desc="Computing system linkages",
         disable=disable_bar,
     ) as pbar:
-
         for sys_hash1, sys_hash2 in pbar:
             # Find conserved spots shared between these two systems
-            common_conserved_spots = (
-                systemhash2conserved_spots[sys_hash1]
-                & systemhash2conserved_spots[sys_hash2]
-            )
+            common_conserved_spots = systemhash2conserved_spots[sys_hash1] & systemhash2conserved_spots[sys_hash2]
 
             # Add edge if systems share conserved spots
             if common_conserved_spots:
@@ -845,9 +794,7 @@ def graph_systems_link_with_conserved_spots(
                     system_obj = systemhash2system[sys_hash]
 
                     # Update node attributes
-                    node_attr.update(
-                        {"system_name": system_obj.name, "pangenome": pangenome_name}
-                    )
+                    node_attr.update({"system_name": system_obj.name, "pangenome": pangenome_name})
 
                     # Collect associated spot IDs for this system in shared conserved spots
                     associated_spots = set()
@@ -881,9 +828,7 @@ def graph_systems_link_with_conserved_spots(
     if community == "Louvain":
         logger.info("Performing Louvain community detection")
         louvain_graph = systems_graph.copy()
-        partitions = nx.algorithms.community.louvain_communities(
-            louvain_graph, weight="weight"
-        )
+        partitions = nx.algorithms.community.louvain_communities(louvain_graph, weight="weight")
 
         cluster_id = 1
         clusters_retained = 0
@@ -891,9 +836,7 @@ def graph_systems_link_with_conserved_spots(
         for cluster_systems in partitions:
             if len(cluster_systems) > 1:  # Only process multi-node clusters
                 # Check if the cluster spans multiple pangenomes
-                pangenomes_in_cluster = {
-                    system2pangenome[sys_hash] for sys_hash in cluster_systems
-                }
+                pangenomes_in_cluster = {system2pangenome[sys_hash] for sys_hash in cluster_systems}
 
                 if len(pangenomes_in_cluster) > 1:
                     # Multi-pangenome cluster - retain and label
@@ -920,33 +863,23 @@ def graph_systems_link_with_conserved_spots(
                 # Single-node cluster - remove
                 louvain_graph.remove_nodes_from(cluster_systems)
 
-        logger.info(
-            f"Louvain clustering: retained {clusters_retained} inter-pangenome clusters"
-        )
+        logger.info(f"Louvain clustering: retained {clusters_retained} inter-pangenome clusters")
 
         # Save Louvain clustering results
         if graph_formats is not None:
             for fmt in graph_formats:
                 if fmt == "gexf":
-                    graph_file = (
-                        output / "systems_link_with_conserved_spots_louvain.gexf"
-                    )
+                    graph_file = output / "systems_link_with_conserved_spots_louvain.gexf"
                     logger.info(f"Writing Louvain graph in GEXF format: {graph_file}")
                     nx.readwrite.gexf.write_gexf(louvain_graph, graph_file)
                 elif fmt == "graphml":
-                    graph_file = (
-                        output / "systems_link_with_conserved_spots_louvain.graphml"
-                    )
-                    logger.info(
-                        f"Writing Louvain graph in GraphML format: {graph_file}"
-                    )
+                    graph_file = output / "systems_link_with_conserved_spots_louvain.graphml"
+                    logger.info(f"Writing Louvain graph in GraphML format: {graph_file}")
                     nx.readwrite.graphml.write_graphml(louvain_graph, graph_file)
 
     if community == "MST":
         # MINIMUM SPANNING TREE (MST) CLUSTERING ANALYSIS
-        logger.info(
-            "Performing MST-based clustering with automatic threshold detection"
-        )
+        logger.info("Performing MST-based clustering with automatic threshold detection")
 
         if len(systems_graph.edges) == 0:
             logger.warning("No edges in systems graph - skipping MST analysis")
@@ -972,29 +905,22 @@ def graph_systems_link_with_conserved_spots(
             threshold = sorted_weights[max_jump_index]
 
             logger.info(
-                f"MST threshold detection: identified threshold = {threshold} "
-                f"(max jump at index {max_jump_index})"
+                f"MST threshold detection: identified threshold = {threshold} (max jump at index {max_jump_index})"
             )
         else:
             # Fallback for the single edge case
             threshold = sorted_weights[0]
-            logger.info(
-                f"MST threshold detection: single edge, using weight = {threshold}"
-            )
+            logger.info(f"MST threshold detection: single edge, using weight = {threshold}")
 
         # Remove edges with weights above the threshold
-        heavy_edges = [
-            (u, v) for u, v, d in mst.edges(data=True) if d["weight"] > threshold
-        ]
+        heavy_edges = [(u, v) for u, v, d in mst.edges(data=True) if d["weight"] > threshold]
         if heavy_edges:
             mst.remove_edges_from(heavy_edges)
             logger.info(f"Removed {len(heavy_edges)} edges above threshold from MST")
 
         # Identify connected components as clusters
         mst_clusters_retained = 0
-        for cluster_id, cluster_systems in enumerate(
-            nx.connected_components(mst), start=1
-        ):
+        for cluster_id, cluster_systems in enumerate(nx.connected_components(mst), start=1):
             if len(cluster_systems) > 1:
                 # Assign cluster labels to nodes
                 for sys_hash in cluster_systems:
@@ -1025,9 +951,7 @@ def graph_systems_link_with_conserved_spots(
                     logger.info(f"Writing MST graph in GEXF format: {graph_file}")
                     nx.readwrite.gexf.write_gexf(mst, graph_file)
                 elif fmt == "graphml":
-                    graph_file = (
-                        output / "systems_link_with_conserved_spots_mst.graphml"
-                    )
+                    graph_file = output / "systems_link_with_conserved_spots_mst.graphml"
                     logger.info(f"Writing MST graph in GraphML format: {graph_file}")
                     nx.readwrite.graphml.write_graphml(mst, graph_file)
 
@@ -1081,7 +1005,6 @@ def write_conserved_spots(
         desc="Processing conserved spots",
         disable=disable_bar,
     ) as pbar:
-
         for conserved_spot in pbar:
             # Data for an individual conserved spot file
             individual_spot_data = []
@@ -1102,9 +1025,7 @@ def write_conserved_spots(
                 # Add detailed information for an individual file
                 for rgp in spot.regions:
                     family_names = [family.name for family in rgp.families]
-                    individual_spot_data.append(
-                        [spot.ID, spot.pangenome.name, rgp.name, ",".join(family_names)]
-                    )
+                    individual_spot_data.append([spot.ID, spot.pangenome.name, rgp.name, ",".join(family_names)])
 
             # Write an individual conserved spot file
             if individual_spot_data:
@@ -1112,14 +1033,10 @@ def write_conserved_spots(
                     individual_spot_data,
                     columns=["Spot_ID", "Pangenome", "RGP_Name", "Gene_Families"],
                 )
-                individual_df = individual_df.sort_values(
-                    ["Spot_ID", "Pangenome", "RGP_Name"]
-                )
+                individual_df = individual_df.sort_values(["Spot_ID", "Pangenome", "RGP_Name"])
 
                 individual_file = cs_dir / f"conserved_spot_{conserved_spot.ID}.tsv"
-                individual_df.to_csv(
-                    individual_file, sep="\t", header=True, index=False
-                )
+                individual_df.to_csv(individual_file, sep="\t", header=True, index=False)
 
                 logger.debug(f"Written individual file: {individual_file}")
 
@@ -1148,10 +1065,7 @@ def write_conserved_spots(
         summary_file = output / "all_conserved_spots.tsv"
         summary_df.to_csv(summary_file, sep="\t", header=True, index=False)
 
-        logger.info(
-            f"Written summary file: {summary_file} "
-            f"({len(all_conserved_spots_data)} spot entries)"
-        )
+        logger.info(f"Written summary file: {summary_file} ({len(all_conserved_spots_data)} spot entries)")
 
     # Add systems information to the graph if available
     if cs_graph is not None:
@@ -1166,16 +1080,12 @@ def write_conserved_spots(
                 "Pass cs_graph parameter to enable graph export."
             )
 
-        logger.info(
-            f"Exporting conserved spots graph in {len(graph_formats)} format(s)"
-        )
+        logger.info(f"Exporting conserved spots graph in {len(graph_formats)} format(s)")
 
         for fmt in graph_formats:
             if fmt == "gexf":
                 graph_file = output / "conserved_spots.gexf"
-                logger.info(
-                    f"Writing conserved spots graph in GEXF format: {graph_file}"
-                )
+                logger.info(f"Writing conserved spots graph in GEXF format: {graph_file}")
                 try:
                     nx.readwrite.gexf.write_gexf(cs_graph, graph_file)
                 except Exception as e:
@@ -1183,9 +1093,7 @@ def write_conserved_spots(
 
             elif fmt == "graphml":
                 graph_file = output / "conserved_spots.graphml"
-                logger.info(
-                    f"Writing conserved spots graph in GraphML format: {graph_file}"
-                )
+                logger.info(f"Writing conserved spots graph in GraphML format: {graph_file}")
                 try:
                     nx.readwrite.graphml.write_graphml(cs_graph, graph_file)
                 except Exception as e:
@@ -1234,9 +1142,7 @@ def compare_spots(
         RuntimeError: If clustering fails or produces no valid clusters.
     """
     if gfrr_metrics not in ["min_gfrr", "max_gfrr"]:
-        raise ValueError(
-            f"Invalid gfrr_metrics: {gfrr_metrics}. Must be 'min_gfrr' or 'max_gfrr'"
-        )
+        raise ValueError(f"Invalid gfrr_metrics: {gfrr_metrics}. Must be 'min_gfrr' or 'max_gfrr'")
 
     logger.info(
         f"Starting conserved spots comparison with {len(pangenomes)} pangenomes "

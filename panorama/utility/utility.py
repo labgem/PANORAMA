@@ -8,19 +8,21 @@ This module provides some utilities function
 # default libraries
 import argparse
 import logging
-from typing import List
 from pathlib import Path
+from typing import List
 
-# installed libraries
-from tqdm import tqdm
 import pandas as pd
 from ppanggolin.utils import restricted_float
 
+# installed libraries
+from tqdm import tqdm
+
+from panorama.systems.models import Models
+from panorama.utility.genInput import create_hmm_list_file, read_metadata
+from panorama.utility.translate import KNOWN_SOURCES, launch_translate
+
 # local libraries
 from panorama.utils import mkdir
-from panorama.utility.genInput import create_hmm_list_file, read_metadata
-from panorama.utility.translate import launch_translate, KNOWN_SOURCES
-from panorama.systems.models import Models
 
 
 def check_parameters(args: argparse.Namespace) -> None:
@@ -62,9 +64,7 @@ def check_parameters(args: argparse.Namespace) -> None:
                 args.target_coverage = args.coverage[1]
 
     if not any(arg is not None for arg in [args.hmm, args.translate, args.models]):
-        raise argparse.ArgumentError(
-            argument=None, message="You did not provide any action to do"
-        )
+        raise argparse.ArgumentError(argument=None, message="You did not provide any action to do")
     if args.hmm is not None:
         if args.output is None:
             raise argparse.ArgumentError(
@@ -80,8 +80,7 @@ def check_parameters(args: argparse.Namespace) -> None:
             )
         if args.meta is not None:
             logging.getLogger("PANORAMA").warning(
-                "Metadata are not supported for models."
-                "Report an issue if you want it in future version"
+                "Metadata are not supported for models.Report an issue if you want it in future version"
             )
     if args.translate is not None:
         if args.output is None:
@@ -90,15 +89,12 @@ def check_parameters(args: argparse.Namespace) -> None:
                 message="Required to give an output directory to translate",
             )
         if args.source is None:
-            raise argparse.ArgumentError(
-                argument=args.source, message="Required to know how to translate models"
-            )
+            raise argparse.ArgumentError(argument=args.source, message="Required to know how to translate models")
         else:
             if args.source not in KNOWN_SOURCES:
                 raise argparse.ArgumentError(
                     argument=args.source,
-                    message="Unknown source. choose one of this source: "
-                    f"{', '.join(KNOWN_SOURCES)}",
+                    message=f"Unknown source. choose one of this source: {', '.join(KNOWN_SOURCES)}",
                 )
         check_coverage_parameters()
 
@@ -156,7 +152,7 @@ def check_models(models_list: Path, disable_bar: bool = False) -> Models:
     logging.getLogger("PANORAMA").info("Check models...")
     models_df = pd.read_csv(models_list, sep="\t", names=["name", "path"])
     models = Models()
-    for idx, model_file in tqdm(
+    for _, model_file in tqdm(
         models_df["path"].items(),
         total=models_df.shape[0],
         desc="Check models",
@@ -165,11 +161,11 @@ def check_models(models_list: Path, disable_bar: bool = False) -> Models:
     ):
         try:
             models.read(Path(model_file))
-        except Exception:
+        except Exception as error:
             raise Exception(
                 f"Problem with model {model_file}. Check that you give correct input and option. "
                 "If nothing wrong please report an issue on our github."
-            )
+            ) from error
     return models
 
 
@@ -214,9 +210,7 @@ def launch(args: argparse.Namespace):
             force=args.force,
             disable_bar=args.disable_prog_bar,
         )
-        check_models(
-            models_list=outdir / "models_list.tsv", disable_bar=args.disable_prog_bar
-        )
+        check_models(models_list=outdir / "models_list.tsv", disable_bar=args.disable_prog_bar)
 
     if args.models is not None:
         outdir = mkdir(output=args.output, force=args.force)
@@ -267,8 +261,7 @@ def parser_utils(parser: argparse.ArgumentParser):
     )
     hmm = parser.add_argument_group(
         title="HMM utils arguments",
-        description="Arguments to create an HMM list. "
-        "Arguments are common with translate arguments.",
+        description="Arguments to create an HMM list. Arguments are common with translate arguments.",
     )
     hmm.add_argument(
         "--hmm",

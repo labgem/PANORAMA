@@ -6,9 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "PANORAMA"
 
 authors = [
-    { name = "Jérôme Arnoux", email = "arnoux.jeromepj@gmail.com"},
-    { name = "Jean Mainguy", email = "jmainguy@genoscope.cns.fr"},
-
+    { name = "Jérôme Arnoux", email = "arnoux.jeromepj@gmail.com" },
+    { name = "Jean Mainguy", email = "jmainguy@genoscope.cns.fr" },
 ]
 #maintainers
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
@@ -52,8 +51,7 @@ dev = [
     "seaborn>=0.13",
     "vitables>=3.0.0",
     "viztracer>=0.16.2",
-    "black>=24.10.0",
-    "flake8>=7.3.0"
+    "ruff>=0.13.3"
 ]
 notebook = [
     "jupyter-book>=1.0.0",
@@ -65,7 +63,7 @@ test = [
     "pytest==7",
     "natsort>=8",
     "pytest-cov>=6.0.0",
-    ]
+]
 [project.urls]
 Homepage = "https://labgem.genoscope.cns.fr"
 Repository = "https://github.com/labgem/PANORAMA"
@@ -95,3 +93,64 @@ log_cli = true
 log_cli_level = "WARNING"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
+
+[tool.ruff]
+line-length = 120
+indent-width = 4
+
+# Assume Python 3.9
+target-version = "py310"
+
+[tool.ruff.lint]
+# Enable Pyflakes (`F`) and a subset of the pycodestyle (`E`) codes by default.
+# Unlike Flake8, Ruff doesn't enable pycodestyle warnings (`W`) or
+# McCabe complexity (`C901`) by default.
+select = [
+    "E", # pycodestyle errors
+    "W", # pycodestyle warnings
+    "F", # pyflakes
+    "I", # isort
+    "B", # flake8-bugbear
+]
+ignore = [
+    "E203",
+    "W291"
+]
+exclude = [
+    "docs/",
+    ".github/"
+]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+#fixable = ["ALL"]
+#unfixable = []
+
+# Allow unused variables when underscore-prefixed.
+dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
+
+# Enable auto-formatting of code examples in docstrings. Markdown,
+# reStructuredText code/literal blocks and doctests are all supported.
+#
+# This is currently disabled by default, but it is planned for this
+# to be opt-out in the future.
+docstring-code-format = false
+
+# Set the line length limit used when formatting code snippets in
+# docstrings.
+#
+# This only has an effect when the `docstring-code-format` setting is
+# enabled.
+docstring-code-line-length = "dynamic"

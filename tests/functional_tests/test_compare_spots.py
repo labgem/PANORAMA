@@ -1,14 +1,18 @@
+from pathlib import Path
+
 import pytest
 
-from pathlib import Path
+from tests.functional_tests.test_utils_cmd import utils_clustering, utils_model_list  # noqa: F401
 from tests.utils.run_command import run_command
-from tests.functional_tests.test_utils_cmd import utils_model_list, utils_clustering
-from tests.utils.file_compare import assert_or_update_file
 
 
 @pytest.mark.requires_test_data
 def test_compare_spots_command(
-    pangenome_list_file, utils_model_list, utils_clustering, num_cpus, update_golden
+    pangenome_list_file,
+    utils_model_list,  # noqa: F811
+    utils_clustering,  # noqa: F811
+    num_cpus,
+    update_golden,
 ):
     # TODO Manage the problem with reproducibility for better testing
 
@@ -21,7 +25,7 @@ def test_compare_spots_command(
         f"--cpus {num_cpus} "
         f"--cluster {utils_clustering} "
         "--systems "
-        f"-s defensefinder "
+        "-s defensefinder "
         f"-m {utils_model_list} "
     )
     run_command(compare_spots_command)

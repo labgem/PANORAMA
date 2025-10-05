@@ -7,7 +7,18 @@ from typing import Generator, List, Set, Tuple
 
 # installed libraries
 from ppanggolin.genome import Organism
-from ppanggolin.region import Region as RGP, Spot as Hotspot, Module as Mod, GeneContext as GeneCont
+from ppanggolin.region import (
+    GeneContext as GeneCont,
+)
+from ppanggolin.region import (
+    Module as Mod,
+)
+from ppanggolin.region import (
+    Region as RGP,
+)
+from ppanggolin.region import (
+    Spot as Hotspot,
+)
 
 # local libraries
 from panorama.geneFamily import GeneFamily
@@ -117,8 +128,8 @@ class ConservedSpots:
     def __getitem__(self, key: Tuple[str, int]) -> Spot:
         try:
             return self._spots_getter[key]
-        except KeyError:
-            raise KeyError(f"Spot {key} is not in conserved spot with ID {self.ID}")
+        except KeyError as error:
+            raise KeyError(f"Spot {key} is not in conserved spot with ID {self.ID}") from error
 
     def add(self, spot: Spot) -> None:
         """
@@ -253,8 +264,8 @@ class Module(Mod):
         """
         try:
             unit = self._unit_getter[identifier]
-        except KeyError:
-            raise KeyError(f"System {identifier} is not associated to module {self.ID}")
+        except KeyError as error:
+            raise KeyError(f"System {identifier} is not associated to module {self.ID}") from error
         else:
             return unit
 
@@ -266,7 +277,8 @@ class Module(Mod):
             unit (System): The system to add to the module.
 
         Raises:
-            Exception: If a system with the same ID but different name or gene families is already associated with the module.
+            Exception: If a system with the same ID but different name or
+            gene families is already associated with the module.
         """
         try:
             unit_in = self.get_unit(unit.ID)
@@ -274,12 +286,16 @@ class Module(Mod):
             self._unit_getter[unit.ID] = unit
         else:
             if unit.name != unit_in.name:
-                raise Exception("Two system with same ID but with different name are trying to be added to module."
-                                "This error is unexpected. Please report on our GitHub")
+                raise Exception(
+                    "Two system with same ID but with different name are trying to be added to module."
+                    "This error is unexpected. Please report on our GitHub"
+                )
             else:
                 if unit.families != unit_in.families:
-                    raise Exception("Two system with same ID and name but with different gene families are trying to be"
-                                    " added to module. This error is unexpected. Please report on our GitHub")
+                    raise Exception(
+                        "Two system with same ID and name but with different gene families are trying to be"
+                        " added to module. This error is unexpected. Please report on our GitHub"
+                    )
 
     @property
     def systems(self):
@@ -296,19 +312,28 @@ class Module(Mod):
 
 
 class GeneContext(GeneCont):
-
     """
     A class used to represent a gene context
 
     """
 
-    def __init__(self, pangenome, gc_id: int, families: Set[GeneFamily], families_of_interest: Set[GeneFamily]):
+    def __init__(
+        self,
+        pangenome,
+        gc_id: int,
+        families: Set[GeneFamily],
+        families_of_interest: Set[GeneFamily],
+    ):
         """
         :param gc_id : identifier of the Gene context
         :param families: Gene families included in the GeneContext
         """
 
-        super().__init__(gc_id=f"{pangenome.name}_{gc_id}", families=families, families_of_interest=families_of_interest)
+        super().__init__(
+            gc_id=f"{pangenome.name}_{gc_id}",
+            families=families,
+            families_of_interest=families_of_interest,
+        )
 
         self.pangenome = pangenome.name
 
@@ -316,15 +341,16 @@ class GeneContext(GeneCont):
         """
         Summarize gene context information in a dict
 
-        :return: dict with gene context info. 
+        :return: dict with gene context info.
         """
 
-        return {"GeneContext ID": self.ID,
-                "pangenome": self.pangenome,
-                "Gene Family count": len(self.families),
-                "Partitions": ";".join({f.named_partition for f in self.families})
-                }
-    
+        return {
+            "GeneContext ID": self.ID,
+            "pangenome": self.pangenome,
+            "Gene Family count": len(self.families),
+            "Partitions": ";".join({f.named_partition for f in self.families}),
+        }
+
     def __gt__(self, other):
         return self.ID > other.ID
 

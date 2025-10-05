@@ -25,7 +25,7 @@ pip install -e .[dev]  # -e for editable mode (recommended)
 
 This installs:
 
-- **[Black](https://black.readthedocs.io/)** - Code formatter
+- **[Ruff](https://docs.astral.sh/ruff/)** - Code formatter
 - **VizTracer** - Performance profiling
 - **Vitables** - Interface to open HDF5 files
 - And more!
@@ -33,6 +33,7 @@ This installs:
 Now you're ready to develop!
 
 ## Code Style and Formatting
+
 ```{tip}
 Most IDE integrates plugins for code formatting and linting.
 Look at your IDE's documentation for more information.
@@ -53,47 +54,56 @@ Python's official style guide. It covers things like:
 **The good news?** You don't need to memorize this! Our tools handle most of it automatically.
 ```
 
+### Ruff: Fast, All-in-One Python Linter and Formatter
 
-### Black: The Uncompromising Code Formatter
+We use [Ruff](https://docs.astral.sh/ruff/) for both linting and formatting. Ruff is 10-100x faster than traditional
+tools and replaces Black, flake8, isort, and more - all with a single tool and unified configuration.
 
-We use [Black](https://black.readthedocs.io/) to format all Python code. Black makes formatting decisions for you, so
-you can focus on logic instead of style debates.
-
-**Format your code before committing:**
-
-```shell
-# Format all Python files in the project
-black panorama/ tests/
-
-# Check what would change without modifying files
-black --check panorama/ tests/
-
-# Format a specific file
-black panorama/systems/system.py
-```
-
-Black is opinionated, which is actually great - no more discussions about where to put line breaks!
-
-```{hint}
-Set up your editor to run Black on save:
-- **VSCode**: Install the Python extension, enable format on save
-- **PyCharm**: Use the Black plugin
-- **Vim**: Use the black.vim plugin
-```
-
-### Linting with flake8
-
-While Black handles formatting, [flake8](https://flake8.pycqa.org/) catches potential bugs and style issues:
+#### Format and check your code before committing:
 
 ```shell
-# Check the entire project
-flake8 panorama/ tests/
+# Format all Python files in the project (replaces Black)
+ruff format panorama/ tests/
 
-# Check specific files
-flake8 panorama/systems/system.py
+# Check formatting without modifying files
+ruff format --check panorama/ tests/
+
+# Lint the code (replaces flake8)
+ruff check panorama/ tests/
+
+# Lint with auto-fix
+ruff check --fix panorama/ tests/
+
+# Format and lint a specific file
+ruff format panorama/systems/system.py
+ruff check panorama/systems/system.py
 ```
 
-Fix the issues flake8 reports before pushing. Most are quick fixes!
+Ruff's formatter is compatible with Black (99% identical output), so you get the same uncompromising style without the debates!
+Set up your editor to run Ruff on save:
+- **VSCode**: Install the Ruff extension, enable format on save
+- **PyCharm**: Use the Ruff plugin
+- **Vim**: Use the ruff.vim plugin or ALE
+
+#### Configuration
+
+Ruff is configured in pyproject.toml:
+```toml
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "B",   # flake8-bugbear
+]
+ignore = ["E203"]
+```
+
+Fix the issues Ruff reports before pushing. Most are quick fixes!
 
 ## Writing Clean, Maintainable Code
 
@@ -138,6 +148,7 @@ Each function should do one thing well.
 ## Error Handling and Validation
 
 We try to anticipate and handle errors as early as possible:
+
 - think about what could go wrong
 - Choose the Right Exception Type
 - Validate Input Early
@@ -151,11 +162,9 @@ We try to anticipate and handle errors as early as possible:
 **"Premature optimization is the root of all evil"** - Donald Knuth
 ```
 
-Don't guess where your code is slow - measure it! 
+Don't guess where your code is slow - measure it!
 We use [VizTracer](https://github.com/gaogaotiantian/viztracer) for performance profiling.
 But you're free to use any tool you like.
-
-
 
 ### When to Optimize
 

@@ -7,20 +7,20 @@ This module provides classes to represent a pangenome or a set of pangenomes
 
 # default libraries
 import logging
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Generator, List, Set, Tuple, Union
-from collections import defaultdict
 
 # install libraries
 import pandas as pd
-from tqdm import tqdm
-from ppanggolin.pangenome import Pangenome as Pan
 from ppanggolin.pangenome import GeneFamily as Fam
+from ppanggolin.pangenome import Pangenome as Pan
+from tqdm import tqdm
 
 # local libraries
-from panorama.systems.system import System, ClusterSystems
-from panorama.geneFamily import GeneFamily, Akin
-from panorama.region import Spot, ConservedSpots
+from panorama.geneFamily import Akin, GeneFamily
+from panorama.region import ConservedSpots, Spot
+from panorama.systems.system import ClusterSystems, System
 
 
 class Pangenome(Pan):
@@ -34,8 +34,7 @@ class Pangenome(Pan):
     """
 
     def __init__(self, name, taxid: int = None):
-        """Constructor method.
-        """
+        """Constructor method."""
         super().__init__()
         self._system_getter = {}
         self._name2system = {}
@@ -43,7 +42,7 @@ class Pangenome(Pan):
         self._systems_sources2metada_sources = None
         self.name = name
         self.taxid = taxid
-        self.status.update({"systems": 'No', "systems_sources": set()})
+        self.status.update({"systems": "No", "systems_sources": set()})
 
     def __str__(self):
         return self.name
@@ -59,7 +58,8 @@ class Pangenome(Pan):
             pangenome_file:
                 A string representing the filepath to the hdf5 pan file to be either used or created
             check_version:
-                Check ppanggolin version of the pangenome file to be compatible with the current version of ppanggolin being used.
+                Check ppanggolin version of the pangenome file to be compatible
+                with the current version of ppanggolin being used.
 
         Raises:
             AssertionError:
@@ -68,9 +68,11 @@ class Pangenome(Pan):
                 If the `pangenome_file` is not a HDF5 format file
         """
         assert isinstance(pangenome_file, Path), "pangenome file should be a Path object type"
-        from tables import is_hdf5_file
         from ppanggolin.utils import check_version_compatibility
+        from tables import is_hdf5_file
+
         from panorama.format.read_binaries import get_status
+
         # importing on call instead of importing on top to avoid cross-reference problems.
         if not is_hdf5_file(pangenome_file):
             raise TypeError("Pangenome file should be an HDF5 file type")
@@ -187,8 +189,8 @@ class Pangenome(Pan):
         """
         try:
             system = self._system_getter[system_id]
-        except KeyError:
-            uncanonical_id = system_id.split('.')[0]
+        except KeyError as error:
+            uncanonical_id = system_id.split(".")[0]
             find_in_canonical = False
             if len(uncanonical_id) > 0:
                 uncanonical_system = self.get_system(uncanonical_id)
@@ -196,12 +198,14 @@ class Pangenome(Pan):
                     if canonical.ID == system_id:
                         return canonical
                 if not find_in_canonical:
-                    raise KeyError(f"There is no system with ID = {system_id} in pangenome")
+                    raise KeyError(f"There is no system with ID = {system_id} in pangenome") from error
                 else:
                     # You should not arrive here because if `find_in_canonical` is True the function return a value
-                    raise Exception("Something unexpected happened here. Please report an issue on our GitHub")
+                    raise Exception(
+                        "Something unexpected happened here. Please report an issue on our GitHub"
+                    ) from error
             else:
-                raise KeyError(f"There is no system with ID = {system_id} in pangenome")
+                raise KeyError(f"There is no system with ID = {system_id} in pangenome") from error
         else:
             return system
 
@@ -351,11 +355,14 @@ class Pangenomes:
                     self._families2pangenome[family.name] = pangenome.name
                 else:
                     if check_duplicate_names:
-                        logging.getLogger("PANORAMA").error(f"Duplicate family name is {family.name} between "
-                                                            f"{pangenome.name} and {duplicate_pangenome}")
-                        raise KeyError("There is duplicate names of gene families between your pangenomes."
-                                       "In your command it could affect the results. Look at the documentation or "
-                                       "post an issue in our GitHub to manage this situation.")
+                        logging.getLogger("PANORAMA").error(
+                            f"Duplicate family name is {family.name} between {pangenome.name} and {duplicate_pangenome}"
+                        )
+                        raise KeyError(
+                            "There is duplicate names of gene families between your pangenomes."
+                            "In your command it could affect the results. Look at the documentation or "
+                            "post an issue in our GitHub to manage this situation."
+                        )
                     else:
                         logging.getLogger("PANORAMA").debug("Duplicate family names between pangenomes")
                         # "Be really careful with what you do"
@@ -482,8 +489,8 @@ class Pangenomes:
         """
         try:
             conserved_spots = self._conserved_spots_getter[cs_id]
-        except KeyError:
-            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes")
+        except KeyError as error:
+            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes") from error
         else:
             return conserved_spots
 
@@ -535,8 +542,8 @@ class Pangenomes:
         """
         try:
             cluster_systems = self._cluster_systems_getter[cs_id]
-        except KeyError:
-            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes")
+        except KeyError as error:
+            raise KeyError(f"Conserved spots {cs_id} does not exist in pangenomes") from error
         else:
             return cluster_systems
 

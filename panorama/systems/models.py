@@ -6,9 +6,10 @@ This module provides tools to define and validate rules used to detect biologica
 """
 
 from __future__ import annotations
-from pathlib import Path
-from typing import Dict, List, Generator, Set, Tuple, Union, Iterable
+
 import json
+from pathlib import Path
+from typing import Dict, Generator, List, Set, Tuple, Union
 
 # Constants (could be encapsulated later in a config class)
 SUPRULES_PARAMS = ["min_mandatory", "min_total"]
@@ -32,9 +33,7 @@ def check_key(data: Dict, required_keys: Set[str]) -> None:
     missing_keys = required_keys - set(data.keys())
 
     if missing_keys:
-        raise KeyError(
-            f"the following keys are required: {', '.join(sorted(missing_keys))}"
-        )
+        raise KeyError(f"the following keys are required: {', '.join(sorted(missing_keys))}")
 
 
 def check_parameters(param_dict: Dict[str, int], mandatory_keys: Set[str]) -> None:
@@ -62,10 +61,10 @@ def check_parameters(param_dict: Dict[str, int], mandatory_keys: Set[str]) -> No
     """
     try:
         check_key(param_dict, mandatory_keys)
-    except KeyError:
-        raise KeyError("One or more required parameters are missing.")
-    except Exception as e:
-        raise Exception(f"Unexpected error checking parameters: {e}")
+    except KeyError as error:
+        raise KeyError("One or more required parameters are missing") from error
+    except Exception as error:
+        raise Exception("Unexpected error checking parameters") from error
 
     for key, value in param_dict.items():
         if key in SUPRULES_PARAMS + ["transitivity", "window"]:
@@ -120,17 +119,17 @@ def check_dict(
         Exception:
             If any unexpected issues occur during the validation process.
     TODO:
-        split in multiple functions: one to validate type, one to validate value, and keep this function at the main one.
+        split in multiple functions: one to validate type, one to validate value, and keep this function at the main one
         (ask Jerome for the example code)
     """
     param_keys = set() if param_keys is None else param_keys
 
     try:
         check_key(data_dict, mandatory_keys)
-    except KeyError:
-        raise KeyError("One or more required top-level keys are missing.")
+    except KeyError as error:
+        raise KeyError("One or more required top-level keys are missing.") from error
     except Exception as error:
-        raise Exception(f"Unexpected error during validation: {error}")
+        raise Exception("Unexpected error during validation") from error
 
     for key, value in data_dict.items():
         if key == "name":
@@ -306,8 +305,8 @@ class Models:
         """
         try:
             model = self._model_getter[name]
-        except KeyError:
-            raise KeyError("Model not present in set of value")
+        except KeyError as error:
+            raise KeyError("Model not present in set of value") from error
         else:
             return model
 
@@ -357,22 +356,17 @@ class Models:
             data = json.load(json_file)
             try:
                 model = Model.read_model(data)
-            except KeyError:
-                raise KeyError(
-                    f"Problem with one or more keys in {model_path} are missing."
-                )
-            except TypeError:
-                raise TypeError(
-                    f"One or more attributes are not with the correct presence in {model_path}."
-                )
-            except ValueError:
-                raise ValueError(
-                    f"One or more attributes are not with an acceptable value in {model_path}."
-                )
-            except Exception:
-                raise Exception(f"Unexpected problem to read JSON {model_path}")
+            except KeyError as error:
+                raise KeyError(f"Problem with one or more keys in {model_path} are missing.") from error
+            except TypeError as error:
+                raise TypeError(f"One or more attributes are not with the correct presence in {model_path}.") from error
+            except ValueError as error:
+                raise ValueError(f"One or more attributes are not with an acceptable value in {model_path}.") from error
+            except Exception as error:
+                raise Exception(f"Unexpected problem to read JSON {model_path}") from error
             else:
                 self.add_model(model)
+
 
 class _BasicFeatures:
     """
@@ -433,9 +427,7 @@ class _BasicFeatures:
         """
         return f"{self.__class__.__name__} name: {self.name}"
 
-    def read_parameters(
-        self, parameters: Dict[str, Union[str, int, bool]], param_keys: Set[str]
-    ):
+    def read_parameters(self, parameters: Dict[str, Union[str, int, bool]], param_keys: Set[str]):
         """
         Reads and assigns parameters from a provided dictionary or falls back to parent attributes
         if the parameter is not found.
@@ -600,9 +592,7 @@ class _ModFuFeatures:
         if presence is None:
             return {child.name for child in self._children}
         else:
-            return {
-                child.name for child in self._children if child.presence == presence
-            }
+            return {child.name for child in self._children if child.presence == presence}
 
     def _duplicate(self, filter_type: str = None):
         """
@@ -658,25 +648,14 @@ class _ModFuFeatures:
                 f"There are no mandatory {self.child_type}. "
                 f"You should have at least one mandatory {self.child_type} with mandatory presence."
             )
-        if self.min_mandatory > len(self.mandatory) + sum(
-            [child.duplicate for child in self._duplicate("mandatory")]
-        ):
-            raise Exception(
-                f"There are less mandatory {self.child_type} than the minimum mandatory"
-            )
+        if self.min_mandatory > len(self.mandatory) + sum([child.duplicate for child in self._duplicate("mandatory")]):
+            raise Exception(f"There are less mandatory {self.child_type} than the minimum mandatory")
         if self.min_total > len(self.mandatory.union(self.accessory)) + sum(
-            [
-                child.duplicate
-                for child in set(self._duplicate("mandatory")).union(
-                    set(self._duplicate("accessory"))
-                )
-            ]
+            [child.duplicate for child in set(self._duplicate("mandatory")).union(set(self._duplicate("accessory")))]
         ):
             raise Exception(f"There are less {self.child_type} than the minimum total")
         if self.min_mandatory > self.min_total:
-            raise Exception(
-                f"Minimum mandatory {self.child_type} value is greater than minimum total."
-            )
+            raise Exception(f"Minimum mandatory {self.child_type} value is greater than minimum total.")
 
     @property
     def child_type(self):
@@ -698,10 +677,7 @@ class _ModFuFeatures:
                 if child_type is None:
                     child_type = curr_child_type
                 elif child_type != curr_child_type:
-                    raise TypeError(
-                        f"The child type is inconsistent. "
-                        f"It contains {child_type} and {curr_child_type}"
-                    )
+                    raise TypeError(f"The child type is inconsistent. It contains {child_type} and {curr_child_type}")
             self._child_type = child_type
             return self._child_type
 
@@ -732,9 +708,7 @@ class _ModFuFeatures:
         elif child.presence == "neutral":
             self.neutral.add(child)
         else:
-            raise ValueError(
-                f"The child {child.name} does not have a valid presence attribute ({child.presence})."
-            )
+            raise ValueError(f"The child {child.name} does not have a valid presence attribute ({child.presence}).")
         child._parent = self
 
     def _mk_child_getter(self):
@@ -767,8 +741,8 @@ class _ModFuFeatures:
             self._mk_child_getter()
         try:
             child = self._child_getter[name]
-        except KeyError:
-            raise KeyError(f"No such {self._child_type} with name {name} in {type(self)}")
+        except KeyError as error:
+            raise KeyError(f"No such {self._child_type} with name {name} in {type(self)}") from error
         else:
             return child
 
@@ -932,8 +906,8 @@ class Model(_BasicFeatures, _ModFuFeatures):
         """
         try:
             self._check()
-        except Exception as err:
-            raise Exception(f"Consistency not respected in {self.name}. {err}")
+        except Exception as error:
+            raise Exception(f"Consistency not respected in {self.name}") from error
 
     def read(self, data_model: dict):
         """
@@ -947,15 +921,11 @@ class Model(_BasicFeatures, _ModFuFeatures):
         mandatory_keys = {"name", "parameters", "func_units"}
         param_mandatory = {"transitivity", "min_mandatory", "min_total"}
 
-        check_dict(
-            data_model, mandatory_keys=mandatory_keys, param_keys=param_mandatory
-        )
+        check_dict(data_model, mandatory_keys=mandatory_keys, param_keys=param_mandatory)
 
         self.name = data_model["name"]
         self.read_parameters(data_model["parameters"], param_keys=param_mandatory)
-        self.window = (
-            data_model["window"] if "window" in data_model else self.transitivity + 1
-        )
+        self.window = data_model["window"] if "window" in data_model else self.transitivity + 1
         for dict_fu in data_model["func_units"]:
             func_unit = FuncUnit()
             func_unit.model = self
@@ -982,11 +952,13 @@ class Model(_BasicFeatures, _ModFuFeatures):
 
 class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
     """
-    Represents a Functional Unit class that models functional and operational parameters, structural constraints, and various
-    functional units and families. This class provides utilities to manage functional units, their relationships, and interactions.
+    Represents a Functional Unit class that models functional and operational parameters, structural constraints,
+    and various functional units and families. This class provides utilities to manage functional units,
+    their relationships, and interactions.
 
     This class is designed to encapsulate features essential for analyzing and validating relationships between
-    functional sub-elements, families, and systems. It defines the functional unit's behaviors, attributes, and operations.
+    functional sub-elements, families, and systems. It defines the functional unit's behaviors,
+    attributes, and operations.
 
     Attributes:
         name (str): Name of the functional unit.
@@ -1179,10 +1151,10 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
         """
         try:
             self._check()
-        except Exception:
+        except Exception as error:
             raise Exception(
                 f"Consistency not respected in model {self.model.name} at functional unit {self.name}"
-            )
+            ) from error
 
     def read(self, data_fu: dict):
         """
@@ -1208,9 +1180,7 @@ class FuncUnit(_BasicFeatures, _FuFamFeatures, _ModFuFeatures):
             data_fu["parameters"] if "parameters" in data_fu else {},
             param_keys=fu_params,
         )
-        self.window = (
-            data_fu["parameters"]["window"] if "window" in data_fu["parameters"] else self.transitivity + 1
-        )
+        self.window = data_fu["parameters"]["window"] if "window" in data_fu["parameters"] else self.transitivity + 1
         for fam_dict in data_fu["families"]:
             family = Family()
             family.func_unit = self
@@ -1331,8 +1301,6 @@ class Family(_BasicFeatures, _FuFamFeatures):
             data_fam["parameters"] if "parameters" in data_fam else {},
             param_keys=fam_param,
         )
-        self.window = (
-            data_fam["window"] if "window" in data_fam else self.transitivity + 1
-        )
+        self.window = data_fam["window"] if "window" in data_fam else self.transitivity + 1
         if "exchangeable" in data_fam:
             self.exchangeable = set(data_fam["exchangeable"])

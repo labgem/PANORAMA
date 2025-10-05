@@ -8,25 +8,27 @@ This test suite provides comprehensive coverage for the classes and functions
 defined in the biological systems detection module, including validation functions,
 Models, FuncUnit, Family classes and their interactions.
 """
+
 import re
-from typing import Generator, List
-import pytest
 from pathlib import Path
+from typing import Generator, List
 from unittest.mock import mock_open, patch
+
+import pytest
 
 # Import the module under test
 # Assuming the module is named 'bio_systems' - adjust import as needed
 from panorama.systems.models import (
-    check_key,
-    check_parameters,
-    check_dict,
-    Models,
-    Model,
-    FuncUnit,
     Family,
+    FuncUnit,
+    Model,
+    Models,
     _BasicFeatures,
     _FuFamFeatures,
     _ModFuFeatures,
+    check_dict,
+    check_key,
+    check_parameters,
 )
 
 
@@ -435,7 +437,9 @@ class TestModFuFeatures:
         dumb_type = type(dumb_child).__name__
 
         # Pattern that matches either order
-        pattern = f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+        pattern = (
+            f"The child type is inconsistent\\. It contains ({child_type} and {dumb_type}|{dumb_type} and {child_type})"
+        )
 
         with pytest.raises(TypeError, match=pattern):
             _ = mff.child_type
@@ -446,9 +450,7 @@ class TestModFuFeatures:
         child1.presence = "mandatory"
         child2.presence = "accessory"
 
-        mff = _ModFuFeatures(
-            mandatory={child1}, accessory={child2}, min_mandatory=1, min_total=2
-        )
+        mff = _ModFuFeatures(mandatory={child1}, accessory={child2}, min_mandatory=1, min_total=2)
 
         # Should not raise any exception
         mff._check()
@@ -458,17 +460,17 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(min_mandatory=1, min_total=1)
 
         with pytest.raises(
-                Exception,
-                match=f"There are no mandatory {mff.child_type}. "
-                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+            Exception,
+            match=f"There are no mandatory {mff.child_type}. "
+            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
         mff.accessory = {child}
         with pytest.raises(
-                Exception,
-                match=f"There are no mandatory {mff.child_type}. "
-                      f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
+            Exception,
+            match=f"There are no mandatory {mff.child_type}. "
+            f"You should have at least one mandatory {mff.child_type} with mandatory presence.",
         ):
             mff._check()
 
@@ -476,8 +478,8 @@ class TestModFuFeatures:
         """Test exception when mandatory elements are less than the required minimum."""
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=2, min_total=2)
         with pytest.raises(
-                Exception,
-                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+            Exception,
+            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -493,8 +495,8 @@ class TestModFuFeatures:
         mff = _ModFuFeatures(mandatory={child}, min_mandatory=3, min_total=3)
         child.duplicate = 1
         with pytest.raises(
-                Exception,
-                match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
+            Exception,
+            match=f"There are less mandatory {mff.child_type} than the minimum mandatory",
         ):
             mff._check()
 
@@ -509,8 +511,8 @@ class TestModFuFeatures:
             min_total=3,
         )
         with pytest.raises(
-                Exception,
-                match=f"There are less {mff.child_type} than the minimum total",
+            Exception,
+            match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -543,8 +545,8 @@ class TestModFuFeatures:
         child2.duplicate = 1
         child3.duplicate = 2
         with pytest.raises(
-                Exception,
-                match=f"There are less {mff.child_type} than the minimum total",
+            Exception,
+            match=f"There are less {mff.child_type} than the minimum total",
         ):
             mff._check()
 
@@ -556,14 +558,12 @@ class TestModFuFeatures:
         child.presence = "mandatory"
         child.duplicate = 2
         with pytest.raises(
-                Exception,
-                match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
+            Exception,
+            match=f"Minimum mandatory {mff.child_type} value is greater than minimum total",
         ):
             mff._check()
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_add_child_success(self, child, presence):
         """Test adding a child with mandatory presence."""
 
@@ -586,8 +586,9 @@ class TestModFuFeatures:
         dumb_child = DumbChild()
         mff = _ModFuFeatures(mandatory={child})
         with pytest.raises(
-                TypeError,
-                match=f"The child type is inconsistent. Expected {type(child).__name__} but found {type(dumb_child).__name__}",
+            TypeError,
+            match=f"The child type is inconsistent. Expected {type(child).__name__} but "
+            f"found {type(dumb_child).__name__}",
         ):
             mff.add(dumb_child)
 
@@ -596,10 +597,8 @@ class TestModFuFeatures:
         mff = _ModFuFeatures()
         child.presence = "unexpected"
         with pytest.raises(
-                ValueError,
-                match=re.escape(
-                    f"The child {child.name} does not have a valid presence attribute ({child.presence})."
-                ),
+            ValueError,
+            match=re.escape(f"The child {child.name} does not have a valid presence attribute ({child.presence})."),
         ):
             mff.add(child)
 
@@ -621,9 +620,7 @@ class TestModFuFeatures:
     def test_get_child_failure(self, children):
         mff = _ModFuFeatures(mandatory=set(children))
         name = "notin_child"
-        with pytest.raises(
-                KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"
-        ):
+        with pytest.raises(KeyError, match=f"No such {mff.child_type} with name {name} in {type(mff)}"):
             mff.get(name)
 
 
@@ -835,9 +832,7 @@ class TestFuncUnit:
 
         assert func_unit.get("test_family") == family
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_list_families_names(self, families, presence):
         """Test list_families method returns the list of child fus."""
         func_unit = FuncUnit()
@@ -855,9 +850,7 @@ class TestFuncUnit:
         else:
             assert func_unit.families_names(fam3.presence) == {fam3.name}
 
-    @pytest.mark.parametrize(
-        "presence", ["mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", ["mandatory", "accessory", "forbidden", "neutral"])
     def test_get_duplicate_families(self, families, presence):
         """Test get_duplicate_families method returns the list of child fus with duplicate data."""
         func_unit = FuncUnit()
@@ -1018,9 +1011,7 @@ class TestModel:
         func_units_set = set(model.func_units)
         assert func_units_set == set(func_units)
 
-    @pytest.mark.parametrize(
-        "presence", [None, "mandatory", "accessory", "forbidden", "neutral"]
-    )
+    @pytest.mark.parametrize("presence", [None, "mandatory", "accessory", "forbidden", "neutral"])
     def test_get_func_units_names(self, func_units, presence):
         """Test get_func_units_names method returns the list of functional unit names."""
         model = Model()
@@ -1033,9 +1024,7 @@ class TestModel:
         model.add(fu5)
 
         func_units_names = set(model.func_units_names(presence))
-        assert func_units_names == {
-            fu.name for fu in func_units if fu.presence == presence or presence is None
-        }
+        assert func_units_names == {fu.name for fu in func_units if fu.presence == presence or presence is None}
 
     def test_families_property(self, families, func_units):
         """Test families property returns all families from functional units."""
@@ -1355,9 +1344,7 @@ class TestModels:
 
         models.add_model(model1)
 
-        with pytest.raises(
-            Exception, match=f"Model {model2.name} already in set of value"
-        ):
+        with pytest.raises(Exception, match=f"Model {model2.name} already in set of value"):
             models.add_model(model2)
 
     @patch("builtins.open", new_callable=mock_open)
