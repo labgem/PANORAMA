@@ -46,11 +46,11 @@ doc = [
     "sphinx-autodoc-napoleon-typehints>=2.1.6"
 ]
 dev = [
-    "matplotlib>=3.8",
-    "squarify>=0.4",
-    "seaborn>=0.13",
-    "vitables>=3.0.0",
-    "viztracer>=0.16.2",
+    "matplotlib>=3.10.6",
+    "squarify>=0.4.4",
+    "seaborn>=0.13.2",
+    "vitables==3.0.0",
+    "viztracer>=1.0.4",
     "ruff>=0.13.3"
 ]
 notebook = [
