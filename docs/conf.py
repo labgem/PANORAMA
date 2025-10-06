@@ -74,14 +74,14 @@ exclude_patterns = [
     "developer/draw.md",
     "developer/system_asso_script.md",
     "developer/write_flat_script.md",
-    "developer/conserved_spot_script.md"
+    "developer/conserved_spot_script.md",
 ]
 
 suppress_warnings = [
     "myst.header",
     # "autosectionlabel.*",
     "toc.not_included",
-    "myst.xref_missing"
+    "myst.xref_missing",
 ]
 
 # The name of the default role for inline references
@@ -103,13 +103,11 @@ html_static_path = ["_static"]
 html_context = {
     "github_user": "labgem",
     "github_repo": "PANORAMA",
-    "github_version": "doc",  # Automatically go to the doc branch for tiny modification.
+    "github_version": "dev",  # Automatically go to the dev branch for modification
     "doc_path": "docs",
 }
 
-html_logo = (
-    "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
-)
+html_logo = "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
 
 # These are options specifically for the Wagtail Theme.
 html_theme_options = {
@@ -200,4 +198,4 @@ napoleon_use_admonition_for_examples = True
 napoleon_use_admonition_for_notes = True
 napoleon_use_admonition_for_references = True
 napoleon_use_rtype = False
-napoleon_custom_sections = [('Returns', 'params_style'), ('Raises', 'params_style')]
+napoleon_custom_sections = [("Returns", "params_style"), ("Raises", "params_style")]

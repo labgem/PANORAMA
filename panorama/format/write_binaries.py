@@ -10,15 +10,17 @@ including canonical systems, system units and their metadata relationships.
 
 # default libraries
 import logging
-from typing import Dict, Tuple, Union, Set
 from dataclasses import dataclass
+from typing import Dict, Set, Tuple, Union
 
-# installed libraries
+# Third-party imports
 import tables
-from tqdm import tqdm
-from ppanggolin.formats.writeBinaries import write_status as super_write_status
+
+# PPanGGOLiN format imports
 from ppanggolin.formats.writeBinaries import erase_pangenome as super_erase_pangenome
 from ppanggolin.formats.writeBinaries import write_pangenome as super_write_pangenome
+from ppanggolin.formats.writeBinaries import write_status as super_write_status
+from tqdm import tqdm
 
 # local libraries
 from panorama.pangenomes import Pangenome
@@ -36,9 +38,7 @@ class SystemTableSizes:
     """Container for system table size information."""
 
     system_sizes: Tuple[int, int, int]  # (max_id_len, max_name_len, expected_rows)
-    unit_sizes: Tuple[
-        int, int, int, int
-    ]  # (max_name_len, max_gf_name_len, max_metadata_source, expected_rows)
+    unit_sizes: Tuple[int, int, int, int]  # (max_name_len, max_gf_name_len, max_metadata_source, expected_rows)
     canonical_sizes: Tuple[int, int, int]  # (max_id_len, max_name_len, expected_rows)
     canonical_unit_sizes: Tuple[
         int, int, int, int
@@ -162,16 +162,12 @@ def calculate_system_table_sizes(pangenome: Pangenome, source: str) -> SystemTab
     max_len_canon_unit = (DEFAULT_STRING_SIZE, DEFAULT_STRING_SIZE, DEFAULT_STRING_SIZE)
 
     # Initialize row counters
-    exp_rows_sys = exp_rows_units = exp_rows_can = exp_rows_can_units = (
-        exp_rows_sys2can
-    ) = 0
+    exp_rows_sys = exp_rows_units = exp_rows_can = exp_rows_can_units = exp_rows_sys2can = 0
 
     # Analyze each system to calculate maximums and counts
     for system in pangenome.get_system_by_source(source):
         # Update maximum lengths for regular systems
-        max_len_sys, max_len_unit = _calculate_max_lengths_for_system(
-            system, max_len_sys, max_len_unit
-        )
+        max_len_sys, max_len_unit = _calculate_max_lengths_for_system(system, max_len_sys, max_len_unit)
 
         # Count rows for regular systems
         exp_rows_sys += len(system)
@@ -261,9 +257,7 @@ def create_system_tables(
     system_table = h5f.create_table(
         source_group,
         "systems",
-        description=create_system_description(
-            *table_sizes.system_sizes[:-1], include_canonical_count=True
-        ),
+        description=create_system_description(*table_sizes.system_sizes[:-1], include_canonical_count=True),
         expectedrows=table_sizes.system_sizes[-1],
     )
 
@@ -287,9 +281,7 @@ def create_system_tables(
     canonical_unit_table = h5f.create_table(
         source_group,
         "canonic_units",
-        description=create_system_unit_description(
-            *table_sizes.canonical_unit_sizes[:-1]
-        ),
+        description=create_system_unit_description(*table_sizes.canonical_unit_sizes[:-1]),
         expectedrows=table_sizes.canonical_unit_sizes[-1],
     )
 
@@ -313,9 +305,7 @@ def create_system_tables(
     )
 
 
-def write_systems_to_hdf5(
-    pangenome: Pangenome, h5f: tables.File, source: str, disable_bar: bool = False
-) -> None:
+def write_systems_to_hdf5(pangenome: Pangenome, h5f: tables.File, source: str, disable_bar: bool = False) -> None:
     """
     Write all systems from a specific source to HDF5 file.
 
@@ -345,14 +335,10 @@ def write_systems_to_hdf5(
     table_sizes = calculate_system_table_sizes(pangenome, source)
 
     # Create the source-specific group
-    source_group = h5f.create_group(
-        systems_group, source, f"Detected systems from source: {source}"
-    )
+    source_group = h5f.create_group(systems_group, source, f"Detected systems from source: {source}")
 
     # Store metadata sources information
-    source_group._v_attrs.metadata_sources = (
-        pangenome.systems_sources_to_metadata_source()[source]
-    )
+    source_group._v_attrs.metadata_sources = pangenome.systems_sources_to_metadata_source()[source]
 
     # Create all necessary tables
     tables_tuple = create_system_tables(h5f, source_group, table_sizes)
@@ -382,21 +368,16 @@ def write_systems_to_hdf5(
         disable=disable_bar,
         desc=f"Writing systems from {source}",
     ) as progress:
-
         for system in pangenome.systems:
             # Write regular system data
-            write_system_data_to_tables(
-                system, system_row, unit_row, is_canonical=False
-            )
+            write_system_data_to_tables(system, system_row, unit_row, is_canonical=False)
 
             # Process canonical systems
             for canonical in system.canonical:
                 # Write canonical system data only once
                 if canonical.ID not in canonical_systems_seen:
                     canonical_systems_seen.add(canonical.ID)
-                    write_system_data_to_tables(
-                        canonical, canonical_row, canonical_unit_row, is_canonical=True
-                    )
+                    write_system_data_to_tables(canonical, canonical_row, canonical_unit_row, is_canonical=True)
 
                 # Write system-to-canonical relationship
                 sys2canonical_row["system"] = system.ID
@@ -415,9 +396,7 @@ def write_systems_to_hdf5(
     ]:
         table.flush()
 
-    logger.debug(
-        f"Successfully wrote {total_systems} systems with {len(canonical_systems_seen)} canonical systems"
-    )
+    logger.debug(f"Successfully wrote {total_systems} systems with {len(canonical_systems_seen)} canonical systems")
 
 
 def write_pangenome_status(pangenome: Pangenome, h5f: tables.File) -> None:
@@ -570,14 +549,11 @@ def write_pangenome(
     # Handle systems data if present and computed
     with tables.open_file(file_path, "a") as h5f:
         if "systems" in pangenome.status and pangenome.status["systems"] == "Computed":
-
             if source is None:
                 raise ValueError("Source must be specified when writing systems data")
 
             logger.info(f"Writing systems data from source: {source}")
-            write_systems_to_hdf5(
-                pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar
-            )
+            write_systems_to_hdf5(pangenome=pangenome, h5f=h5f, source=source, disable_bar=disable_bar)
 
             # Update status to reflect successful writing
             pangenome.status["systems"] = "Loaded"

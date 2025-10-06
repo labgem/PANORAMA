@@ -6,36 +6,39 @@ This module provides utility functions to detect and write biological systems in
 
 # default libraries
 from __future__ import annotations
+
 import logging
-from typing import Dict, Iterable, List, Optional, Set, Tuple
+import warnings
+from abc import ABC, abstractmethod
 from collections import defaultdict
 from pathlib import Path
-from abc import ABC, abstractmethod
-import warnings
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 # installed libraries
+import networkx as nx
 import numpy as np
 import pandas as pd
-import networkx as nx
-from ppanggolin.genome import Organism
-from bokeh.plotting import figure
+from bokeh.core.validation import silence
+from bokeh.core.validation.warnings import MISSING_RENDERERS
 from bokeh.io import export_png, output_file, save
 from bokeh.models import (
     ColumnDataSource,
-    GlyphRenderer,
     FactorRange,
+    GlyphRenderer,
     HoverTool,
 )
 from bokeh.models.glyph import Glyph
-from bokeh.core.validation import silence
-from bokeh.core.validation.warnings import MISSING_RENDERERS
+from bokeh.plotting import figure
+from ppanggolin.genome import Organism
 
 # local libraries
 from panorama.geneFamily import GeneFamily
-from panorama.systems.models import Model, FuncUnit, Family
 from panorama.pangenomes import Pangenome
+from panorama.systems.models import Family, FuncUnit, Model
 
-pd.options.mode.copy_on_write = True  # Remove when pandas3.0 available. See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+# Remove when pandas3.0 available. See the caveats in the documentation:
+# https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+pd.options.mode.copy_on_write = True
 # Silence-specific warning
 silence(MISSING_RENDERERS, True)
 # Silence output file will be overwritten info from bokeh
@@ -48,9 +51,7 @@ warnings.filterwarnings(
 )
 
 
-def filter_global_context(
-    graph: nx.Graph, jaccard_threshold: float = 0.8
-) -> nx.Graph[GeneFamily]:
+def filter_global_context(graph: nx.Graph, jaccard_threshold: float = 0.8) -> nx.Graph[GeneFamily]:
     """
     Filters the edges of a gene family graph based on a Jaccard gene proportion threshold.
 
@@ -105,15 +106,15 @@ def filter_local_context(
 
     Args:
         graph (nx.Graph): A sub-pangenome graph.
-        organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        organisms (Set[Organism]):
+            Organisms where edges between families of interest exist. Default is None
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
     orgs = frozenset(organisms)
 
     # Precompute family ∩ organisms intersections
-    family_orgs: dict[GeneFamily, set[Organism]] = {
-        fam: set(fam.organisms).intersection(orgs) for fam in graph.nodes
-    }
+    family_orgs: dict[GeneFamily, set[Organism]] = {fam: set(fam.organisms).intersection(orgs) for fam in graph.nodes}
 
     new_graph = nx.Graph()
     new_graph.add_nodes_from(graph.nodes(data=True))
@@ -149,8 +150,10 @@ def filter_local_context_old(
 
     Args:
         graph (nx.Graph): A sub-pangenome graph.
-        organisms (Set[Organism]): Organisms where edges between families of interest exist. Default is None
-        jaccard_threshold (float, optional): Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
+        organisms (Set[Organism]):
+            Organisms where edges between families of interest exist. Default is None
+        jaccard_threshold (float, optional):
+            Minimum Jaccard similarity used to filter edges between gene families. Default is 0.8.
     """
 
     def get_gene_proportion(gene_family: GeneFamily) -> float:
@@ -245,10 +248,7 @@ def check_for_families(
             for meta_id, metadata in gf.get_metadata_by_source(source).items():
                 if metadata.protein_name in available_names or (
                     "secondary_name" in metadata.fields
-                    and any(
-                        name in available_names
-                        for name in metadata.secondary_names.split(",")
-                    )
+                    and any(name in available_names for name in metadata.secondary_names.split(","))
                 ):
                     fam2meta_info[family] = (source, meta_id, metadata.score)
 
@@ -280,10 +280,7 @@ def check_for_families(
         gf2meta_info[gf] = best_meta_info[:2]
 
     # Check if constraints are satisfied
-    if (
-        len(mandatory_seen) >= func_unit.min_mandatory
-        and len(mandatory_seen | accessory_seen) >= func_unit.min_total
-    ):
+    if len(mandatory_seen) >= func_unit.min_mandatory and len(mandatory_seen | accessory_seen) >= func_unit.min_total:
         return True, gf2meta_info
 
     return False, {}
@@ -324,7 +321,6 @@ def get_gfs_matrix_combination(
     return pd.DataFrame(score_matrix, index=model_fams, columns=[gf.name for gf in gfs])
 
 
-# Note that this function assumes that a family could play multiple roles to satisfy the model requirements if it has multiple annotations.
 def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     """
     Check if there are enough mandatory and total families to satisfy the functional unit rules.
@@ -335,6 +331,10 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
 
     Returns:
         Boolean: True if satisfied, False otherwise
+
+    Notes:
+        This function assumes that a family could play multiple roles to satisfy
+        the model requirements if it has multiple annotations
     """
 
     matrix = matrix.loc[matrix.sum(axis=1) > 0]  # Remove all-zero rows
@@ -342,15 +342,10 @@ def check_needed_families(matrix: pd.DataFrame, func_unit: FuncUnit) -> bool:
     mandatory_fams = {fam.name for fam in func_unit.mandatory}
     mandatory_count = sum(fam in mandatory_fams for fam in matrix.index)
 
-    return (
-        mandatory_count >= func_unit.min_mandatory
-        and len(matrix) >= func_unit.min_total
-    )
+    return mandatory_count >= func_unit.min_mandatory and len(matrix) >= func_unit.min_total
 
 
-def get_metadata_to_families(
-    pangenome: Pangenome, sources: Iterable[str]
-) -> Dict[str, Dict[str, Set[GeneFamily]]]:
+def get_metadata_to_families(pangenome: Pangenome, sources: Iterable[str]) -> Dict[str, Dict[str, Set[GeneFamily]]]:
     """
     Retrieves a mapping of metadata to sets of gene families for each metadata source.
 
@@ -393,14 +388,10 @@ def dict_families_context(
     fam2source = {}
     for fam_model in model.families:
         exchangeable = fam_model.exchangeable | {fam_model.name}
-        for exchangeable in exchangeable:
+        for exch in exchangeable:
             for source, annotation2families in annot2fam.items():
-                if exchangeable in annotation2families:
-
-                    if (
-                        fam_model.name in fam2source
-                        and fam2source[fam_model.name] != source
-                    ):
+                if exch in annotation2families:
+                    if fam_model.name in fam2source and fam2source[fam_model.name] != source:
                         logging.getLogger("PANORAMA").warning(
                             f"Protein annotation {fam_model.name} is encountered in multiple sources."
                             "All sources will be used, but only first one will be associated with "
@@ -409,7 +400,7 @@ def dict_families_context(
                     else:
                         fam2source[fam_model.name] = source
 
-                    for gf in annotation2families[exchangeable]:
+                    for gf in annotation2families[exch]:
                         gf2fam[gf].add(fam_model)
 
     return gf2fam, fam2source
@@ -485,9 +476,7 @@ class VisualizationBuilder(ABC):
     """int: Height of PNG exports
     """
 
-    def __init__(
-        self, name: str, output_dir: Path, formats: Optional[List[str]] = None
-    ):
+    def __init__(self, name: str, output_dir: Path, formats: Optional[List[str]] = None):
         """
         Initialize the visualization builder.
 
@@ -607,9 +596,7 @@ class VisualizationBuilder(ABC):
             if fmt == "html":
                 output_file(output_path.absolute().as_posix())
                 save(fig)
-                self.logger.info(
-                    f"Saved {filename_base} visualization in HTML format to {output_path}"
-                )
+                self.logger.info(f"Saved {filename_base} visualization in HTML format to {output_path}")
 
             elif fmt == "png":
                 export_png(
@@ -618,9 +605,7 @@ class VisualizationBuilder(ABC):
                     width=self.PNG_EXPORT_WIDTH,
                     height=self.PNG_EXPORT_HEIGHT,
                 )
-                self.logger.debug(
-                    f"Saved {filename_base} visualization in PNG format to {output_path}"
-                )
+                self.logger.debug(f"Saved {filename_base} visualization in PNG format to {output_path}")
 
             else:
                 raise ValueError(f"Unsupported output format: {fmt}")
@@ -739,9 +724,7 @@ class VisualizationBuilder(ABC):
         )
 
         # Configure appearance
-        self._configure_bar_plot_style(
-            self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True
-        )
+        self._configure_bar_plot_style(self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True)
 
     def create_top_bar_plot(
         self,

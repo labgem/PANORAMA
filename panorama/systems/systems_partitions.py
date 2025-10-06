@@ -7,23 +7,26 @@ This module provides functionality to create heatmap visualizations for
 pangenome systems partitions and system counts across organisms.
 """
 
+# default libraries
 import logging
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import List, Optional
 
+# installed libraries
 import numpy as np
 import pandas as pd
+from bokeh.layouts import gridplot
 from bokeh.models import (
     CategoricalColorMapper,
     ColorBar,
     ColumnDataSource,
-    HoverTool,
     FactorRange,
+    HoverTool,
 )
-from bokeh.layouts import gridplot
 from bokeh.plotting import figure
 from tqdm import tqdm
 
+# local libraries
 from panorama.systems.utils import VisualizationBuilder, conciliate_partition
 
 # Configuration constants
@@ -62,16 +65,18 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         super().__init__(name, output_dir, formats)
 
         # Partition configuration
-        self.partitions = ["persistent|accessory", "persistent", "accessory", "shell", "cloud"]
+        self.partitions = [
+            "persistent|accessory",
+            "persistent",
+            "accessory",
+            "shell",
+            "cloud",
+        ]
         self.color_palette = ["#FF2828", "#F7A507", "#EB37ED", "#00D860", "#79DEFF"]
-        self.partition2color = dict(zip(self.partitions, self.color_palette))
+        self.partition2color = dict(zip(self.partitions, self.color_palette, strict=False))
 
         # Color mapper for categorical partitions
-        self.mapper = CategoricalColorMapper(
-            palette=self.color_palette,
-            factors=self.partitions,
-            nan_color="white"
-        )
+        self.mapper = CategoricalColorMapper(palette=self.color_palette, factors=self.partitions, nan_color="white")
 
     def create_left_bar(self, source: ColumnDataSource) -> None:
         """
@@ -98,19 +103,16 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         )
 
         # Configure appearance
-        self._configure_bar_plot_style(
-            self.left_bar,
-            x_label="Count",
-            flip_x=True,
-            hide_y_axis=True
-        )
+        self._configure_bar_plot_style(self.left_bar, x_label="Count", flip_x=True, hide_y_axis=True)
 
         # Add interactive hover tool
-        hover = HoverTool(tooltips=[
-            ("System", "@systems"),
-            ("Partition", "$name"),
-            ("Count", "@$name{0}"),
-        ])
+        hover = HoverTool(
+            tooltips=[
+                ("System", "@systems"),
+                ("Partition", "$name"),
+                ("Count", "@$name{0}"),
+            ]
+        )
         self.left_bar.add_tools(hover)
 
     def create_color_bar(self, title: str) -> None:
@@ -153,10 +155,10 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         self.color_bar.title.text_font_size = "14pt"
 
     def create_main_figure(
-            self,
-            partition_matrix: pd.DataFrame,
-            x_range: FactorRange,
-            y_range: FactorRange,
+        self,
+        partition_matrix: pd.DataFrame,
+        x_range: FactorRange,
+        y_range: FactorRange,
     ) -> None:
         """
         Create the main partition matrix heatmap figure.
@@ -205,16 +207,10 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
             partition_matrix: DataFrame with partition information
         """
         # Filter out 'Not_found' entries for cleaner visualization
-        filtered_matrix = partition_matrix[
-            partition_matrix["partition"] != "Not_found"
-            ]
+        filtered_matrix = partition_matrix[partition_matrix["partition"] != "Not_found"]
 
         # Left bar plot: Partition distribution by system (stacked bars)
-        pivot_df = (
-            filtered_matrix.groupby(["system name", "partition"])
-            .size()
-            .unstack(fill_value=0)
-        )
+        pivot_df = filtered_matrix.groupby(["system name", "partition"]).size().unstack(fill_value=0)
 
         # Prepare data for stacked bars - ensure all partitions are represented
         source_data = {"systems": pivot_df.index.tolist()}
@@ -229,9 +225,7 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         self.create_left_bar(left_bar_source)
 
         # Top bar plot: Organism counts
-        organism_counts = pd.DataFrame(
-            filtered_matrix["organism"].value_counts()
-        ).reset_index()
+        organism_counts = pd.DataFrame(filtered_matrix["organism"].value_counts()).reset_index()
         organism_counts.columns = ["organism", "count"]
 
         top_bar_source = ColumnDataSource(organism_counts)
@@ -239,12 +233,7 @@ class SystemsPartitionVisualizer(VisualizationBuilder):
         # Sort organisms by count for better visualization
         x_order = organism_counts.sort_values("count", ascending=False)["organism"].tolist()
 
-        self.create_top_bar_plot(
-            top_bar_source,
-            "organism",
-            x_order=x_order,
-            color="green"
-        )
+        self.create_top_bar_plot(top_bar_source, "organism", x_order=x_order, color="green")
 
     def plot(self) -> None:
         """
@@ -287,16 +276,10 @@ def preprocess_data(data: pd.DataFrame, disable_bar: bool = False) -> pd.DataFra
         disable=disable_bar,
     ):
         data_genome = data[data["organism"] == organism]
-        dict_defense_genome = pd.Series(
-            data_genome["system name"].values, index=data_genome["system number"]
-        ).to_dict()
+        dict_defense_genome = pd.Series(data_genome["system name"].values, index=data_genome["system number"]).to_dict()
         for i, system in enumerate(system_names):
-            matrix_genomes_systems[i][j] = sum(
-                x == system for x in dict_defense_genome.values()
-            )
-    data_count = pd.DataFrame(
-        matrix_genomes_systems, columns=organism_names, index=system_names
-    )
+            matrix_genomes_systems[i][j] = sum(x == system for x in dict_defense_genome.values())
+    data_count = pd.DataFrame(matrix_genomes_systems, columns=organism_names, index=system_names)
     data_count.index.name = "system name"
     data_count.columns.name = "organism"
     return data_count
@@ -316,9 +299,7 @@ def preprocess_partition_data(data: pd.DataFrame) -> pd.DataFrame:
         fill_value="Not_found",
         aggfunc=lambda x: conciliate_partition(set(x)),
     )
-    df_stack_partition = pd.DataFrame(
-        data_partition.stack(), columns=["partition"]
-    ).reset_index()
+    df_stack_partition = pd.DataFrame(data_partition.stack(), columns=["partition"]).reset_index()
     return df_stack_partition
 
 
@@ -353,16 +334,11 @@ def systems_partition(
     for fmt in output_formats:
         if fmt not in VisualizationBuilder.OUTPUT_FORMATS:
             raise ValueError(
-                f"Unsupported output format: {fmt}. "
-                f"Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
+                f"Unsupported output format: {fmt}. Supported formats: {VisualizationBuilder.OUTPUT_FORMATS}"
             )
     partitions_matrix = preprocess_partition_data(system_projection)
-    viz_builder = SystemsPartitionVisualizer(
-        name=name, output_dir=output, formats=output_formats
-    )
+    viz_builder = SystemsPartitionVisualizer(name=name, output_dir=output, formats=output_formats)
     viz_builder.create_bar_plots(partitions_matrix)
-    viz_builder.create_main_figure(
-        partitions_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range
-    )
+    viz_builder.create_main_figure(partitions_matrix, viz_builder.top_bar.x_range, viz_builder.left_bar.y_range)
     viz_builder.create_color_bar("Partition")
     viz_builder.plot()

@@ -87,16 +87,8 @@ PANORAMA follows semantic versioning: `Major.Minor.Patch`
 
 **What this means for your PR:**
 
-VERSION will be updated by the maintainers when merging PRs.
-But you can also update it manually to make his life easier (he will appreciate it):
-
-```bash
-# Current version: 1.2.5
-# Your PR changes it to: 1.2.6
-echo "1.2.6" > VERSION
-git add VERSION
-git commit -m "Bump version to 1.2.6"
-```
+VERSION is automatically updated thanks to the workflow [Auto bump version](https://github.com/labgem/PANORAMA/blob/main/.github/workflows/bump_version.yml).
+But a double check will be appreciated.
 
 
 ## Creating a Pull Request 🔄
