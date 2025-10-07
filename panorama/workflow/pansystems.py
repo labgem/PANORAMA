@@ -186,7 +186,7 @@ def pansystems(
                 **hmm_kwgs,
             )
         pangenome2metadata_df[pangenome.name] = metadata_df
-        logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
+    logging.getLogger("PANORAMA").info(f"Pangenomes annotation with HMM done in {time.time() - t0:2f} seconds")
 
     write_annotations_to_pangenomes(
         pangenomes,
