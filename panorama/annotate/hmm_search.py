@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -659,6 +660,7 @@ def annot_with_hmm(
     if (tblout or domtblout or pfamtblout) and output is None:
         raise AssertionError("Output path must be specified to save hits")
     gene2family = None
+    t0 = time.time()
     if mode == "sensitive":
         sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, disable_bar)
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
@@ -702,4 +704,7 @@ def annot_with_hmm(
             mode,
         )
     metadata_df = get_metadata_df(res, mode, gene2family)
+    logging.getLogger("PANORAMA").info(
+        f"Annotation with HMM done for {pangenome.name} in {time.time() - t0:2f} seconds"
+    )
     return metadata_df
