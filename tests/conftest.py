@@ -17,8 +17,39 @@ from ppanggolin.meta.meta import assign_metadata
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Family, FuncUnit, Model
 
+
+
+import ppanggolin.annotate.annotate as annotate
+import ppanggolin.annotate.synta as synta
+import ppanggolin.nem.partition as partition
+from ppanggolin.formats import writeFlatPangenome
+import ppanggolin.formats.writeAnnotations as writeAnnot
+from ppanggolin.pangenome import Pangenome
+
+
 logger = logging.getLogger(__name__)
 
+
+@pytest.fixture(autouse=True)
+def reset_globals():
+    """Reset ppanggolin global variables before each test."""
+    annotate.ctg_counter = 0
+    synta.contig_counter = 0
+    partition.samples = []
+    partition.pan = Pangenome()
+    writeFlatPangenome.pan = Pangenome()
+    writeFlatPangenome.needAnnotations = False
+    writeFlatPangenome.needFamilies = False
+    writeFlatPangenome.needGraph = False
+    writeFlatPangenome.needPartitions = False
+    writeFlatPangenome.needSpots = False
+    writeFlatPangenome.needRegions = False
+    writeFlatPangenome.needModules = False
+    writeFlatPangenome.needMetadata = False
+    writeFlatPangenome.metatype = False
+    writeFlatPangenome.ignore_err = False
+    writeAnnot.genedata_counter = 0
+    yield
 
 def validate_test_data_path(path_str: str = None) -> Union[Path, None]:
     """
