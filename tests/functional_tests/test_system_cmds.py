@@ -44,7 +44,7 @@ def test_annotation_and_systems_cmds_pangenome_list(
     
     logger.warning(">>>>>>>>Finished panorama annotation and systems commands.")
 
-    assert False
+    # assert False
     return pangenome_list_file
 
 
