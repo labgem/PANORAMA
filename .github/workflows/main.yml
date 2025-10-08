@@ -31,8 +31,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-latest'] #, 'macos-latest']
-        python-version: ['3.10'] #, '3.12']
+        os: ['ubuntu-latest', 'macos-latest']
+        python-version: ['3.10', '3.12']
     steps:
 
       # Get number of cpu available on the current runner
