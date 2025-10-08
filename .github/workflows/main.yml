@@ -32,7 +32,7 @@ jobs:
     strategy:
       matrix:
         os: ['ubuntu-latest', 'macos-latest']
-        python-version: ['3.11', '3.12']
+        python-version: ['3.10', '3.12']
     steps:
 
       # Get number of cpu available on the current runner
@@ -73,7 +73,7 @@ jobs:
         if: steps.cache-conda.outputs.cache-hit != 'true'
         with:
           python-version: ${{ matrix.python-version }}
-          channels: conda-forge,bioconda,defaults
+          channels: conda-forge,bioconda
           environment-file: panorama.yml
           activate-environment: panorama
       
@@ -100,13 +100,6 @@ jobs:
           # Install PANORAMA with test dependencies
           pip install .[test]
 
-      # Export conda environment for reproducibility
-      - name: Export conda environment
-        shell: bash -l {0}
-        run: |
-          conda env export --name panorama > conda-env-${{ matrix.os }}-python${{ matrix.python-version }}.yml
-          conda list --explicit > conda-explicit-${{ matrix.os }}-python${{ matrix.python-version }}.txt
-
       # Check that it is installed and displays help without error
       - name: Check that PANORAMA is installed
         shell: bash -l {0}
@@ -123,13 +116,3 @@ jobs:
         run: |
           pytest --cov=panorama  --test-data-path=test_data
       
-      # Upload conda environment files as artifacts
-      - name: Upload conda environment artifacts
-        uses: actions/upload-artifact@v4
-        if: always()  # Upload even if tests fail
-        with:
-          name: conda-env-${{ matrix.os }}-python${{ matrix.python-version }}
-          path: |
-            conda-env-${{ matrix.os }}-python${{ matrix.python-version }}.yml
-            conda-explicit-${{ matrix.os }}-python${{ matrix.python-version }}.txt
-          retention-days: 30
