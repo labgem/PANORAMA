@@ -50,6 +50,10 @@ def test_write_systems(
     num_cpus,
     update_golden,
 ):
+    
+    logger.warning("Running test_write_systems...")
+    logger.warning(f"{annotation_and_systems_cmds_pangenome_list}")
+
     outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
 
     command = (
