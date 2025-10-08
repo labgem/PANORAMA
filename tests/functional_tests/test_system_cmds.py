@@ -39,6 +39,8 @@ def annotation_and_systems_cmds_pangenome_list(
     )
 
     run_command(systems_command)
+    
+    logger.warning("Finished panorama annotation and systems commands.")
 
     return pangenome_list_file
 
@@ -51,7 +53,7 @@ def test_write_systems(
     update_golden,
 ):
     
-    logger.warning("Running test_write_systems...")
+    logger.warning("Running test_write_systems...") 
     logger.warning(f"{annotation_and_systems_cmds_pangenome_list}")
 
     outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
