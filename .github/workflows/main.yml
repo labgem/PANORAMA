@@ -65,6 +65,13 @@ jobs:
         run: |
           pip install .[test]
 
+      # Export conda environment for reproducibility
+      - name: Export conda environment
+        shell: bash -l {0}
+        run: |
+          conda env export --name panorama > conda-env-${{ matrix.os }}-python${{ matrix.python-version }}.yml
+          conda list --explicit > conda-explicit-${{ matrix.os }}-python${{ matrix.python-version }}.txt
+
       # Check that it is installed and displays help without error
       - name: Check that PANORAMA is installed
         shell: bash -l {0}
@@ -80,3 +87,14 @@ jobs:
         shell: bash -l {0}
         run: |
           pytest --cov=panorama  --test-data-path=test_data
+      
+      # Upload conda environment files as artifacts
+      - name: Upload conda environment artifacts
+        uses: actions/upload-artifact@v4
+        if: always()  # Upload even if tests fail
+        with:
+          name: conda-env-${{ matrix.os }}-python${{ matrix.python-version }}
+          path: |
+            conda-env-${{ matrix.os }}-python${{ matrix.python-version }}.yml
+            conda-explicit-${{ matrix.os }}-python${{ matrix.python-version }}.txt
+          retention-days: 30
