@@ -26,9 +26,9 @@ def annotation_and_systems_cmds_pangenome_list(
         "--k_best_hit 3 "
         f"--threads {num_cpus}"
     )
-
+    logger.warning(">>>>>>>>Running panorama annotation")
     run_command(annotation_command)
-
+    
     systems_command = (
         "panorama systems "
         f"--pangenomes {pangenome_list_file} "
@@ -37,10 +37,10 @@ def annotation_and_systems_cmds_pangenome_list(
         "--annotation_sources defensefinder "
         f"--threads {num_cpus}"
     )
-
+    logger.warning(">>>>>>>>Running panorama systems")
     run_command(systems_command)
     
-    logger.warning("Finished panorama annotation and systems commands.")
+    logger.warning(">>>>>>>>Finished panorama annotation and systems commands.")
 
     return pangenome_list_file
 
@@ -53,8 +53,8 @@ def test_write_systems(
     update_golden,
 ):
     
-    logger.warning("Running test_write_systems...") 
-    logger.warning(f"{annotation_and_systems_cmds_pangenome_list}")
+    logger.warning(">>>>>>>>Running test_write_systems...") 
+    logger.warning(f">>>>>>>>{annotation_and_systems_cmds_pangenome_list}")
 
     outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
 
