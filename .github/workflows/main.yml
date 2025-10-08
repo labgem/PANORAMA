@@ -52,17 +52,52 @@ jobs:
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-      # Install requirements with miniconda
+      
+      # Cache conda environment
+      - name: Cache conda environment
+        uses: actions/cache@v4
+        id: cache-conda
+        with:
+          path: |
+            /usr/share/miniconda/envs/panorama
+            ~/.conda/envs/panorama
+            ~/miniconda3/envs/panorama
+            /Users/runner/miniconda3/envs/panorama
+          key: conda-${{ runner.os }}-python${{ matrix.python-version }}-${{ hashFiles('panorama.yml', 'pyproject.toml') }}-v1
+          restore-keys: |
+            conda-${{ runner.os }}-python${{ matrix.python-version }}-
+            conda-${{ runner.os }}-
+      
+      # Install requirements with miniconda (only if cache miss)
       - uses: conda-incubator/setup-miniconda@v3
+        if: steps.cache-conda.outputs.cache-hit != 'true'
         with:
           python-version: ${{ matrix.python-version }}
           channels: conda-forge,bioconda,defaults
           environment-file: panorama.yml
           activate-environment: panorama
+      
+      # If cache hit, just activate the cached environment
+      - uses: conda-incubator/setup-miniconda@v3
+        if: steps.cache-conda.outputs.cache-hit == 'true'
+        with:
+          python-version: ${{ matrix.python-version }}
+          activate-environment: panorama
+          auto-activate-base: false
+
+      # Show cache status for debugging
+      - name: Cache status
+        run: |
+          if [ "${{ steps.cache-conda.outputs.cache-hit }}" == "true" ]; then
+            echo "✅ Conda environment loaded from cache"
+          else
+            echo "⏬ Conda environment created fresh (cache miss)"
+          fi
 
       - name: Install panorama
         shell: bash -l {0}
         run: |
+          # Install PANORAMA with test dependencies
           pip install .[test]
 
       # Export conda environment for reproducibility
