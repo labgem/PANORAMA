@@ -2,13 +2,14 @@ from pathlib import Path
 
 import pytest
 
-from tests.functional_tests.test_utils_cmd import utils_clustering, utils_model_list  # noqa: F401
+from tests.functional_tests.test_utils_cmd import utils_clustering, utils_model_list, utils_hmm_list  # noqa: F401
 from tests.utils.run_command import run_command
+from tests.functional_tests.test_system_cmds import annotation_and_systems_cmds_pangenome_list  # noqa: F401
 
 
 @pytest.mark.requires_test_data
 def test_compare_spots_command(
-    pangenome_list_file,
+    annotation_and_systems_cmds_pangenome_list,
     utils_model_list,  # noqa: F811
     utils_clustering,  # noqa: F811
     num_cpus,
@@ -16,10 +17,10 @@ def test_compare_spots_command(
 ):
     # TODO Manage the problem with reproducibility for better testing
 
-    outdir = pangenome_list_file.parent / "compare_spots_outdir"
+    outdir = annotation_and_systems_cmds_pangenome_list.parent / "compare_spots_outdir"
     compare_spots_command = (
         "panorama compare_spots "
-        f"--pangenomes {pangenome_list_file} "
+        f"--pangenomes {annotation_and_systems_cmds_pangenome_list} "
         f"-o {outdir} "
         "--graph_formats gexf graphml "
         f"--cpus {num_cpus} "

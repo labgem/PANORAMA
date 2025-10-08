@@ -120,21 +120,22 @@ def test_data_path(request):
     return validate_test_data_path(path_str)
 
 
-@pytest.fixture(scope="session")
-def pangenome_list_file(test_data_path, tmp_path_factory):
+@pytest.fixture()
+def pangenome_list_file(test_data_path, tmp_path):
     """
     Create a temporary pangenome list file for testing.
     Copies pangenome files to temporary directory to avoid modifying originals.
     Uses tmp_path_factory for session scope compatibility.
     """
     pangenome_dir = test_data_path / "pangenomes"
-    tmp_path = tmp_path_factory.mktemp("panorama_test")
-
+    # tmp_path = tmp_path_factory.mktemp("panorama_test")
+    tmp_path_test = tmp_path / "panorama_test"
+    tmp_path_test.mkdir()
     # Create a subdirectory for copied pangenome files
-    tmp_pangenome_dir = tmp_path / "pangenomes"
+    tmp_pangenome_dir = tmp_path_test / "pangenomes"
     tmp_pangenome_dir.mkdir()
 
-    pangenome_list_tsv = tmp_path / "pangenomes_list.tsv"
+    pangenome_list_tsv = tmp_path_test / "pangenomes_list.tsv"
 
     with open(pangenome_list_tsv, "w") as f:
         for pangenome_file in pangenome_dir.glob("*.h5"):

@@ -5,15 +5,19 @@ import pytest
 from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list  # noqa: F401
 from tests.utils.file_compare import assert_or_update_file
 from tests.utils.run_command import run_command
+import logging
 
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-@pytest.fixture(scope="session")
-def annotation_and_systems_cmds(
+@pytest.fixture()
+def annotation_and_systems_cmds_pangenome_list(
     pangenome_list_file,
     utils_hmm_list,  # noqa: F811
     utils_model_list,  # noqa: F811
     num_cpus,
 ):
+    logger.warning("Running panorama annotation and systems commands...")
     annotation_command = (
         f"panorama annotation "
         f"--pangenomes {pangenome_list_file} "
@@ -36,19 +40,20 @@ def annotation_and_systems_cmds(
 
     run_command(systems_command)
 
+    return pangenome_list_file
+
 
 @pytest.mark.requires_test_data
 def test_write_systems(
-    annotation_and_systems_cmds,
-    pangenome_list_file,
+    annotation_and_systems_cmds_pangenome_list,
     utils_model_list,  # noqa: F811
     num_cpus,
     update_golden,
 ):
-    outdir = pangenome_list_file.parent / "write_systems_outdir"
+    outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
 
     command = (
-        f"panorama write_systems  --pangenomes {pangenome_list_file} "
+        f"panorama write_systems  --pangenomes {annotation_and_systems_cmds_pangenome_list} "
         f"--output {outdir} --models {utils_model_list} "
         "--sources defensefinder "
         "--projection "
@@ -63,7 +68,7 @@ def test_write_systems(
 
     # Get list of pangenome names from the pangenome list file
     pangenome_names = []
-    with open(pangenome_list_file, "r") as f:
+    with open(annotation_and_systems_cmds_pangenome_list, "r") as f:
         for line in f:
             if line.strip():
                 pangenome_name = line.split("\t")[0]
