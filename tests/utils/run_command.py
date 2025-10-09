@@ -1,13 +1,17 @@
 import logging
-from unittest.mock import patch
-
-from panorama.main import main
+import subprocess
 
 # create a module-level logger
 logger = logging.getLogger(__name__)
 
 
+# def run_command(cmd):
+#     logger.info(cmd)
+#     with patch("sys.argv", cmd.split()):
+#         main()
+
+
 def run_command(cmd):
     logger.info(cmd)
-    with patch("sys.argv", cmd.split()):
-        main()
+
+    subprocess.run(cmd.split())
