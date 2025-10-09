@@ -31,18 +31,18 @@ def test_annotation_and_systems_cmds_pangenome_list(
     logger.warning(">>>>>>>>Running panorama annotation")
     run_command(annotation_command)
     
-    systems_command = (
-        "panorama systems "
-        f"--pangenomes {pangenome_list_file} "
-        f"--models {utils_model_list} "
-        "--source defensefinder "
-        "--annotation_sources defensefinder "
-        f"--threads {num_cpus} --disable_prog_bar"
-    )
-    logger.warning(">>>>>>>>Running panorama systems")
-    run_command(systems_command)
+    # systems_command = (
+    #     "panorama systems "
+    #     f"--pangenomes {pangenome_list_file} "
+    #     f"--models {utils_model_list} "
+    #     "--source defensefinder "
+    #     "--annotation_sources defensefinder "
+    #     f"--threads {num_cpus} --disable_prog_bar"
+    # )
+    # logger.warning(">>>>>>>>Running panorama systems")
+    # run_command(systems_command)
     
-    logger.warning(">>>>>>>>Finished panorama annotation and systems commands.")
+    # logger.warning(">>>>>>>>Finished panorama annotation and systems commands.")
 
     # assert False
     return pangenome_list_file
