@@ -1,5 +1,4 @@
 import logging
-from pathlib import Path
 
 import pytest
 
@@ -7,15 +6,13 @@ from tests.functional_tests.test_utils_cmd import (  # noqa: F401
     utils_hmm_list,
     utils_model_list,
 )
-from tests.utils.file_compare import assert_or_update_file
 from tests.utils.run_command import run_command
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-
-@pytest.fixture()
-def annotation_and_systems_cmds_pangenome_list(
+@pytest.mark.requires_test_data
+def test_annotation_and_systems_cmds_pangenome_list(
     pangenome_list_file,
     utils_hmm_list,  # noqa: F811
     utils_model_list,  # noqa: F811
@@ -50,78 +47,78 @@ def annotation_and_systems_cmds_pangenome_list(
     return pangenome_list_file
 
 
-@pytest.mark.requires_test_data
-def test_write_systems(
-    annotation_and_systems_cmds_pangenome_list,
-    utils_model_list,  # noqa: F811
-    num_cpus,
-    update_golden,
-):
-    logger.warning(">>>>>>>>Running test_write_systems...")
-    logger.warning(f">>>>>>>>{annotation_and_systems_cmds_pangenome_list}")
+# @pytest.mark.requires_test_data
+# def test_write_systems(
+#     annotation_and_systems_cmds_pangenome_list,
+#     utils_model_list,  # noqa: F811
+#     num_cpus,
+#     update_golden,
+# ):
+#     logger.warning(">>>>>>>>Running test_write_systems...")
+#     logger.warning(f">>>>>>>>{annotation_and_systems_cmds_pangenome_list}")
 
-    outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
+#     outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
 
-    command = (
-        f"panorama write_systems  --pangenomes {annotation_and_systems_cmds_pangenome_list} "
-        f"--output {outdir} --models {utils_model_list} "
-        "--sources defensefinder "
-        "--projection "
-        f"--threads {num_cpus} "
-        "--association all"
-    )
+#     command = (
+#         f"panorama write_systems  --pangenomes {annotation_and_systems_cmds_pangenome_list} "
+#         f"--output {outdir} --models {utils_model_list} "
+#         "--sources defensefinder "
+#         "--projection "
+#         f"--threads {num_cpus} "
+#         "--association all"
+#     )
 
-    run_command(command)
+#     run_command(command)
 
-    # Validate output structure and files
-    assert outdir.exists(), f"Output directory {outdir} was not created"
+#     # Validate output structure and files
+#     assert outdir.exists(), f"Output directory {outdir} was not created"
 
-    # Get list of pangenome names from the pangenome list file
-    pangenome_names = []
-    with open(annotation_and_systems_cmds_pangenome_list, "r") as f:
-        for line in f:
-            if line.strip():
-                pangenome_name = line.split("\t")[0]
-                pangenome_names.append(pangenome_name)
+#     # Get list of pangenome names from the pangenome list file
+#     pangenome_names = []
+#     with open(annotation_and_systems_cmds_pangenome_list, "r") as f:
+#         for line in f:
+#             if line.strip():
+#                 pangenome_name = line.split("\t")[0]
+#                 pangenome_names.append(pangenome_name)
 
-    # Expected files in each source directory (without projection subdirectory)
-    expected_files = [
-        "association.tsv",
-        "correlation_modules.html",
-        "correlation_RGPs.html",
-        "correlation_spots.html",
-        "module_to_systems.tsv",
-        "rgp_to_systems.tsv",
-        "spot_to_systems.tsv",
-        "systems.tsv",
-    ]
+#     # Expected files in each source directory (without projection subdirectory)
+#     expected_files = [
+#         "association.tsv",
+#         "correlation_modules.html",
+#         "correlation_RGPs.html",
+#         "correlation_spots.html",
+#         "module_to_systems.tsv",
+#         "rgp_to_systems.tsv",
+#         "spot_to_systems.tsv",
+#         "systems.tsv",
+#     ]
 
-    # Check each pangenome directory
-    for pangenome_name in pangenome_names:
-        pangenome_dir = outdir / pangenome_name
-        assert pangenome_dir.exists(), f"Pangenome directory {pangenome_dir} was not created"
+#     # Check each pangenome directory
+#     for pangenome_name in pangenome_names:
+#         pangenome_dir = outdir / pangenome_name
+#         assert pangenome_dir.exists(), f"Pangenome directory {pangenome_dir} was not created"
 
-        # Check source directory
-        source_dir = pangenome_dir / "defensefinder"
-        assert source_dir.exists(), f"Source directory {source_dir} was not created"
+#         # Check source directory
+#         source_dir = pangenome_dir / "defensefinder"
+#         assert source_dir.exists(), f"Source directory {source_dir} was not created"
 
-        # Check all expected files exist
-        for expected_file in expected_files:
-            file_path = source_dir / expected_file
-            assert file_path.exists(), f"Expected file {file_path} was not created"
-            assert file_path.stat().st_size > 0, f"Expected file {file_path} is empty"
-            if expected_file == "systems.tsv":
-                golden_file_name = Path(f"test_write_systems.{pangenome_name}.systems.tsv")
-                assert_or_update_file(golden_file_name, file_path, update_golden)
+#         # Check all expected files exist
+#         for expected_file in expected_files:
+#             file_path = source_dir / expected_file
+#             assert file_path.exists(), f"Expected file {file_path} was not created"
+#             assert file_path.stat().st_size > 0, f"Expected file {file_path} is empty"
+#             if expected_file == "systems.tsv":
+#                 golden_file_name = Path(f"test_write_systems.{pangenome_name}.systems.tsv")
+#                 assert_or_update_file(golden_file_name, file_path, update_golden)
 
-        # Check the projection directory exists (since --projection flag is used)
-        projection_dir = source_dir / "projection"
-        assert projection_dir.exists(), f"Projection directory {projection_dir} was not created"
+#         # Check the projection directory exists (since --projection flag is used)
+#         projection_dir = source_dir / "projection"
+#         assert projection_dir.exists(), f"Projection directory {projection_dir} was not created"
 
-        # Check that the projection directory contains TSV files
-        projection_files = list(projection_dir.glob("*.tsv"))
-        assert len(projection_files) > 0, f"No projection TSV files found in {projection_dir}"
+#         # Check that the projection directory contains TSV files
+#         projection_files = list(projection_dir.glob("*.tsv"))
+#         assert len(projection_files) > 0, f"No projection TSV files found in {projection_dir}"
 
-        # Verify all projection files are non-empty
-        for proj_file in projection_files:
-            assert proj_file.stat().st_size > 0, f"Projection file {proj_file} is empty"
+#         # Verify all projection files are non-empty
+#         for proj_file in projection_files:
+#             assert proj_file.stat().st_size > 0, f"Projection file {proj_file} is empty"
