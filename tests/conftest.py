@@ -24,10 +24,10 @@ logger = logging.getLogger(__name__)
 def calculate_md5(file_path: Path) -> str:
     """
     Calculate MD5 checksum of a file.
-    
+
     Args:
         file_path: Path to the file
-        
+
     Returns:
         MD5 checksum as hexadecimal string
     """
@@ -42,32 +42,29 @@ def calculate_md5(file_path: Path) -> str:
 def copy_and_verify(source: Path, destination: Path) -> None:
     """
     Copy a file and verify integrity using MD5 checksum.
-    
+
     Args:
         source: Source file path
         destination: Destination file path
-        
+
     Raises:
         ValueError: If MD5 checksums don't match after copying
     """
     # Calculate MD5 of source file
     source_md5 = calculate_md5(source)
     logger.debug(f"Source file {source.name} MD5: {source_md5}")
-    
+
     # Copy the file
     shutil.copy2(source, destination)
-    
+
     # Calculate MD5 of copied file
     dest_md5 = calculate_md5(destination)
     logger.debug(f"Copied file {destination.name} MD5: {dest_md5}")
-    
+
     # Verify checksums match
     if source_md5 != dest_md5:
-        raise ValueError(
-            f"MD5 checksum mismatch for {source.name}! "
-            f"Source: {source_md5}, Copied: {dest_md5}"
-        )
-    
+        raise ValueError(f"MD5 checksum mismatch for {source.name}! Source: {source_md5}, Copied: {dest_md5}")
+
     logger.debug(f"✅ File {source.name} copied and verified successfully")
 
 
@@ -190,7 +187,7 @@ def pangenome_list_file(test_data_path, tmp_path_factory):
         for pangenome_file in pangenome_dir.glob("*.h5"):
             # Copy pangenome file to temporary directory with MD5 verification
             tmp_pangenome_file = tmp_pangenome_dir / pangenome_file.name
-            
+
             logger.info(f"Copying and verifying pangenome file: {pangenome_file.name}")
             copy_and_verify(pangenome_file, tmp_pangenome_file)
 
@@ -304,9 +301,7 @@ def simple_gfs(simple_contigs, simple_orgs):
 
 @pytest.fixture
 def simple_pangenome(simple_gfs, simple_orgs):
-    from panorama.pangenomes import (
-        Pangenome,
-    )  # Import here to avoid circular import issue; TODO fix it
+    from panorama.pangenomes import Pangenome  # Import here to avoid circular import issue; TODO fix it
 
     pangenome = Pangenome(name="test_pangenome")
     for gf in simple_gfs:
