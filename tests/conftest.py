@@ -1,4 +1,5 @@
 # default libraries
+import hashlib
 import logging
 import os
 import shutil
@@ -17,7 +18,58 @@ from ppanggolin.meta.meta import assign_metadata
 from panorama.geneFamily import GeneFamily
 from panorama.systems.models import Family, FuncUnit, Model
 
+
 logger = logging.getLogger(__name__)
+
+
+def calculate_md5(file_path: Path) -> str:
+    """
+    Calculate MD5 checksum of a file.
+    
+    Args:
+        file_path: Path to the file
+        
+    Returns:
+        MD5 checksum as hexadecimal string
+    """
+    hash_md5 = hashlib.md5()
+    with open(file_path, "rb") as f:
+        # Read file in chunks to handle large files efficiently
+        for chunk in iter(lambda: f.read(4096), b""):
+            hash_md5.update(chunk)
+    return hash_md5.hexdigest()
+
+
+def copy_and_verify(source: Path, destination: Path) -> None:
+    """
+    Copy a file and verify integrity using MD5 checksum.
+    
+    Args:
+        source: Source file path
+        destination: Destination file path
+        
+    Raises:
+        ValueError: If MD5 checksums don't match after copying
+    """
+    # Calculate MD5 of source file
+    source_md5 = calculate_md5(source)
+    logger.debug(f"Source file {source.name} MD5: {source_md5}")
+    
+    # Copy the file
+    shutil.copy2(source, destination)
+    
+    # Calculate MD5 of copied file
+    dest_md5 = calculate_md5(destination)
+    logger.debug(f"Copied file {destination.name} MD5: {dest_md5}")
+    
+    # Verify checksums match
+    if source_md5 != dest_md5:
+        raise ValueError(
+            f"MD5 checksum mismatch for {source.name}! "
+            f"Source: {source_md5}, Copied: {dest_md5}"
+        )
+    
+    logger.debug(f"✅ File {source.name} copied and verified successfully")
 
 
 def validate_test_data_path(path_str: str = None) -> Union[Path, None]:
@@ -119,32 +171,36 @@ def test_data_path(request):
     return validate_test_data_path(path_str)
 
 
-@pytest.fixture(scope="session")
-def pangenome_list_file(test_data_path, tmp_path_factory):
+@pytest.fixture()
+def pangenome_list_file(test_data_path, tmp_path):
     """
     Create a temporary pangenome list file for testing.
     Copies pangenome files to temporary directory to avoid modifying originals.
     Uses tmp_path_factory for session scope compatibility.
     """
     pangenome_dir = test_data_path / "pangenomes"
-    tmp_path = tmp_path_factory.mktemp("panorama_test")
-
+    # tmp_path = tmp_path_factory.mktemp("panorama_test")
+    tmp_path_test = tmp_path / "panorama_test"
+    tmp_path_test.mkdir()
     # Create a subdirectory for copied pangenome files
-    tmp_pangenome_dir = tmp_path / "pangenomes"
+    tmp_pangenome_dir = tmp_path_test / "pangenomes"
     tmp_pangenome_dir.mkdir()
 
-    pangenome_list_tsv = tmp_path / "pangenomes_list.tsv"
+    pangenome_list_tsv = tmp_path_test / "pangenomes_list.tsv"
 
     with open(pangenome_list_tsv, "w") as f:
         for pangenome_file in pangenome_dir.glob("*.h5"):
-            # Copy pangenome file to temporary directory
+            # Copy pangenome file to temporary directory with MD5 verification
             tmp_pangenome_file = tmp_pangenome_dir / pangenome_file.name
-            shutil.copy2(pangenome_file, tmp_pangenome_file)
+            
+            logger.info(f"Copying and verifying pangenome file: {pangenome_file.name}")
+            copy_and_verify(pangenome_file, tmp_pangenome_file)
 
             pangenome_name = pangenome_file.name.rsplit(".h5", 1)[0]
             # Write the path to the copied file in the list
             f.write(f"{pangenome_name}\t{tmp_pangenome_file}\n")
 
+    logger.info(f"All pangenome files copied and verified. List created: {pangenome_list_tsv}")
     return pangenome_list_tsv
 
 

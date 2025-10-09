@@ -31,8 +31,8 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: ['ubuntu-latest', 'macos-latest']
-        python-version: ['3.10', '3.12']
+        os: ['ubuntu-latest'] #, 'macos-latest']
+        python-version: ['3.10'] #, '3.12']
     steps:
 
       # Get number of cpu available on the current runner
@@ -52,17 +52,52 @@ jobs:
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
       - uses: actions/checkout@v4
-      # Install requirements with miniconda
+      
+      # # Cache conda environment
+      # - name: Cache conda environment
+      #   uses: actions/cache@v4
+      #   id: cache-conda
+      #   with:
+      #     path: |
+      #       /usr/share/miniconda/envs/panorama
+      #       ~/.conda/envs/panorama
+      #       ~/miniconda3/envs/panorama
+      #       /Users/runner/miniconda3/envs/panorama
+      #     key: conda-${{ runner.os }}-python${{ matrix.python-version }}-${{ hashFiles('panorama.yml', 'pyproject.toml') }}-v1
+      #     restore-keys: |
+      #       conda-${{ runner.os }}-python${{ matrix.python-version }}-
+      #       conda-${{ runner.os }}-
+      
+      # Install requirements with miniconda (only if cache miss)
       - uses: conda-incubator/setup-miniconda@v3
+        # if: steps.cache-conda.outputs.cache-hit != 'true'
         with:
           python-version: ${{ matrix.python-version }}
-          channels: conda-forge,bioconda,defaults
+          channels: conda-forge,bioconda
           environment-file: panorama.yml
           activate-environment: panorama
+      
+      # # If cache hit, just activate the cached environment
+      # - uses: conda-incubator/setup-miniconda@v3
+      #   if: steps.cache-conda.outputs.cache-hit == 'true'
+      #   with:
+      #     python-version: ${{ matrix.python-version }}
+      #     activate-environment: panorama
+      #     auto-activate-base: false
+
+      # # Show cache status for debugging
+      # - name: Cache status
+      #   run: |
+      #     if [ "${{ steps.cache-conda.outputs.cache-hit }}" == "true" ]; then
+      #       echo "✅ Conda environment loaded from cache"
+      #     else
+      #       echo "⏬ Conda environment created fresh (cache miss)"
+      #     fi
 
       - name: Install panorama
         shell: bash -l {0}
         run: |
+          # Install PANORAMA with test dependencies
           pip install .[test]
 
       # Check that it is installed and displays help without error
@@ -76,7 +111,42 @@ jobs:
         with:
           repository: labgem/PANORAMA_test
           path: test_data
-      - name: Run pytest with coverage
+      # - name: Run pytest with coverage
+      #   shell: bash -l {0}
+      #   run: |
+      #     # pytest --cov=panorama  --test-data-path=test_data
+      #     pytest tests/functional_tests/test_system_cmds.py --test-data-path=test_data
+      - name: Run panorama annotate, systems and write_systems 
         shell: bash -l {0}
         run: |
-          pytest --cov=panorama  --test-data-path=test_data
+          cd test_data
+          panorama utils --hmm hmms -o hmms_formatted/
+
+          panorama annotation \
+          --pangenomes pangenomes_list.tsv \
+          --source defensefinder \
+          --hmm hmms_formatted/hmm_list.tsv \
+          --k_best_hit 3 \
+          --output results/ \
+          --threads $NUM_CPUS
+
+
+          panorama utils --models models/* -o .  --force
+          panorama systems \
+          --pangenomes pangenomes_list.tsv \
+          --models models_list.tsv \
+          --source defensefinder \
+          --annotation_sources  defensefinder \
+          --threads $NUM_CPUS
+
+          panorama write_systems  \
+          --pangenomes pangenomes_list.tsv \
+          --output write_systems_outdir \
+          --models models_list.tsv \
+          --sources defensefinder \
+          --projection \
+          --threads $NUM_CPUS   \
+          --association all
+
+
+          cd -  

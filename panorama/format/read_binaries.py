@@ -15,23 +15,15 @@ robust error handling and progress tracking for large-scale pangenome analyses.
 # Standard library imports
 import logging
 import time
-from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Lock
 from pathlib import Path
 from typing import Callable, Dict, List, Optional, Set
 
 # Third-party imports
 import tables
-from ppanggolin.formats import (
-    get_need_info,
-    read_annotation,
-    read_chunks,
-    read_gene_sequences,
-    read_graph,
-    read_metadata,
-    read_rgp,
-)
+from ppanggolin.formats import get_need_info
 from ppanggolin.formats import get_status as super_get_status
+from ppanggolin.formats import read_annotation, read_chunks, read_gene_sequences, read_graph, read_metadata, read_rgp
 from ppanggolin.geneFamily import Gene
 from tqdm import tqdm
 
@@ -41,7 +33,7 @@ from panorama.pangenomes import Pangenome, Pangenomes
 from panorama.region import Module, Spot
 from panorama.systems.models import Models
 from panorama.systems.system import System, SystemUnit
-from panorama.utils import check_tsv_sanity, init_lock
+from panorama.utils import check_tsv_sanity
 
 # Module-level logger
 logger = logging.getLogger("PANORAMA")
@@ -762,6 +754,7 @@ def read_pangenome(
                     # Read metadata if available and requested
                     if metastatus._v_attrs[metatype] and requested_sources:
                         logger.info(f"Reading {metatype} metadata from sources: {requested_sources}")
+                        print()
                         read_metadata(
                             pangenome,
                             h5f,
@@ -1016,51 +1009,54 @@ def load_pangenomes(
     # Disable individual progress bars during parallel loading to avoid conflicts
     individual_disable_bar = max_workers > 1 or disable_bar
 
-    with ThreadPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
+    # with ThreadPoolExecutor(max_workers=max_workers, initializer=init_lock, initargs=(lock,)) as executor:
         # Submit all loading tasks
+    if True:
         with tqdm(
             total=len(pan_to_path),
             unit="pangenome",
             desc="Loading pangenomes",
             disable=disable_bar,
         ) as progress:
-            futures = []
+            # futures = []
             for pangenome_name, pangenome_info in pan_to_path.items():
                 # Extract pangenome information
                 pangenome_path = pangenome_info["path"]
                 pangenome_taxid = pangenome_info["taxid"]
 
                 # Submit loading task
-                future = executor.submit(
-                    load_pangenome,
-                    name=pangenome_name,
-                    path=pangenome_path,
-                    taxid=pangenome_taxid,
-                    need_info=need_info,
-                    check_function=check_function,
-                    disable_bar=individual_disable_bar,
-                    **kwargs,
-                )
-
-                # Set up a progress callback
-                future.add_done_callback(lambda f: progress.update())
-                futures.append((future, pangenome_name))
-
-            # Collect results as they complete
-            for future, pangenome_name in futures:
+                # future = executor.submit(
                 try:
-                    # Get the result (this will raise any exceptions that occurred)
-                    pangenome_result = future.result()
+                    pangenome = load_pangenome(
+                        name=pangenome_name,
+                        path=pangenome_path,
+                        taxid=pangenome_taxid,
+                        need_info=need_info,
+                        check_function=check_function,
+                        disable_bar=individual_disable_bar,
+                        **kwargs,
+                    )
+                    pangenomes.add(pangenome)
+                    progress.update()
+                    # Set up a progress callback
+                    # future.add_done_callback(lambda f: progress.update())
+                    # futures.append((future, pangenome_name))
 
-                    # Thread-safe addition to results
-                    with lock:
-                        pangenomes.add(pangenome_result)
+                # # Collect results as they complete
+                # for future, pangenome_name in futures:
+                #     try:
+                #         # Get the result (this will raise any exceptions that occurred)
+                #         pangenome_result = future.result()
+
+                #         # Thread-safe addition to results
+                #         with lock:
+                #             pangenomes.add(pangenome_result)
 
                 except Exception as error:
                     logger.error(f"Failed to load pangenome '{pangenome_name}': {error}")
                     # Cancel remaining futures and re-raise
-                    for remaining_future, _ in futures:
-                        remaining_future.cancel()
+                    # for remaining_future, _ in futures:
+                    #     remaining_future.cancel()
                     raise error
 
     # Log completion statistics

@@ -13,7 +13,7 @@ authors = [
 keywords = ["Pangenomics", "Comparative genomics", "Bioinformatics", "Prokaryote"]
 description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 license = { file = "LICENCE" }
 classifiers = ["Development Status :: Open alpha",
     "Environment :: Console",
@@ -24,13 +24,6 @@ classifiers = ["Development Status :: Open alpha",
     "Programming Language :: Python :: 3",
     "Topic :: Scientific/Engineering :: Bio-Informatics"]
 dynamic = ["version"]
-dependencies = [
-    "ppanggolin>=2.1.0",
-    "pyhmmer>=0.11.1",
-    "lxml>=6.0.2",
-    "selenium>=4.36.0",
-]
-
 
 [project.optional-dependencies]
 doc = [
@@ -85,7 +78,7 @@ markers = [
     "requires_test_data: marks tests that require test dataset path to be provided",
 ]
 log_cli = true
-log_cli_level = "WARNING"
+log_cli_level = "INFO"
 log_cli_format = "%(asctime)s [%(levelname)8s] %(message)s (%(filename)s:%(lineno)s)"
 log_cli_date_format = "%Y-%m-%d %H:%M:%S"
 
