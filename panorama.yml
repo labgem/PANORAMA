@@ -4,7 +4,7 @@ channels:
   - bioconda
 dependencies:
   - python>=3.10
-  - ppanggolin>=2.1.0
+  - ppanggolin>=2.2.5
   - pyhmmer>=0.6
   - lxml>=4.9.2
   - selenium>=4.35.0
