@@ -65,12 +65,12 @@ def test_write_systems(
     update_golden,
 ):
     logger.warning(">>>>>>>>Running test_write_systems...")
-    logger.warning(f">>>>>>>>{annotation_and_systems_cmds_pangenome_list}")
+    logger.warning(f">>>>>>>>{systems_cmd_pangenome_list}")
 
-    outdir = annotation_and_systems_cmds_pangenome_list.parent / "write_systems_outdir"
+    outdir = systems_cmd_pangenome_list.parent / "write_systems_outdir"
 
     command = (
-        f"panorama write_systems  --pangenomes {annotation_and_systems_cmds_pangenome_list} "
+        f"panorama write_systems  --pangenomes {systems_cmd_pangenome_list} "
         f"--output {outdir} --models {utils_model_list} "
         "--sources defensefinder "
         "--projection "
@@ -85,7 +85,7 @@ def test_write_systems(
 
     # Get list of pangenome names from the pangenome list file
     pangenome_names = []
-    with open(annotation_and_systems_cmds_pangenome_list, "r") as f:
+    with open(systems_cmd_pangenome_list, "r") as f:
         for line in f:
             if line.strip():
                 pangenome_name = line.split("\t")[0]
