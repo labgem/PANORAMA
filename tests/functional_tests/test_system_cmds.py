@@ -11,11 +11,10 @@ from tests.utils.run_command import run_command
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-@pytest.mark.requires_test_data
-def test_annotation_and_systems_cmds_pangenome_list(
+@pytest.fixture()
+def annotation_cmd_pangenome_list(
     pangenome_list_file,
     utils_hmm_list,  # noqa: F811
-    utils_model_list,  # noqa: F811
     num_cpus,
 ):
     logger.warning("Running panorama annotation and systems commands...")
@@ -30,9 +29,19 @@ def test_annotation_and_systems_cmds_pangenome_list(
     logger.warning(">>>>>>>>Running panorama annotation")
     run_command(annotation_command)
 
+    # assert False
+    return pangenome_list_file
+
+
+@pytest.mark.requires_test_data
+def annotation_and_systems_cmds_pangenome_list(
+    annotation_cmd_pangenome_list,
+    utils_model_list,  # noqa: F811
+    num_cpus,
+):
     systems_command = (
         "panorama systems "
-        f"--pangenomes {pangenome_list_file} "
+        f"--pangenomes {annotation_cmd_pangenome_list} "
         f"--models {utils_model_list} "
         "--source defensefinder "
         "--annotation_sources defensefinder "
@@ -44,8 +53,7 @@ def test_annotation_and_systems_cmds_pangenome_list(
     logger.warning(">>>>>>>>Finished panorama annotation and systems commands.")
 
     # assert False
-    return pangenome_list_file
-
+    return annotation_cmd_pangenome_list
 
 # @pytest.mark.requires_test_data
 # def test_write_systems(
