@@ -34,7 +34,7 @@ def annotation_cmd_pangenome_list(
 
 
 @pytest.mark.requires_test_data
-def annotation_and_systems_cmds_pangenome_list(
+def test_annotation_and_systems_cmds_pangenome_list(
     annotation_cmd_pangenome_list,
     utils_model_list,  # noqa: F811
     num_cpus,
