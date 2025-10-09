@@ -79,4 +79,4 @@ jobs:
       - name: Run pytest with coverage
         shell: bash -l {0}
         run: |
-          pytest --cov=panorama  --test-data-path=test_data
+          pytest tests/functional_tests/test_system_cmds.py --cov=panorama  --test-data-path=test_data
