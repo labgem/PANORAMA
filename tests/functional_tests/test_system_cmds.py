@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 @pytest.fixture()
-def test_annotation_and_systems_cmds_pangenome_list(
+def annotation_and_systems_cmds_pangenome_list(
     pangenome_list_file,
     utils_hmm_list,  # noqa: F811
     utils_model_list,  # noqa: F811
