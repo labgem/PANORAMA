@@ -1,8 +1,12 @@
 from pathlib import Path
+from time import sleep
 
 import pytest
 
-from tests.functional_tests.test_utils_cmd import utils_hmm_list, utils_model_list  # noqa: F401
+from tests.functional_tests.test_utils_cmd import (  # noqa: F401
+    utils_hmm_list,
+    utils_model_list,
+)
 from tests.utils.file_compare import assert_or_update_file
 from tests.utils.run_command import run_command
 
@@ -22,6 +26,8 @@ def annotation_and_systems_cmds(
         "--k_best_hit 3 "
         f"--threads {num_cpus}"
     )
+
+    sleep(10)  # Give some time between the two commands
 
     run_command(annotation_command)
 
