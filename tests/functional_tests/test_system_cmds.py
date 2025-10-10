@@ -26,10 +26,9 @@ def annotation_and_systems_cmds(
         "--k_best_hit 3 "
         f"--threads {num_cpus}"
     )
+    run_command(annotation_command)
 
     sleep(10)  # Give some time between the two commands
-
-    run_command(annotation_command)
 
     systems_command = (
         "panorama systems "
