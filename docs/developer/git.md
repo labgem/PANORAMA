@@ -106,6 +106,31 @@ If your PR addresses an issue, link it! Use these keywords in your PR descriptio
 - `Related to #123` - Links without closing
 ```
 
+### For reviewer
+
+Before to validate the commit change, you should check the elements in the following template for reviewer.
+
+```md
+## Quick Review
+
+### ✅ Checks
+- [ ] Code runs correctly
+- [ ] Logic makes sense
+- [ ] No obvious bugs
+- [ ] Comments help understand the code
+
+### 💬 Feedback
+<!-- Your comments here -->
+
+**Status:** ✅ Approved / 🔄 Suggestions / ❌ Changes needed
+```
+
+```{tip}
+You can add this template direclty in your saved replies (Go to your Settings->Saved replies)
+
+See [Using saved replies documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-saved-replies/using-saved-replies)
+```
+
 ## Keeping Your Branch Updated
 
 While you're working on your feature, `dev` keeps moving forward. Here's how to stay in sync:
