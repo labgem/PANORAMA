@@ -97,44 +97,38 @@ You've done the hard work - now let's get it merged!
 
 ### PR Title and Description
 
-Write a clear title that summarizes your change and use the PR template to provide context:
-
-```markdown
-## What does this PR do?
-
-Adds a new module for detecting CRISPR-Cas systems in bacterial genomes using HMM profiles.
-
-## Why is this needed?
-
-Many users requested CRISPR detection capabilities. This addresses issue #123.
-
-## What changed?
-
-- Added `panorama/crispr/detector.py` with detection logic
-- Added HMM profiles for Cas proteins
-- Added unit tests (coverage: 95%)
-- Updated user documentation with examples
-
-## How to test?
-
-pytest tests/test_crispr.py
-panorama detect_crispr --pangenome examples/ecoli.h5
-
-## Related Issues
-
-Closes #123
-Related to #456
-
-## Version
-
-Updated VERSION from 1.2.5 → 1.2.6
-```
+Write a clear title that summarizes your change and use the PR template to provide context.
 
 ```{important}
 If your PR addresses an issue, link it! Use these keywords in your PR description:
 - `Fixes #123` - Automatically closes issue when PR merges
 - `Closes #123` - Same as above
 - `Related to #123` - Links without closing
+```
+
+### For reviewer
+
+Before to validate the commit change, you should check the elements in the following template for reviewer.
+
+```md
+## Quick Review
+
+### ✅ Checks
+- [ ] Code runs correctly
+- [ ] Logic makes sense
+- [ ] No obvious bugs
+- [ ] Comments help understand the code
+
+### 💬 Feedback
+<!-- Your comments here -->
+
+**Status:** ✅ Approved / 🔄 Suggestions / ❌ Changes needed
+```
+
+```{tip}
+You can add this template direclty in your saved replies (Go to your Settings->Saved replies)
+
+See [Using saved replies documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-saved-replies/using-saved-replies)
 ```
 
 ## Keeping Your Branch Updated
