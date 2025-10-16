@@ -43,6 +43,7 @@ Closes #
 - [ ] My code follows the project guidelines
 - [ ] Complex logic is commented
 - [ ] No unnecessary files or debug code included
+- [ ] My PR is targeting the `dev` branch
 
 ## Additional notes
 
