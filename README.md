@@ -7,6 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/labgem/panorama.svg?style=flat-square&maxAge=600)](https://github.com/labgem/panorama/issues)
 [![Docs](https://img.shields.io/readthedocs/panorama/latest?style=flat-square&maxAge=600)](https://panorama.readthedocs.io)
 [![Downloads](https://anaconda.org/bioconda/panorama/badges/downloads.svg)](https://bioconda.github.io/recipes/panorama/README.html#download-stats)
+[![Paper](https://img.shields.io/badge/bioRxiv-10.1101%2F2022.09.16.508229-blue?style=flat-square&maxAge=3600)](https://www.biorxiv.org/content/10.64898/2025.12.22.695875v1)
 
 PANORAMA is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
