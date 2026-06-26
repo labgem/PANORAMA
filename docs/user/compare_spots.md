@@ -43,7 +43,7 @@ panorama compare_spots \
 --output conserved_spots_results \
 --gfrr_metrics min_gfrr \
 --gfrr_cutoff 0.8 0.8 \
---threads 8
+--cpu 8
 ```
 
 With system analysis enabled:
@@ -57,7 +57,7 @@ panorama compare_spots \
 --sources defense_finder \
 --gfrr_cutoff 0.8 0.8 \
 --graph_formats gexf graphml \
---threads 8
+--cpu 8
 ```
 
 ### Key Options 📋

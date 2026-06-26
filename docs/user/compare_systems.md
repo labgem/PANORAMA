@@ -53,7 +53,7 @@ panorama compare_systems \
 --sources defense_finder \
 --output systems_comparison_results \
 --heatmap \
---threads 8
+--cpu 8
 ```
 
 Full analysis with conserved systems clustering:
@@ -69,7 +69,7 @@ panorama compare_systems \
 --gfrr_cutoff 0.8 0.8 \
 --gfrr_models_cutoff 0.2 0.2 \
 --graph_formats gexf graphml \
---threads 8
+--cpu 8
 ```
 
 ### Key Options
