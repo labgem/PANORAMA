@@ -9,6 +9,8 @@
 import datetime
 from pathlib import Path
 
+import myst_parser
+
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -105,6 +107,7 @@ html_context = {
     "github_repo": "PANORAMA",
     "github_version": "dev",  # Automatically go to the dev branch for modification
     "doc_path": "docs",
+    "myst_version": myst_parser.__version__,
 }
 
 html_logo = "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
@@ -172,7 +175,7 @@ html_theme_options = {
     "navbar_center": ["navbar-nav"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "footer_start": ["copyright"],
-    "footer_center": ["sphinx-version"],
+    "footer_center": ["sphinx-myst-footer"],
     # "footer_links": ",".join(
     #     [
     #         "About Us|http://example.com/",
