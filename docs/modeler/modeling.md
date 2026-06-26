@@ -208,7 +208,7 @@ Parameters are defined at the model or functional unit level, such as:
 "min_mandatory": 2,
 "min_total": 3,
 "transitivity": 5,
-"window": 6
+"window": 6,
 "same_strand": false,
 }
 ```
