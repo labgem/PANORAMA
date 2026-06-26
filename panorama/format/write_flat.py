@@ -37,10 +37,10 @@ def check_flat_parameters(
     Returns:
         Dictionary needed to load pangenomes information
     """
-    if not args.hmm and not args.annotations and not args.conserved_spots:
+    if not args.hmm and not args.annotations:
         raise argparse.ArgumentError(
             argument=None,
-            message="You need to provide at least --annotation, --hmm or --conserved_spots",
+            message="You need to provide at least --annotation or --hmm",
         )
     else:
         need_info = {}
@@ -399,8 +399,7 @@ def launch(args):
         disable_bar=args.disable_prog_bar,
         check_annotations=args.annotations,
         sources=args.sources,
-        check_hmm=args.hmm,
-        check_conserved_spots=args.conserved_spots,
+        check_hmm=args.hmm
     )
     write_flat_files(
         pangenomes,
