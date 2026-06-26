@@ -125,7 +125,7 @@ To build the documentation locally:
 
 ```shell
 cd docs
-sphinx-autobuild source/ build/
+sphinx-autobuild . build/
 # Open http://127.0.0.1:8000 in your browser
 ```
 

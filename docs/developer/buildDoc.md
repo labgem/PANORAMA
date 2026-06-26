@@ -33,7 +33,7 @@ Want to see your changes in real-time as you write? Use `sphinx-autobuild` (inst
 
 ```shell
 cd docs  # Navigate to the docs folder
-sphinx-autobuild source/ build/
+sphinx-autobuild . build/
 
 # The server will start and give you a URL like:
 # Serving on http://127.0.0.1:8000
@@ -111,7 +111,7 @@ When you add new packages or modules to PANORAMA, regenerate the API reference:
 
 ```shell
 # From the PANORAMA root directory
-sphinx-apidoc -o docs/source/api panorama/ -f
+sphinx-apidoc -o docs/api panorama/ -f
 ```
 
 ```{attention}
