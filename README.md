@@ -62,14 +62,15 @@ PANORAMA provides a command to perform the complete detection workflow as follow
 
 ```shell
 panorama pansystems \
--p pangenomes.tsv \
---hmm /PATH/TO/HMM/LIST/FILE/hmm_list.tsv \
- -m /PATH/TO/MODELS/LIST/FILE/models_list.tsv \
- -s system_model_source_name \
--o PATH/TO/OUPUT/DIRECTORY \
---projection \
---association all \
---partition
+    --pangenomes pangenomes.tsv \
+    --source defense_finder \
+    --hmm hmms.tsv \
+    --models models.tsv \
+    --output results/ \
+    --projection \
+    --association RGPs spots \
+    --partition \
+    --threads 8
 ```
 
 ## Pangenome comparison
