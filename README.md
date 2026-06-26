@@ -17,23 +17,20 @@ software suite. It is designed to perform pangenome comparison at high-throughtu
 
 # Quick Installation
 
-PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html) and
-[pip](https://pip.pypa.io/en/stable/). Follow the next step to install panorama.
+PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html). Follow the next step to install panorama.
 
 ```shell
-# 1. Clone the Repository
-git clone https://github.com/labgem/PANORAMA.git
-cd PANORAMA
+# Create a new Conda environment and install PANORAMA in one line:
+conda create -n panorama -c conda-forge -c bioconda panorama
 
-# 2. Create and Configure the Conda Environment
-conda create -n panorama
-conda config --add channels bioconda
-conda config --add channels conda-forge
+# Activate the environment
 conda activate panorama
-conda env update --file panorama.yml
+
+# Check the install
+panorama --version
 ```
 
-[//]: # (You can find more information on the installation [here]&#40;link_read_the_doc&#41;)
+For alternative installation methods see the [Installation Guide](https://panorama.readthedocs.io/en/latest/user/install.html).
 
 ---
 
