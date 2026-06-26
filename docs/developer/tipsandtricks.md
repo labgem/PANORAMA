@@ -597,7 +597,7 @@ grep -r "print(" panorama/  # Just an example!
 
 #### 6. Update the VERSION File
 
-Don't forget to bump the patch version! See the [Versioning section](#versioning-and-releases-🏷️) above.
+Don't forget to bump the patch version! See the [Versioning section](git.md#versioning-and-releases).
 
 ### Handling Merge Conflicts
 
