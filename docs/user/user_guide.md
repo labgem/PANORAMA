@@ -14,6 +14,7 @@ myst:
 install
 quick_usage
 issues
+citation
 ```
 
 ```{toctree}

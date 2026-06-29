@@ -7,8 +7,9 @@
 [![GitHub issues](https://img.shields.io/github/issues/labgem/panorama.svg?style=flat-square&maxAge=600)](https://github.com/labgem/panorama/issues)
 [![Docs](https://img.shields.io/readthedocs/panorama/latest?style=flat-square&maxAge=600)](https://panorama.readthedocs.io)
 [![Downloads](https://anaconda.org/bioconda/panorama/badges/downloads.svg)](https://bioconda.github.io/recipes/panorama/README.html#download-stats)
+[![Paper](https://img.shields.io/badge/bioRxiv-10.1101%2F2022.09.16.508229-blue?style=flat-square&maxAge=3600)](https://www.biorxiv.org/content/10.64898/2025.12.22.695875v1)
 
-PANORAMA is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
+PANORAMA (([Arnoux et al. 2025](https://www.biorxiv.org/content/10.64898/2025.12.22.695875v1)) is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
@@ -149,6 +150,17 @@ panorama cluster \
 --cluster_coverage 0.8 \
 --threads 8
 ```
+
+---
+# How to cite
+
+If you use PANORAMA in your research, please cite:
+
+> Arnoux J, Mainguy J, Bry L, Fernandez de Grado Q, Hoblos Y, Vallenet D, Calteau A.
+> **Panorama: a robust pangenome-based method for predicting and comparing biological systems across species.**
+> *bioRxiv* 2025.12.22.695875; doi: [https://doi.org/10.64898/2025.12.22.695875](https://doi.org/10.64898/2025.12.22.695875)
+
+PANORAMA is built on top of [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN). If you use PANORAMA, please also cite PPanGGOLiN — see the [PPanGGOLiN citation page](https://ppanggolin.readthedocs.io/en/latest/user/practicalInformation.html#citation) for the appropriate reference.
 
 ---
 
