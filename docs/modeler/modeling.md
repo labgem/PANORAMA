@@ -140,8 +140,15 @@ In the next section, we'll look at how to create more simplified models.
 ### Components
 
 #### Model
+Models represent the whole system, with its families and functional units. Models define all default parameters used for functional units and families if not specified. 
 
 #### Functional Units
+
+| Field            | Description                                           | Required/Optional | Possible Values                                                         |
+|------------------|-------------------------------------------------------|-------------------|-------------------------------------------------------------------------|
+| name             | Name identifying the searched systems                 | 🔴 Required       | String (annotation identifier)                                          |
+| functional units | List of units that composed the model                 | 🔴 Required       | List of family objects                                                  |
+| parameters       | List of global rules to detect the units and families | 🔴 Required       | Dictionary with fields describe in [detection rules](#detection-rules)  |
 
 Functional Units represent a set of genes/families that together perform a system function. Each has:
 
