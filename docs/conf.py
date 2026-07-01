@@ -53,6 +53,8 @@ extensions = [
     "sphinxcontrib.mermaid",
 ]
 
+myst_enable_extensions = ["colon_fence"]
+
 source_suffix = {".md": "markdown"}
 
 # Prefix document path to section labels, to use:

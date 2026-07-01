@@ -39,16 +39,11 @@ Each model file is a single JSON object composed of:
 
 The structure is hierarchical:
 
+```{image} _static/pictures/models_structure.svg
+:alt: Model structure diagram
+:width: 50%
 ```
-Model
-├── FunctionalUnit
-│ ├── Family
-│ └── ...
-├── FunctionalUnit
-│ ├── Family
-│ └── ...
-```
-
+-
 Each **Functional Unit** and **Family** has a `presence` type (`mandatory`, `accessory`, `neutral`, `forbidden`) that
 governs how it contributes to system detection.
 
