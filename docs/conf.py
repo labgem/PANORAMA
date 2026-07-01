@@ -71,12 +71,6 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "requirements.txt",
-    "developer/figure_script.md",
-    "developer/draw_spot_script.md",
-    "developer/draw.md",
-    "developer/system_asso_script.md",
-    "developer/write_flat_script.md",
-    "developer/conserved_spot_script.md",
 ]
 
 suppress_warnings = [
