@@ -22,11 +22,10 @@ panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--conten
 | --status     | Extract and export the status (booleans) of each pangenome.  |
 | --content    | Extract and export structural and numerical content metrics. |
 
-default If no flags are provided, all (status, content, parameters, metadata) are extracted.
+If no flags are provided, both `--status` and `--content` are extracted by default.
 
-```{warning}
-`--parameters` and `--metadata` outputs are not settled yet. We are currently working on a useful output.
-Please add `--status` and/or `--content` to don't get an error.
+```{note}
+`--parameters` and `--metadata` are not yet available. Use `--status` and/or `--content` for now.
 ```
 
 ## Exploring the Reports
