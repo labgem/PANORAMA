@@ -13,7 +13,11 @@ methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
 
----
+```{image} _static/pictures/panorama_logo.svg
+:alt: PANORAMA logo
+:width: 75%
+:align: center
+```
 
 # Quick Installation
 
