@@ -105,7 +105,7 @@ panorama compare_systems \
 ```{note}
 PANORAMA can perform the clustering step first thing, but it's also possible to use pre-computed clustering results with
 the `--cluster` argument.
-If you use let PANORAMA perform the clustering, you can look at the [Clustering](../clustering.md) section for more
+If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md) section for more
 details about options.
 ```
 
