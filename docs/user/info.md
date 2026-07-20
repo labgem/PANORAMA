@@ -30,6 +30,7 @@ If no flags are provided, both `--status` and `--content` are extracted by defau
 
 ## Exploring the Reports
 
+(status-info)=
 ### Status info
 
 Shows whether each processing step was completed:
@@ -41,6 +42,7 @@ Features:
 - Radio button filters for boolean values.
 - TSV download of filtered results.
 
+(content-info)=
 ### Content info
 
 Displays statistics such as:
