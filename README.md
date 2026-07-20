@@ -10,36 +10,33 @@
 [![Paper](https://img.shields.io/badge/paper-PLOS%20Computational%20Biology-teal.svg?style=flat-square&maxAge=3600)](https://doi.org/10.1371/journal.pcbi.1013856)
 [![Citations](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fbadge.dimensions.ai%2Fdetails%2Fdoi%2F10.1371%2Fjournal.pcbi.1013856&search=%3Cdiv%20class%3D%22count%22%3E(%5Cd*)%3C%2Fdiv%3E&replace=%241&style=flat-square&label=citations&cacheSeconds=3600)](https://badge.dimensions.ai/details/doi/10.1371/journal.pcbi.1013856)
 
-PANORAMA ([Arnoux _et al_.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013856)) is a software
+PANORAMA ([Arnoux _et al_. 2026](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013856)) is a software
 suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
 
-```{image} _static/pictures/panorama_logo.svg
-:alt: PANORAMA logo
-:width: 75%
-:align: center
-```
+---
 
 # Quick Installation
 
-PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html). Follow the next
-step to install panorama.
+PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html) and
+[pip](https://pip.pypa.io/en/stable/). Follow the next step to install panorama.
 
 ```shell
-# Create a new Conda environment and install PANORAMA in one line:
-conda create -n panorama -c conda-forge -c bioconda panorama
+# 1. Clone the Repository
+git clone https://github.com/labgem/PANORAMA.git
+cd PANORAMA
 
-# Activate the environment
+# 2. Create and Configure the Conda Environment
+conda create -n panorama
+conda config --add channels bioconda
+conda config --add channels conda-forge
 conda activate panorama
-
-# Check the install
-panorama --version
+conda env update --file panorama.yml
 ```
 
-For alternative installation methods see
-the [Installation Guide](https://panorama.readthedocs.io/en/latest/user/install.html).
+[//]: # (You can find more information on the installation [here]&#40;link_read_the_doc&#41;)
 
 ---
 
@@ -71,15 +68,14 @@ PANORAMA provides a command to perform the complete detection workflow as follow
 
 ```shell
 panorama pansystems \
-    --pangenomes pangenomes.tsv \
-    --source defense_finder \
-    --hmm hmms.tsv \
-    --models models.tsv \
-    --output results/ \
-    --projection \
-    --association RGPs spots \
-    --partition \
-    --threads 8
+-p pangenomes.tsv \
+--hmm /PATH/TO/HMM/LIST/FILE/hmm_list.tsv \
+ -m /PATH/TO/MODELS/LIST/FILE/models_list.tsv \
+ -s system_model_source_name \
+-o PATH/TO/OUPUT/DIRECTORY \
+--projection \
+--association all \
+--partition
 ```
 
 ## Pangenome comparison
@@ -156,6 +152,17 @@ panorama cluster \
 --cluster_coverage 0.8 \
 --threads 8
 ```
+
+---
+# How to cite
+
+If you use PANORAMA in your research, please cite:
+
+> Arnoux J, Mainguy J, Bry L, Fernandez de Grado Q, Hoblos Y, Vallenet D, Calteau A.
+> **Panorama: a robust pangenome-based method for predicting and comparing biological systems across species.**
+> *bioRxiv* 2025.12.22.695875; doi: [https://doi.org/10.64898/2025.12.22.695875](https://doi.org/10.64898/2025.12.22.695875)
+
+PANORAMA is built on top of [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN). If you use PANORAMA, please also cite PPanGGOLiN — see the [PPanGGOLiN citation page](https://ppanggolin.readthedocs.io/en/latest/user/practicalInformation.html#citation) for the appropriate reference.
 
 ---
 
