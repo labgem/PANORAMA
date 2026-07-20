@@ -24,7 +24,7 @@ project = "PANORAMA"
 organization = "LABGeM"
 author = "Jérôme Arnoux"
 year = datetime.date.today().year
-copyright = f"{'2025' if year == 2025 else f'2025-{year}'}, {organization}, {author}"
+copyright = f"2025-{year}, {organization}, {author}"
 
 html_show_copyright = True
 
