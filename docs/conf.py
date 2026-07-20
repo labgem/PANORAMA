@@ -154,7 +154,10 @@ html_theme_options = {
     # Sphinx indices
     "primary_sidebar_end": ["indices.html"],
     # Annoucement banners
-    "announcement": "PANORAMA just released!",
+    "announcement": (
+        'PANORAMA paper is out! Click <a href="https://journals.plos.org/ploscompbiol/article?'
+        'id=10.1371/journal.pcbi.1013856">here</a> to read it.'
+    ),
     # Back to Top button
     "back_to_top_button": True,
     # Branding and logo
