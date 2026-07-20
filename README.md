@@ -10,9 +10,8 @@
 [![Paper](https://img.shields.io/badge/paper-PLOS%20Computational%20Biology-teal.svg?style=flat-square&maxAge=3600)](https://doi.org/10.1371/journal.pcbi.1013856)
 [![Citations](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fbadge.dimensions.ai%2Fdetails%2Fdoi%2F10.1371%2Fjournal.pcbi.1013856&search=%3Cdiv%20class%3D%22count%22%3E(%5Cd*)%3C%2Fdiv%3E&replace=%241&style=flat-square&label=citations&cacheSeconds=3600)](https://badge.dimensions.ai/details/doi/10.1371/journal.pcbi.1013856)
 
-
-
-PANORAMA is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
+PANORAMA ([Arnoux _et al_.](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013856)) is a software
+suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
@@ -25,7 +24,8 @@ software suite. It is designed to perform pangenome comparison at high-throughtu
 
 # Quick Installation
 
-PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html). Follow the next step to install panorama.
+PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html). Follow the next
+step to install panorama.
 
 ```shell
 # Create a new Conda environment and install PANORAMA in one line:
@@ -38,7 +38,8 @@ conda activate panorama
 panorama --version
 ```
 
-For alternative installation methods see the [Installation Guide](https://panorama.readthedocs.io/en/latest/user/install.html).
+For alternative installation methods see
+the [Installation Guide](https://panorama.readthedocs.io/en/latest/user/install.html).
 
 ---
 
