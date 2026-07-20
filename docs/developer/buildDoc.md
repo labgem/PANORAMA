@@ -14,8 +14,8 @@ When you merge your branch into `main`, ReadTheDocs will automatically rebuild a
 
 The documentation requires some specific packages to build. We've made this easy for you!
 
-All required packages are listed in the [sphinx_requirements.txt](../sphinx_requirements.txt) file. But here's an even
-simpler way - the [pyproject.toml](../../pyproject.toml) includes everything you need:
+All required packages are listed in the `[doc]` extra of [pyproject.toml](../../pyproject.toml) — this is the single
+source of truth for documentation dependencies, also used by Read the Docs to build this site:
 
 ```shell
 # From the PANORAMA root directory
