@@ -7,4 +7,4 @@ sphinxcontrib.mermaid>=1.0.0
 sphinxcontrib-jquery>=4.1
 sphinx_design>=0.6.1
 pydata-sphinx-theme>=0.16.1
-sphinx-autodoc-napoleon-typehints>=2.1.6
+sphinx-autodoc-typehints>=3.0.1

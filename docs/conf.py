@@ -46,6 +46,7 @@ extensions = [
     "sphinx.ext.duration",
     "sphinx_search.extension",
     "sphinx.ext.napoleon",  # Extension for NumPy and Google style docstrings
+    "sphinx_autodoc_typehints",  # Merges type hints into Napoleon-style docstrings; must load after napoleon
     "sphinx.ext.extlinks",
     "sphinx.ext.todo",  # Remove warning todo
     "sphinx_design",
