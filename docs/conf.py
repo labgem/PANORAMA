@@ -164,8 +164,8 @@ html_theme_options = {
     "logo": {
         "text": "PANORAMA ",
         "alt_text": "PANORAMA documentation - Home",
-        "image_light": "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg",
-        "image_dark": "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg",
+        "image_light": "_static/pictures/GENOSCOPE-LABGeM.jpg",
+        "image_dark": "_static/pictures/GENOSCOPE-LABGeM.jpg",
     },
     # Configure pygments theme
     "pygments_light_style": "tango",
