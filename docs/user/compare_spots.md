@@ -1,4 +1,4 @@
-# Conserved Spots Comparison Across Pangenomes
+# Conserved Spots Identification Across Pangenomes
 
 The compare_spots command identifies and analyzes conserved genomic spots across multiple pangenomes by comparing their
 gene family composition and genomic organization patterns.
