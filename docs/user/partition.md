@@ -121,7 +121,7 @@ a function in the system:
 | Partition Category        | Color Code | Description                                               |
 |---------------------------|------------|-----------------------------------------------------------|
 | **Persistent**            | 🟠 Orange  | All systems gene families are persistent                  |
-| **Persistent\|Accessory** | 🔴 Red     | Systems gene families spanning both all partitions        |
+| **Persistent\|Accessory** | 🔴 Red     | Systems gene families spanning all partitions             |
 | **Accessory**             | 🟣 Purple  | Systems gene families spanning cloud and shell partitions |
 | **Shell**                 | 🟢 Green   | All systems gene families are shell                       |
 | **Cloud**                 | 🔵 Blue    | All systems gene families are cloud                       |
