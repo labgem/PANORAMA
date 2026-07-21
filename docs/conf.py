@@ -50,6 +50,7 @@ extensions = [
     "sphinx_design",
     "sphinxcontrib.jquery",
     "sphinxcontrib.mermaid",
+    "sphinx_copybutton",
 ]
 
 myst_enable_extensions = ["colon_fence"]
