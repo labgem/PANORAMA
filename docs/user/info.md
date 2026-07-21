@@ -1,9 +1,9 @@
-# Extract and Visualize Pangenome Information ℹ️
+# Extract and Visualize Pangenome Information
 
 The info subcommand extracts summary information from PPanGGOLiN **.h5 pangenome files** and generates interactive HTML
 reports. These reports support quick content comparison of each pangenome.
 
-## Info command line usage ️
+## Info command line usage
 
 ```shell
 panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--content]

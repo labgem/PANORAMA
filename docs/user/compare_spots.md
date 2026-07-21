@@ -60,7 +60,7 @@ panorama compare_spots \
 --cpu 8
 ```
 
-### Key Options 📋
+### Key Options
 
 | Shortcut | Argument        | Type           | Required/Optional       | Description                                                                   |
 |----------|-----------------|----------------|-------------------------|-------------------------------------------------------------------------------|

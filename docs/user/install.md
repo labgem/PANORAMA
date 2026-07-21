@@ -1,4 +1,4 @@
-# Installation Guide 🦮
+# Installation Guide
 
 ```{important}
 Supported Python versions are 3.10, 3.11 and 3.12
@@ -6,7 +6,7 @@ Supported Python versions are 3.10, 3.11 and 3.12
 
 ## Latest version
 
-### Installation via Conda (recommended) 🐍
+### Installation via Conda (recommended)
 
 The recommended way to install PANORAMA is via [Conda](https://docs.conda.io/en/latest/miniconda.html)
 from the [Bioconda](https://bioconda.github.io/) channel.
@@ -39,11 +39,11 @@ conda create -n panorama -c conda-forge -c bioconda panorama python=X.X
 
 ---
 
-### Installing from source code (GitHub) 🐙
+### Installing from source code (GitHub)
 
 (with_conda_env)=
 
-#### Within a Conda environment 🐍
+#### Within a Conda environment
 
 ##### 1. Clone the GitHub Repository
 
@@ -82,7 +82,7 @@ panorama --help
 panorama --version
 ```
 
-#### Manual Installation (without Conda) 🛠️
+#### Manual Installation (without Conda)
 
 ```{important}
 PANORAMA requires Python 3.10 or higher.

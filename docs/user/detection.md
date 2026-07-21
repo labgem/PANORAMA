@@ -64,7 +64,7 @@ panorama systems \
 | —        | --threads            | Number of threads to use for parallel model evaluation                     |
 
 <!--
-## 🔍 Sensitivity Modes
+## Sensitivity Modes
 
 
 | Level | Description                                                                            |
