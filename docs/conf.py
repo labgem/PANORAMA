@@ -28,10 +28,8 @@ copyright = f"2025-{year}, {organization}, {author}"
 
 html_show_copyright = True
 
-# The full version, including alpha/beta/rc tags
-release = (
-    open(Path(__file__).resolve().parents[1] / "VERSION").read().rstrip()
-)  # Get release number in the VERSION file
+# The full version, including alpha/beta/rc tags. Get release number from the VERSION file
+release = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
 
 
 # -- General configuration ---------------------------------------------------
