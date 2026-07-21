@@ -27,4 +27,15 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: ModelTranslationError, HMMProcessingError
+```
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   ModelTranslationError
+   HMMProcessingError
 ```

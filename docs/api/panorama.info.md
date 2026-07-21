@@ -9,4 +9,15 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: PangenomeInfoExtractor, HTMLExporter
+```
+
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   PangenomeInfoExtractor
+   HTMLExporter
 ```

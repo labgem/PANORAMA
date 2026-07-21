@@ -40,6 +40,7 @@ release = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
 extensions = [
     "myst_parser",
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.duration",
     "sphinx_search.extension",
@@ -56,7 +57,12 @@ extensions = [
 myst_enable_extensions = ["colon_fence"]
 myst_heading_anchors = 4
 
-source_suffix = {".md": "markdown"}
+source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
+
+# Auto-generate a stub page (via _templates/summary.rst) for every class listed
+# in an `autosummary` block, so classes get their own navigable sidebar entry.
+# Generated .rst files require ".rst" in source_suffix above.
+autosummary_generate = True
 
 # Prefix document path to section labels, to use:
 # `path/to/file:heading` instead of just `heading`

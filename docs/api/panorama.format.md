@@ -18,8 +18,17 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: SystemTableSizes
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   SystemTableSizes
+```
 ## panorama.format.write_flat module
 
 ```{eval-rst}

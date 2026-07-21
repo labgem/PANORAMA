@@ -27,8 +27,17 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: SystemsComparisonError
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   SystemsComparisonError
+```
 ## panorama.compare.utils module
 
 ```{eval-rst}
