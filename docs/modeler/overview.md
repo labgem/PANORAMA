@@ -77,6 +77,6 @@ You can contribute to the creation of new models by following the guide
 
 PANORAMA can translate several sources (see [PANORAMA models repository](https://github.com/PANORAMA-models)).
 
-We ary trying to keep our models updated. But in case we miss it,
+We are trying to keep our models updated. But in case we miss it,
 you can translate the model yourself with `panorama utils --translate` command.
 Look here for more information: [PANORAMA – Model Translation Guide](translate.md) 
