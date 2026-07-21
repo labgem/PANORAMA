@@ -122,19 +122,23 @@ panorama write_systems \
 
 ### Required Arguments
 
-| Argument       | Type | Description                                     |
-|----------------|------|-------------------------------------------------|
-| `--pangenomes` | Path | TSV file listing pangenome .h5 files to process |
-| `--output`     | Path | Output directory for projection results         |
-| `--models`     | Path | Path(s) to model list files                     |
-| `--sources`    | str  | Name(s) of the systems sources                  |
+| Argument       | Type | Description                                      |
+|----------------|------|----------------------------------------------------|
+| `--pangenomes` | Path | TSV file listing pangenome .h5 files to process    |
+| `--output`     | Path | Output directory for results                       |
+| `--models`     | Path | Path(s) to model list files                        |
+| `--sources`    | str  | Name(s) of the systems sources                     |
 
 ### Optional Arguments
 
-| Argument    | Type | Default | Description                         |
-|-------------|------|---------|-------------------------------------|
-| `--threads` | int  | 1       | Number of parallel threads to use   |
-| `--force`   | flag | False   | Overwrite existing projection files |
+| Argument                    | Type         | Default | Description                                               |
+|------------------------------|--------------|---------|-------------------------------------------------------------|
+| `--threads`                 | int          | 1       | Number of parallel threads to use                          |
+| `--verbose`                 | int (choice) | 1       | Verbose level: 0 (warnings/errors), 1 (info), 2 (debug)    |
+| `--log`                     | Path         | stdout  | Log output file                                            |
+| `-d`, `--disable_prog_bar`  | flag         | False   | Disable the progress bars                                  |
+| `--force`                   | flag         | False   | Force writing in the output directory and pangenome file   |
+```
 
 ## Projection Output Files
 
@@ -146,7 +150,7 @@ output/
 │   └── source_1/
 │       ├── systems.tsv                    # Pangenome summary
 │       └── projection/
-│           ├── organism_A.tsv            # Per-organism detailed results
+│           ├── organism_A.tsv             # Per-organism detailed results
 │           ├── organism_B.tsv
 │           └── ...
 └── pangenome_2/

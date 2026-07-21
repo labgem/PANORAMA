@@ -20,6 +20,9 @@ jobs:
       - name: install panorama with python deps and doc deps
         run: pip install .[doc]
 
+      - name: Check common argument tables stay in sync
+        run: python .github/scripts/check_common_arguments_docs.py
+
       - name: Complete workflow
         shell: bash -l {0}
         run: |
