@@ -42,7 +42,7 @@ The systems comparison process runs as follows:
 
    Conserved systems are saved as graph files (GEXF, GraphML) and summary tables for further analysis and visualization.
 
-## System comparison command Line Usage
+## System comparison command line usage
 
 Basic systems comparison with heatmap generation:
 
@@ -81,7 +81,7 @@ panorama compare_systems \
 | -s       | --sources            | List[str]              | False    | Name(s) of systems sources (must match --models order)                                              |
 | -o       | --output             | str (directory path)   | False    | Output directory for comparison results                                                             |
 | —        | --gfrr_cutoff        | List[float] (2 values) | True     | Two thresholds for min_gfrr and max_gfrr values (default: 0.5 0.8)                                  |
-| —        | --seed               | Int                    | Optional | Random seed to guarantee reproductibility (default 42)                                              |
+| —        | --seed               | Int                    | Optional | Random seed to guarantee reproducibility (default 42)                                               |
 | —        | --heatmap            | bool (flag)            | True     | Generate heatmaps showing system distribution across pangenomes                                     |
 | —        | --gfrr_metrics       | str (choice)           | True     | GFRR metric for clustering conserved systems (min_gfrr_models, max_gfrr_models, min_gfrr, max_gfrr) |
 | —        | --gfrr_models_cutoff | List[float] (2 values) | True     | GFRR thresholds for model gene families (default: 0.4 0.6)                                          |
