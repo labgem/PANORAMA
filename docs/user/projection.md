@@ -114,11 +114,11 @@ panorama write_systems \
 
 ### Projection-specific keys
 
-| Argument        | Type | Default | Description                                            |
-|-----------------|------|---------|--------------------------------------------------------|
-| `--projection`  | flag | False   | Enable the projection of systems onto genomes          |
-| `--organisms`   | list | None    | List of organisms to project (defaults to all)         |
-| `--canonical`   | flag | False   | Also project canonical versions of systems             |
+| Argument       | Type | Default | Description                                    |
+|----------------|------|---------|------------------------------------------------|
+| `--projection` | flag | False   | Enables the projection of systems onto genomes |
+| `--organisms`  | list | None    | List of organisms to project (defaults to all) |
+| `--canonical`  | flag | False   | Also project canonical versions of systems     |
 
 ### Required Arguments
 
@@ -131,13 +131,10 @@ panorama write_systems \
 
 ### Optional Arguments
 
-| Argument        | Type | Default | Description                                            |
-|-----------------|------|---------|--------------------------------------------------------|
-| `--projection`  | flag | False   | Enable the projection of systems onto genomes          |
-| `--organisms`   | list | None    | List of organisms to project (defaults to all)         |
-| `--canonical`   | flag | False   | Also project canonical versions of systems             |
-| `--threads`     | int  | 1       | Number of parallel threads to use                      |
-| `--force`       | flag | False   | Overwrite existing projection files                    |
+| Argument    | Type | Default | Description                         |
+|-------------|------|---------|-------------------------------------|
+| `--threads` | int  | 1       | Number of parallel threads to use   |
+| `--force`   | flag | False   | Overwrite existing projection files |
 
 ## Projection Output Files
 
