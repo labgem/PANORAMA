@@ -597,7 +597,7 @@ grep -r "print(" panorama/  # Just an example!
 
 #### 6. Update the VERSION File
 
-Don't forget to bump the patch version! See the [Versioning section](git.md#versioning-and-releases).
+Don't forget to bump the patch version! See the {ref}`Versioning section <versioning-and-releases>`.
 
 ### Handling Merge Conflicts
 
@@ -652,6 +652,7 @@ git bisect start
 
 ---
 
+(common-pitfalls)=
 ## Common Pitfalls 🚧
 
 ### Mutable Default Arguments

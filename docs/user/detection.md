@@ -3,7 +3,7 @@
 The `systems` command enables the detection of biological systems in pangenomes using predefined functional models.
 
 This detection relies on gene family [annotations](annotation.md#gene-family-annotation),
-and a [model](../modeler/modeling.md#models) file defining the presence/absence of a specific function and the genomic
+and a [model](../modeler/modeling.md) file defining the presence/absence of a specific function and the genomic
 organization.
 
 ## Model Detection Workflow

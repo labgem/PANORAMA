@@ -92,7 +92,7 @@ panorama compare_spots \
 ```{note}
 PANORAMA can perform the clustering step first thing, but it's also possible to use pre-computed clustering results with
 the `--cluster` argument.
-If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md#clustering) section for more
+If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md) guide for more
 details about options.
 ```
 

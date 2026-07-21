@@ -14,10 +14,10 @@ Start with what's relevant to your contribution and refer back as needed.
 ## Quick overview 🚀
 
 1. **Set up your development environment** → See [Development Setup](#development-setup)
-2. **Follow coding standards** → See [Development Methods](devRules.md#dev-rules)
-3. **Learn our git workflow** → See [Version Control Guide](git.md#git-guide)
-4. **Write tests** → See [Testing Guidelines](unitTest.md#test-guide)
-5. **Update documentation** → See [Documentation Guide](buildDoc.md#build-doc)
+2. **Follow coding standards** → See {ref}`Development Methods <dev-rules>`
+3. **Learn our git workflow** → See {ref}`Version Control Guide <git-guide>`
+4. **Write tests** → See {ref}`Testing Guidelines <test-guide>`
+5. **Update documentation** → See {ref}`Documentation Guide <build-doc>`
 6. **Submit your Pull Request** → See [Pull Request Process](#pr-process)
 
 ## Development Setup
@@ -105,14 +105,14 @@ pytest --cov=panorama  --test-data-path=test_data
 
 ```
 
-More detail [here](unitTest.md#run-tests)
+More detail {ref}`here <run-tests>`
 
 ### Test Types
 
 - **Unit tests** – Test individual functions and classes in isolation
 - **Functional tests** – Test complete workflows and CLI commands
 
-See our [Testing Guidelines](unitTest.md#test-guide) for comprehensive testing practices.
+See our {ref}`Testing Guidelines <test-guide>` for comprehensive testing practices.
 
 ## Updating Documentation 📚
 
@@ -130,7 +130,7 @@ sphinx-autobuild . build/
 # Open http://127.0.0.1:8000 in your browser
 ```
 
-See our [Documentation Building Guide](buildDoc.md#build-doc) for details.
+See our {ref}`Documentation Building Guide <build-doc>` for details.
 
 (pr-process)=
 

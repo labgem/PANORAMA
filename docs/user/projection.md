@@ -77,7 +77,7 @@ New optimization that handles overlapping system units:
 ### 5. Write Output
 
 Projection results are written as TSV files with improved organization and metadata.
-See [Output Files](#output-files) for details on the organization and contents.
+See [Output Files](#projection-output-files) for details on the organization and contents.
 
 ## Projection command Line Usage
 

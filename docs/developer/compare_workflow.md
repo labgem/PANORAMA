@@ -51,6 +51,7 @@ on the filtered graph. Each connected component becomes one
 
 ## Spots comparison ({py:mod}`panorama.compare.spots`)
 
+(validate_load_spot)=
 ### 1. Validate and load
 
 {py:func}`panorama.compare.spots.check_compare_spots_args` validates arguments and
@@ -63,6 +64,7 @@ returns the `need_info` dict. Pangenomes are loaded in parallel by
 graph for each pangenome where nodes are {py:class}`Spot <panorama.region.Spot>` objects
 and edges connect spots that share gene families within that pangenome.
 
+(build_cross_spot)=
 ### 3. Build the cross-pangenome graph
 
 {py:func}`panorama.compare.spots.create_spots_graph` merges the per-pangenome graphs
@@ -79,6 +81,7 @@ each spot node with the systems detected within it, and
 linked to the spot graph via
 {py:func}`panorama.compare.spots.graph_systems_link_with_conserved_spots`.
 
+(write_outputs_spots)=
 ### 4. Cluster and write outputs
 
 {py:func}`panorama.compare.utils.cluster_on_gfrr` groups connected spots into
@@ -86,6 +89,7 @@ linked to the spot graph via
 {py:func}`panorama.compare.spots.write_conserved_spots` writes the TSV and optional
 graph outputs.
 
+(data_flow_spots)=
 ### Data-flow summary
 
 ```
@@ -105,6 +109,7 @@ load_pangenomes()
 
 ## Systems comparison ({py:mod}`panorama.compare.systems`)
 
+(validate_load_systems)=
 ### 1. Validate and load
 
 {py:func}`panorama.compare.systems.check_compare_systems_args` validates that the number
@@ -119,12 +124,14 @@ and edges connect systems that share gene families within that pangenome.
 {py:func}`panorama.compare.systems.add_system_metadata_to_graph` annotates nodes with
 system metadata for downstream output.
 
+(build_cross_systems)=
 ### 3. Build the cross-pangenome graph
 
 {py:func}`panorama.compare.systems.create_systems_graph` merges per-pangenome graphs
 and {py:func}`panorama.compare.systems.compute_gfrr_edges` scores every system–system
 pair across pangenomes using GFRR.
 
+(write_outputs_systems)=
 ### 4. Cluster and write outputs
 
 {py:func}`panorama.compare.utils.cluster_on_gfrr` groups connected systems into
@@ -135,6 +142,7 @@ Optionally, {py:func}`panorama.compare.systems.generate_heatmap` and
 {py:func}`panorama.compare.systems.create_pangenome_systems_heatmaps` produce Bokeh
 HTML heatmaps of system distributions across pangenomes.
 
+(data_flow_systems)=
 ### Data-flow summary
 
 ```

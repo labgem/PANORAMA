@@ -53,6 +53,7 @@ extensions = [
 ]
 
 myst_enable_extensions = ["colon_fence"]
+myst_heading_anchors = 4
 
 source_suffix = {".md": "markdown"}
 
@@ -75,10 +76,12 @@ exclude_patterns = [
 ]
 
 suppress_warnings = [
-    "myst.header",
-    # "autosectionlabel.*",
+    # Some pages intentionally reuse heading text across sections (e.g. parallel
+    # "spots" vs "systems" subsections) and rely on explicit `(label)=` anchors for
+    # any real cross-references, so the ambiguous auto-generated label is unused
+    # and this collision is expected, not a bug.
+    "autosectionlabel.*",
     "toc.not_included",
-    "myst.xref_missing",
 ]
 
 # The name of the default role for inline references

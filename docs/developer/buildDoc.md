@@ -247,6 +247,7 @@ Developer docs are for people working on PANORAMA's code:
 5. **Architecture deep-dives** - Explain complex parts of the codebase. Feel free to reference code, classes, and
    implementation details here.
 
+(api-docs_autogen)=
 #### API Documentation
 
 Generate API docs automatically from your docstrings and reference API elements in your docs: `{ref}\package panorama\`

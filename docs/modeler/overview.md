@@ -56,9 +56,9 @@ Detection rules are defined at **both the model level** and the **functional uni
 
 For full details, see:
 
-- [Model structure](modeling.md#-model-structure)
+- [Model structure](modeling.md#model-structure)
 - [Presence Types](modeling.md#presence-types-explained)
-- [Detection rules](modeling.md#-detection-parameters)
+- [Detection rules](modeling.md#detection-rules)
 
 ---
 

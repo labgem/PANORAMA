@@ -17,3 +17,11 @@ overview
 modeling
 translate
 ```
+
+```{toctree}
+:caption: 'Community:'
+:maxdepth: 2
+
+contribute
+FAQ
+```
