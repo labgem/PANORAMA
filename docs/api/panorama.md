@@ -28,17 +28,11 @@ panorama.workflow
 
 ## panorama.main module
 
-
 ```{eval-rst}
-
 .. automodule:: panorama.main
-
    :members:
-
    :undoc-members:
-
    :show-inheritance:
-
 ```
 
 ## panorama.pangenomes module
