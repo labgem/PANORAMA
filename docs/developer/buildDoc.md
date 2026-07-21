@@ -5,7 +5,7 @@
 This guide will help you build and preview the PANORAMA documentation locally before merging your changes. Whether
 you're fixing a typo or adding a whole new section, testing your docs locally saves time and catches issues early!
 
-```{danger}
+```{warning}
 When you merge your branch into `main`, ReadTheDocs will automatically rebuild and deploy the documentation online.
  Make sure everything looks good locally first - broken docs are visible to everyone! 
 ```
@@ -67,7 +67,7 @@ Save your changes and check them in your browser with `sphinx-autobuild` running
 
 ### API Documentation
 
-**Good news** - the API documentation updates automatically when you change docstrings in the code! Modify your
+**Good news** – the API documentation updates automatically when you change docstrings in the code! Modify your
 docstrings and rebuild.
 
 **However**, if you add a new package or module, you'll need to regenerate the API docs. See
@@ -101,7 +101,7 @@ Got ideas for improving the developer docs? Awesome! We welcome contributions.
 - **If it needs its own file**, create a new Markdown file with a descriptive name
 - **Add it to the Developer Guide toctree** so people can find it
 
-We're pretty flexible about what goes into developer docs - if you think it'll help someone, it probably belongs!
+We're pretty flexible about what goes into developer docs – if you think it'll help someone, it probably belongs!
 
 (updating-api)=
 
@@ -211,7 +211,7 @@ rm source/index.rst  # or api/*.rst
 
 ### Including the README
 
-Want to include the project README in your documentation? Smart move - less duplication!
+Want to include the project README in your documentation? Smart move – less duplication!
 
 Add this to your `index.md`:
 
@@ -229,10 +229,10 @@ Here's how we organize PANORAMA docs:
 
 User docs should be practical and example-driven:
 
-1. **One file per command** - Each command gets its own guide
-2. **Installation guide** - Help users get started
-3. **Contributing guide** - How to report issues or request features
-4. **No code references** - Focus on usage, not implementation
+1. **One file per command** – Each command gets its own guide
+2. **Installation guide** – Help users get started
+3. **Contributing guide** – How to report issues or request features
+4. **No code references** – Focus on usage, not implementation
 
 Write for bioinformaticians who want to use PANORAMA, not necessarily code it.
 
@@ -240,10 +240,10 @@ Write for bioinformaticians who want to use PANORAMA, not necessarily code it.
 
 Developer docs are for people working on PANORAMA's code:
 
-1. **PEP standards** - Code style and Python conventions
-2. **Git workflow** - How we use version control (you're reading one now!)
-3. **Testing guide** - Writing and running tests
-4. **Documentation guide** - How to improve these docs (meta!)
+1. **PEP standards** – Code style and Python conventions
+2. **Git workflow** – How we use version control (you're reading one now!)
+3. **Testing guide** – Writing and running tests
+4. **Documentation guide** – How to improve these docs (meta!)
 5. **Architecture deep-dives** - Explain complex parts of the codebase. Feel free to reference code, classes, and
    implementation details here.
 
@@ -264,11 +264,13 @@ If this happens, just rename or remove duplicate section titles in the affected 
 
 Documentation giving you trouble? Here's what to do:
 
-1. **Check Sphinx documentation** - [sphinx-doc.org](https://www.sphinx-doc.org/)
-2. **Check MyST documentation** - [mystmd.org/guide](https://mystmd.org/guide)
-3. **Check MyST parser documentation** - [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/en/latest/index.html)
-4. **Check PyData Sphinx theme documentation** - [pydata-sphinx-theme.readthedocs.io](https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html)
-5. **Ask in discussions** - Other contributors can help
-6. **Open a draft PR** - Get feedback on your documentation changes
+1. **Check Sphinx documentation** – [sphinx-doc.org](https://www.sphinx-doc.org/)
+2. **Check MyST documentation** – [mystmd.org/guide](https://mystmd.org/guide)
+3. **Check MyST parser documentation
+   ** – [myst-parser.readthedocs.io](https://myst-parser.readthedocs.io/en/latest/index.html)
+4. **Check PyData Sphinx theme documentation
+   ** – [pydata-sphinx-theme.readthedocs.io](https://pydata-sphinx-theme.readthedocs.io/en/stable/index.html)
+5. **Ask in discussions** – Other contributors can help
+6. **Open a draft PR** – Get feedback on your documentation changes
 
 Remember: good documentation is just as important as good code. Thanks for taking the time to document your work! 🙏
