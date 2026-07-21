@@ -28,12 +28,3 @@
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama.alignment
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```

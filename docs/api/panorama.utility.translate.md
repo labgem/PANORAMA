@@ -28,12 +28,3 @@
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama.utility.translate
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```

@@ -91,12 +91,3 @@
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama.systems
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```

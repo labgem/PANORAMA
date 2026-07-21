@@ -61,12 +61,3 @@ panorama.workflow
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```

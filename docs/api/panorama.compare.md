@@ -37,12 +37,3 @@
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama.compare
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```
