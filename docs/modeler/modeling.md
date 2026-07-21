@@ -1,4 +1,5 @@
 (models)=
+
 # PANORAMA System Modeling
 
 ## Definition
@@ -140,24 +141,26 @@ In the next section, we'll look at how to create more simplified models.
 ### Components
 
 #### Model
-Models represent the whole system, with its families and functional units. Models define all default parameters used for functional units and families if not specified. 
+
+Models represent the whole system, with its families and functional units. Models define all default parameters used for
+functional units and families if not specified.
 
 #### Functional Units
 
-| Field            | Description                                           | Required/Optional | Possible Values                                                         |
-|------------------|-------------------------------------------------------|-------------------|-------------------------------------------------------------------------|
-| name             | Name identifying the searched systems                 | 🔴 Required       | String (annotation identifier)                                          |
-| functional units | List of units that composed the model                 | 🔴 Required       | List of family objects                                                  |
-| parameters       | List of global rules to detect the units and families | 🔴 Required       | Dictionary with fields describe in [detection rules](#detection-rules)  |
+| Field            | Description                                           | Required/Optional | Possible Values                                                        |
+|------------------|-------------------------------------------------------|-------------------|------------------------------------------------------------------------|
+| name             | Name identifying the searched systems                 | 🔴 Required       | String (annotation identifier)                                         |
+| functional units | List of units that composed the model                 | 🔴 Required       | List of family objects                                                 |
+| parameters       | List of global rules to detect the units and families | 🔴 Required       | Dictionary with fields describe in [detection rules](#detection-rules) |
 
 Functional Units represent a set of genes/families that together perform a system function. Each has:
 
-| Field      | Description                                    | Required/Optional | Possible Values                                                         |
-|------------|------------------------------------------------|-------------------|-------------------------------------------------------------------------|
-| name       | Unique name identifying the functional unit    | 🔴 Required       | String (annotation identifier)                                          |
-| presence   | Role of the unit                               | 🔴 Required       | `mandatory`, `accessory`, `neutral`, `forbidden`                        |
-| families   | List of protein families included in this unit | 🔴 Required       | List of family objects                                                  |
-| parameters | List of specific rules to detect the unit      | 🟡 Optional       | Dictionary with fields describe in [detection rules](#detection-rules)  |
+| Field      | Description                                    | Required/Optional | Possible Values                                                        |
+|------------|------------------------------------------------|-------------------|------------------------------------------------------------------------|
+| name       | Unique name identifying the functional unit    | 🔴 Required       | String (annotation identifier)                                         |
+| presence   | Role of the unit                               | 🔴 Required       | `mandatory`, `accessory`, `neutral`, `forbidden`                       |
+| families   | List of protein families included in this unit | 🔴 Required       | List of family objects                                                 |
+| parameters | List of specific rules to detect the unit      | 🟡 Optional       | Dictionary with fields describe in [detection rules](#detection-rules) |
 
 A functional unit could biologically represent a functional module, such as isoenzyme, or subunit of protein dimers.
 
@@ -181,6 +184,7 @@ Families correspond to isofunctional protein families used to search the pangeno
 ```{attention}
 A family must be included in a functional unit.
 ```
+
 ```{warning}
 A family can theoretically be in multiple unit, but this feature has never been tested.
 ```
@@ -206,6 +210,7 @@ Below is a complete reference:
 | neutral       | Family, Unit | 〰 Ignored               | ❌ No            | ✔ Yes                         | Ignored for scoring, but included in the graph. Helps connect elements that are close in genomic context.   |
 
 (detection-rules)=
+
 ### Detection rules
 
 Parameters are defined at the model or functional unit level, such as:
@@ -277,8 +282,8 @@ Here, the functional unit _FA_ inherits all the parameters from the model, where
 and the _transitivity_.
 
 ```{attention}
-Either it's possible to don't precise all parameters in functional unit, the `parameters` field must exist.
-To let the functional unit inherits all parameter you can let the dictionary empty.
+Although you may omit individual parameters in a functional unit, the `parameters` field itself must always be present 
+(use an empty object `{}` to inherit everything from the model).
 ```
 
 ### Canonical Models 🧪
@@ -314,6 +319,7 @@ Models failing these checks will raise clear exceptions.
 ## Notes 📝
 
 1. Each model must be saved in its own .json file.
-2. Names are case-sensitive. 
-3. Families must match the name given during the annotation step (see [annotation command](../user/annotation.md#gene-family-annotation)). 
+2. Names are case-sensitive.
+3. Families must match the name given during the annotation step (
+   see [annotation command](../user/annotation.md#gene-family-annotation)).
 4. Exchangeable families inherit the parameters (presence, etc.) of their reference unless specified otherwise.
