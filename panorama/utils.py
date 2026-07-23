@@ -216,6 +216,7 @@ def resolve_path(path: Path, relative_directory: Path) -> Path:
     # Return the cwd version if neither exists (for error reporting)
     return path
 
+
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
     """
     Check if the given TSV file is readable for the next PANORAMA step.
