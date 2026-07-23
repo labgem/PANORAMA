@@ -167,11 +167,11 @@ Node attributes include conserved spot ID, pangenome name, spot ID, the number o
 RGPs.
 Edge attributes include GFRR metric and the number of shared gene families.
 
-[PLACEHOLDER: Example conserved spots visualization across pangenomes]
+[//]: # ([PLACEHOLDER: Example conserved spots visualization across pangenomes])
 
 ### Systems Analysis Files (Optional)
 
 When `--systems` is specified, generate `systems_link_with_conserved_spots_louvain.gexf/graphml` Network graphs of
 conserved system clusters. These graphs are generated using the Louvain algorithm.
 
-[PLACEHOLDER: Systems linkage graph showing relationships through conserved spots]
+[//]: # ([PLACEHOLDER: Systems linkage graph showing relationships through conserved spots])

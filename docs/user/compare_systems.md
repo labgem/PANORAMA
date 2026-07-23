@@ -160,11 +160,11 @@ Interactive HTML heatmaps showing system distribution patterns:
 | heatmap_normalized_systems.html | Normalized percentages showing relative abundance |
 
 [//]: # (Test)
-<iframe src="../pictures/heatmap_number_sys.html"></iframe>
+[//]: # (<iframe src="../pictures/heatmap_number_sys.html"></iframe>)
 
-[PLACEHOLDER: Heatmap showing system distribution across multiple pangenomes]
+[//]: # ([PLACEHOLDER: Heatmap showing system distribution across multiple pangenomes])
 
-[PLACEHOLDER: Normalized heatmap showing relative system abundance patterns]
+[//]: # ([PLACEHOLDER: Normalized heatmap showing relative system abundance patterns])
 
 #### Conserved System Clustering
 
@@ -175,4 +175,4 @@ conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
 Edge attributes contain GFRR similarity scores and the number of shared gene families.
 
-[PLACEHOLDER: Network graph of conserved systems clusters with different colors]
+[//]: # ([PLACEHOLDER: Network graph of conserved systems clusters with different colors])
