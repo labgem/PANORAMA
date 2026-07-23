@@ -6,6 +6,7 @@ import logging
 import os
 import sys
 import tempfile
+import time
 from collections import defaultdict, namedtuple
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -137,11 +138,9 @@ def digit_family_sequences(pangenome: Pangenome, disable_bar: bool = False) -> T
         desc="Digitalized gene families sequences",
         disable=disable_bar,
     ):
-        bit_name = family.name.encode("UTF-8")
-        bit_acc = str(family.ID).encode("UTF-8")
         sequence = family.sequence if family.HMM is None else family.HMM.consensus.upper()
         sequence = sequence.replace("*", "")
-        text_seq = TextSequence(name=bit_name, accession=bit_acc, sequence=sequence)
+        text_seq = TextSequence(name=family.name, accession=str(family.ID), sequence=sequence)
         sequences.append(text_seq.digitize(Alphabet.amino()))
     available_memory = psutil.virtual_memory().available
     return sequences, (True if sum(map(sys.getsizeof, sequences)) < available_memory else False)
@@ -225,8 +224,8 @@ def profile_gf(
             raise Exception(f"The following error happened while reading file {msa_path}") from error
         else:
             try:
-                msa.name = gf.name.encode("UTF-8")
-                msa.accession = f"PAN{gf.ID}".encode("UTF-8")
+                msa.name = gf.name
+                msa.accession = f"PAN{gf.ID}"
                 gf._hmm, gf.profile, gf.optimized_profile = builder.build_msa(msa, background)
             except Exception as error:
                 raise Exception(f"The following error happened while building HMM from file {msa_path}") from error
@@ -330,7 +329,7 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
         information if the hit passes filters, otherwise None.
     """
     cog = hit.best_domain.alignment
-    hmm_info = meta.loc[cog.hmm_accession.decode("UTF-8")]
+    hmm_info = meta.loc[cog.hmm_accession]
     target_coverage = (cog.target_to - cog.target_from) / cog.target_length
     hmm_coverage = (cog.hmm_to - cog.hmm_from) / cog.hmm_length
 
@@ -343,8 +342,8 @@ def assign_hit(hit: Hit, meta: pd.DataFrame) -> Union[Tuple[str, str, str, float
     if check_target_cov and check_hmm_cov and check_score and check_e_value and check_ie_value:
         secondary_name = "" if pd.isna(hmm_info.secondary_name) else hmm_info.secondary_name
         return (
-            hit.name.decode("UTF-8"),
-            cog.hmm_accession.decode("UTF-8"),
+            hit.name,
+            cog.hmm_accession,
             hmm_info.protein_name,
             hit.evalue,
             hit.score,
@@ -394,7 +393,7 @@ def annot_with_hmmscan(
             seq (Sequence): The annotated sequence object returned by `hmmscan`.
             _ (Any): Placeholder for an unused second argument (typically error object or result metadata).
         """
-        logging.getLogger("PANORAMA").debug(f"Finished annotation with target {seq.name.decode()}")
+        logging.getLogger("PANORAMA").debug(f"Finished annotation with target {seq.name}")
         bar.update()
 
     tmp = Path(tempfile.gettempdir()) if tmp is None else tmp
@@ -460,7 +459,7 @@ def annot_with_hmmsearch(
             hmm (HMMProfile): The HMM profile object that was used in the search.
             _ (Any): Placeholder for an unused second argument (typically error object or result metadata).
         """
-        logging.getLogger("PANORAMA").debug(f"Finished annotation with HMM {hmm.name.decode()}")
+        logging.getLogger("PANORAMA").debug(f"Finished annotation with HMM {hmm.name}")
         bar.update()
 
     res = []
@@ -659,6 +658,7 @@ def annot_with_hmm(
     if (tblout or domtblout or pfamtblout) and output is None:
         raise AssertionError("Output path must be specified to save hits")
     gene2family = None
+    t0 = time.time()
     if mode == "sensitive":
         sequences, fit_memory = digit_gene_sequences(pangenome, threads, tmp, disable_bar)
         gene2family = {gene.ID: family.name for family in pangenome.gene_families for gene in family.genes}
@@ -702,4 +702,7 @@ def annot_with_hmm(
             mode,
         )
     metadata_df = get_metadata_df(res, mode, gene2family)
+    logging.getLogger("PANORAMA").info(
+        f"Annotation with HMM done for {pangenome.name} in {time.time() - t0:2f} seconds"
+    )
     return metadata_df

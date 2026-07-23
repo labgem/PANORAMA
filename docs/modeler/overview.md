@@ -39,16 +39,11 @@ Each model file is a single JSON object composed of:
 
 The structure is hierarchical:
 
+```{image} _static/pictures/models_structure.svg
+:alt: Model structure diagram
+:width: 50%
 ```
-Model
-├── FunctionalUnit
-│ ├── Family
-│ └── ...
-├── FunctionalUnit
-│ ├── Family
-│ └── ...
-```
-
+-
 Each **Functional Unit** and **Family** has a `presence` type (`mandatory`, `accessory`, `neutral`, `forbidden`) that
 governs how it contributes to system detection.
 
@@ -61,9 +56,9 @@ Detection rules are defined at **both the model level** and the **functional uni
 
 For full details, see:
 
-- [Model structure](modeling.md#-model-structure)
+- [Model structure](modeling.md#model-structure)
 - [Presence Types](modeling.md#presence-types-explained)
-- [Detection rules](modeling.md#-detection-parameters)
+- [Detection rules](modeling.md#detection-rules)
 
 ---
 
@@ -82,6 +77,6 @@ You can contribute to the creation of new models by following the guide
 
 PANORAMA can translate several sources (see [PANORAMA models repository](https://github.com/PANORAMA-models)).
 
-We ary trying to keep our models updated. But in case we miss it,
+We are trying to keep our models updated. But in case we miss it,
 you can translate the model yourself with `panorama utils --translate` command.
 Look here for more information: [PANORAMA – Model Translation Guide](translate.md) 

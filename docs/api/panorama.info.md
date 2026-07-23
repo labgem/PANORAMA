@@ -9,13 +9,15 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: PangenomeInfoExtractor, HTMLExporter
 ```
 
-## Module contents
-
 ```{eval-rst}
-.. automodule:: panorama.info
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   PangenomeInfoExtractor
+   HTMLExporter
 ```

@@ -187,6 +187,36 @@ def is_empty(filepath):
     return os.path.getsize(filepath) == 0
 
 
+def resolve_path(path: Path, relative_directory: Path) -> Path:
+    """
+    Try the path from cwd first, then relative to the file location
+
+    Args:
+        path (Path): path to solve
+        relative_directory (Path): directory to resolve relative paths from
+
+    Returns:
+          Path: resolved path
+    """
+    path = Path(path)
+
+    # If absolute, use as-is
+    if path.is_absolute():
+        return path
+
+    # Try from the current working directory first
+    if path.exists():
+        return path
+
+    # Try relative to the file location
+    relative = relative_directory / path
+    if relative.exists():
+        return relative
+
+    # Return the cwd version if neither exists (for error reporting)
+    return path
+
+
 def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path]]]:
     """
     Check if the given TSV file is readable for the next PANORAMA step.
@@ -232,10 +262,11 @@ def check_tsv_sanity(tsv_path: Path) -> Dict[str, Dict[str, Union[int, str, Path
         logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace("\n", "\n\t"))
         raise ValueError("There is a line with no path (second column)")
     else:
+        tsv["path"] = tsv["path"].map(lambda x: resolve_path(x, relative_directory=tsv_path.parent))
         if not tsv["path"].map(lambda x: Path(x).exists()).all():
             err_df = pd.DataFrame(
-                [tsv["path"], ~tsv["path"].map(lambda x: Path(x).exists())],
-                ["pangenome_path", "error"],
+                [tsv["path"], tsv["path"].map(lambda x: Path(x).exists())],
+                ["pangenome_path", "exist"],
             ).T
             logging.getLogger("PANORAMA").error("\n" + err_df.to_string().replace("\n", "\n\t"))
             raise FileNotFoundError("Unable to locate one or more pangenome in your file.}")

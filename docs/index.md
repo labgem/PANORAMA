@@ -36,5 +36,3 @@ developer/developer_guide
 
 api/api_ref
 ```
-
-TODO: Add the citation to MyST

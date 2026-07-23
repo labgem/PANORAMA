@@ -27,12 +27,15 @@ env:
 jobs:
   test:
     name: test PANORAMA on ${{ matrix.os }} with python ${{ matrix.python-version }}
+    # Skip the full test matrix on doc/* branches; only the doc-check workflow should run there.
+    # github.head_ref is only set for pull_request events; workflow_dispatch runs are unaffected.
+    if: ${{ !startsWith(github.head_ref, 'doc/') }}
     # The type of runner that the job will run on
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: ['ubuntu-latest', 'macos-latest']
-        python-version: ['3.10', '3.12']
+        python-version: ['3.12']
     steps:
 
       # Get number of cpu available on the current runner

@@ -9,6 +9,8 @@
 import datetime
 from pathlib import Path
 
+import myst_parser
+
 # -- Path setup --------------------------------------------------------------
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -22,14 +24,12 @@ project = "PANORAMA"
 organization = "LABGeM"
 author = "Jérôme Arnoux"
 year = datetime.date.today().year
-copyright = f"{'2025' if year == 2025 else f'2025-{year}'}, {organization}, {author}"
+copyright = f"2025-{year}, {organization}, {author}"
 
 html_show_copyright = True
 
-# The full version, including alpha/beta/rc tags
-release = (
-    open(Path(__file__).resolve().parents[1] / "VERSION").read().rstrip()
-)  # Get release number in the VERSION file
+# The full version, including alpha/beta/rc tags. Get release number from the VERSION file
+release = (Path(__file__).resolve().parents[1] / "VERSION").read_text().strip()
 
 
 # -- General configuration ---------------------------------------------------
@@ -40,18 +40,29 @@ release = (
 extensions = [
     "myst_parser",
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosummary",
     "sphinx.ext.autosectionlabel",
     "sphinx.ext.duration",
     "sphinx_search.extension",
     "sphinx.ext.napoleon",  # Extension for NumPy and Google style docstrings
+    "sphinx_autodoc_typehints",  # Merges type hints into Napoleon-style docstrings; must load after napoleon
     "sphinx.ext.extlinks",
     "sphinx.ext.todo",  # Remove warning todo
     "sphinx_design",
     "sphinxcontrib.jquery",
     "sphinxcontrib.mermaid",
+    "sphinx_copybutton",
 ]
 
-source_suffix = {".md": "markdown"}
+myst_enable_extensions = ["colon_fence"]
+myst_heading_anchors = 4
+
+source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
+
+# Auto-generate a stub page (via _templates/summary.rst) for every class listed
+# in an `autosummary` block, so classes get their own navigable sidebar entry.
+# Generated .rst files require ".rst" in source_suffix above.
+autosummary_generate = True
 
 # Prefix document path to section labels, to use:
 # `path/to/file:heading` instead of just `heading`
@@ -69,19 +80,15 @@ exclude_patterns = [
     ".DS_Store",
     "**.ipynb_checkpoints",
     "requirements.txt",
-    "developer/figure_script.md",
-    "developer/draw_spot_script.md",
-    "developer/draw.md",
-    "developer/system_asso_script.md",
-    "developer/write_flat_script.md",
-    "developer/conserved_spot_script.md",
 ]
 
 suppress_warnings = [
-    "myst.header",
-    # "autosectionlabel.*",
+    # Some pages intentionally reuse heading text across sections (e.g. parallel
+    # "spots" vs "systems" subsections) and rely on explicit `(label)=` anchors for
+    # any real cross-references, so the ambiguous auto-generated label is unused
+    # and this collision is expected, not a bug.
+    "autosectionlabel.*",
     "toc.not_included",
-    "myst.xref_missing",
 ]
 
 # The name of the default role for inline references
@@ -97,7 +104,8 @@ html_theme = "pydata_sphinx_theme"
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+html_static_path = ["_static", "user/_static", "modeler/_static"]
+html_js_files = ["js/new_tab_links.js"]
 
 # Source Buttons
 html_context = {
@@ -105,6 +113,7 @@ html_context = {
     "github_repo": "PANORAMA",
     "github_version": "dev",  # Automatically go to the dev branch for modification
     "doc_path": "docs",
+    "myst_version": myst_parser.__version__,
 }
 
 html_logo = "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg"
@@ -154,15 +163,18 @@ html_theme_options = {
     # Sphinx indices
     "primary_sidebar_end": ["indices.html"],
     # Annoucement banners
-    "announcement": "PANORAMA just released!",
+    "announcement": (
+        'PANORAMA paper is out! Click <a href="https://journals.plos.org/ploscompbiol/article?'
+        'id=10.1371/journal.pcbi.1013856">here</a> to read it.'
+    ),
     # Back to Top button
     "back_to_top_button": True,
     # Branding and logo
     "logo": {
         "text": "PANORAMA ",
         "alt_text": "PANORAMA documentation - Home",
-        "image_light": "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg",
-        "image_dark": "https://labgem.genoscope.cns.fr/wp-content/uploads/2021/06/GENOSCOPE-LABGeM.jpg",
+        "image_light": "_static/pictures/GENOSCOPE-LABGeM.jpg",
+        "image_dark": "_static/pictures/GENOSCOPE-LABGeM.jpg",
     },
     # Configure pygments theme
     "pygments_light_style": "tango",
@@ -172,7 +184,7 @@ html_theme_options = {
     "navbar_center": ["navbar-nav"],
     "navbar_end": ["theme-switcher", "navbar-icon-links"],
     "footer_start": ["copyright"],
-    "footer_center": ["sphinx-version"],
+    "footer_center": ["sphinx-myst-footer"],
     # "footer_links": ",".join(
     #     [
     #         "About Us|http://example.com/",

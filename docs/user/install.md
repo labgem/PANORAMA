@@ -1,13 +1,14 @@
-# Installation Guide 🦮
+# Installation Guide
 
 ```{important}
 Supported Python versions are 3.10, 3.11 and 3.12
 ```
 
 ## Latest version
-### Installation via Conda (recommended) 🐍
 
-The recommended way to install PANORAMA is via [Conda](https://docs.conda.io/en/latest/miniconda.html) 
+### Installation via Conda (recommended)
+
+The recommended way to install PANORAMA is via [Conda](https://docs.conda.io/en/latest/miniconda.html)
 from the [Bioconda](https://bioconda.github.io/) channel.
 We recommend creating a new Conda environment for PANORAMA to prevent any conflicts with other packages.
 
@@ -23,21 +24,26 @@ panorama --version
 ```
 
 If you want to use a specific version of PANORAMA, you can install it with:
+
 ```shell
 # X.X.X is the version number
 conda create -n panorama -c conda-forge -c bioconda panorama==X.X.X
 ```
 
 To use a specific python version:
+
 ```shell
 # X.X.X is the version number
 conda create -n panorama -c conda-forge -c bioconda panorama python=X.X
 ```
+
 ---
 
-### Installing from source code (GitHub) 🐙
+### Installing from source code (GitHub)
+
 (with_conda_env)=
-#### Within a Conda environment 🐍
+
+#### Within a Conda environment
 
 ##### 1. Clone the GitHub Repository
 
@@ -56,7 +62,8 @@ conda env update -n panorama --file panorama.yml
 conda activate panorama
 ```
 
-Alternatively, in one line:  
+Alternatively, in one line:
+
 ```shell
 conda env create -f panorama.yml # -n panorama ## if you want to name the environment differently
 conda activate panorama
@@ -75,10 +82,10 @@ panorama --help
 panorama --version
 ```
 
-#### Manual Installation (without Conda) 🛠️
+#### Manual Installation (without Conda)
 
 ```{important}
-PANOARMA requires Python 3.10 or higher.
+PANORAMA requires Python 3.10 or higher.
 ```
 
 ##### 1. Clone the Repository
@@ -110,13 +117,14 @@ pip install .
 ```
 
 ```{warning}
-geckodriver is not compatible with pip, so the feature that generate png image from bokeh is not supported.
+geckodriver is not compatible with pip, so the feature that generates png image from bokeh is not supported.
 ```
+
 ---
 
 ## Development Version
 
-### 1. Get the Development branch 
+### 1. Get the Development branch
 
 To clone the `dev` Branch
 
@@ -124,17 +132,17 @@ To clone the `dev` Branch
 git clone --branch dev https://github.com/labgem/PANORAMA.git
 ```
 
-
 ### 2. Install Dependencies
 
-Follow the same steps as in the standard installation. 
+Follow the same steps as in the standard installation.
 With a [conda environment](#with_conda_env) or with a [manual installation](#manual-installation-without-conda).
 
 ### 3. Install the Development Version
+
 ```shell
 pip install .
 ```
-    
+
 ***
 
 ## Troubleshooting

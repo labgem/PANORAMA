@@ -1,4 +1,4 @@
-# Systems analysis output 📊
+# Systems analysis output
 
 ```{toctree}
 :maxdepth: 2

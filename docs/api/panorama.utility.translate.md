@@ -27,13 +27,15 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: ModelTranslationError, HMMProcessingError
 ```
 
-## Module contents
-
 ```{eval-rst}
-.. automodule:: panorama.utility.translate
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   ModelTranslationError
+   HMMProcessingError
 ```
