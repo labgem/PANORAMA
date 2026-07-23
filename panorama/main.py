@@ -85,9 +85,10 @@ opening_full = (
 """
 )
 epilog = f"""
-By Jérôme Arnoux <arnoux.jeromepj@gmail.com>
-PANORAMA ({version}) is an opensource bioinformatic tools under CeCILL FREE SOFTWARE LICENSE AGREEMENT
-LABGeM
+PANORAMA ({version}) is an opensource bioinformatic tools, developed by the LABGeM team, under CeCILL FREE SOFTWARE LICENSE AGREEMENT
+Please cite:
+Arnoux J, et al. (2026) Panorama: A robust pangenome-based method for predicting and comparing biological systems across species.
+PLOS Computational Biology 22(7): e1013856; doi: https://doi.org/10.1371/journal.pcbi.1013856
 """
 
 
