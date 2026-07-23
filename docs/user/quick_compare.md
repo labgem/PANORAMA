@@ -18,7 +18,7 @@ panorama compare_spots \
     --pangenomes pangenomes.tsv \
     --output conserved_spots_results \
     --gfrr_cutoff 0.8 0.8 \
-    --threads 8
+    --cpu 8
 
 # With systems analysis
 panorama compare_spots \
@@ -29,7 +29,7 @@ panorama compare_spots \
     --sources defense_finder \
     --gfrr_cutoff 0.8 0.8 \
     --graph_formats gexf graphml \
-    --threads 8
+    --cpu 8
 ```
 
 ### Compare spots key Arguments
@@ -63,7 +63,7 @@ panorama compare_systems \
     --sources defense_finder \
     --output systems_comparison_results \
     --heatmap \
-    --threads 8
+    --cpu 8
 
 # Full analysis with conserved systems clustering
 panorama compare_systems \
@@ -76,7 +76,7 @@ panorama compare_systems \
     --gfrr_cutoff 0.8 0.8 \
     --gfrr_models_cutoff 0.2 0.2 \
     --graph_formats gexf graphml \
-    --threads 8
+    --cpu 8
 ```
 
 ### Compare systems key Arguments

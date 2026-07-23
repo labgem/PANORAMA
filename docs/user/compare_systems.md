@@ -42,7 +42,7 @@ The systems comparison process runs as follows:
 
    Conserved systems are saved as graph files (GEXF, GraphML) and summary tables for further analysis and visualization.
 
-## System comparison command Line Usage
+## System comparison command line usage
 
 Basic systems comparison with heatmap generation:
 
@@ -53,7 +53,7 @@ panorama compare_systems \
 --sources defense_finder \
 --output systems_comparison_results \
 --heatmap \
---threads 8
+--cpu 8
 ```
 
 Full analysis with conserved systems clustering:
@@ -69,7 +69,7 @@ panorama compare_systems \
 --gfrr_cutoff 0.8 0.8 \
 --gfrr_models_cutoff 0.2 0.2 \
 --graph_formats gexf graphml \
---threads 8
+--cpu 8
 ```
 
 ### Key Options
@@ -81,7 +81,7 @@ panorama compare_systems \
 | -s       | --sources            | List[str]              | False    | Name(s) of systems sources (must match --models order)                                              |
 | -o       | --output             | str (directory path)   | False    | Output directory for comparison results                                                             |
 | —        | --gfrr_cutoff        | List[float] (2 values) | True     | Two thresholds for min_gfrr and max_gfrr values (default: 0.5 0.8)                                  |
-| —        | --seed               | Int                    | Optional | Random seed to guarantee reproductibility (default 42)                                              |
+| —        | --seed               | Int                    | Optional | Random seed to guarantee reproducibility (default 42)                                               |
 | —        | --heatmap            | bool (flag)            | True     | Generate heatmaps showing system distribution across pangenomes                                     |
 | —        | --gfrr_metrics       | str (choice)           | True     | GFRR metric for clustering conserved systems (min_gfrr_models, max_gfrr_models, min_gfrr, max_gfrr) |
 | —        | --gfrr_models_cutoff | List[float] (2 values) | True     | GFRR thresholds for model gene families (default: 0.4 0.6)                                          |
@@ -105,7 +105,7 @@ panorama compare_systems \
 ```{note}
 PANORAMA can perform the clustering step first thing, but it's also possible to use pre-computed clustering results with
 the `--cluster` argument.
-If you use let PANORAMA perform the clustering, you can look at the [Clustering](../clustering.md) section for more
+If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md) section for more
 details about options.
 ```
 
@@ -160,11 +160,11 @@ Interactive HTML heatmaps showing system distribution patterns:
 | heatmap_normalized_systems.html | Normalized percentages showing relative abundance |
 
 [//]: # (Test)
-<iframe src="../pictures/heatmap_number_sys.html"></iframe>
+[//]: # (<iframe src="../pictures/heatmap_number_sys.html"></iframe>)
 
-[PLACEHOLDER: Heatmap showing system distribution across multiple pangenomes]
+[//]: # ([PLACEHOLDER: Heatmap showing system distribution across multiple pangenomes])
 
-[PLACEHOLDER: Normalized heatmap showing relative system abundance patterns]
+[//]: # ([PLACEHOLDER: Normalized heatmap showing relative system abundance patterns])
 
 #### Conserved System Clustering
 
@@ -175,4 +175,4 @@ conserved system clusters.
 Node attributes include system metadata, pangenome information, and cluster assignments
 Edge attributes contain GFRR similarity scores and the number of shared gene families.
 
-[PLACEHOLDER: Network graph of conserved systems clusters with different colors]
+[//]: # ([PLACEHOLDER: Network graph of conserved systems clusters with different colors])

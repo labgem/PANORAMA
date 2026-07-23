@@ -7,8 +7,14 @@
 [![GitHub issues](https://img.shields.io/github/issues/labgem/panorama.svg?style=flat-square&maxAge=600)](https://github.com/labgem/panorama/issues)
 [![Docs](https://img.shields.io/readthedocs/panorama/latest?style=flat-square&maxAge=600)](https://panorama.readthedocs.io)
 [![Downloads](https://anaconda.org/bioconda/panorama/badges/downloads.svg)](https://bioconda.github.io/recipes/panorama/README.html#download-stats)
+[![Paper](https://img.shields.io/badge/paper-PLOS%20Computational%20Biology-teal.svg?style=flat-square&maxAge=3600)](https://doi.org/10.1371/journal.pcbi.1013856)
+[![Citations](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fbadge.dimensions.ai%2Fdetails%2Fdoi%2F10.1371%2Fjournal.pcbi.1013856&search=%3Cdiv%20class%3D%22count%22%3E(%5Cd*)%3C%2Fdiv%3E&replace=%241&style=flat-square&label=citations&cacheSeconds=3600)](https://badge.dimensions.ai/details/doi/10.1371/journal.pcbi.1013856)
 
-PANORAMA is a software suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
+![PANORAMA logo](docs/_static/pictures/panorama_logo.svg)
+
+PANORAMA ([Arnoux _et al_. 2026](https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1013856)) is a
+software
+suite used to analyze and compare partitioned pangenomes graph provided. It benefits from
 methods for the reconstruction and analysis of pangenome graphs, thanks to
 the [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN)
 software suite. It is designed to perform pangenome comparison at high-throughtup level.
@@ -149,6 +155,21 @@ panorama cluster \
 --cluster_coverage 0.8 \
 --threads 8
 ```
+
+---
+
+# How to cite
+
+If you use PANORAMA in your research, please cite:
+
+> Arnoux J, Mainguy J, Bry L, Fernandez de Grado Q, Hoblos Y, Vallenet D, et al. (2026) Panorama: A robust
+> pangenome-based method for predicting and comparing biological systems across species. PLoS Comput Biol 22(7):
+> e1013856. https://doi.org/10.1371/journal.pcbi.1013856
+> PANORAMA is built on top of [PPanGGOLiN](https://github.com/labgem/PPanGGOLiN).
+
+If you use PANORAMA, please also cite PPanGGOLiN — see
+the [PPanGGOLiN citation page](https://ppanggolin.readthedocs.io/en/latest/user/practicalInformation.html#citation) for
+the appropriate reference.
 
 ---
 

@@ -9,8 +9,19 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: AlignmentConfig, AlignmentError, AlignmentValidationError
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   AlignmentConfig
+   AlignmentError
+   AlignmentValidationError
+```
 ## panorama.alignment.cluster module
 
 ```{eval-rst}
@@ -18,8 +29,20 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: ClusteringMethod, ClusteringConfig, ClusteringError, ClusteringValidationError
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   ClusteringMethod
+   ClusteringConfig
+   ClusteringError
+   ClusteringValidationError
+```
 ## panorama.alignment.utils module
 
 ```{eval-rst}
@@ -27,13 +50,16 @@
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: MMSeqsConfig, PangenomeProcessingError, MMSeqsError
 ```
 
-## Module contents
-
 ```{eval-rst}
-.. automodule:: panorama.alignment
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   MMSeqsConfig
+   PangenomeProcessingError
+   MMSeqsError
 ```

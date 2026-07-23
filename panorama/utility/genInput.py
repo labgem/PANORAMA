@@ -93,7 +93,7 @@ def process_hmm_name(
     Raises:
         IOError: If HMM name cannot be determined
     """
-    name_parts = hmm.name.decode("UTF-8").split()
+    name_parts = hmm.name.split()
 
     if len(name_parts) > 1:
         logging.getLogger("PANORAMA").error(f"HMM with naming problem: {hmm_file.absolute().as_posix()}")
@@ -106,7 +106,7 @@ def process_hmm_name(
     hmm_dict["protein_name"] = file_protein_name if hmm_protein_name != file_protein_name else hmm_protein_name
 
     # Update HMM object with processed name
-    hmm.name = hmm_dict["protein_name"].encode("UTF-8")
+    hmm.name = hmm_dict["protein_name"]
 
     return hmm_dict
 
@@ -142,12 +142,12 @@ def process_hmm_accession(
     Returns:
         Dict: Updated HMM dictionary
     """
-    if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
+    if not hmm.accession:
         # Generate new unique accession ID
         hmm_dict["accession"] = generate_unique_accession(panorama_acc)
-        hmm.accession = hmm_dict["accession"].encode("UTF-8")
+        hmm.accession = hmm_dict["accession"]
     else:
-        hmm_dict["accession"] = hmm.accession.decode("UTF-8")
+        hmm_dict["accession"] = hmm.accession
 
     return hmm_dict
 
@@ -201,19 +201,19 @@ def parse_hmm_info(hmm: HMM, panorama_acc: Set[str], metadata: pd.DataFrame = No
         Dictionary with the parsed information
     """
     hmm_dict = {
-        "name": hmm.name.decode("UTF-8"),
+        "name": hmm.name,
         "accession": "",
         "length": len(hmm.consensus),
     }
 
-    if hmm.accession is None or hmm.accession == "".encode("UTF-8"):
+    if not hmm.accession:
         hmm_dict["accession"] = generate_unique_accession(panorama_acc)
-        hmm.accession = hmm_dict["accession"].encode("UTF-8")
+        hmm.accession = hmm_dict["accession"]
     else:
-        hmm_dict["accession"] = hmm.accession.decode("UTF-8")
+        hmm_dict["accession"] = hmm.accession
 
     if hmm.description is not None:
-        hmm_dict["description"] = hmm.description.decode("UTF-8")
+        hmm_dict["description"] = hmm.description
 
     if metadata is not None and hmm_dict["accession"] in metadata.index:
         hmm_info = metadata.loc[hmm_dict["accession"]]
@@ -245,9 +245,7 @@ def write_hmm(hmm: HMM, output: Path, binary: bool = False, name: bool = False) 
     Returns:
         Path of the HMM file
     """
-    outpath = (
-        output / f"{hmm.name.decode('UTF-8') if name else hmm.accession.decode('UTF-8')}.{'h3m' if binary else 'hmm'}"
-    )
+    outpath = output / f"{hmm.name if name else hmm.accession}.{'h3m' if binary else 'hmm'}"
     with open(outpath, "wb") as file:
         hmm.write(file, binary)
     return outpath

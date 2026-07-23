@@ -75,6 +75,7 @@ git push origin --delete feature/my-awesome-feature
 The reviewer can also delete your branch after merging direclty from GitHub.
 ```
 
+(versioning-and-releases)=
 ## Versioning and Releases 🏷️
 
 PANORAMA follows semantic versioning: `Major.Minor.Patch`
@@ -85,11 +86,9 @@ PANORAMA follows semantic versioning: `Major.Minor.Patch`
   improvements.
 - **Major** (e.g., **2**.0.0) - Breaking changes or major architectural updates. Rare but important!
 
-**What this means for your PR:**
-
-VERSION is automatically updated thanks to the workflow [Auto bump version](https://github.com/labgem/PANORAMA/blob/main/.github/workflows/bump_version.yml).
-But a double check will be appreciated.
-
+```{important}
+Don't forget to bump the patch version!
+```
 
 ## Creating a Pull Request 🔄
 
