@@ -19,12 +19,3 @@
    :undoc-members:
    :show-inheritance:
 ```
-
-## Module contents
-
-```{eval-rst}
-.. automodule:: panorama.annotate
-   :members:
-   :undoc-members:
-   :show-inheritance:
-```

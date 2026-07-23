@@ -4,5 +4,7 @@
 .. currentmodule:: {{ module }}
 
 .. autoclass:: {{ name }}
-   :inherited-members:
    :members:
+   :undoc-members:
+   :show-inheritance:
+   :inherited-members:

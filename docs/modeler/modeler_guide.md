@@ -2,7 +2,7 @@
 myst:
   html_meta:
     "description lang=en": |
-      Documentation for user who wish to create their own models.
+      Documentation for users who wish to create their own models.
     "keywords": |
       Models
 ---
@@ -16,4 +16,12 @@ myst:
 overview
 modeling
 translate
+```
+
+```{toctree}
+:caption: 'Community:'
+:maxdepth: 2
+
+contribute
+FAQ
 ```

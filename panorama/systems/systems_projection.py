@@ -480,7 +480,7 @@ def project_pangenome_systems(
             "organism",
             "completeness",
         ],
-        key=lambda col: (col.apply(extract_numeric_for_sorting) if col.name == "system number" else col),
+        key=lambda col: col.apply(extract_numeric_for_sorting) if col.name == "system number" else col,
         ascending=[True, True, True, True, True],
         inplace=True,
     )
@@ -551,7 +551,7 @@ def get_org_df(org_df: pd.DataFrame) -> Tuple[pd.DataFrame, str]:
     # sort columns considering "system number" numerically
     org_df_grouped_sorted = org_df_grouped.sort_values(
         by=["system number", "system name", "start", "stop"],
-        key=lambda col: (col.apply(extract_numeric_for_sorting) if col.name == "system number" else col),
+        key=lambda col: col.apply(extract_numeric_for_sorting) if col.name == "system number" else col,
         ascending=[True, True, True, True],
     )
     return org_df_grouped_sorted, org_name
@@ -651,7 +651,7 @@ def get_org_df_one_unit_per_fam(
     # sort columns considering "system number" numerically
     org_df_grouped_sorted = org_df_filtered.sort_values(
         by=["system number", "system name", "start", "stop"],
-        key=lambda col: (col.apply(extract_numeric_for_sorting) if col.name == "system number" else col),
+        key=lambda col: col.apply(extract_numeric_for_sorting) if col.name == "system number" else col,
         ascending=[True, True, True, True],
     )
     return org_df_grouped_sorted, org_name

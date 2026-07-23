@@ -75,6 +75,7 @@ git push origin --delete feature/my-awesome-feature
 The reviewer can also delete your branch after merging direclty from GitHub.
 ```
 
+(versioning-and-releases)=
 ## Versioning and Releases 🏷️
 
 PANORAMA follows semantic versioning: `Major.Minor.Patch`
@@ -85,11 +86,9 @@ PANORAMA follows semantic versioning: `Major.Minor.Patch`
   improvements.
 - **Major** (e.g., **2**.0.0) - Breaking changes or major architectural updates. Rare but important!
 
-**What this means for your PR:**
-
-VERSION is automatically updated thanks to the workflow [Auto bump version](https://github.com/labgem/PANORAMA/blob/main/.github/workflows/bump_version.yml).
-But a double check will be appreciated.
-
+```{important}
+Don't forget to bump the patch version!
+```
 
 ## Creating a Pull Request 🔄
 
@@ -97,44 +96,38 @@ You've done the hard work - now let's get it merged!
 
 ### PR Title and Description
 
-Write a clear title that summarizes your change and use the PR template to provide context:
-
-```markdown
-## What does this PR do?
-
-Adds a new module for detecting CRISPR-Cas systems in bacterial genomes using HMM profiles.
-
-## Why is this needed?
-
-Many users requested CRISPR detection capabilities. This addresses issue #123.
-
-## What changed?
-
-- Added `panorama/crispr/detector.py` with detection logic
-- Added HMM profiles for Cas proteins
-- Added unit tests (coverage: 95%)
-- Updated user documentation with examples
-
-## How to test?
-
-pytest tests/test_crispr.py
-panorama detect_crispr --pangenome examples/ecoli.h5
-
-## Related Issues
-
-Closes #123
-Related to #456
-
-## Version
-
-Updated VERSION from 1.2.5 → 1.2.6
-```
+Write a clear title that summarizes your change and use the PR template to provide context.
 
 ```{important}
 If your PR addresses an issue, link it! Use these keywords in your PR description:
 - `Fixes #123` - Automatically closes issue when PR merges
 - `Closes #123` - Same as above
 - `Related to #123` - Links without closing
+```
+
+### For reviewer
+
+Before to validate the commit change, you should check the elements in the following template for reviewer.
+
+```md
+## Quick Review
+
+### ✅ Checks
+- [ ] Code runs correctly
+- [ ] Logic makes sense
+- [ ] No obvious bugs
+- [ ] Comments help understand the code
+
+### 💬 Feedback
+<!-- Your comments here -->
+
+**Status:** ✅ Approved / 🔄 Suggestions / ❌ Changes needed
+```
+
+```{tip}
+You can add this template direclty in your saved replies (Go to your Settings->Saved replies)
+
+See [Using saved replies documentation](https://docs.github.com/en/get-started/writing-on-github/working-with-saved-replies/using-saved-replies)
 ```
 
 ## Keeping Your Branch Updated

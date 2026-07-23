@@ -8,8 +8,8 @@ Also, it will prepare all required input files, so they can be used directly for
 
 - PADLOC (e.g., antiviral defense systems),
 - MacSyFinder-based tools like:
-    - DefenseFinder (e.g., restriction-modification, retrons, etc.),
-    - CASFINDER ()
+    - DefenseFinder (phage defense systems),
+    - CASFINDER (CRISPR-Cas systems)
     - CONJScan (conjugative systems),
     - TXSScan (type secretion systems),
     - TFFScan (type IV pili),
@@ -21,7 +21,7 @@ Translated and updated versions of models are already available [here](https://g
 ```
 
 1. When a new version exists, and it's not yet available on [PANORAMA models](https://github.com/PANORAMA-models),
-2. When you want to use a specif version, not available on [PANORAMA models](https://github.com/PANORAMA-models)
+2. When you want to use a specific version, not available on [PANORAMA models](https://github.com/PANORAMA-models)
 3. When you have your own version of models that use the same grammar as supported sources.
 
 ## What do you need?
@@ -62,8 +62,9 @@ panorama utils \
 Defense Finder and PADLOC use different threshold for the HMM and the target coverage.
 Defense Finder use 0.4 for HMM and 0 for target for all profiles.
 PADLOC define in the metadata a specific threshold for each profile.
-This default behavior is tunable with the `--hmm_coverage` and `--target_coverage` options 
+This default behaviors are tunable with the `--hmm_coverage` and `--target_coverage` options 
 that will affect a threshold for all profiles.
+PANORAMA will automatically generate the metadata file corresponding to the source.
 ```
 
 ## What files are created?
@@ -90,6 +91,7 @@ panorama utils \
 --output padloc_translate/ \
 --binary
 ```
+
 ```{tip}
 PANORAMA automatically find all required files on its own, as the structure is already known.
 ```
@@ -105,8 +107,9 @@ panorama utils \
 --output dfinder_translate/ \
 --binary
 ```
+
 ```{note}
-Defense Finder team as the tendency to reorganize the repository.
+Defense Finder team has the tendency to reorganize the repository.
 If you're trying to translate a new version this could not work.
 In this case report an issue [here](https://github.com/PANORAMA-models/Defense-Finder)
 ```
