@@ -399,7 +399,7 @@ def launch(args):
         disable_bar=args.disable_prog_bar,
         check_annotations=args.annotations,
         sources=args.sources,
-        check_hmm=args.hmm
+        check_hmm=args.hmm,
     )
     write_flat_files(
         pangenomes,
