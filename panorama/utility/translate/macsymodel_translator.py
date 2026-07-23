@@ -380,7 +380,7 @@ def parse_macsyfinder_hmm(hmm: HMM, hmm_file: Path, panorama_acc: Set[str]) -> D
 
     # Extract description if available
     if hmm.description is not None:
-        hmm_dict["description"] = hmm.description.decode("UTF-8")
+        hmm_dict["description"] = hmm.description
 
     return hmm_dict
 
