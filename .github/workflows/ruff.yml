@@ -16,8 +16,10 @@ jobs:
         uses: astral-sh/ruff-action@v3
         with:
           args: format --check --output-format github
+          src: "panorama tests"
 
       - name: Lint with Ruff
         uses: astral-sh/ruff-action@v3
         with:
           args: check --output-format github
+          src: "panorama tests"
