@@ -3,5 +3,5 @@
 ```{toctree}
 :maxdepth: 4
 panorama
-indice_and_table
+indices_and_tables
 ```

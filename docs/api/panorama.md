@@ -24,21 +24,25 @@ panorama.workflow
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: GeneFamily, Akin
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   GeneFamily
+   Akin
+```
 ## panorama.main module
 
-
 ```{eval-rst}
-
 .. automodule:: panorama.main
-
    :members:
-
    :undoc-members:
-
    :show-inheritance:
-
 ```
 
 ## panorama.pangenomes module
@@ -48,8 +52,18 @@ panorama.workflow
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: Pangenome, Pangenomes
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   Pangenome
+   Pangenomes
+```
 ## panorama.region module
 
 ```{eval-rst}
@@ -57,8 +71,21 @@ panorama.workflow
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: Region, Spot, ConservedSpots, Module, GeneContext
 ```
 
+```{eval-rst}
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   Region
+   Spot
+   ConservedSpots
+   Module
+   GeneContext
+```
 ## panorama.utils module
 
 ```{eval-rst}
@@ -66,13 +93,14 @@ panorama.workflow
    :members:
    :undoc-members:
    :show-inheritance:
+   :exclude-members: RawTextArgumentDefaultsHelpFormatter
 ```
 
-## Module contents
-
 ```{eval-rst}
-.. automodule:: panorama
-   :members:
-   :undoc-members:
-   :show-inheritance:
+.. autosummary::
+   :toctree: generated
+   :template: summary.rst
+   :nosignatures:
+
+   RawTextArgumentDefaultsHelpFormatter
 ```

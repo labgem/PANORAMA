@@ -112,6 +112,15 @@ For complete output options and file formats, see:
 | `--tmp`      | Path | auto    | Temporary directory        |
 | `--keep_tmp` | flag | False   | Keep temporary files       |
 
+### Common Optional Arguments
+
+| Argument                    | Type         | Default | Description                                               |
+|------------------------------|--------------|---------|-------------------------------------------------------------|
+| `--verbose`                 | int (choice) | 1       | Verbose level: 0 (warnings/errors), 1 (info), 2 (debug)    |
+| `--log`                     | Path         | stdout  | Log output file                                            |
+| `-d`, `--disable_prog_bar`  | flag         | False   | Disable the progress bars                                  |
+| `--force`                   | flag         | False   | Force writing in the output directory and pangenome file   |
+
 ---
 
 ## Output Structure

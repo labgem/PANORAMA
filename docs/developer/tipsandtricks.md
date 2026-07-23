@@ -542,33 +542,33 @@ pytest tests/test_my_feature.py
 
 All tests should pass. If something fails, fix it before pushing. Your future self will thank you!
 
-#### 2. Format with Black
+#### 2. Format with Ruff
 
-We use Black to keep the code style consistent. No more debates about spaces and brackets!
+We use [Ruff](https://docs.astral.sh/ruff/) to keep the code style consistent. No more debates about spaces and brackets!
 
 ```bash
 # Format everything
-black panorama/ tests/
+ruff format panorama/ tests/
 
 # Check what would change (without modifying files)
-black --check panorama/ tests/
+ruff format --check panorama/ tests/
 ```
 
-Black makes code reviews smoother since we're focusing on logic, not style.
+Ruff makes code reviews smoother since we're focusing on logic, not style.
 
-#### 3. Linting with Flake8
+#### 3. Linting with Ruff
 
-[flake8](https://flake8.pycqa.org/) catches potential bugs and style issues:
+Ruff also handles linting, catching potential bugs and style issues:
 
 ```shell
-# Check the entire project
-flake8 panorama/ tests/
+# Check and auto-fix the entire project
+ruff check --fix panorama/ tests/
 
 # Check specific files
-flake8 panorama/systems/system.py
+ruff check panorama/systems/system.py
 ```
 
-Fix the issues flake8 reports before pushing. Most are quick fixes!
+Fix any remaining issues Ruff reports before pushing. Most are quick fixes!
 
 #### 4. Update Documentation
 
@@ -597,7 +597,7 @@ grep -r "print(" panorama/  # Just an example!
 
 #### 6. Update the VERSION File
 
-Don't forget to bump the patch version! See the [Versioning section](#versioning-and-releases-🏷️) above.
+Don't forget to bump the patch version! See the {ref}`Versioning section <versioning-and-releases>`.
 
 ### Handling Merge Conflicts
 
@@ -652,6 +652,7 @@ git bisect start
 
 ---
 
+(common-pitfalls)=
 ## Common Pitfalls 🚧
 
 ### Mutable Default Arguments

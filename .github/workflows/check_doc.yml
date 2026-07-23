@@ -1,7 +1,16 @@
 name: Check documentation
 
 on:
+  # doc/* branches are covered by the pull_request trigger below instead, to avoid
+  # this workflow running twice (push + pull_request) for the same commit.
   push:
+    branches-ignore:
+      - 'doc/**'
+    paths:
+      - 'docs/**'
+      - '.readthedocs.yaml'
+      - '.github/workflows/check_doc.yml'
+  pull_request:
     paths:
       - 'docs/**'
       - '.readthedocs.yaml'
@@ -9,7 +18,9 @@ on:
 
 jobs:
   build:
-
+    # Non-push (i.e. pull_request) events only run here when the PR's source branch
+    # is a doc/* branch; other branches are already covered by the push trigger above.
+    if: ${{ github.event_name != 'pull_request' || startsWith(github.head_ref, 'doc/') }}
     runs-on: ubuntu-latest
 
     steps:
@@ -19,6 +30,9 @@ jobs:
           python-version: '3.10'
       - name: install panorama with python deps and doc deps
         run: pip install .[doc]
+
+      - name: Check common argument tables stay in sync
+        run: python .github/scripts/check_common_arguments_docs.py
 
       - name: Complete workflow
         shell: bash -l {0}

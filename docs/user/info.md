@@ -1,9 +1,9 @@
-# Extract and Visualize Pangenome Information ℹ️
+# Extract and Visualize Pangenome Information
 
 The info subcommand extracts summary information from PPanGGOLiN **.h5 pangenome files** and generates interactive HTML
 reports. These reports support quick content comparison of each pangenome.
 
-## Info command line usage ️
+## Info command line usage
 
 ```shell
 panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--content]
@@ -17,19 +17,20 @@ panorama info -i <pangenome_list.tsv> -o <output_directory> [--status] [--conten
 
 ## Key options
 
-| Option       | Description                                                  |
-|--------------|--------------------------------------------------------------|
-| --status     | Extract and export the status (booleans) of each pangenome.  |
-| --content    | Extract and export structural and numerical content metrics. |
+| Option    | Description                                                  |
+|-----------|--------------------------------------------------------------|
+| --status  | Extract and export the status (booleans) of each pangenome.  |
+| --content | Extract and export structural and numerical content metrics. |
 
-default If no flags are provided, all (status, content, parameters, metadata) are extracted.
+Default: if no flags are provided, both `--status` and `--content` are extracted.
 
-```{warning}
-`--parameters` and `--metadata` outputs are not settled yet. We are currently working on a useful output.
-Please add `--status` and/or `--content` to don't get an error.
+```{note}
+`--parameters` and `--metadata` are not yet available. Use `--status` and/or `--content` for now.
 ```
 
 ## Exploring the Reports
+
+(status-info)=
 
 ### Status info
 
@@ -41,6 +42,8 @@ Features:
 
 - Radio button filters for boolean values.
 - TSV download of filtered results.
+
+(content-info)=
 
 ### Content info
 

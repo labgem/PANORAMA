@@ -2,7 +2,7 @@
 myst:
   html_meta:
     "description lang=en": |
-      Documentation for developer woh wish to contribute to the project.
+      Documentation for developer who wish to contribute to the project.
     "keywords": |
       Pangenomics, Python, Developer, Documentation
 ---
@@ -10,7 +10,7 @@ myst:
 # Developer documentation
 
 ```{toctree}
-:caption: 'Developper Guide:'
+:caption: 'Contributing & Guidelines:'
 :maxdepth: 2
 
 contribute
@@ -19,4 +19,15 @@ git
 unitTest
 buildDoc
 tipsandtricks
+```
+
+```{toctree}
+:caption: 'Codebase Internals:'
+:maxdepth: 2
+
+architecture
+detection_workflow
+compare_workflow
+io_layer
+add_subcommand
 ```

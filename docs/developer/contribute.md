@@ -7,17 +7,17 @@ This guide will walk you through basic 'need to know' to contribute effectively.
 in the next pages.
 
 ```{important}
-We encourage all contributions, this guide is not absolute rules but a help to go through. 
+Feel free to contribute in any way you can; consider this guide a helpful resource rather than a strict ruleset.
 Start with what's relevant to your contribution and refer back as needed.
 ```
 
 ## Quick overview 🚀
 
 1. **Set up your development environment** → See [Development Setup](#development-setup)
-2. **Follow coding standards** → See [Development Methods](devRules.md#dev-rules)
-3. **Learn our git workflow** → See [Version Control Guide](git.md#git-guide)
-4. **Write tests** → See [Testing Guidelines](unitTest.md#test-guide)
-5. **Update documentation** → See [Documentation Guide](buildDoc.md#build-doc)
+2. **Follow coding standards** → See {ref}`Development Methods <dev-rules>`
+3. **Learn our git workflow** → See {ref}`Version Control Guide <git-guide>`
+4. **Write tests** → See {ref}`Testing Guidelines <test-guide>`
+5. **Update documentation** → See {ref}`Documentation Guide <build-doc>`
 6. **Submit your Pull Request** → See [Pull Request Process](#pr-process)
 
 ## Development Setup
@@ -67,7 +67,7 @@ We use a structured workflow to keep the codebase stable and organized:
 
 - **`main`** - Stable, production-ready code
 - **`dev`** - Latest development version (your starting point!)
-- **Feature branches** - Your work happens here
+- **Feature branches** – Your work happens here
 
 ### Creating a Feature Branch
 
@@ -84,17 +84,18 @@ git checkout -b feature/your-feature-name
 
 We follow consistent standards to keep the codebase maintainable:
 
-- **Follow PEP 8** - Python's official style guide
+- **Follow PEP 8** – Python's official style guide
 - **Use Ruff** for formatting - Runs automatically, no debates!
-- **Write docstrings** - Document your functions and classes with the Google style
+- **Write docstrings** – Document your functions and classes with the Google style
 - **Use type hints** - Helps catch bugs and improves readability
 
 ```{tip}
 Most IDE have plugins to help you follow these standards.
 ```
+
 ## Writing Tests 🧪
 
-Tests are crucial - they catch bugs and give everyone confidence that changes work correctly.
+Tests are crucial – they catch bugs and give everyone confidence that changes work correctly.
 
 ### Running Tests
 
@@ -104,32 +105,32 @@ pytest --cov=panorama  --test-data-path=test_data
 
 ```
 
-More detail [here](unitTest.md#run-tests)
+More detail {ref}`here <run-tests>`
 
 ### Test Types
 
-- **Unit tests** - Test individual functions and classes in isolation
-- **Functional tests** - Test complete workflows and CLI commands
+- **Unit tests** – Test individual functions and classes in isolation
+- **Functional tests** – Test complete workflows and CLI commands
 
-See our [Testing Guidelines](unitTest.md#test-guide) for comprehensive testing practices.
+See our {ref}`Testing Guidelines <test-guide>` for comprehensive testing practices.
 
 ## Updating Documentation 📚
 
 Documentation is just as important as code! When you make changes update
 
 - **API documentation** - Auto-generated from docstrings, but may need regeneration
-- **User guides** - If you add user-facing features
-- **Developer docs** - If you change development processes or architecture
+- **User guides** – If you add user-facing features
+- **Developer docs** – If you change development processes or architecture
 
 To build the documentation locally:
 
 ```shell
 cd docs
-sphinx-autobuild source/ build/
+sphinx-autobuild . build/
 # Open http://127.0.0.1:8000 in your browser
 ```
 
-See our [Documentation Building Guide](buildDoc.md#build-doc) for details.
+See our {ref}`Documentation Building Guide <build-doc>` for details.
 
 (pr-process)=
 
@@ -153,10 +154,10 @@ For more tips and tricks, see our [Tips and Tricks](tipsandtricks.md) page.
 
 Stuck on something? Here's where you can find help:
 
-- **GitHub Discussions** - General questions and discussions
-- **Issue tracker** - Bug reports and feature requests
-- **Pull Request comments** - Questions about specific code
-- **Tag maintainers** - We're here to help!
+- **GitHub Discussions** – General questions and discussions
+- **Issue tracker** – Bug reports and feature requests
+- **Pull Request comments** – Questions about specific code
+- **Tag maintainers** – We're here to help!
 
 **Remember:** No question is too basic! We all started somewhere, and we want to support your contribution journey.
 
@@ -171,6 +172,6 @@ We value all contributions! Contributors are:
 ## Ready to Contribute? 🎉
 
 Pick an issue labeled `good first issue` or `help wanted`, or tackle something you've noticed that needs fixing. Don't
-hesitate to ask questions - we're here to help you succeed!
+hesitate to ask questions – we're here to help you succeed!
 
 Thank you for contributing to PANORAMA. Your work helps advance bioinformatics research worldwide! 🚀

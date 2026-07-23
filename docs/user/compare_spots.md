@@ -1,4 +1,4 @@
-# Conserved Spots Comparison Across Pangenomes
+# Conserved Spots Identification Across Pangenomes
 
 The compare_spots command identifies and analyzes conserved genomic spots across multiple pangenomes by comparing their
 gene family composition and genomic organization patterns.
@@ -33,7 +33,7 @@ The conserved spots comparison process runs as follows:
 6. Write Results to Files
     - Conserved spots are saved as detailed TSV files and optional graph formats (GEXF, GraphML) for visualization.
 
-## Compare spots command Line Usage
+## Compare spots command line usage
 
 Basic conserved spots comparison:
 
@@ -43,7 +43,7 @@ panorama compare_spots \
 --output conserved_spots_results \
 --gfrr_metrics min_gfrr \
 --gfrr_cutoff 0.8 0.8 \
---threads 8
+--cpu 8
 ```
 
 With system analysis enabled:
@@ -57,10 +57,10 @@ panorama compare_spots \
 --sources defense_finder \
 --gfrr_cutoff 0.8 0.8 \
 --graph_formats gexf graphml \
---threads 8
+--cpu 8
 ```
 
-### Key Options 📋
+### Key Options
 
 | Shortcut | Argument        | Type           | Required/Optional       | Description                                                                   |
 |----------|-----------------|----------------|-------------------------|-------------------------------------------------------------------------------|
@@ -68,7 +68,7 @@ panorama compare_spots \
 | -o       | --output        | Directory path | Required                | Output directory for conserved spots results                                  |
 | —        | --gfrr_metrics  | String         | Optional                | GFRR metric for clustering: 'min_gfrr' (conservative) or 'max_gfrr' (liberal) |
 | —        | --gfrr_cutoff   | Float Float    | Optional                | Two thresholds for min_gfrr and max_gfrr values (default: 0.8 0.8)            |
-| —        | --seed          | Int            | Optional                | Random seed to guarantee reproductibility (default 42)                        |
+| —        | --seed          | Int            | Optional                | Random seed to guarantee reproducibility (default 42)                         |
 | —        | --dup_margin    | Float          | Optional                | Minimum ratio for multigenic family detection (default: 0.05)                 |
 | —        | --systems       | Flag           | Optional                | Enable systems analysis within conserved spots                                |
 | -m       | --models        | File path(s)   | Required with --systems | Path(s) to system model files (required with --systems)                       |
@@ -92,7 +92,7 @@ panorama compare_spots \
 ```{note}
 PANORAMA can perform the clustering step first thing, but it's also possible to use pre-computed clustering results with
 the `--cluster` argument.
-If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md#clustering) section for more
+If you use let PANORAMA perform the clustering, you can look at the [Clustering](clustering.md) guide for more
 details about options.
 ```
 
@@ -167,11 +167,11 @@ Node attributes include conserved spot ID, pangenome name, spot ID, the number o
 RGPs.
 Edge attributes include GFRR metric and the number of shared gene families.
 
-[PLACEHOLDER: Example conserved spots visualization across pangenomes]
+[//]: # ([PLACEHOLDER: Example conserved spots visualization across pangenomes])
 
 ### Systems Analysis Files (Optional)
 
 When `--systems` is specified, generate `systems_link_with_conserved_spots_louvain.gexf/graphml` Network graphs of
 conserved system clusters. These graphs are generated using the Louvain algorithm.
 
-[PLACEHOLDER: Systems linkage graph showing relationships through conserved spots]
+[//]: # ([PLACEHOLDER: Systems linkage graph showing relationships through conserved spots])
