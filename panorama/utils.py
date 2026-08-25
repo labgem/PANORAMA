@@ -133,6 +133,7 @@ def get_panorama_version() -> str:
     """
     return distribution("panorama-sys").version
 
+
 # File managing system
 def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:
     """
