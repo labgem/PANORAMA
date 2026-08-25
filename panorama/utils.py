@@ -122,8 +122,16 @@ def set_verbosity_level(args: argparse.Namespace) -> None:
             # log is written in a files. basic condif uses filename
             logging.basicConfig(filename=args.log, level=level, format=str_format, datefmt=datefmt)
         logging.getLogger("PANORAMA").debug("Command: " + " ".join([arg for arg in sys.argv]))
-        logging.getLogger("PANORAMA").debug(f"PANORAMA version: {distribution('panorama').version}")
+        logging.getLogger("PANORAMA").debug(f"PANORAMA version: {get_panorama_version()}")
 
+
+def get_panorama_version() -> str:
+    """
+    Get the version of the panorama package.
+
+    :return: The version of the panorama package.
+    """
+    return distribution("panorama-sys").version
 
 # File managing system
 def mkdir(output: Path, force: bool = False, erase: bool = False) -> Path:

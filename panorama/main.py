@@ -23,7 +23,6 @@ if sys.version_info < (3, 10):  # minimum is python3.9
     )
 
 import argparse
-from importlib.metadata import distribution
 
 from panorama.alignment.align import launch as align_launcher
 from panorama.alignment.align import subparser as align_subparser
@@ -49,11 +48,16 @@ from panorama.utility.utility import launch as utility_launcher
 from panorama.utility.utility import subparser as utility_subparser
 
 # local modules
-from panorama.utils import RawTextArgumentDefaultsHelpFormatter, add_common_arguments, set_verbosity_level
+from panorama.utils import (
+    RawTextArgumentDefaultsHelpFormatter,
+    add_common_arguments,
+    get_panorama_version,
+    set_verbosity_level,
+)
 from panorama.workflow.pansystems import launch as pansystems_launcher
 from panorama.workflow.pansystems import subparser as pansystems_subparser
 
-version = distribution("panorama-sys").version
+version = get_panorama_version()
 opening = r"""
     ____     ___     _   __   ____     ____     ___     __  ___    ___ 
    / __ \   /   |   / | / /  / __ \   / __ \   /   |   /  |/  /   /   |
