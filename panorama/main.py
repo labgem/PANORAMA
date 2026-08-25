@@ -49,15 +49,11 @@ from panorama.utility.utility import launch as utility_launcher
 from panorama.utility.utility import subparser as utility_subparser
 
 # local modules
-from panorama.utils import (
-    RawTextArgumentDefaultsHelpFormatter,
-    add_common_arguments,
-    set_verbosity_level,
-)
+from panorama.utils import RawTextArgumentDefaultsHelpFormatter, add_common_arguments, set_verbosity_level
 from panorama.workflow.pansystems import launch as pansystems_launcher
 from panorama.workflow.pansystems import subparser as pansystems_subparser
 
-version = distribution("panorama").version
+version = distribution("panorama-sys").version
 opening = r"""
     ____     ___     _   __   ____     ____     ___     __  ___    ___ 
    / __ \   /   |   / | / /  / __ \   / __ \   /   |   /  |/  /   /   |
