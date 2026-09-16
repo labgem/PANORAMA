@@ -47,4 +47,4 @@ jobs:
         shell: bash -l {0}
         run: |
           pip install pytest
-          pytest --cov=panorama  --test-data-path=test_data
+          pytest --test-data-path=test_data
