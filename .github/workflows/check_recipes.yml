@@ -32,7 +32,7 @@ jobs:
       - name: Set up test environment
         shell: bash -l {0}
         run: |
-          conda install -y panorama
+          conda install -y panorama pytest natsort
       - name: check installation
         shell: bash -l {0}
         run: |
@@ -43,8 +43,7 @@ jobs:
         with:
           repository: labgem/PANORAMA_test
           path: test_data
-      - name: Run pytest with coverage
+      - name: Run pytest
         shell: bash -l {0}
         run: |
-          pip install pytest
           pytest --test-data-path=test_data
