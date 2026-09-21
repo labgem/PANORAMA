@@ -15,7 +15,7 @@ description = "Comparative pangenomic analysis toolbox"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { file = "LICENCE" }
-classifiers = [
+classifiers = ["Development Status :: 5 - Production/Stable",
     "Environment :: Console",
     "Intended Audience :: Science/Research",
     "License :: OSI Approved :: CEA CNRS Inria Logiciel Libre License, version 2.1 (CeCILL-2.1)",
