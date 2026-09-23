@@ -7,6 +7,7 @@
 [![GitHub issues](https://img.shields.io/github/issues/labgem/panorama.svg?style=flat-square&maxAge=600)](https://github.com/labgem/panorama/issues)
 [![Docs](https://img.shields.io/readthedocs/panorama/latest?style=flat-square&maxAge=600)](https://panorama.readthedocs.io)
 [![Downloads](https://anaconda.org/bioconda/panorama/badges/downloads.svg)](https://bioconda.github.io/recipes/panorama/README.html#download-stats)
+[![PyPI version](https://badge.fury.io/py/panorama-sys.svg?cache-control=no-cache)](https://pypi.org/project/panorama-sys/)
 [![Paper](https://img.shields.io/badge/paper-PLOS%20Computational%20Biology-teal.svg?style=flat-square&maxAge=3600)](https://doi.org/10.1371/journal.pcbi.1013856)
 [![Citations](https://img.shields.io/badge/dynamic/regex?url=https%3A%2F%2Fbadge.dimensions.ai%2Fdetails%2Fdoi%2F10.1371%2Fjournal.pcbi.1013856&search=%3Cdiv%20class%3D%22count%22%3E(%5Cd*)%3C%2Fdiv%3E&replace=%241&style=flat-square&label=citations&cacheSeconds=3600)](https://badge.dimensions.ai/details/doi/10.1371/journal.pcbi.1013856)
 
@@ -23,20 +24,28 @@ software suite. It is designed to perform pangenome comparison at high-throughtu
 
 # Quick Installation
 
-PANORAMA is easily installed with [conda](https://docs.conda.io/projects/conda/en/latest/index.html) and
-[pip](https://pip.pypa.io/en/stable/). Follow the next step to install panorama.
+The recommended installation method is via [Conda](https://docs.conda.io/projects/conda/en/latest/index.html) from the [Bioconda](https://bioconda.github.io/) channel.
+A PyPI installation is also available as an alternative when you prefer `pip`.
+
+## Install with Bioconda
 
 ```shell
-# 1. Clone the Repository
-git clone https://github.com/labgem/PANORAMA.git
-cd PANORAMA
-
-# 2. Create and Configure the Conda Environment
-conda create -n panorama
-conda config --add channels bioconda
-conda config --add channels conda-forge
+conda create -n panorama -c conda-forge -c bioconda panorama
 conda activate panorama
-conda env update --file panorama.yml
+panorama --version
+```
+
+## Install with PyPI
+
+The package published on PyPI is named `panorama-sys`.
+
+```shell
+pip install panorama-sys
+panorama --version
+```
+
+```{warning}
+The PyPI release only includes the Python package and Python dependencies. Non-Python system requirements such as MMSeqs2 and geckodriver must be installed separately before using the full feature set.
 ```
 
 [//]: # (You can find more information on the installation [here]&#40;link_read_the_doc&#41;)
