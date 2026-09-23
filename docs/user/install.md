@@ -37,9 +37,22 @@ To use a specific python version:
 conda create -n panorama -c conda-forge -c bioconda panorama python=X.X
 ```
 
----
+### Installation via PyPI
+
+An alternative install option is the PyPI package, named `panorama-sys`.
+
+```shell
+pip install panorama-sys
+panorama --version
+```
+
+```{warning}
+The PyPI package includes only the Python package and Python dependencies. It does not ship non-Python system requirements, such as MMSeqs2, geckodriver, or other OS-level tools that PANORAMA may need. Install those separately with your system package manager or Conda before using the full feature set.
+```
 
 ### Installing from source code (GitHub)
+
+This installation method is intended for developers or advanced users. For normal users, we recommend the Bioconda package or the PyPI package.
 
 (with_conda_env)=
 
