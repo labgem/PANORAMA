@@ -46,8 +46,9 @@ pip install panorama-sys
 panorama --version
 ```
 
-> [!WARNING]
-> The PyPI package includes only the Python package and Python dependencies. It does not ship non-Python system requirements, such as MMSeqs2, geckodriver, or other OS-level tools that PANORAMA may need. Install those separately with your system package manager or Conda before using the full feature set. See [Install PANORAMA dependencies](#install-panorama-dependencies) for the required setup.
+```{warning}
+The PyPI package includes only the Python package and Python dependencies. It does not ship non-Python system requirements, such as MMSeqs2 and geckodriver. Install those separately with your system package manager or Conda before using the full feature set. See [Install PANORAMA dependencies](#install-panorama-dependencies) for the required setup.
+```
 
 ### Installing from source code (GitHub)
 
