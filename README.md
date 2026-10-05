@@ -45,7 +45,7 @@ panorama --version
 ```
 
 > [!WARNING]
-> The PyPI release only includes the Python package and Python dependencies. Non-Python system requirements such as MMSeqs2 and geckodriver must be installed separately before using the full feature set. Please refer to [Install PANORAMA dependencies](#install-panorama-dependencies) for the required external dependencies.
+> The PyPI release only includes the Python package and Python dependencies. Non-Python system requirements such as MMSeqs2 and geckodriver must be installed separately before using the full feature set. Please refer to the [installation documentation](https://panorama.readthedocs.io/latest/user/install.html#install-panorama-dependencies) for the required external dependencies.
 
 [//]: # (You can find more information on the installation [here]&#40;link_read_the_doc&#41;)
 
