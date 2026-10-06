@@ -38,6 +38,7 @@ doc = [
     "readthedocs-sphinx-search>=0.3.2",
     "sphinx-autobuild>=2024.10.3",
     "myst-parser>=4.0.1",
+    "linkify-it-py>=2.0.3",  # Required by the MyST "linkify" extension
     "docutils>=0.21.2",  # Version 0.22.2 is not compatible with myst parser 4.0.1
     "sphinxcontrib.mermaid>=1.0.0",
     "sphinxcontrib-jquery>=4.1",
