@@ -7,6 +7,7 @@
 # -- Imports -----------------------------------------------------------------
 
 import datetime
+import sys
 from pathlib import Path
 
 import myst_parser
@@ -17,6 +18,7 @@ import myst_parser
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
+sys.path.insert(0, str(Path(__file__).resolve().parent / "_ext"))
 
 # -- Project information -----------------------------------------------------
 
@@ -52,9 +54,13 @@ extensions = [
     "sphinxcontrib.jquery",
     "sphinxcontrib.mermaid",
     "sphinx_copybutton",
+    "github_readme",  # Local extension (_ext/): renders the GitHub README as the landing page
 ]
 
-myst_enable_extensions = ["colon_fence"]
+# Besides colon_fence, these extensions mirror GitHub-flavored Markdown so README.md renders the same in both places
+myst_enable_extensions = ["colon_fence", "linkify", "strikethrough", "tasklist"]
+myst_fence_as_directive = ["mermaid"]
+myst_linkify_fuzzy_links = False  # Like GitHub, only autolink http(s):// and www. URLs, not "README.md"
 myst_heading_anchors = 4
 
 source_suffix = {".md": "markdown", ".rst": "restructuredtext"}
