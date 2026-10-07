@@ -73,6 +73,49 @@ docstrings and rebuild.
 **However**, if you add a new package or module, you'll need to regenerate the API docs. See
 the [Updating API documentation](#updating-api) section below.
 
+(readme-doc)=
+
+### The README
+
+The [README](https://github.com/labgem/PANORAMA/blob/dev/README.md) is the landing page of the GitHub repository **and** of this documentation, which pulls it
+in with an `{include}` directive in `docs/index.md`. One file, two renderers: GitHub only understands GitHub-flavored
+Markdown, while Sphinx reads MyST. To keep a single file, **write the README for GitHub**. The docs build takes care of
+the rest.
+
+What happens at build time:
+
+| In README.md (GitHub syntax)                     | In the docs                                                                                             |
+|--------------------------------------------------|---------------------------------------------------------------------------------------------------------|
+| Alerts: `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]` | Converted into the matching MyST admonition by the local extension `docs/_ext/github_readme.py` |
+| Bare URLs (`https://...`, `www....`)             | Turned into links by the MyST `linkify` extension                                                       |
+| `~~strikethrough~~`, task lists `- [ ]`          | Rendered by the MyST `strikethrough` and `tasklist` extensions                                          |
+| ```` ```mermaid ```` code blocks                 | Rendered as diagrams through `myst_fence_as_directive`                                                  |
+
+For example, write a note in the README like this:
+
+```markdown
+> [!NOTE]
+> We recommend using an absolute path in this file to avoid errors.
+```
+
+```{warning}
+Do not use MyST-only syntax in the README: directives (```` ```{note} ````, `:::`), roles (`` {ref}`...` ``),
+targets (`(label)=`), `%` comments or `+++` block breaks. GitHub would show them as raw text.
+```
+
+Two safeguards catch MyST syntax that slipped into the README:
+
+- **During the docs build**, the extension prints a warning pointing to the offending line, e.g.
+  `` README.md:6: WARNING: MyST role in 'See {ref}`x`' will not render on GitHub... ``
+- **In CI**, `tests/unit_tests/test_readme.py` fails on the same check. Sphinx warnings do not fail the build, so this
+  test is what blocks a pull request. It runs with the rest of the unit tests and needs neither Sphinx nor the test
+  dataset.
+
+MyST syntax inside a code block is ignored, so you can still show examples of it.
+
+If you need a GitHub feature that is not in the table above, add the conversion in `docs/_ext/github_readme.py` (the
+`include-read` handler only touches files named `README.md`) and a test case in `tests/unit_tests/test_readme.py`.
+
 (heading-adding)=
 
 ## Adding to Existing Documentation ➕
@@ -220,6 +263,9 @@ Add this to your `index.md`:
     :relative-images:
     ```
 ```
+
+Keep the README written in GitHub-flavored Markdown and load the `github_readme` extension, see
+[The README](#readme-doc).
 
 ### Documentation Structure
 

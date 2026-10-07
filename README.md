@@ -57,10 +57,9 @@ In the following we will name this file *pangenomes.tsv*
 | ...        | ...                |
 | PangenomeX | path/to/pangenomeX |
 
-```{note}
-We recommend using an absolute path in this file to avoid errors.
-You can use the path from your current directory or the path from the input file as a relative path to find pangenomes
-```
+> [!NOTE]
+> We recommend using an absolute path in this file to avoid errors.
+> You can use the path from your current directory or the path from the input file as a relative path to find pangenomes
 
 ## Biological systems detection
 
@@ -181,6 +180,5 @@ PANORAMA is still in early development.
 Have suggestions, ideas, or bug reports?  
 👉 [Open an issue on GitHub](https://github.com/labgem/PANORAMA/issues)
 
-```{important}
-We cannot correct bugs if we do not know about them and will try to help you the best we can
-```
+> [!IMPORTANT]
+> We cannot correct bugs if we do not know about them and will try to help you the best we can
