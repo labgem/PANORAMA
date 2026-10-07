@@ -3,7 +3,7 @@ requires = ["setuptools"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "PANORAMA"
+name = "panorama-sys"
 
 authors = [
     { name = "Jérôme Arnoux", email = "arnoux.jeromepj@gmail.com" },
